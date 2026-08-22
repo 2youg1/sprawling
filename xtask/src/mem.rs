@@ -26,6 +26,10 @@
 //! three different budgets.
 
 use std::path::Path;
+// Linux reads a file; the other two ask a program. The import carries the
+// same condition as its only caller, or it is unused on Linux and the
+// zero-warning build stops there.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::process::Command;
 
 use crate::report::XtaskError;

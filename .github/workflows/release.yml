@@ -47,12 +47,15 @@ jobs:
       - name: xtask gates
         run: cargo xtask gates
 
+  # Linux is verified above but not shipped yet, by the person's ruling.
+  # The absence is written here rather than left to be noticed: a platform
+  # missing from a release page is a decision, not an oversight.
   archive:
     needs: verify
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
