@@ -18,6 +18,7 @@ mod header;
 mod lexicon;
 mod mem;
 mod modmap;
+mod package;
 mod release;
 mod report;
 mod repro;
@@ -62,6 +63,13 @@ fn main() -> ExitCode {
         Some("mem") => match mem::run(&root, args.get(1).map(String::as_str)) {
             Ok(text) => {
                 println!("{text}");
+                ExitCode::SUCCESS
+            }
+            Err(err) => report::internal_failure(&err),
+        },
+        Some("package") => match package::run(&root) {
+            Ok(message) => {
+                print!("{message}");
                 ExitCode::SUCCESS
             }
             Err(err) => report::internal_failure(&err),
@@ -141,6 +149,6 @@ fn usage() {
         "usage: cargo xtask <gates|header|lexicon|modmap|depmap|zerojs|secret|specalign|apisync|guard> [--range a..b] [--write]"
     );
     eprintln!(
-        "       cargo xtask spec <crate> | budget | badge [--write] | mem [pid] | sbom | repro [--full]"
+        "       cargo xtask spec <crate> | budget | badge [--write] | mem [pid] | sbom | package | repro [--full]"
     );
 }

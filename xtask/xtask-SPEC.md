@@ -130,6 +130,8 @@ pub(crate) struct Violation {
 
 serde＋serde_json（cargo metadata 解析；工作区已钉）；toml（lexicon 数据面；xtask 独用，不入产品面）；thiserror（工作区已钉）；kernel（S2.12 起：secret 门复用 `kernel::secret::scan`，一个判定一个家）。不引 walkdir/regex/clap：手写遍历十几行；判定用子串与前缀即可（C12 对 regex 的敏感面在 kernel，此处一并回避）；子命令分发一个 match 足矣。
 
+**zip**（P7.02，`default-features = false, features = ["deflate-flate2"]`，净增两个包）：复用 xtask 已有的 flate2 做压缩后端。替代方案是在 justfile 与 CI 里按平台分支调 `Compress-Archive`／`zip`／`tar`，已验证否决：git-bash 携的是 GNU tar，不产 zip，三个平台因此需三段 shell，且本机与 CI 的产物不同源——那正是本轮要关掉的那类差异。维护成本：仅工作区工具链，恒不入产品二进制。
+
 ## 14 硬编码声明
 
 MPL 头三行；保护路径清单（xtask/、.github/、deny.toml、Cargo.toml、rust-toolchain.toml、clippy.toml、justfile）；状态枚举四值；JS 扩展名族与 node 命令族。各随其权威变更而改，改动本身受 guard 看守。

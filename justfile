@@ -90,6 +90,12 @@ dist: build-web
     cargo xtask sbom
     cargo xtask badge --write
 
+# The release archive: the one file a person downloads, unpacks and runs.
+# `dist` first, because the archive is assembled out of its artifacts and
+# never out of whatever happened to be in target/ from an earlier build.
+package: dist
+    cargo xtask package
+
 # Offline chain verification (A2); strictly read-only.
 replay log:
     cargo run -p sprawling --locked -- replay {{log}}

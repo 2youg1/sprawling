@@ -49,8 +49,7 @@ pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
     // build (no `just build-web` beforehand) lacks the `web_bg.wasm`
     // entry, and a binary like that must not look shippable.
     if let Some(binary) = binary_path(root)
-        && let Ok(bytes) = std::fs::read(&binary)
-        && !contains(&bytes, b"web_bg.wasm")
+        && !carries_client(&binary)?
     {
         violations.push(Violation {
             gate: "budget",
@@ -231,7 +230,22 @@ fn binary_bytes(root: &Path) -> Option<u64> {
     std::fs::metadata(path).ok().map(|meta| meta.len())
 }
 
-fn binary_path(root: &Path) -> Option<PathBuf> {
+/// Whether a built binary carries the real client or only the page
+/// shell. One statement of that fact, because the gate refuses on it and
+/// so does `package`, and two readings would drift apart.
+///
+/// # Errors
+/// Propagates the failure of reading the binary: a release artifact that
+/// cannot be read is a finding, not a thing to skip over.
+pub(crate) fn carries_client(binary: &Path) -> Result<bool, XtaskError> {
+    let bytes = std::fs::read(binary).map_err(|source| XtaskError::Io {
+        path: binary.display().to_string(),
+        source,
+    })?;
+    Ok(contains(&bytes, b"web_bg.wasm"))
+}
+
+pub(crate) fn binary_path(root: &Path) -> Option<PathBuf> {
     for name in ["sprawling", "sprawling.exe"] {
         let path: PathBuf = root.join("target").join("release").join(name);
         if path.is_file() {

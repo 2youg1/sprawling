@@ -16,6 +16,7 @@ toml.workspace = true
 # on the path; this lands in workspace tooling only, never in the
 # product binary.
 flate2 = "1"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
 
 [lints]
 workspace = true
