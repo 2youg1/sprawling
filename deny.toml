@@ -14,6 +14,10 @@ allow = [
     "Zlib",
     "CC0-1.0",
     "Unicode-3.0",
+    # CDLA-Permissive-2.0: webpki-root-certs, the platform root-store
+    # certificate bundle rustls-platform-verifier uses (reqwest's desktop
+    # trust store). A data license for a list of public certificates.
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]
