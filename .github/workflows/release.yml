@@ -1,0 +1,99 @@
+# The deliverable, built by a machine rather than by hand.
+#
+# Every symptom this workflow exists to prevent came from one cause: a
+# release artifact whose provenance nobody could check. So the archive is
+# assembled here, out of a tree that passed the gates, on each platform it
+# claims to support - and `xtask package` refuses a binary carrying only
+# the page shell, which is the defect that survives a green build and
+# reaches a person as an empty browser window.
+#
+# C1 note: no step here invokes the node toolchain family; the client is
+# WebAssembly built by cargo and wasm-bindgen.
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Nothing is built for release out of a tree that has not passed.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: tests
+        run: cargo nextest run --workspace --locked --all-features
+      - name: xtask gates
+        run: cargo xtask gates
+
+  archive:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: install pinned toolchain
+        run: rustup show
+      - name: the client target
+        run: rustup target add wasm32-unknown-unknown
+      # The CLI version must equal the crate version; a mismatch there is
+      # the quietest way to break a wasm build. The pin below is a copy,
+      # so the next step fails loudly when the copy falls behind.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,wasm-bindgen-cli@0.2.127
+      - name: the CLI and the crate agree on a version
+        shell: bash
+        run: |
+          set -euo pipefail
+          crate=$(sed -n 's/^wasm-bindgen = "\(.*\)"$/\1/p' Cargo.toml)
+          cli=$(wasm-bindgen --version | awk '{print $2}')
+          echo "crate pins $crate, CLI is $cli"
+          test "$crate" = "$cli"
+      - name: build the client, the binary, and the archive
+        shell: bash
+        run: just package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.os }}
+          path: target/package/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: archive
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: attach the archives to the tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la assets
+          gh release create "${GITHUB_REF_NAME}" assets/*.zip \
+            --title "sprawling ${GITHUB_REF_NAME}" \
+            --notes-file .github/release-notes.md
