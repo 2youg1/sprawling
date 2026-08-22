@@ -66,12 +66,19 @@ pub(crate) struct InitReport {
 /// `sprawling init <dir>`: the genesis write. The city is born when
 /// `city_initialized` becomes line zero; a second init refuses — history
 /// starts once.
+/// Whether this directory already carries a city's history.
+///
+/// The one fact `init` refuses on and `up` branches on, read from one
+/// place so the two can never disagree about what counts as a city.
+pub(crate) fn has_history(city_root: &Path) -> bool {
+    std::fs::read_dir(ledger_dir(city_root))
+        .map(|mut entries| entries.next().is_some())
+        .unwrap_or(false)
+}
+
 pub(crate) fn init_city(city_root: &Path) -> Result<InitReport, AxError> {
     let dir = ledger_dir(city_root);
-    let already = std::fs::read_dir(&dir)
-        .map(|mut entries| entries.next().is_some())
-        .unwrap_or(false);
-    if already {
+    if has_history(city_root) {
         return Err(AxError::failure(
             AxCode::ConfigInvalid,
             "initialize city",

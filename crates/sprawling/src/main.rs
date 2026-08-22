@@ -8,6 +8,7 @@
 //! export, restore, resume, fork.
 
 mod assembly;
+mod firstrun;
 mod mcp_http;
 mod mcp_stdio;
 
@@ -27,13 +28,29 @@ fn client_summary() -> String {
     if CLIENT_COMPLETE {
         let total: usize = CLIENT_FILES.iter().map(|f| f.gz.len()).sum();
         format!(
-            "client: embedded, {} file(s), {total} gzipped byte(s)",
+            "embedded, {} file(s), {total} gzipped byte(s)",
             CLIENT_FILES.len()
         )
     } else {
-        "client: page shell only - run `just build-web`, then rebuild this binary".to_owned()
+        "page shell only - run `just build-web`, then rebuild this binary".to_owned()
     }
 }
+
+/// The command list, in one place. The refusal of an unknown subcommand
+/// and the first screen print the same text, so neither can fall behind
+/// what the binary actually accepts.
+const COMMANDS: &str = "\
+commands:
+  up [dir] [addr]              raise a city here if needed, serve it, open the WebUI
+  init <dir>                   raise a city: writes the genesis record
+  serve <dir> [addr] [--open]  serve a city that already exists
+  resume <dir>                 after a restart: verify, close what was lost, report
+  status [--deps]              this binary: version, client, what it is built from
+  fork <dir> <run> <seq>       branch a lineage from one step of a run
+  adopt <dir> <addr>           take an existing directory in as a building
+  replay <dir>                 verify a chain offline, read-only
+  export <city> <dest>         pack a whole city
+  restore <bundle> <city>      unpack it on another machine";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -41,26 +58,103 @@ fn main() -> ExitCode {
         Some("status") => status(&args),
         Some("replay") => replay(args.get(1)),
         Some("init") => init(args.get(1)),
+        Some("up") => up(&args),
         Some("serve") => serve(args.get(1), args.get(2), &args),
         Some("export") => export(args.get(1), args.get(2)),
         Some("restore") => restore(args.get(1), args.get(2)),
         Some("resume") => resume(args.get(1)),
         Some("fork") => fork(&args),
         Some("adopt") => adopt(args.get(1), args.get(2)),
+        Some("help" | "--help" | "-h") => {
+            println!("{COMMANDS}");
+            ExitCode::SUCCESS
+        }
         Some(other) => {
             eprintln!("unknown subcommand: {other}");
-            eprintln!(
-                "available: status, init <dir>, serve <dir> [addr], resume <dir>, \
-                 fork <dir> <run> <seq> [addr], adopt <dir> <addr>, replay <dir>, \
-                 export <city> <dest>, restore <bundle> <city>"
-            );
+            eprintln!("{COMMANDS}");
             ExitCode::from(2)
         }
-        None => {
-            eprintln!("usage: sprawling status [--log <level>]");
+        None => first_screen(),
+    }
+}
+
+/// What a launch with no command gets. Most of those come from a file
+/// manager, where the console closes the moment this returns - so every
+/// path out of here holds the window until somebody has read it.
+fn first_screen() -> ExitCode {
+    let city = default_city_location();
+    let answered = firstrun::ask(&city, &mut std::io::stdin().lock(), &mut std::io::stdout());
+    let code = match answered {
+        Ok(firstrun::FirstScreen::Start(city)) => up_at(&city, "127.0.0.1:8787", &[]),
+        Ok(firstrun::FirstScreen::Quit) => {
+            println!("{COMMANDS}");
             ExitCode::from(2)
+        }
+        Err(err) => {
+            eprintln!("could not read the answer: {err}");
+            ExitCode::FAILURE
+        }
+    };
+    hold();
+    code
+}
+
+/// Keeps the window long enough to be read. A console opened by a file
+/// manager closes with the process, which is how a refusal becomes an
+/// unexplained flash. With nobody at the keyboard this returns at once.
+fn hold() {
+    println!("\n  Press Enter to close.");
+    let mut ignored = String::new();
+    // A failed read means there is nobody to wait for, which is the same
+    // outcome as being waited for: this process is ending either way.
+    let _ = std::io::stdin().read_line(&mut ignored);
+}
+
+/// Where `up` and the first screen put a city nobody named.
+fn default_city_location() -> std::path::PathBuf {
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(std::path::PathBuf::from);
+    match std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+    {
+        Some(beside) => {
+            let writable = firstrun::is_writable(&beside);
+            firstrun::default_city(&beside, home.as_deref(), writable)
+        }
+        None => firstrun::default_city(std::path::Path::new("."), home.as_deref(), true),
+    }
+}
+
+/// The one command that makes a city run: raise it when it is not there,
+/// serve it, and open the WebUI once the port answers. The first screen
+/// and the launcher in the release archive both arrive here, so the
+/// sequence has exactly one definition and `init` and `serve` keep theirs.
+fn up(args: &[String]) -> ExitCode {
+    let city = match args.get(1).filter(|a| !a.starts_with("--")) {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => default_city_location(),
+    };
+    let addr = args
+        .get(2)
+        .filter(|a| !a.starts_with("--"))
+        .map_or("127.0.0.1:8787", String::as_str);
+    up_at(&city, addr, args)
+}
+
+fn up_at(city: &std::path::Path, raw: &str, args: &[String]) -> ExitCode {
+    if !assembly::has_history(city) {
+        match assembly::init_city(city) {
+            Ok(raised) => println!(
+                "city raised at {} (genesis seq {})",
+                raised.ledger_dir.display(),
+                raised.genesis.seq().value()
+            ),
+            Err(err) => return report(err),
         }
     }
+    serve_city(city, raw, args, true)
 }
 
 /// The genesis write: a city is born when city_initialized becomes line
@@ -149,6 +243,14 @@ fn serve(dir: Option<&String>, addr: Option<&String>, args: &[String]) -> ExitCo
     let raw = addr
         .filter(|a| !a.starts_with("--"))
         .map_or("127.0.0.1:8787", String::as_str);
+    let open = args.iter().any(|a| a == "--open");
+    serve_city(std::path::Path::new(dir), raw, args, open)
+}
+
+/// Serving proper, reached from `serve` and from `up`. `open` is the only
+/// difference between them: `up` is the appliance and opens the WebUI,
+/// `serve` stays where a person put it unless asked.
+fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) -> ExitCode {
     let Ok(bind) = raw.parse() else {
         eprintln!("not a socket address: {raw}");
         eprintln!("recovery: give host:port, for example 127.0.0.1:8787");
@@ -178,9 +280,24 @@ fn serve(dir: Option<&String>, addr: Option<&String>, args: &[String]) -> ExitCo
             return ExitCode::FAILURE;
         }
     };
-    println!("serving {raw} - {}", client_summary());
-    if let channels::ClientAssets::Disk(dir) = &client {
-        println!("client: read per request from {}", dir.display());
+    let client_line = match &client {
+        channels::ClientAssets::Disk(dir) => {
+            format!("read per request from {}", dir.display())
+        }
+        channels::ClientAssets::Embedded(_) => client_summary(),
+    };
+    let url = firstrun::local_url(bind);
+    println!();
+    println!("  sprawling is running.");
+    println!();
+    println!("    city     {}", city.display());
+    println!("    WebUI    {url}");
+    println!("    client   {client_line}");
+    println!();
+    println!("  Open the WebUI in a browser. Ctrl-C stops the city.");
+    println!();
+    if open {
+        firstrun::open_when_ready(bind, url);
     }
     let log = match log_floor(args) {
         Ok(Some(level)) => {
@@ -202,7 +319,7 @@ fn serve(dir: Option<&String>, addr: Option<&String>, args: &[String]) -> ExitCo
     };
     let (vault, vault_notice) = assembly::open_vault();
     match runtime.block_on(assembly::serve(
-        std::path::Path::new(dir),
+        city,
         bind,
         token.as_deref(),
         client,
@@ -346,7 +463,7 @@ fn status(args: &[String]) -> ExitCode {
         return ExitCode::SUCCESS;
     }
     println!("sprawling {} (pre-alpha)", env!("CARGO_PKG_VERSION"));
-    println!("{}", client_summary());
+    println!("client: {}", client_summary());
     println!(
         "built from {} crate(s); list them with status --deps",
         DEPENDENCIES.lines().count()

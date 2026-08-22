@@ -327,7 +327,7 @@ The two size rows are also rendered as the badges in `README.md`, from this same
 
 The machine's data face, parsed by `cargo xtask modmap`: a `.rs` file under `crates/*/src` that is not in this table turns CI red, and so does a row whose file is missing. `lib.rs` and pure index files are exempt because they hold no logic — that too is checked.
 
-Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (the construction stage that introduced it: S0–S5 skeleton, P1–P4 product, R1 repair, F1 front end) **| Status** (`planned`, `building`, `built`, `frozen`).
+Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (the construction stage that introduced it: S0–S5 skeleton, P1–P4 product, R1 repair, F1 front end, P5–P7 documents, measurement and delivery) **| Status** (`planned`, `building`, `built`, `frozen`).
 
 ### kernel (27) — every decision in the city, and nothing that touches a disk
 
@@ -488,7 +488,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::archive_search | crates/web/src/archive_search.rs | what this city wrote down: the shelves and the record, never merged | decision | F1 | built |
 | web::settings | crates/web/src/settings.rs | turning a URL and a key into a model a run can be given | decision | P1 | built |
 
-### browser (6), protocol (2), bin (4)
+### browser (6), protocol (2), bin (5)
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -504,6 +504,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | bin::assembly | crates/sprawling/src/assembly.rs | the assembly point: the dirtiest component and the only omniscient one | adapter | S0 | built |
 | bin::mcp_stdio | crates/sprawling/src/mcp_stdio.rs | an MCP server as a child process, one line per message | adapter | R1 | built |
 | bin::mcp_http | crates/sprawling/src/mcp_http.rs | an MCP server over HTTP: one request, one message, no session | adapter | R1 | built |
+| bin::firstrun | crates/sprawling/src/firstrun.rs | the first screen, where a city goes when nobody said, and handing a URL to the desktop | adapter | P7 | built |
 
 ## 13 Changing this document
 
