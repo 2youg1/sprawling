@@ -64,13 +64,37 @@ The directory tree on disk *is* the space: a **City** is a directory tree, a pro
 
 ## Getting it running
 
+### Quick start
+
+1. Download the archive for your system from the [latest release](../../releases/latest).
+2. Unpack it anywhere.
+3. Run **`start.cmd`** (Windows) or **`./start.sh`** (macOS, Linux).
+
+That is the whole install. Nothing is registered, and nothing outside that folder is written to—delete the folder and it is gone. A console window opens and stays open: **that window is the city**. Your browser opens at `http://127.0.0.1:8787`; if it doesn’t, open the address yourself. `Ctrl-C` in the window stops the city.
+
+The binaries are not code-signed, so the first run trips a warning. Windows says “Windows protected your PC”—choose **More info → Run anyway**. macOS refuses the first launch—open it once from Finder’s right-click menu.
+
+**Before it can do anything you need a model to call**: an API key for a provider speaking the OpenAI or Anthropic dialect, or a subscription login. sprawling schedules agents, records what they do, and shows it to you; it does not think by itself.
+
+### From a terminal
+
 One binary is enough. No npm, no node, no extra runtime.
+
+From a terminal it is one command, and the same one the launcher runs:
+
+```bash
+sprawling up [city-dir] [addr]      # raise the city if it is not there, serve it, open the WebUI
+```
+
+Taken apart, when you want the steps separately:
 
 ```bash
 sprawling init  <city-dir>          # found a city; the name is written into the genesis record
 sprawling serve <city-dir> [addr]   # start the control plane; defaults to loopback only
 # then open http://127.0.0.1:8787
 ```
+
+> **Don’t `cargo install` this.** The client is WebAssembly, built before the binary and embedded into it. A plain cargo build cannot run that step, and yields a binary whose page is blank. Take a release archive, or build it with `just dist`.
 
 Four steps on the page, roughly ten seconds:
 
@@ -89,9 +113,12 @@ sprawling replay <ledger-dir>       # offline chain verification, read-only
 sprawling export <city-dir> <file>  # pack a city; the manifest is the integrity criterion
 sprawling restore <file> <city-dir> # unpack it on another machine
 sprawling status [--deps]           # state of this machine; --deps lists the compiled-in dependencies
+sprawling help                      # every command, on one screen
 ```
 
-A step-by-step walk from empty directory to first Run lives in [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md) (English version coming).
+Launched with no command at all—by double-clicking it, for instance—it shows a single screen, names the folder it would create, and waits for you to agree before creating anything. Founding a city writes the genesis record, and that does not happen because somebody double-clicked a file.
+
+A step-by-step walk from empty directory to first Run lives in [`docs/getting-started.md`](docs/getting-started.md) ([中文](docs/getting-started.zh-CN.md)).
 
 ## Five words
 

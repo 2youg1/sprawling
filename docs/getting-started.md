@@ -8,6 +8,8 @@
 
 A desktop browser and the `sprawling` binary. Nothing else — no npm, no node, no language runtime, no database.
 
+The quickest way to both: take the archive for your system from the [latest release](../../../releases/latest), unpack it, and run `start.cmd` (Windows) or `./start.sh` (macOS, Linux). That launcher does steps 1 and 2 below in one go and opens the page for you; come back here at step 3. The rest of this walkthrough uses the commands, because knowing them is what lets you run a second city, move one between machines, or drive it from a script.
+
 You also need one model to call. Either an API key for a provider that speaks the OpenAI or the Anthropic dialect, or a local server that speaks one of them.
 
 To build the binary yourself rather than take one, see [`CONTRIBUTING.md`](CONTRIBUTING.md); the front end is built first and embedded into the binary, so a `cargo build` alone produces a binary whose page is out of date.
@@ -26,7 +28,13 @@ A city is one directory and everything is inside it. This writes the genesis rec
 sprawling serve ~/cities/first
 ```
 
-It binds `127.0.0.1:8787` and prints where it is listening. Open that address.
+It binds `127.0.0.1:8787` and prints where it is listening. Open that address, or add `--open` and let it open the browser once the port answers.
+
+Steps 1 and 2 together, for a city you have not raised yet, are one command — it is what the launcher in the release archive runs, and with no directory given it puts the city beside the binary:
+
+```bash
+sprawling up ~/cities/first
+```
 
 To reach it from another machine on your network, give an address to bind and set a pairing token first:
 
