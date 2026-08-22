@@ -1,0 +1,45 @@
+# The slow assurances: work that earns its place by running while nobody
+# waits for it. The freeze-leak scenarios (a thousand freeze cycles) run
+# inside `just check` too; here they run on a schedule so a regression
+# cannot hide between manual gate runs. Fuzz targets are smoke-length -
+# long campaigns belong to a dedicated runner, not a CI slot.
+name: nightly
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-leak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: thousand-session freeze leak
+        run: cargo nextest run -p citysim --locked -E 'binary(freeze_leak)'
+      - name: long-batch simulation
+        run: cargo nextest run -p citysim --locked
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install pinned toolchain and nightly
+        run: |
+          rustup show
+          rustup toolchain install nightly --profile minimal
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: each target, sixty seconds
+        run: |
+          for target in $(cargo fuzz list --fuzz-dir fuzz); do
+            cargo fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=60
+          done

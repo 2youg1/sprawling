@@ -1,0 +1,50 @@
+[package]
+name = "web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+channels = { path = "../channels", default-features = false }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+# The renderer and the browser bindings exist only on the target that has a
+# browser. Everything above this line compiles on the host, which is what
+# keeps `cargo clippy --workspace` covering this crate's logic.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dioxus = { workspace = true, features = ["web"] }
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = [
+    "BinaryType",
+    # The isometric city is painted, not laid out: two canvas features
+    # rather than a thousand elements the browser has to keep styled.
+    "CanvasRenderingContext2d",
+    "HtmlCanvasElement",
+    "CloseEvent",
+    "Document",
+    "Element",
+    "Event",
+    "MessageEvent",
+    # The interruption that reaches somebody who is not looking at the tab.
+    # `web::alert` is the only module allowed to raise one.
+    "Notification",
+    "NotificationOptions",
+    "NotificationPermission",
+    "Window",
+    "WebSocket",
+    "Location",
+    "XmlHttpRequest",
+] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
+
+[lib]
+# cdylib for wasm-bindgen, rlib so the host test build can link it.
+crate-type = ["cdylib", "rlib"]

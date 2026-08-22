@@ -1,0 +1,33 @@
+[package]
+name = "runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kernel = { path = "../kernel" }
+memory = { path = "../memory" }
+serde.workspace = true
+serde_json.workspace = true
+# Execution boundary. Pinned at 48: carries the
+# path_open TRUNCATE bypass fix (GHSA-2r75-cxrj-cmph) and the
+# hard-link/rename FilePerms bypass fix (CVE-2026-58494). wasip1 only —
+# there is no socket host implementation, which is the Python arm's
+# mechanical proof that it cannot reach the network.
+wasmtime = { version = "48", optional = true, default-features = false, features = ["cranelift", "runtime", "std"] }
+wasmtime-wasi = { version = "48", optional = true }
+
+[features]
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
+conformance = ["kernel/conformance"]
+
+[dev-dependencies]
+tempfile.workspace = true
+trybuild.workspace = true
+# A10's three assertions are pinned with hand-written WAT so the gate
+# needs no CPython artifact to run.
+wat = "1"
+
+[lints]
+workspace = true

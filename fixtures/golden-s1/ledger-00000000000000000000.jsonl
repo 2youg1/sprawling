@@ -1,0 +1,6 @@
+{"v":1,"run":"00000000-0000-0000-0000-000000000000","seq":0,"prev":"0000000000000000000000000000000000000000000000000000000000000000","t":1,"who":"city","kind":"city_initialized","data":{}}
+{"v":1,"run":"00000000-0000-0000-0000-000000000000","seq":1,"prev":"88bc839a1f5296e3a5ebd6608d351be2d735f87277840aa521143b09df933981","t":2,"who":"city","addr":"lab","kind":"building_created","data":{"template":"workshop"}}
+{"v":1,"run":"01010101-0101-0101-0101-010101010101","seq":2,"prev":"8efd9c34efcbe6c8aecb53e17839dcdb10cda877e24f383552d63feb5f0095cd","t":3,"who":"planner@lab.1","kind":"run_started","data":{}}
+{"v":1,"run":"01010101-0101-0101-0101-010101010101","seq":3,"prev":"28f069f63e56c51b0f0d3161f9294db88574166b324c7070a9aa919c057e7023","t":4,"who":"planner@lab.1","kind":"tool_called","data":{"args":["b","a"],"tool":"exec"}}
+{"v":1,"run":"00000000-0000-0000-0000-000000000000","seq":4,"prev":"a150fb522a96aee4135b07534e0826cc88de5f1f569697345755beefe06026b8","t":5,"who":"system","kind":"log_truncated","data":{"dropped_bytes":7},"ig":true}
+{"v":1,"run":"01010101-0101-0101-0101-010101010101","seq":5,"prev":"b19113b417a5134079f1793c0b222f63742a0faa92c42d356e7c4cc99d12a80b","t":6,"who":"planner@lab.1","kind":"run_frozen","data":{}}

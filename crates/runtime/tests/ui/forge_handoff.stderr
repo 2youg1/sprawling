@@ -1,0 +1,15 @@
+error: cannot construct `Handoff` with struct literal syntax due to private fields
+  --> tests/ui/forge_handoff.rs:10:13
+   |
+10 |     let _ = runtime::handoff::Handoff {
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+11 |         overview: String::new(),
+   |         ----------------------- private field
+12 |         progress: String::new(),
+   |         ----------------------- private field
+13 |         context: String::new(),
+   |         ---------------------- private field
+14 |         next_step: String::new(),
+   |         ------------------------ private field
+   |
+   = note: ...and other private field `must_read` that was not provided

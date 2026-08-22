@@ -1,0 +1,69 @@
+impl eval::Answers
+impl eval::Comparison
+impl eval::Disposal
+impl eval::Half
+impl eval::Probe
+impl eval::Suite
+impl eval::Tally
+pub const eval::ASSET_FLOOR_PER_MILLE: u32
+pub const eval::ASSET_IDLE_DAYS: u32
+pub enum eval::Disposal
+pub enum eval::Half
+pub eval::AssetUse::billed: kernel::budget::UsdMicros
+pub eval::AssetUse::idle_days: u32
+pub eval::AssetUse::resident: kernel::budget::ByteLen
+pub eval::AssetUse::uses: u32
+pub eval::Comparison::kept: u32
+pub eval::Comparison::lost: alloc::vec::Vec<u32>
+pub eval::Disposal::Keep
+pub eval::Disposal::Retire
+pub eval::Disposal::Retire::because: alloc::string::String
+pub eval::Disposal::Warn
+pub eval::Disposal::Warn::because: alloc::string::String
+pub eval::Half::HeldIn
+pub eval::Half::HeldOut
+pub eval::Outcome::id: alloc::string::String
+pub eval::Outcome::passed: bool
+pub eval::ProbeId::name: alloc::string::String
+pub eval::ProbeId::version: u32
+pub eval::Report::held_in: eval::Tally
+pub eval::Report::held_out: eval::Tally
+pub eval::Report::unknown: u32
+pub eval::Score::idle_days: u32
+pub eval::Score::per_mille: u32
+pub eval::Tally::passed: u32
+pub eval::Tally::tried: u32
+pub eval::Task::at: kernel::locator::Locator
+pub eval::Task::half: eval::Half
+pub eval::Task::id: alloc::string::String
+pub fn eval::Answers::id(&self) -> &eval::ProbeId
+pub fn eval::Comparison::intact(&self) -> bool
+pub fn eval::Disposal::because(&self) -> &str
+pub fn eval::Half::as_str(self) -> &'static str
+pub fn eval::Probe::answered(&self, alloc::vec::Vec<alloc::string::String>) -> core::result::Result<eval::Answers, kernel::error::AxError>
+pub fn eval::Probe::id(&self) -> &eval::ProbeId
+pub fn eval::Probe::new(eval::ProbeId, alloc::vec::Vec<alloc::string::String>) -> core::result::Result<eval::Probe, kernel::error::AxError>
+pub fn eval::Probe::questions(&self) -> &[alloc::string::String]
+pub fn eval::Suite::half(&self, eval::Half) -> alloc::vec::Vec<&eval::Task>
+pub fn eval::Suite::is_empty(&self) -> bool
+pub fn eval::Suite::len(&self) -> usize
+pub fn eval::Suite::new(alloc::vec::Vec<eval::Task>) -> core::result::Result<eval::Suite, kernel::error::AxError>
+pub fn eval::Suite::report(&self, &[eval::Outcome]) -> eval::Report
+pub fn eval::Tally::per_mille(&self) -> u32
+pub fn eval::compare(&eval::Answers, &eval::Answers) -> core::result::Result<eval::Comparison, kernel::error::AxError>
+pub fn eval::dispose(&eval::AssetUse, eval::Score, bool) -> eval::Disposal
+pub fn eval::score(&eval::AssetUse) -> eval::Score
+pub fn eval::sweep<T: core::clone::Clone>(&[(T, eval::AssetUse, eval::Score, bool)]) -> alloc::vec::Vec<(T, eval::Disposal)>
+pub fn eval::worst_first<T: core::clone::Clone>(&[(T, eval::Score)]) -> alloc::vec::Vec<(T, eval::Score)>
+pub mod eval
+pub struct eval::Answers
+pub struct eval::AssetUse
+pub struct eval::Comparison
+pub struct eval::Outcome
+pub struct eval::Probe
+pub struct eval::ProbeId
+pub struct eval::Report
+pub struct eval::Score
+pub struct eval::Suite
+pub struct eval::Tally
+pub struct eval::Task

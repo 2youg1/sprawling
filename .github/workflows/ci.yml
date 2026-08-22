@@ -1,0 +1,52 @@
+# Three platforms because A4/V8 assert byte identity; a platform not in the
+# matrix is a promise, not a fact (constitution 18.2 Stage 0).
+# C1 note: GitHub Actions infrastructure is not part of the artifact build
+# chain; the zero-js gate asserts our own commands never invoke npm/node.
+name: ci
+# Trigger is manual-only while the project is under construction (card S0.12,
+# user ruling: no CI yet). Restore push/pull_request triggers on user verdict.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-deny,cargo-public-api
+      - name: nightly toolchain (rustdoc JSON for apisync)
+        run: rustup toolchain install nightly --profile minimal
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: tests
+        run: cargo nextest run --workspace --locked --all-features
+      - name: deny
+        run: cargo deny check
+      - name: xtask gates
+        run: cargo xtask gates
+
+  kani:
+    # V5: the kernel harnesses (cfg(kani)); Linux-only upstream.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: model-checking/kani-github-action@v1
+        with:
+          args: -p kernel

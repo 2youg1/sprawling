@@ -1,0 +1,190 @@
+#[non_exhaustive] pub enum memory::QueueLane
+#[non_exhaustive] pub enum memory::RunPhase
+impl core::fmt::Debug for memory::Worktrees
+impl kernel::ledger::Ledger for memory::JsonlLedger
+impl memory::Attribution
+impl memory::Bundle
+impl memory::Cas
+impl memory::Checkpoint
+impl memory::DigestCache
+impl memory::EventQueue
+impl memory::HotView
+impl memory::JsonlLedger
+impl memory::LedgerIndex
+impl memory::Manifest
+impl memory::MemoryError
+impl memory::Projection
+impl memory::QueueLane
+impl memory::WorktreeLease
+impl memory::WorktreeName
+impl memory::Worktrees
+pub const memory::MANIFEST: &str
+pub enum memory::MemoryError
+pub fn memory::Attribution::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::Attribution::new() -> memory::Attribution
+pub fn memory::Attribution::report(&self) -> memory::AttributionReport
+pub fn memory::Bundle::export(&std::path::Path, &std::path::Path) -> core::result::Result<memory::Manifest, memory::MemoryError>
+pub fn memory::Bundle::read_manifest(&std::path::Path) -> core::result::Result<memory::Manifest, memory::MemoryError>
+pub fn memory::Bundle::restore(&std::path::Path, &std::path::Path) -> core::result::Result<memory::Manifest, memory::MemoryError>
+pub fn memory::Cas::contains(&self, &kernel::locator::B3Hash) -> bool
+pub fn memory::Cas::get(&self, &kernel::locator::B3Hash) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
+pub fn memory::Cas::get_range(&self, &kernel::locator::B3Hash, &kernel::locator::Range) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
+pub fn memory::Cas::open(&std::path::Path) -> core::result::Result<memory::Cas, memory::MemoryError>
+pub fn memory::Cas::put(&mut self, &[u8]) -> core::result::Result<kernel::locator::B3Hash, memory::MemoryError>
+pub fn memory::Checkpoint::ensure_base(&mut self, &str, kernel::event::TimeMs, &str) -> core::result::Result<core::option::Option<kernel::event::Payload>, memory::MemoryError>
+pub fn memory::Checkpoint::open(&std::path::Path) -> core::result::Result<memory::Checkpoint, memory::MemoryError>
+pub fn memory::Checkpoint::scan_staged(&mut self) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::Checkpoint::wave_post(&mut self, &str) -> core::result::Result<alloc::vec::Vec<kernel::event::Payload>, memory::MemoryError>
+pub fn memory::Checkpoint::wave_pre(&mut self, &str, kernel::event::TimeMs, &str) -> core::result::Result<kernel::event::Payload, memory::MemoryError>
+pub fn memory::DigestCache::get(&self, &kernel::locator::B3Hash) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, memory::MemoryError>
+pub fn memory::DigestCache::invalidate(&mut self, &kernel::locator::B3Hash, &str) -> core::result::Result<kernel::event::Payload, memory::MemoryError>
+pub fn memory::DigestCache::open(&std::path::Path) -> core::result::Result<memory::DigestCache, memory::MemoryError>
+pub fn memory::DigestCache::put(&mut self, &kernel::locator::B3Hash, &[u8]) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::EventQueue::consume(&mut self) -> core::option::Option<memory::QueueItem>
+pub fn memory::EventQueue::duplicate_count(&self) -> u64
+pub fn memory::EventQueue::enqueue(&mut self, kernel::idem::IdemKey, kernel::event::Payload, kernel::event::TimeMs) -> core::result::Result<kernel::backpressure::Admission, memory::MemoryError>
+pub fn memory::EventQueue::is_empty(&self) -> bool
+pub fn memory::EventQueue::lane(&self) -> memory::QueueLane
+pub fn memory::EventQueue::len(&self) -> u64
+pub fn memory::EventQueue::new(memory::QueueLane, u64) -> memory::EventQueue
+pub fn memory::EventQueue::shed_count(&self) -> u64
+pub fn memory::EventQueue::stats(&self) -> kernel::backpressure::QueueStats
+pub fn memory::HotView::active_count(&self) -> u64
+pub fn memory::HotView::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::HotView::frozen_count(&self) -> u64
+pub fn memory::HotView::get(&self, &kernel::event::RunId) -> core::option::Option<&memory::RunHot>
+pub fn memory::HotView::new() -> memory::HotView
+pub fn memory::HotView::runs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&kernel::event::RunId, &memory::RunHot)>
+pub fn memory::JsonlLedger::append(&mut self, kernel::event::EventDraft) -> core::result::Result<kernel::event::EventRef, kernel::error::AxError>
+pub fn memory::JsonlLedger::append_all(&mut self, alloc::vec::Vec<kernel::event::EventDraft>) -> core::result::Result<alloc::vec::Vec<kernel::event::EventRef>, memory::MemoryError>
+pub fn memory::JsonlLedger::observe(&mut self, memory::WriteObserver)
+pub fn memory::JsonlLedger::open(&std::path::Path, kernel::event::TimeMs) -> core::result::Result<(Self, memory::OpenReport), memory::MemoryError>
+pub fn memory::JsonlLedger::position(&self) -> kernel::event::Seq
+pub fn memory::JsonlLedger::read_raw_lines(&self) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, memory::MemoryError>
+pub fn memory::LedgerIndex::is_empty(&self) -> bool
+pub fn memory::LedgerIndex::len(&self) -> usize
+pub fn memory::LedgerIndex::line_at(&self, &std::path::Path, kernel::event::Seq) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
+pub fn memory::LedgerIndex::load_or_rebuild(&std::path::Path) -> core::result::Result<memory::LedgerIndex, memory::MemoryError>
+pub fn memory::LedgerIndex::persist(&self, &std::path::Path) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::LedgerIndex::tail_seq(&self) -> core::option::Option<kernel::event::Seq>
+pub fn memory::Manifest::cas_objects(&self) -> u64
+pub fn memory::Manifest::files(&self) -> u64
+pub fn memory::Manifest::head(&self) -> &str
+pub fn memory::Manifest::records(&self) -> u64
+pub fn memory::MemoryError::into_ax(self) -> kernel::error::AxError
+pub fn memory::Projection::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::Projection::apply_all<'a>(&mut self, impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::Projection::export_canonical(&self) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
+pub fn memory::Projection::last_applied(&self) -> core::option::Option<kernel::event::Seq>
+pub fn memory::Projection::open(&std::path::Path) -> core::result::Result<memory::Projection, memory::MemoryError>
+pub fn memory::Projection::recycle_bin(&self) -> core::result::Result<alloc::vec::Vec<memory::RecycleEntry>, memory::MemoryError>
+pub fn memory::Projection::run_rows(&self) -> core::result::Result<alloc::vec::Vec<memory::RunRow>, memory::MemoryError>
+pub fn memory::QueueLane::as_str(self) -> &'static str
+pub fn memory::WorktreeLease::disk(&self) -> kernel::budget::ByteLen
+pub fn memory::WorktreeLease::name(&self) -> &memory::WorktreeName
+pub fn memory::WorktreeLease::opened_payload(&self) -> core::result::Result<kernel::event::Payload, memory::MemoryError>
+pub fn memory::WorktreeLease::path(&self) -> &std::path::Path
+pub fn memory::WorktreeName::as_str(&self) -> &str
+pub fn memory::WorktreeName::parse(&str) -> core::result::Result<memory::WorktreeName, memory::MemoryError>
+pub fn memory::Worktrees::claim(&self, &memory::WorktreeName) -> core::result::Result<memory::WorktreeLease, memory::MemoryError>
+pub fn memory::Worktrees::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn memory::Worktrees::live(&self) -> core::result::Result<alloc::vec::Vec<memory::WorktreeName>, memory::MemoryError>
+pub fn memory::Worktrees::merge(&self, &memory::WorktreeName) -> core::result::Result<alloc::string::String, memory::MemoryError>
+pub fn memory::Worktrees::open(&std::path::Path) -> core::result::Result<memory::Worktrees, memory::MemoryError>
+pub fn memory::Worktrees::release(&self, memory::WorktreeLease) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::open_restored(&std::path::Path, kernel::event::TimeMs) -> core::result::Result<std::path::PathBuf, memory::MemoryError>
+pub fn memory::read_raw_lines_at(&std::path::Path) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, memory::MemoryError>
+pub memory::AttributionReport::by_actor: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
+pub memory::AttributionReport::by_run: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
+pub memory::AttributionReport::by_segment: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
+pub memory::AttributionReport::by_skill: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
+pub memory::AttributionReport::by_tool: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
+pub memory::AttributionReport::total: kernel::budget::UsdMicros
+pub memory::MemoryError::Bundle
+pub memory::MemoryError::Bundle::detail: alloc::string::String
+pub memory::MemoryError::Bundle::op: &'static str
+pub memory::MemoryError::CasCorrupt
+pub memory::MemoryError::CasCorrupt::hash: alloc::string::String
+pub memory::MemoryError::CasCorrupt::path: std::path::PathBuf
+pub memory::MemoryError::CasMissing
+pub memory::MemoryError::CasMissing::hash: alloc::string::String
+pub memory::MemoryError::Checkpoint
+pub memory::MemoryError::Checkpoint::detail: alloc::string::String
+pub memory::MemoryError::Checkpoint::op: &'static str
+pub memory::MemoryError::Draft
+pub memory::MemoryError::Draft::source: kernel::error::AxError
+pub memory::MemoryError::Envelope
+pub memory::MemoryError::Envelope::line: u64
+pub memory::MemoryError::Envelope::path: std::path::PathBuf
+pub memory::MemoryError::Envelope::source: kernel::error::AxError
+pub memory::MemoryError::Io
+pub memory::MemoryError::Io::op: &'static str
+pub memory::MemoryError::Io::path: std::path::PathBuf
+pub memory::MemoryError::Io::source: core::io::error::Error
+pub memory::MemoryError::MergeStale
+pub memory::MemoryError::MergeStale::detail: alloc::string::String
+pub memory::MemoryError::MergeStale::name: alloc::string::String
+pub memory::MemoryError::Projection
+pub memory::MemoryError::Projection::detail: alloc::string::String
+pub memory::MemoryError::Projection::op: &'static str
+pub memory::MemoryError::RangeOutOfBounds
+pub memory::MemoryError::RangeOutOfBounds::hash: alloc::string::String
+pub memory::MemoryError::SecretEgress
+pub memory::MemoryError::SecretEgress::locations: alloc::string::String
+pub memory::MemoryError::SeqMissing
+pub memory::MemoryError::SeqMissing::seq: u64
+pub memory::MemoryError::VersionAhead
+pub memory::MemoryError::VersionAhead::path: std::path::PathBuf
+pub memory::MemoryError::VersionAhead::v: u64
+pub memory::MemoryError::Worktree
+pub memory::MemoryError::Worktree::detail: alloc::string::String
+pub memory::MemoryError::Worktree::op: &'static str
+pub memory::MemoryError::WorktreeBusy
+pub memory::MemoryError::WorktreeBusy::detail: alloc::string::String
+pub memory::MemoryError::WorktreeBusy::name: alloc::string::String
+pub memory::OpenReport::recovered: core::option::Option<memory::TailTruncation>
+pub memory::QueueItem::enqueued_t: kernel::event::TimeMs
+pub memory::QueueItem::id: u64
+pub memory::QueueItem::key: kernel::idem::IdemKey
+pub memory::QueueItem::payload: kernel::event::Payload
+pub memory::QueueLane::Approval
+pub memory::QueueLane::Repair
+pub memory::QueueLane::Signal
+pub memory::RecycleEntry::paths: alloc::vec::Vec<alloc::string::String>
+pub memory::RecycleEntry::restoration: alloc::string::String
+pub memory::RecycleEntry::restored: bool
+pub memory::RecycleEntry::seq: kernel::event::Seq
+pub memory::RecycleEntry::t: kernel::event::TimeMs
+pub memory::RunHot::last_kind: kernel::event::EventKind
+pub memory::RunHot::last_seq: kernel::event::Seq
+pub memory::RunHot::phase: memory::RunPhase
+pub memory::RunHot::who: alloc::string::String
+pub memory::RunPhase::Active
+pub memory::RunPhase::Frozen
+pub memory::RunRow::frozen: core::option::Option<alloc::string::String>
+pub memory::RunRow::run: alloc::string::String
+pub memory::RunRow::started_t: kernel::event::TimeMs
+pub memory::TailTruncation::dropped_bytes: u64
+pub mod memory
+pub struct memory::Attribution
+pub struct memory::AttributionReport
+pub struct memory::Bundle
+pub struct memory::Cas
+pub struct memory::Checkpoint
+pub struct memory::DigestCache
+pub struct memory::EventQueue
+pub struct memory::HotView
+pub struct memory::JsonlLedger
+pub struct memory::LedgerIndex
+pub struct memory::Manifest
+pub struct memory::OpenReport
+pub struct memory::Projection
+pub struct memory::QueueItem
+pub struct memory::RecycleEntry
+pub struct memory::RunHot
+pub struct memory::RunRow
+pub struct memory::TailTruncation
+pub struct memory::WorktreeLease
+pub struct memory::WorktreeName(_)
+pub struct memory::Worktrees
+pub type memory::WriteObserver = alloc::boxed::Box<(dyn core::ops::function::FnMut(&kernel::event::EventRecord) + core::marker::Send)>

@@ -1,0 +1,21 @@
+[package]
+name = "citysim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kernel = { path = "../crates/kernel", features = ["conformance"] }
+memory = { path = "../crates/memory" }
+runtime = { path = "../crates/runtime" }
+gateway = { path = "../crates/gateway" }
+eval = { path = "../crates/eval" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

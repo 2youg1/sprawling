@@ -1,0 +1,18 @@
+[package]
+name = "collab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kernel = { path = "../kernel" }
+memory = { path = "../memory" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+trybuild = { workspace = true }
+
+[lints]
+workspace = true

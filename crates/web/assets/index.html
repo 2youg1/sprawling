@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling</title>
+<!--
+  No colour is named here. web::theme writes the :root custom properties as
+  its first act, and every rule below reads a token. That is what makes
+  "one production point for colour" true of the shipped page and not only
+  of the Rust source.
+-->
+<style>
+  /* Five regions, one rhythm. Every size below is a multiple of 4px and
+     every colour is a token: meaning is carried by lightness, and the one
+     coloured token that means anything is ALERT - a person is needed. */
+  body { background: var(--G0); color: var(--G8);
+         font-family: "Noto Sans SC", "Zen Kaku Gothic New", system-ui, sans-serif;
+         font-size: 14px; line-height: 1.55; font-variant-numeric: tabular-nums;
+         margin: 0; min-height: 100vh; }
+  h2 { font-size: 15px; font-weight: 600; color: var(--G9); margin: 0 0 4px; }
+  p { margin: 0; }
+  /* The five regions fill the window exactly once: the rows are declared,
+     so the middle one takes what is left and scrolls inside itself. With
+     `min-height` and no rows, the whole document scrolled instead - the
+     control surface slid off the bottom edge and the top bar went with it,
+     which is the opposite of what a standing region is for. */
+  .layout { display: grid; height: 100vh; box-sizing: border-box; gap: 8px; padding: 16px;
+            grid-template-columns: 200px 1fr 240px;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            grid-template-areas: "top top top" "nav centre status" "foot foot foot"; }
+  .left-nav, .right-status { overflow: auto; }
+  .top-bar { grid-area: top; color: var(--G9); display: flex; align-items: center; }
+  .left-nav { grid-area: nav; display: flex; flex-direction: column; gap: 14px; }
+  /* Three headings rather than eight flat entries: the nav answers "where
+     do I go for this", and a list that long is read as a menu to search.
+     Nothing collapses - a hidden page is not a shorter nav, it is a page
+     nobody finds. */
+  .nav-group { display: flex; flex-direction: column; gap: 2px; }
+  .nav-heading { font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+                 text-transform: uppercase; color: var(--G5); margin: 0 0 2px 9px; }
+  .nav-group .nav-item { padding-left: 16px; }
+  .centre { grid-area: centre; background: var(--G1); overflow: auto; padding: 16px 18px;
+            border: 1px solid var(--G3); border-radius: var(--corner-panel);
+            corner-shape: var(--corner-panel-shape); }
+  .right-status { grid-area: status; color: var(--G7); display: flex;
+                  flex-direction: column; gap: 8px; }
+  .control-surface { grid-area: foot; border-top: 1px solid var(--G3); padding-top: 10px;
+                     display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .address { letter-spacing: 0.04em; font-weight: 600; }
+
+  /* Controls. One shape for every button, one focus ring, and a disabled
+     state that dims rather than hides - a control a person cannot use is
+     still a control they can read. */
+  button { background: var(--G3); color: var(--G9); border: 1px solid var(--G4);
+           border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
+           padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--G4); color: var(--G10); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button[type="submit"]:not(:disabled) { background: var(--ACCENT); border-color: var(--ACCENT);
+                                         color: var(--G0); font-weight: 600; }
+  button[type="submit"]:hover:not(:disabled) { background: var(--ACCENT_HOVER);
+                                               border-color: var(--ACCENT_HOVER); }
+  :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 1px; }
+  input, select, textarea { background: var(--G1); color: var(--G9); font: inherit;
+                            border: 1px solid var(--G4); border-radius: var(--corner-control);
+                            corner-shape: var(--corner-control-shape); padding: 6px 9px; }
+  input::placeholder { color: var(--G5); }
+  form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+
+  /* Left nav: the current page is marked by an inset bar, not by colour
+     alone; the badge is the one place ALERT appears unasked. */
+  .nav-item { text-align: left; background: transparent; border: 0;
+              border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
+              padding: 7px 9px; display: flex; align-items: center; gap: 8px; }
+  .nav-item:hover { background: var(--G2); }
+  .nav-item[aria-current="page"] { background: var(--G2); color: var(--G10);
+                                   box-shadow: inset 2px 0 0 var(--ACCENT); }
+  .badge { margin-left: auto; background: var(--ALERT); color: var(--G0);
+           border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+           padding: 0 6px; font-size: 11px; font-weight: 700; }
+
+  /* Tables and lists share one grammar across every page. */
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  th { text-align: left; color: var(--G6); font-weight: 500; font-size: 12px;
+       padding: 6px 8px; border-bottom: 1px solid var(--G3); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--G2); vertical-align: top; }
+  tr:hover td { background: var(--G2); }
+  ol.lines { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
+  .line { display: grid; grid-template-columns: 72px 148px 1fr; gap: 10px;
+          padding: 4px 0; border-bottom: 1px solid var(--G2); }
+  .line .seq { color: var(--G5); }
+  .line .kind { color: var(--G7); }
+  .line .text { color: var(--G9); }
+  .line.person .text { color: var(--G10); font-weight: 600; }
+  .empty, .window, .dropped, .settings-state, .city-state, .reconciled, .spent-line,
+  .note, .enrolment { color: var(--G6); font-size: 12.5px; }
+  .filtered, .unpriced, .problems { color: var(--ALERT); font-size: 12.5px; }
+
+  /* Approvals: a group is a card, and a tainted one is bordered in the
+     colour that means a person is needed and cannot be waived. */
+  .cluster { border: 1px solid var(--G3); border-radius: var(--corner-card);
+             corner-shape: var(--corner-card-shape); margin-bottom: 12px; }
+  .cluster > header { background: var(--G3); padding: 8px 12px; display: flex;
+                      gap: 10px; align-items: center; flex-wrap: wrap; }
+  .cluster.tainted { border-color: var(--ALERT); }
+  .cluster .item { padding: 9px 12px; border-top: 1px solid var(--G2); display: flex;
+                   gap: 10px; align-items: center; flex-wrap: wrap; }
+  .cluster .desc { flex: 1; color: var(--G9); }
+  .cluster .actor, .cluster .count { color: var(--G6); font-size: 12.5px; }
+
+  /* The progress bar: one shape, three states, and the blocked one carries
+     a rule so it survives both the loss of hue and a lightness collision.
+     No animation - a moving stripe manufactures attention. */
+  .bar { display: flex; align-items: center; gap: 8px; }
+  .bar .track { display: block; width: 160px; height: 8px; background: var(--G4);
+                border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+                overflow: hidden; }
+  .bar .fill { display: block; height: 100%; }
+  .bar.running .fill { background: var(--ACCENT); }
+  .bar.done .fill { background: var(--PROGRESS_DONE); }
+  .bar.blocked .fill { background: var(--ALERT); box-shadow: inset -2px 0 0 var(--G10); }
+  /* Nothing filled and still blocked: the rule sits where the fill would
+     have started, so the shape is present either way. */
+  .bar.blocked .track { box-shadow: inset 2px 0 0 var(--G10); }
+  .bar .bar-label { color: var(--G7); font-size: 12.5px; }
+
+  /* The city's vital signs: three counts, above the picture. Plain text
+     rather than tiles - a number that needs a box around it to be noticed
+     is a number nobody needed. */
+  .vitals { display: flex; gap: 20px; flex-wrap: wrap; color: var(--G6);
+            font-size: 12.5px; margin-bottom: 10px; }
+  .vitals b { color: var(--G9); font-weight: 600; }
+
+  /* The archive: a search over the shelves, and what the record says went
+     in lately. The two halves are separated by a heading, never merged -
+     one reads the disk, the other reads history. */
+  .archive-search .search { margin: 0 0 12px; }
+  .archive-search .search input { min-width: 280px; }
+  .shelf { margin: 10px 0 16px; }
+  .shelf h2 { color: var(--G9); border-bottom: 1px solid var(--G3); padding-bottom: 4px; }
+  .lately { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--G3); }
+  /* Four columns here rather than the building page's three: a city-wide
+     list has to say which building a line came from. */
+  .archive-search .filed { grid-template-columns: 90px 110px 1fr 160px; }
+  .filed .where { color: var(--G6); font-size: 12.5px; }
+
+  /* A room's mailbox: what waits, and who sent it. Same row grammar as
+     the archive index, because both are lists of things the city filed. */
+  .waiting { display: grid; grid-template-columns: 110px 180px 1fr; gap: 12px;
+             padding: 6px 0; border-bottom: 1px solid var(--G2); }
+  .waiting .kind { color: var(--G9); }
+  .waiting .from, .waiting .id { color: var(--G6); }
+  .tab.room { font-family: ui-monospace, monospace; font-size: 12.5px; }
+
+  /* The Recycle Bin: one row per discarded thing, and the way back is the
+     widest column because it is the only part a person acts on. A row that
+     already came back dims - it is evidence, not work. */
+  .binned { display: grid; grid-template-columns: 280px 1fr auto; gap: 12px;
+            padding: 7px 0; border-bottom: 1px solid var(--G2); align-items: baseline; }
+  .binned .what { color: var(--G9); }
+  .binned .way-back { color: var(--G7); }
+  .binned.back { color: var(--G6); }
+  .binned.back .what, .binned.back .way-back { color: var(--G6); }
+
+  /* Cost: one bar grammar, share by width, amount right-aligned. */
+  .dimension { margin-bottom: 14px; }
+  .dashboard .row { display: grid; grid-template-columns: 220px 1fr 96px; gap: 10px;
+                    align-items: center; padding: 3px 0; }
+  .track { display: block; height: 10px; background: var(--G3);
+           border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+           overflow: hidden; }
+  .fill { display: block; height: 100%; background: var(--PROGRESS_DONE); }
+  .total { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+           margin-bottom: 12px; }
+  .total .amount { font-size: 28px; font-weight: 600; color: var(--G10); }
+  .dashboard .amount { text-align: right; }
+  .consumed { color: var(--G7); }
+
+  /* The dispatch bar takes the width it needs and no more. */
+  .dispatch { flex: 1; display: grid; gap: 8px; margin: 0;
+              grid-template-columns: 170px 1fr 1fr 110px auto; }
+  .dispatch input, .dispatch select { width: 100%; }
+  .steer input { min-width: 320px; }
+  .filters input, .filters select { min-width: 160px; }
+  .export textarea { width: 100%; background: var(--G1); color: var(--G7);
+                     border: 1px solid var(--G3); border-radius: var(--corner-card);
+                     corner-shape: var(--corner-card-shape); }
+
+  /* The city is painted at a fixed pixel size and shown at whatever size
+     the pane has; the picture is one canvas, so it scales as one thing. */
+  .city-view canvas { max-width: 100%; height: auto; display: block;
+                      border: 1px solid var(--G3); border-radius: var(--corner-panel);
+                      corner-shape: var(--corner-panel-shape); }
+  .city-view .camera { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .city-view .camera button { padding: 4px 9px; font-size: 12.5px; }
+  .settings .models summary { cursor: pointer; color: var(--G7); }
+  .settings .model { display: inline-block; margin: 2px 6px 0 0; color: var(--G7);
+                     font-size: 12px; border: 1px solid var(--G3);
+                     border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+                     padding: 0 5px; }
+  .runs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .runs button[aria-current="true"] { border-color: var(--ACCENT); color: var(--G10); }
+  .paging { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+
+  /* A building's own pages: tabs across the top, one document below. */
+  .building-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+                   margin-bottom: 10px; }
+  .building-head .progress, .building-head .rooms { color: var(--G6); font-size: 12.5px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--G3); margin-bottom: 12px;
+          flex-wrap: wrap; }
+  .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--G7);
+         padding: 7px 12px; }
+  .tab[aria-current="true"] { color: var(--G10); border-bottom-color: var(--ACCENT); }
+  .doc-note { color: var(--G6); font-size: 12.5px; margin-bottom: 8px; }
+  .doc-text { background: var(--G1); border: 1px solid var(--G3);
+              border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+              padding: 14px 16px; white-space: pre-wrap; color: var(--G8);
+              max-height: 56vh; overflow: auto; margin: 0; font-size: 13px; }
+  .filed { display: grid; grid-template-columns: 90px 110px 1fr; gap: 12px; padding: 7px 0;
+           border-bottom: 1px solid var(--G2); }
+  .filed .day, .filed .kind { color: var(--G6); }
+  .open-building { margin: 6px 0; }
+  .index { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+  .index-row { display: grid; grid-template-columns: 1fr 90px auto; gap: 10px;
+               align-items: center; padding: 3px 0; }
+  .index-row .pick { text-align: left; background: transparent; border: 0; color: var(--G9); }
+  .index-row .pick[aria-current="true"] { color: var(--G10); font-weight: 600;
+                                          box-shadow: inset 2px 0 0 var(--ACCENT); }
+  .index-row .note { color: var(--G6); font-size: 12.5px; }
+  .index-row .read { padding: 3px 9px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div id="main"></div>
+<script type="module">
+  import init from "./web.js";
+  init();
+</script>
+</body>
+</html>

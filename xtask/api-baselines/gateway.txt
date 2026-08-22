@@ -1,0 +1,154 @@
+#[non_exhaustive] pub enum gateway::AuthSpec
+#[non_exhaustive] pub enum gateway::CostSource
+#[non_exhaustive] pub enum gateway::Persistence
+#[non_exhaustive] pub enum gateway::ProviderOutcome
+impl core::default::Default for gateway::AdmissionState
+impl core::fmt::Debug for gateway::OauthTokens
+impl gateway::AdmissionState
+impl gateway::AttachedEndpoint
+impl gateway::Custodian
+impl gateway::Endpoint
+impl gateway::EndpointBook
+impl gateway::MarketSnapshot
+impl gateway::Native
+impl kernel::model::Model for gateway::Endpoint
+impl kernel::model::Model for gateway::Native
+pub const gateway::OAUTH_PROFILES: [gateway::OauthProfile; 2]
+pub enum gateway::AdmissionVerdict
+pub fn gateway::AdmissionState::admit(&self, kernel::event::TimeMs) -> gateway::AdmissionVerdict
+pub fn gateway::AdmissionState::default() -> Self
+pub fn gateway::AdmissionState::interval_ms(&self) -> u64
+pub fn gateway::AdmissionState::new() -> gateway::AdmissionState
+pub fn gateway::AdmissionState::on_dispatch(&mut self, kernel::event::TimeMs) -> core::result::Result<(), kernel::error::AxError>
+pub fn gateway::AdmissionState::on_outcome(&mut self, gateway::ProviderOutcome, kernel::event::TimeMs)
+pub fn gateway::AttachedEndpoint::chat_url(&self) -> alloc::string::String
+pub fn gateway::AttachedEndpoint::has_credential(&self) -> bool
+pub fn gateway::AttachedEndpoint::is_local(&self) -> bool
+pub fn gateway::AttachedEndpoint::models_url(&self) -> alloc::string::String
+pub fn gateway::Custodian::capture(&mut self, &[u8], &str) -> core::result::Result<gateway::Captured, kernel::error::AxError>
+pub fn gateway::Custodian::describe(&self, &kernel::secret::SecretRef) -> gateway::Described
+pub fn gateway::Custodian::in_memory() -> gateway::Custodian
+pub fn gateway::Custodian::persistence(&self) -> gateway::Persistence
+pub fn gateway::Custodian::probe() -> (gateway::Custodian, core::option::Option<kernel::event::Payload>)
+pub fn gateway::Custodian::resolve(&self, &kernel::secret::SecretRef) -> core::result::Result<kernel::secret::Sealed<alloc::string::String>, kernel::error::AxError>
+pub fn gateway::Custodian::set(&mut self, &kernel::secret::SecretRef, zeroize::Zeroizing<alloc::string::String>) -> core::result::Result<(), kernel::error::AxError>
+pub fn gateway::Custodian::with_env_reader(self, gateway::EnvReader) -> gateway::Custodian
+pub fn gateway::Endpoint::call(&mut self, &kernel::model::ModelRequest) -> core::result::Result<kernel::model::ModelReturn, kernel::error::AxError>
+pub fn gateway::Endpoint::list_models(&self, &str) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, kernel::error::AxError>
+pub fn gateway::Endpoint::new(gateway::EndpointConfig, gateway::SecretResolver) -> core::result::Result<gateway::Endpoint, kernel::error::AxError>
+pub fn gateway::EndpointBook::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), kernel::error::AxError>
+pub fn gateway::EndpointBook::apply_payload(&mut self, kernel::event::EventKind, &kernel::event::Payload) -> core::result::Result<(), kernel::error::AxError>
+pub fn gateway::EndpointBook::choices(&self) -> impl core::iter::traits::iterator::Iterator<Item = (kernel::model::ModelTag, &str, &gateway::ModelEntry)>
+pub fn gateway::EndpointBook::endpoints(&self) -> impl core::iter::traits::iterator::Iterator<Item = &gateway::AttachedEndpoint>
+pub fn gateway::EndpointBook::is_empty(&self) -> bool
+pub fn gateway::EndpointBook::new() -> gateway::EndpointBook
+pub fn gateway::EndpointBook::select(&self, kernel::model::ModelTag, &kernel::model::BuildingPolicy) -> core::result::Result<gateway::Chosen<'_>, kernel::error::AxError>
+pub fn gateway::MarketSnapshot::builtin() -> gateway::MarketSnapshot
+pub fn gateway::MarketSnapshot::from_entries(u32, alloc::vec::Vec<gateway::ModelEntry>) -> core::result::Result<gateway::MarketSnapshot, kernel::error::AxError>
+pub fn gateway::MarketSnapshot::is_empty(&self) -> bool
+pub fn gateway::MarketSnapshot::len(&self) -> usize
+pub fn gateway::MarketSnapshot::lookup(&self, &str) -> core::option::Option<&gateway::ModelEntry>
+pub fn gateway::MarketSnapshot::version(&self) -> u32
+pub fn gateway::Native::call(&mut self, &kernel::model::ModelRequest) -> core::result::Result<kernel::model::ModelReturn, kernel::error::AxError>
+pub fn gateway::Native::new(gateway::NativeConfig) -> core::result::Result<gateway::Native, kernel::error::AxError>
+pub fn gateway::OauthTokens::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn gateway::attached_payload(&gateway::AttachedEndpoint) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn gateway::oauth_begin(&gateway::OauthProfile, alloc::string::String, alloc::string::String) -> core::result::Result<gateway::OauthPending, kernel::error::AxError>
+pub fn gateway::oauth_random(&[u8]) -> alloc::string::String
+pub fn gateway::oauth_redeem(&gateway::OauthProfile, &gateway::OauthPending, &str, u64) -> core::result::Result<gateway::OauthTokens, kernel::error::AxError>
+pub fn gateway::oauth_redeem_request(&gateway::OauthProfile, &gateway::OauthPending, &str) -> core::result::Result<gateway::TokenRequest, kernel::error::AxError>
+pub fn gateway::oauth_refresh(&gateway::OauthProfile, &kernel::secret::Sealed<alloc::string::String>, u64) -> core::result::Result<gateway::OauthTokens, kernel::error::AxError>
+pub fn gateway::profile(&str) -> core::option::Option<&'static gateway::OauthProfile>
+pub fn gateway::request_wire(kernel::model::DialectKind, &kernel::model::ChatRequest) -> core::result::Result<serde_json::value::Value, kernel::error::AxError>
+pub fn gateway::response_from_wire(kernel::model::DialectKind, &serde_json::value::Value) -> core::result::Result<kernel::model::ChatResponse, kernel::error::AxError>
+pub fn gateway::response_wire(kernel::model::DialectKind, &kernel::model::ChatResponse) -> core::result::Result<serde_json::value::Value, kernel::error::AxError>
+pub fn gateway::selected_payload(kernel::model::ModelTag, &str, &gateway::ModelEntry) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn gateway::settle(&kernel::model::ModelUsage, core::option::Option<kernel::budget::UsdMicros>, &gateway::ModelEntry) -> core::result::Result<gateway::CallCost, kernel::error::AxError>
+pub gateway::AdmissionVerdict::Admit
+pub gateway::AdmissionVerdict::Hold
+pub gateway::AdmissionVerdict::Hold::until: kernel::event::TimeMs
+pub gateway::AttachedEndpoint::auth: gateway::AuthSpec
+pub gateway::AttachedEndpoint::base_url: alloc::string::String
+pub gateway::AttachedEndpoint::dialect: kernel::model::DialectKind
+pub gateway::AttachedEndpoint::models: alloc::vec::Vec<alloc::string::String>
+pub gateway::AttachedEndpoint::name: alloc::string::String
+pub gateway::AuthSpec::Bearer(kernel::secret::SecretRef)
+pub gateway::AuthSpec::Header
+pub gateway::AuthSpec::Header::name: alloc::string::String
+pub gateway::AuthSpec::Header::value: kernel::secret::SecretRef
+pub gateway::AuthSpec::None
+pub gateway::CallCost::billed: kernel::budget::UsdMicros
+pub gateway::CallCost::source: gateway::CostSource
+pub gateway::CallCost::usage: kernel::model::ModelUsage
+pub gateway::Captured::events: alloc::vec::Vec<kernel::event::Payload>
+pub gateway::Captured::replaced: alloc::vec::Vec<u8>
+pub gateway::Chosen::endpoint: &'b gateway::AttachedEndpoint
+pub gateway::Chosen::entry: &'b gateway::ModelEntry
+pub gateway::CostSource::Authoritative
+pub gateway::CostSource::PriceSheet
+pub gateway::Described::configured: bool
+pub gateway::Described::persistence: gateway::Persistence
+pub gateway::Described::source: alloc::string::String
+pub gateway::Described::writable: bool
+pub gateway::EndpointConfig::auth: gateway::AuthSpec
+pub gateway::EndpointConfig::base_url: alloc::string::String
+pub gateway::EndpointConfig::dialect: kernel::model::DialectKind
+pub gateway::EndpointConfig::extra_headers: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub gateway::EndpointConfig::model: alloc::string::String
+pub gateway::EndpointConfig::overrides: alloc::vec::Vec<(alloc::string::String, serde_json::value::Value)>
+pub gateway::EndpointConfig::pricing: core::option::Option<gateway::ModelEntry>
+pub gateway::EndpointConfig::timeout_ms: u64
+pub gateway::ModelEntry::cache_read_price: kernel::budget::UsdMicros
+pub gateway::ModelEntry::cache_write_price: kernel::budget::UsdMicros
+pub gateway::ModelEntry::context_tokens: u64
+pub gateway::ModelEntry::id: alloc::string::String
+pub gateway::ModelEntry::input_price: kernel::budget::UsdMicros
+pub gateway::ModelEntry::max_output_tokens: u64
+pub gateway::ModelEntry::output_price: kernel::budget::UsdMicros
+pub gateway::NativeConfig::base_url: alloc::string::String
+pub gateway::NativeConfig::model: alloc::string::String
+pub gateway::NativeConfig::pricing: core::option::Option<gateway::ModelEntry>
+pub gateway::NativeConfig::timeout_ms: u64
+pub gateway::OauthPending::auth_url: alloc::string::String
+pub gateway::OauthPending::state: alloc::string::String
+pub gateway::OauthProfile::api_base: &'static str
+pub gateway::OauthProfile::auth_endpoint: &'static str
+pub gateway::OauthProfile::client_id: &'static str
+pub gateway::OauthProfile::headers: &'static [(&'static str, &'static str)]
+pub gateway::OauthProfile::provider: &'static str
+pub gateway::OauthProfile::redirect_uri: &'static str
+pub gateway::OauthProfile::scopes: &'static [&'static str]
+pub gateway::OauthProfile::token_endpoint: &'static str
+pub gateway::OauthTokens::access: zeroize::Zeroizing<alloc::string::String>
+pub gateway::OauthTokens::expires_in_s: core::option::Option<u64>
+pub gateway::OauthTokens::refresh: core::option::Option<zeroize::Zeroizing<alloc::string::String>>
+pub gateway::Persistence::AcrossReboots
+pub gateway::Persistence::ThisBoot
+pub gateway::Persistence::ThisProcess
+pub gateway::ProviderOutcome::Failed
+pub gateway::ProviderOutcome::Ok
+pub gateway::ProviderOutcome::RateLimited
+pub gateway::ProviderOutcome::RateLimited::retry_after_ms: core::option::Option<u64>
+pub gateway::TokenRequest::body: alloc::string::String
+pub gateway::TokenRequest::url: alloc::string::String
+pub mod gateway
+pub struct gateway::AdmissionState
+pub struct gateway::AttachedEndpoint
+pub struct gateway::CallCost
+pub struct gateway::Captured
+pub struct gateway::Chosen<'b>
+pub struct gateway::Custodian
+pub struct gateway::Described
+pub struct gateway::Endpoint
+pub struct gateway::EndpointBook
+pub struct gateway::EndpointConfig
+pub struct gateway::MarketSnapshot
+pub struct gateway::ModelEntry
+pub struct gateway::Native
+pub struct gateway::NativeConfig
+pub struct gateway::OauthPending
+pub struct gateway::OauthProfile
+pub struct gateway::OauthTokens
+pub struct gateway::TokenRequest
+pub type gateway::EnvReader = alloc::boxed::Box<(dyn core::ops::function::Fn(&str) -> core::option::Option<alloc::string::String> + core::marker::Send)>
+pub type gateway::SecretResolver = alloc::boxed::Box<(dyn core::ops::function::Fn(&kernel::secret::SecretRef) -> core::result::Result<kernel::secret::Sealed<alloc::string::String>, kernel::error::AxError> + core::marker::Send)>

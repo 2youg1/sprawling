@@ -1,0 +1,118 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/kernel",
+    "crates/memory",
+    "crates/gateway",
+    "crates/runtime",
+    "crates/collab",
+    "crates/city",
+    "crates/eval",
+    "crates/channels",
+    "crates/web",
+    "crates/browser",
+    "crates/protocol",
+    "crates/sprawling",
+    "xtask",
+    "citysim",
+]
+# `web` compiles to wasm32 from Stage 4 on; keep native `cargo check` off it.
+default-members = [
+    "crates/kernel",
+    "crates/memory",
+    "crates/gateway",
+    "crates/runtime",
+    "crates/collab",
+    "crates/city",
+    "crates/eval",
+    "crates/channels",
+    "crates/browser",
+    "crates/protocol",
+    "crates/sprawling",
+    "xtask",
+    "citysim",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MPL-2.0"
+rust-version = "1.97"
+publish = false
+
+[workspace.dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+# Stage 1 pins: blake3 is the library-wide sole hash;
+# uuid v7 is human-readable identity only (parse/format; no generation in kernel).
+blake3 = "1.8"
+uuid = { version = "1", features = ["serde"] }
+# Dev-facing: property tests, golden snapshots, temp dirs.
+proptest = "1"
+insta = "1"
+tempfile = "3"
+# S2: compile-fail proof that "unrepresentable" holds (V0 trybuild cases).
+trybuild = "1"
+# S2 pins: Sealed<T> zeroization.
+secrecy = "0.10"
+zeroize = "1.9"
+# S4 pins: channels is the first true async
+# consumer in the workspace - S3 deferred tokio to here on purpose. axum
+# carries tokio-tungstenite itself, so the WS protocol has one version
+# authority, not two.
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time"] }
+axum = "0.8"
+# S4.01 conclusion book (crates/web/web-SPEC.md section 8.5): Dioxus, built
+# without `dx`. default-features off is load-bearing - it drops `asset` and
+# `devtools`, both of which need the CLI we deliberately do not use, and it
+# makes the banned `asset!` macro non-existent rather than merely forbidden.
+dioxus = { version = "0.7.10", default-features = false, features = ["minimal"] }
+# Pinned to the installed wasm-bindgen CLI; a mismatch here is the quietest
+# way to break a wasm build.
+wasm-bindgen = "0.2.127"
+# R1.14: OS entropy for the PKCE verifier and the login state. It is not
+# the seeded RNG the simulator uses and must not become it - a verifier a
+# third party can predict is a login a third party can finish. Already in
+# the tree as a transitive dependency, so this adds a name rather than a
+# crate.
+getrandom = "0.3"
+# One HTTP client for the whole workspace: gateway speaks to providers,
+# the bin speaks to MCP servers reached over HTTP, and two version
+# authorities for one client is how two TLS stacks end up in one binary.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls", "json", "http2"] }
+# The bin's build script gzips the client bundle it embeds; xtask weighs
+# the same artifacts. One version authority for both.
+flate2 = "1"
+web-sys = "0.3"
+js-sys = "0.3"
+
+# C3 hardening: panicking constructs and silent numeric
+# corruption are compile-time errors everywhere; tests relax locally.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# V5 harnesses live behind cfg(kani); the cfg name is legal, kani itself
+# runs in the CI Linux job (no Windows host support upstream).
+unexpected_cfgs = { level = "deny", check-cfg = ["cfg(kani)"] }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+arithmetic_side_effects = "deny"
+as_conversions = "deny"
+dbg_macro = "deny"
+
+# crash-only delivery profile
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

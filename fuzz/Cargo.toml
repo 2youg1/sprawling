@@ -1,0 +1,41 @@
+# cargo-fuzz targets (V4: the parse surface is the taint boundary).
+# Standalone workspace on purpose: fuzz builds need nightly + libFuzzer and
+# never enter the product build graph.
+[package]
+name = "sprawling-fuzz"
+version = "0.0.1"
+edition = "2024"
+license = "MPL-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+kernel = { path = "../crates/kernel" }
+memory = { path = "../crates/memory" }
+tempfile = "3"
+
+[[bin]]
+name = "fuzz_address"
+path = "fuzz_targets/fuzz_address.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_locator"
+path = "fuzz_targets/fuzz_locator.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+
+[[bin]]
+name = "fuzz_jsonl_tail"
+path = "fuzz_targets/fuzz_jsonl_tail.rs"
+test = false
+doc = false
+bench = false

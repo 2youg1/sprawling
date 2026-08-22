@@ -1,0 +1,21 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kernel = { path = "../crates/kernel" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+# The frontend budget is stated compressed, so the gate compresses.
+# Shelling out to gzip would make the reading depend on which gzip is
+# on the path; this lands in workspace tooling only, never in the
+# product binary.
+flate2 = "1"
+
+[lints]
+workspace = true

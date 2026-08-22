@@ -1,0 +1,227 @@
+# 禁用词数据面 — 退役说法的机器子集（xtask lexicon 消费）。
+# 收录判据：语境无关、子串命中即可判错的词。语境依赖者（session 指本城运行时、
+# 建筑指项目时、裸用「档」、persona/soul 会误伤英文正文）不入本表，由评审执行。
+# 例外写法：命中行或其上一行携 `lexicon-ok: <理由>`。
+# 本文件为 .toml，不在扫描范围内，故可安全罗列禁用词本身。
+
+[[entry]]
+banned = "审计链"
+replacement = "Ledger"
+
+[[entry]]
+banned = "hash 链"
+replacement = "Ledger"
+
+[[entry]]
+banned = "事件日志"
+replacement = "Ledger"
+
+[[entry]]
+banned = "工作单元"
+replacement = "Room／节点（产品）；施工卡（施工过程）"
+
+[[entry]]
+banned = "approval 沉淀"
+replacement = "Policy"
+
+[[entry]]
+banned = "会话压缩"
+replacement = "Handoff"
+
+[[entry]]
+banned = "上下文压缩"
+replacement = "Handoff"
+
+[[entry]]
+banned = "任务卡"
+replacement = "JOB.md（产品）；施工卡（施工过程）"
+
+[[entry]]
+banned = "Task Card"
+replacement = "JOB.md（产品）；Build Card（施工过程）"
+
+[[entry]]
+banned = "工单"
+replacement = "JOB.md"
+
+[[entry]]
+banned = "身份卡"
+replacement = "URBANITE.md"
+
+[[entry]]
+banned = "Identity Card"
+replacement = "URBANITE.md"
+
+[[entry]]
+banned = "深色模式"
+replacement = "single-hue language"
+
+[[entry]]
+banned = "配色方案"
+replacement = "single-hue language"
+
+[[entry]]
+banned = "主题色"
+replacement = "single-hue language"
+
+[[entry]]
+banned = "回收目录"
+replacement = "Recycle Bin"
+
+[[entry]]
+banned = "垃圾箱"
+replacement = "Recycle Bin"
+
+[[entry]]
+banned = "软删除"
+replacement = "Discard＋Restoration"
+
+[[entry]]
+banned = "待办清单"
+replacement = "Roadmap.md"
+
+[[entry]]
+banned = "todo 清单"
+replacement = "Roadmap.md"
+
+[[entry]]
+banned = "自治档位"
+replacement = "Autonomy（三态）"
+
+[[entry]]
+banned = "自动模式"
+replacement = "Autonomy（三态）"
+
+[[entry]]
+banned = "全自动"
+replacement = "Autonomy（三态）"
+
+[[entry]]
+banned = "问人工具"
+replacement = "ApprovalItem"
+
+[[entry]]
+banned = "ask user"
+replacement = "ApprovalItem"
+
+[[entry]]
+banned = "确认对话框"
+replacement = "ApprovalItem／three-part refusal"
+
+[[entry]]
+banned = "加载动画"
+replacement = "progress bar"
+
+[[entry]]
+banned = "旋转器"
+replacement = "progress bar"
+
+[[entry]]
+banned = "swarm 模板"
+replacement = "Workshop 节点图"
+
+[[entry]]
+banned = "协作预设"
+replacement = "Workshop 节点图"
+
+[[entry]]
+banned = "write 工具"
+replacement = "exec 的 Python 臂"
+
+[[entry]]
+banned = "收件箱"
+replacement = "Inbox／Approval Inbox"
+
+[[entry]]
+banned = "大楼"
+replacement = "Building"
+
+[[entry]]
+banned = "车间"
+replacement = "Build Floor／Workshop"
+
+[[entry]]
+banned = "Amenity"
+replacement = "Utilities"
+
+[[entry]]
+banned = "时间工具"
+replacement = "ClockStamp／status"
+
+[[entry]]
+banned = "日期工具"
+replacement = "ClockStamp／status"
+
+[[entry]]
+banned = "会话复活"
+replacement = "resume／Fork"
+
+[[entry]]
+banned = "密钥字面"
+replacement = "SecretRef"
+
+[[entry]]
+banned = "原生窗口"
+replacement = "WebUI"
+
+[[entry]]
+banned = "桌面客户端"
+replacement = "WebUI"
+
+[[entry]]
+banned = "终端界面"
+replacement = "WebUI"
+
+[[entry]]
+banned = "sidecar"
+replacement = "Endpoint／external provider"
+
+[[entry]]
+banned = "强调色"
+replacement = "ACCENT"
+
+[[entry]]
+banned = "活性蓝"
+replacement = "ACCENT"
+
+[[entry]]
+banned = "暖黄"
+replacement = "ALERT"
+
+[[entry]]
+banned = "暖金"
+replacement = "ALERT"
+
+[[entry]]
+banned = "报批"
+replacement = "Escalate"
+
+[[entry]]
+banned = "全库 SKILL 清单"
+replacement = "Reading Room（阅览室）"
+
+[[entry]]
+banned = "插件"
+replacement = "Connector"
+
+[[entry]]
+banned = "扩展点"
+replacement = "seam"
+
+# P6：仓库不得引用树里没有的文件。这四个名字曾是本机文档的名字，
+# 它们在发布树里指向不存在的东西，故退役——要引用就引用树里的那一份。
+[[entry]]
+banned = "宪法"
+replacement = "ARCHITECTURE.md"
+
+[[entry]]
+banned = "语义权威"
+replacement = "ARCHITECTURE.md"
+
+[[entry]]
+banned = "设计文档"
+replacement = "ARCHITECTURE.md"
+
+[[entry]]
+banned = "constitution"
+replacement = "ARCHITECTURE.md"

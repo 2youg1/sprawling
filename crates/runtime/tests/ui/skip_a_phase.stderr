@@ -1,0 +1,7 @@
+error[E0599]: no method named `call` found for struct `Turn<Assembling>` in the current scope
+  --> tests/ui/skip_a_phase.rs:14:18
+   |
+14 |     let _ = turn.call();
+   |                  ^^^^ method not found in `Turn<Assembling>`
+   |
+   = note: the method was found for `Turn<Calling>`

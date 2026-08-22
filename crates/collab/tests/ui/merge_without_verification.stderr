@@ -1,0 +1,7 @@
+error[E0599]: no method named `merged` found for struct `Pr<Open>` in the current scope
+  --> tests/ui/merge_without_verification.rs:16:21
+   |
+16 |     let _ = request.merged("abc123".to_owned());
+   |                     ^^^^^^ method not found in `Pr<Open>`
+   |
+   = note: the method was found for `Pr<Verified>`

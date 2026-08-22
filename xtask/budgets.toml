@@ -1,0 +1,102 @@
+# The performance register. One row per budget the design states, and the
+# best reading recorded so far.
+#
+# `xtask budget` refuses two things: a reading above `budget_bytes`, and a
+# reading worse than `best_bytes` by more than `slack_bytes`. The second is
+# the ratchet - a number may improve freely and may drift only within the
+# slack, so a gradual regression cannot arrive one commit at a time.
+#
+# A metric is gated only when a machine can measure it the same way twice.
+# Wall-clock figures depend on the machine that ran them, so they are
+# measured and reported with their machine rather than gated; gating them
+# would make a busy runner look like a defect. Each such row says what it
+# needs, so nobody has to guess why it is not enforced.
+
+# P3.05 moved this reading from 278,829 to 302,038: the city page stopped
+# being an empty div and became a painted canvas, which brings in two
+# web-sys canvas bindings and the first real drawing code the client has
+# had. A deliberate 8% for the product's centrepiece, recorded here so the
+# ratchet keeps holding the line from the new number rather than being
+# widened. Headroom against the budget is still about 6.9x. P3.15 records
+# 307,861 after the two forms landed: within the slack, and written down
+# so the line moves with what is actually shipped.
+# The remediation pass corrected the scale itself: the weight now walks the
+# bundle recursively, so the wasm-bindgen snippets the page actually loads
+# are finally on it (+10.5 KB that were always being downloaded).
+# R1.06 records 384,018: four views that had been rendering as empty divs
+# are now mounted, and their markup, microcopy and event handlers are the
+# 65.6 KB. The old figure was the weight of a client that could only show
+# one page - cheaper, and not a client. Headroom is still 5.5x.
+# R1.11 records 416,116: the building page (a building's own documents and
+# its archive) and the city's building index. Headroom 5.0x.
+# F1.06 records 461,921 for the front-end stage as a whole: the five views
+# that had answers and no page (recycle bin, room mailbox, archive search,
+# the vital signs strip) plus the progress bar's one rendering point and
+# the grouped nav. 45.8 KB for the half of the product that was reachable
+# only by reading the source. Headroom 4.5x, and the ratchet holds from
+# the new number rather than being widened.
+[frontend_artifact]
+what = "the client the browser downloads, gzipped, fonts excluded"
+budget_bytes = 2097152
+best_bytes = 461921
+slack_bytes = 20480
+measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
+status = "gated"
+# The badge in README.md. Rendered from the reading above by
+# `cargo xtask badge --write`, which `just dist` ends with, so nobody
+# edits a size by hand. No platform row: the bundle is one wasm target
+# and weighs the same wherever it is built.
+badge_label = "client"
+
+# The remediation pass found the single-binary promise was hollow: build.rs
+# embedded a 1,306-byte placeholder and the real client never shipped. The
+# binary now carries the whole gzipped bundle (about +330 KB), and the gate
+# refuses a release binary whose file table lacks web_bg.wasm, so this
+# cannot regress silently. The ratchet holds the line from the first honest
+# reading.
+[release_binary]
+what = "the single binary a person installs, before fonts, wasmtime and CPython are embedded"
+budget_bytes = 134217728
+best_bytes = 7249920
+slack_bytes = 1048576
+measured_by = "just build-web, cargo build --release, then just gates"
+status = "gated"
+# A binary's size is a fact about the platform that linked it, so the
+# badge names one machine and only that machine may refresh it. Three
+# platforms writing one file would make the badge churn rather than
+# report. Change this row when a release workflow takes the job over.
+badge_label = "binary · windows-x86_64"
+badge_platform = "windows-x86_64"
+
+[session_resident]
+what = "one session's resident memory, in this platform's own counter"
+budget_bytes = 31457280
+best_bytes = 4292608
+slack_bytes = 2097152
+measured_by = "just mem"
+status = "measured, not gated: the counter differs per platform, so one number cannot mean the same thing on three of them"
+
+[kernel_mutation]
+what = "the share of kernel mutants the tests kill"
+minimum_percent = 90
+measured_by = "just mutants"
+status = "gated by just mutants, not by just check: a full mutation run is minutes, and a gate nobody waits for is a gate nobody runs"
+
+[ledger_append]
+what = "append plus fsync, p50 and p99"
+budget_p50_ms = 5
+budget_p99_ms = 20
+measured_by = "just bench (citysim bench bin, release)"
+status = "measured, not gated: p50 0.97 ms / p99 1.61 ms on windows-x86_64 NVMe (2026-08-22); batched append_all moves about 260k records/s. A wall-clock figure is the machine's, so it is recorded, never gated"
+
+[prefix_assembly]
+what = "assembling one frozen prefix"
+budget_ms = 1
+measured_by = "just bench (citysim bench bin, release)"
+status = "measured, not gated: p50 0.022 ms for 16.5 KB over four slots on windows-x86_64 (2026-08-22)"
+
+[projection_rebuild]
+what = "records folded per second when a view is rebuilt"
+budget_records_per_second = 50000
+measured_by = "just bench (citysim bench bin, release)"
+status = "measured, not gated: about 493k records/s on windows-x86_64 (2026-08-22), every record folding into a table. The remediation pass found per-record transactions rebuilding at about 1.1k records/s - one disk barrier under every event - and moved the fold to one transaction per batch (Projection::apply_all)"

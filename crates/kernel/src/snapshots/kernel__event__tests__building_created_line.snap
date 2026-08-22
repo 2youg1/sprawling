@@ -1,0 +1,5 @@
+---
+source: crates/kernel/src/event.rs
+expression: text
+---
+{"v":1,"run":"00000000-0000-0000-0000-000000000000","seq":1,"prev":"1111111111111111111111111111111111111111111111111111111111111111","t":0,"who":"city","addr":"lab","kind":"building_created","data":{},"ig":true}

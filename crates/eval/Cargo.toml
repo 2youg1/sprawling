@@ -1,0 +1,15 @@
+[package]
+name = "eval"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# The topology allows kernel and memory (ARCHITECTURE 2). Only kernel is
+# taken: this crate decides, and the register it decides about is read by
+# whoever calls it.
+kernel = { path = "../kernel" }
+
+[lints]
+workspace = true

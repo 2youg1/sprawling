@@ -1,0 +1,30 @@
+[package]
+name = "gateway"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kernel = { path = "../kernel" }
+serde.workspace = true
+serde_json.workspace = true
+# Constitution B.7: HTTP with rustls; the wire format stays self-written,
+# the transport does not (gateway-SPEC 8.5). Blocking: the turn loop is
+# synchronous, and one HTTP call must not asyncify the library.
+reqwest = { workspace = true }
+# Custody: platform credential service binding + zeroizing storage
+# (never self-written encrypted files).
+keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service"] }
+zeroize.workspace = true
+# RFC 7636 mandates SHA-256 for the S256 challenge: an external protocol
+# fact, not a second internal hash authority (blake3 stays sole for
+# content addressing).
+sha2 = "0.10"
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,361 @@
+# collab-SPEC.md
+
+> crate：`collab`。本 SPEC 先于代码存在；实现不多不少地遵守本文。
+> 骨架：apostle-sdd 十七节；按模块分章、每章自足（ARCHITECTURE.md §5）。
+> 动手前先读所用工具与依赖的**官方文档或官方 agent 指南**，再写本文的接口节。
+
+## 1 需求拆解
+
+本 crate 是「两个 Agent 在同一栋楼里干活而不互相踩」的机械层。七个模块拆成五张卡，每张卡落地时先补齐本文对应章节（接口先行）：
+
+| 卡 | 模块 | 这张卡回答的问题 |
+|---|---|---|
+| P2.04 | `inbox`、`steer` | 一条消息怎么从一个 Agent 到另一个，而重复投递不会变成重复副作用 |
+| P2.05 | `draft` | 两个 Agent 写同一份东西时，谁手里拿着它 |
+| P2.06 | `workshop`、`fanin` | 一件活拆成多个节点后，谁按什么序跑、结果怎么收回来 |
+| P2.07 | `pr` | 写代码的人不验自己的代码，这件事由什么强制 |
+| P2.08 | `arbiter` | 两个 Agent 不同意时，升到哪里（§8-7） |
+| P3.01 | `signal_tool`、`goal_tool` | 上面六个机制怎么变成 Agent 手里真能调的东西（§8-8、§8-9） |
+| P3.02 | `pr_tool` | 开 PR 与 worktree 为根的 Run（§8-10） |
+| P3.07 | `triage` | 一条外来信号该送到哪个 Address（§8-11） |
+
+## 2 验收标准
+
+逐卡写在 ARCHITECTURE.md §10 的收口栏，本文在卡落地时把它展开成断言名。**本节现在空着是事实而非疏漏**：一个未施工模块的验收标准写在接口存在之前，只会在施工时被改掉。
+
+## 3 假设与歧义
+
+一层深（delegate 值上无 delegate 方法）已在 `kernel::delegation` 定谳，本 crate 只把它当作前提，不重议它。
+
+## 4 现状分析
+
+`collab` 自 S0 起是空壳（只有 `lib.rs` 的 crate 文档）。它要消费的 kernel 判定面已建已测而仍无生产消费者：`kernel::goal`（同资源相斥）、`kernel::repair`（repair lease）、`kernel::delegation`（delegate 两类）。接线台账（ARCHITECTURE.md §6 末）把它们的接线期记在 P2，本 crate 就是那个消费者。
+
+## 5 权威信源
+
+「多 Agent」的语义（一层深、干预五动词、**实现者不自测**、为什么赌多 Agent 的六条及其判负条件）；ARCHITECTURE.md §12 模块图的 collab 段与 §9 七形状；`kernel-SPEC.md` 的 goal／repair／delegation 章。
+
+## 6 命名统一
+
+Signal｜Inbox｜Steer｜HeldDraft｜hold token｜four-way return｜Workshop｜NodeContract｜fan-in｜Artifact｜arbitration｜Triage。概念名一律英文原词；该用什么词见 `docs/glossary.md`，不该用什么词见 `xtask/lexicon.toml`。
+
+## 7 模块边界
+
+**三件邻居的活，及它们各自的主人**（写「X 归 Y」而非「不做 X」：前者告诉施工者去哪，后者只告诉他别去哪里）：
+
+- **物理隔离归 `memory::worktree`**（P2.03）：本 crate 决定谁干什么、谁拿着哪份草稿；一节点一棵树与磁盘上限归 memory。
+- **人的五动词归 `channels::control`**：`Steer`／`Cancel`／`Takeover`／`Rollback`／`Halt` 从人那侧进城已有入口；本 crate 的 `steer` 只管 **Agent 发给 Agent** 那一条通道——两条通道入口不同而落点相同。
+- **处置与监护归 `runtime::watchdog`**：停滞判据与纠正→冻结的升级梯已在那里，本 crate 不建第二套。
+
+**L2 工具为什么住在本 crate（P3.01 定谳）**：一件工具是 `kernel::tool` 缝的适配器，而适配器必须能命名它暴露的机制。依赖法写着 `runtime: kernel, memory, gateway`（ARCHITECTURE.md §2）——**runtime 恒不得指名 collab**，所以 `Signal` 与 `GoalEntry` 的工具面拼不进 `runtime::tools/`；放进 bin 则把四百行判定塞进全图最脏的那个文件且 citysim 测不到。故 L0 三件在 runtime，L2 协作三件在 collab；§3 缝清单的「生产适配器」列同卡加一项。
+
+## 8 接口先行
+
+逐卡写：每个模块落地前先在本节开一个 `### 8-n <模块>（卡号；形状）` 子节，给出类型签名与它们为什么是这个形状，写法同 `city-SPEC.md` §8。
+
+### 8-1 collab::inbox（P2.04；形状 2 值类型＋形状 7 投影）
+
+```rust
+pub struct SignalId(String);                       // 非空、无空白；去重的依据
+pub enum SignalKind { Mention, Thread, Broadcast, Steer }
+pub enum Lane { Urgent, Ordinary }                 // 由 kind 推出，不由调用方给
+pub struct Signal { /* id、kind、from、room、room_version、payload、at —— 私有 */ }
+impl Signal {
+    pub fn new(id: SignalId, kind: SignalKind, from: String, room: Address,
+               room_version: Version, payload: Payload, at: TimeMs) -> Result<Signal, AxError>;
+    pub fn lane(&self) -> Lane;
+    pub fn enqueued_payload(&self) -> Result<Payload, AxError>;   // signal_enqueued
+    pub fn consumed_payload(&self) -> Result<Payload, AxError>;   // signal_consumed
+}
+pub struct Inbox { /* 两条 memory::EventQueue＋bandwidth —— 私有 */ }
+impl Inbox {
+    pub fn new(capacity: u64, bandwidth: u32) -> Inbox;
+    pub fn deliver(&mut self, signal: &Signal) -> Result<Admission, AxError>;
+    pub fn pull(&mut self) -> Result<Vec<Signal>, AxError>;   // ≤ bandwidth，急件先出
+    pub fn pending(&self) -> u32;                             // status 的 signals_pending
+}
+```
+
+- **去重先于副作用**：去重由 `memory::EventQueue` 的 `seen` 给（IdemKey 由 `SignalId` 派生），而不在本模块再建一张表——一条规则一个权威。此事要成立，同一个 id 就必须恒落同一条 lane，**所以 lane 由 kind 推出、不由调用方给**。
+- **`SignalKind` 四值而非三值**（早先的设计记三值）：紧急与否必须是 Signal 自己的属性，否则同一件 Signal 从两个调用点进来会落入两条 lane，去重就有了两个权威。
+- **插队首＝一条先被排干的 lane**，不是队内优先级字段：一个结构里共存两种顺序，就会有人读错其中一种。
+- **pull bandwidth 在接收方**：发送方推不动接收方的上下文窗口；一次 `pull` 最多取 bandwidth 件，Signal 在 prefix 里恒占零字节，常驻的只是 `status` 的 `signals_pending`。
+- **洪水交给 backpressure**：`deliver` 返回 `kernel::Admission`，削峰判定住 `kernel::backpressure`，计数住队列；本模块不自定义第二套限流。
+- **`E_SIGNAL_UNKNOWN` 已定义掉**（定谳三码之一；P3.01 执行）：本模块自写自读载荷，kind 是穷尽枚举，一个本版本不认的 kind 只能来自更新的二进制写的 Ledger，而那已由版本方向门（`E_LOG_VERSION_UNSUPPORTED`）拒在外面；同一句话里不认的 kind 在本版本写入面也拼不出来（`SignalKind::parse` 拒它，报 `E_INVALID_ARGS`）。实测佐证：删除前全仓只有 `kernel::error` 自己提到它，零生产者。实施：删 `AxCode::SignalUnknown`，AxCode 36 → 35，kernel-SPEC §8-1 表同集删行。
+- **`Signal::from_payload` 是 `enqueued_payload` 的逆**（P3.01 新增公开面）：没有它，投影重建就要在仓库里长出第二份 Signal 解析器。重建方式是**先筛后送**：从 Ledger 收齐 `signal_enqueued` 与 `signal_consumed` 两组 id，只把未被消费的按原序 `deliver` 一遍——于是队列不需要「按 id 删除」这个不属于队列的动作。
+
+### 8-2 collab::steer（P2.04；形状 2 值类型）
+
+```rust
+pub struct Steer { /* source、text —— 私有 */ }        // 落点：追在下一次工具结果末尾的一段
+impl Steer {
+    pub fn from_person(text: &str) -> Result<Steer, AxError>;   // 唯一能写出 `user` 前缀的构造子
+    pub fn from_signal(signal: &Signal) -> Result<Steer, AxError>;
+    pub fn source(&self) -> &str;  pub fn text(&self) -> &str;
+}
+pub struct AgentSteer { /* id、text —— 私有 */ }
+impl AgentSteer {
+    pub fn new(id: &str, text: &str) -> Result<AgentSteer, AxError>;
+    pub fn signal(&self, id: SignalId, room: Address, room_version: Version, at: TimeMs)
+        -> Result<Signal, AxError>;                              // Agent 侧只能走 Inbox
+    pub fn landing(&self) -> Steer;                              // `@id`
+}
+```
+
+- **两个入口、一个落点**：人的 Steer 只从 control surface 进城，恒不走 Inbox；Agent 的 Steer 是一件插队首的 Signal。两者都追在下一次工具结果末尾，因为模型只需要认识一种形状。
+- **`user` 前缀只有一个构造子写得出**：`AgentSteer` 的 source 由它自己的 id 拼成 `@id`，故一件自称来自人的注入内容拼不出 `user`——入口分立是安全要求，类型把它变成判定。
+- **Steer 不打断动作**（下接 8-3）：它在安全点被消费并推进（`runtime::turn` 已定）；同一边界上 Cancel 压过 Steer，因为停是不可撤销的那个。本模块只产出落点形状，不重建中断梯。
+
+### 8-3 collab::draft（P2.05；形状 1 判定＋形状 2 值类型）
+
+```rust
+pub struct Draft { /* author、room、seen: Version、body: Payload —— 私有 */ }
+pub enum Return { Rewrite, SendAsIs, Withdraw, ForceInformed }   // 四路退回，穷尽
+pub struct HoldToken { /* room_version、turn —— 私有；只能由服务端发 */ }
+pub enum Submission { Delivered, Held { token: HoldToken, holds: u32 }, Escalated { holds: u32 } }
+pub enum Resolution { Delivered, Withdrawn, Held { token: HoldToken, holds: u32 },
+                      Escalated { holds: u32 }, TokenVoid { token: HoldToken } }
+pub struct Drafts { /* 逐 (author, room) 的 token 与连续退回计数 —— 私有 */ }
+impl Drafts {
+    pub fn submit(&mut self, draft: &Draft, current: Version, turn: u32) -> Submission;
+    pub fn resolve(&mut self, draft: &Draft, choice: Return, current: Version, turn: u32) -> Resolution;
+    pub fn held_payload(&self, draft: &Draft, current: Version) -> Result<Payload, AxError>;
+    pub fn resolved_payload(&self, draft: &Draft, choice: Return) -> Result<Payload, AxError>;
+}
+```
+
+- **`room_version` 是通信侧的乐观并发**，与文件写入的 `base_version` 同型：发言携着自己所见的版本，冲突因此显式。
+- **四路都摆出来，不默认重写**：「Room 变了」不等于「这条发言作废」，判断权归发言者。机制在 prefix 零常驻，被撞回的那一刻才学。
+- **`ForceInformed` 不是免费的**：它消费一枚服务端发的 hold token，而 token 绑着退回当时的 `room_version`；Room 又往前走一步，token 即作废并重新退回。**一般规律**：协调闸门上的旁路开关必须是对服务端已展示状态的确认，不能是客户端的一个意见——无条件生效的旁路参数，会被一个被要求「高效」的模型学会预防性地带上，闸门于是在没有任何人决定废除它的情况下静默地不再存在。
+- **token 本回合内有效**：过期不采时钟，而是比回合号——时间只入参不采样（确定性二）。
+- **连续退回 ≥ `DRAFT_HELD_ESCALATE` 即升 owner verdict**：两个 Agent 互相撞回的活锁不在退回循环里空烧。
+
+### 8-4 collab::workshop（P2.06；形状 2 值类型＋形状 1 判定）
+
+```rust
+pub struct NodeId(String);
+pub struct NodeContract { /* id、goal、depends_on、reads、write_domain、owner、done_check、budget、stop */ }
+impl NodeContract { pub fn job_text(&self) -> String; /* 落盘即该节点的 JOB.md */ }
+pub struct Workshop { /* BTreeMap<NodeId, NodeContract> —— 私有 */ }
+impl Workshop {
+    pub fn new(contracts: Vec<NodeContract>) -> Result<Workshop, AxError>;  // 重名／悬空依赖／环，三者在构造点拒
+    pub fn schedule(&self) -> Vec<NodeId>;                                  // 确定性：同图同序
+    pub fn ready(&self, done: &BTreeSet<NodeId>) -> Vec<NodeId>;            // 可并行者即扇出
+}
+```
+
+- **调度确定性是判负与重放的前提**：有序集合＋按 id 破平，故交付顺序不同也排出同一序。环在构造点拒并点名——一个存在的 Workshop 是一个跑得完的 Workshop。
+- **契约即 JOB.md**：被派入节点的 Agent 的任务权威就是这份契约本身，机制在 prefix 零常驻。
+- **四个字段不许空**（goal／owner／done_check／stop）：空的停止条件是一个不会停的 Run。
+- **图的权威是 `Roadmap.md`**，本模块不为节点图另设存储；从路线图行生成契约的那一步未建（四列表不携 `depends_on`）。
+
+### 8-5 collab::fanin（P2.06；形状 2 值类型）
+
+```rust
+pub struct Claim { /* node、at、digest、by —— 私有 */ }
+impl Claim { pub fn verified(self, done_check_passed: bool, verifier: &str) -> Result<Artifact, AxError>; }
+pub struct Artifact { /* 只能由 Claim::verified 造出 */ }
+pub struct FanIn { /* BTreeMap<NodeId, Artifact> —— 私有 */ }
+impl FanIn {
+    pub fn accept(&mut self, artifact: Artifact);
+    pub fn question(&self) -> Result<PrivateQuestion, AxError>;
+    pub fn decide(&self, answer: &str) -> Result<Joined, AxError>;
+}
+```
+
+- **只收已验证 Artifact**：未验证的产出是 Claim；`Artifact` 无公开构造子，故「Claim 进汇合」在类型层拼不出来。
+- **实现者不自测**（判负线之一）：`verified` 的 verifier 等于生产者即拒。
+- **private-info question 是围栏不是证明**：答案由 artifact 内容派生，只有打开过才答得出；能断言的只是「一眼未看就判」被拒。**拒词恒不回显正确答案**——回显即教会那条捷径。
+
+### 8-6 collab::pr（P2.07；形状 5 typestate）
+
+```rust
+pub struct Pr<S> { /* node、implementer、branch —— 私有 */ }
+pub struct Open;  pub struct Verified { /* by */ }  pub struct Merged { /* by、commit */ }
+impl Pr<Open> {
+    pub fn open(node: NodeId, implementer: String, branch: String) -> Result<Pr<Open>, AxError>;
+    pub fn verified(self, artifact: &Artifact) -> Result<Pr<Verified>, AxError>;
+    pub fn opened_payload(&self) -> Result<Payload, AxError>;
+    pub fn rejected_payload(&self, by: &str, why: &str) -> Result<Payload, AxError>;
+}
+impl Pr<Verified> { pub fn merged(self, commit: String) -> Pr<Merged>; }
+impl Pr<Merged>   { pub fn merged_payload(&self) -> Result<Payload, AxError>; }
+```
+
+- **判负线做成类型**：`Pr<Open>` 没有 `merged`，`Artifact` 没有公开构造子；两条都由 `tests/ui/` 的编译失败反例钉住，不靠评审记得。
+- **不重判验证**：`Artifact` 已携「非生产者跑过 done_check」这个事实；本模块只补「这份产出是不是这个节点的」与「验证者不是实现者」这道兜底（近乎不可达，保留是因为「近乎」正在替一场没人做的评审干活）。
+- **物理 merge 归 `memory::worktree`**：本 crate 决定，那个 crate 搬文件。merge 只走 fast-forward——trunk 动过即退回重做，与 HeldDraft 同一姿态。
+
+### 8-7 collab::arbiter（P2.08；形状 1 判定）
+
+```rust
+pub enum Level { Serialize { after: GoalId }, Arbitrate { with: GoalId }, Owner { with: GoalId, because: Escalation } }
+pub enum Escalation { GateRefused, Intent, ArbitrationExhausted }
+pub struct Circumstance { pub gate_refused: bool, pub touches_intent: bool, pub arbitration_tried: bool }
+pub fn arbitrate(registered: &[GoalEntry], candidate: &GoalEntry, circumstance: Circumstance) -> Option<Level>;
+pub fn conflict_payload(candidate: &GoalEntry, level: &Level) -> Result<Payload, AxError>;
+```
+
+- **检测进 kernel，仲裁不进**：`kernel::goal::detect_conflict` 只答「撞没撞」；本模块答「谁来裁」。
+- **判序固定**（门拒 → 意图 → 仲裁已试 → 机械 → 读）：同一对目标恒落同一级，重放才可比。
+- **机械可判的只有一种形状**：双方都claim路径，且常设性一高一低——「常设的先走」不需要任何判断。其余（两个常设、外部资源同名）都要读目标陈述，那是模型的活。
+- **机器恒不推翻门**：`gate_refused` 排在最前，压过本可机械串行化的情形；`Circumstance` 三项都是调用方已知而目标条目里看不出来的事实。
+
+### 8-8 collab::signal_tool（P3.01；形状 4 适配器）
+
+```rust
+pub enum SignalEffect { Enqueued(Signal), Consumed { signal: Signal, by: String } }
+pub struct SignalDesk { /* run、room、who、reach、inbox、effects、minted —— 私有 */ }
+impl SignalDesk {
+    pub fn new(run: RunId, room: Address, who: String, reach: Address, inbox: Inbox) -> SignalDesk;
+    pub fn pending(&self) -> u32;                     // 借出前读，status.signals_pending 的真值
+    pub fn take_effects(&mut self) -> Vec<SignalEffect>;
+    pub fn take_inbox(&mut self) -> Inbox;            // 归还借出的 Inbox
+}
+pub struct SignalTool { /* meta、desk: Rc<RefCell<SignalDesk>> —— 私有 */ }
+impl SignalTool { pub fn new(desk: Rc<RefCell<SignalDesk>>) -> Result<SignalTool, AxError>; }
+impl Tool for SignalTool { /* 两个 action：send｜pull */ }
+```
+
+- **Inbox 是借出的，不是拷贝的**：工具在 bench 里被 `Box<dyn Tool>` 包起来，工人再也摸不到它，所以共享句柄走 `Rc<RefCell<..>>`——与 `assembly` 里那个接待批项的 `raised` 同一个手法。整个 Run 期间该房间的 Inbox **恰存一份**，住在 desk 里；驱动返回后无论成败都归还。理由与 `interrupts` 那行注释同字：“a source that stayed behind would be a second one”——两份队列就是两个权威，而漂开的总是没人看的那个。
+- **`send` 只入队不投递**：工具只把 Signal 放进 `effects`，真正 `deliver` 到收件房间发生在驱动返回之后、且恒在 `signal_enqueued` 落账之后。因为投影只允许因一条已追加的事件而改变（同 `RunWorker::record`：“the book states what the history says, never what the process hoped to write”）。
+- **发件范围由 `reach` 定界**：`reach` 是发件人所属楼的地址，由装配层经 `city::Building::of` 算好传入——**「一个地址归哪栋楼管」的权威在 city，collab 只执行交给它的边界**。越楼发件恒拒，报 `E_CROSS_BUILDING_DENIED` 且三段完整。`ToolMeta.effect` 是静态的（申报为 `Write { domain: room }`），所以逐件目标判定必须在工具内——工具拥有自己的策略。
+- **id 不采时钟不取随机**：`{run}-s{n}`，`n` 是 desk 自己的计数器。重放同一段历史得到同一批 id，去重才有意义（确定性第七条）。
+- **`pull` 的剩余量写在结果里**：`status.signals_pending` 是派活那一刻的事实（StatusTool 持的是快照），所以 `pull` 结果里带 `remaining`——一个数字比一套让 status 活起来的机制便宜得多，而且它就在模型正在读的那句话里。
+- **投递失败不静默**：`deliver` 返回 `Admission::Shed` 时，入账的是事实而非成功；削峰判定住 `kernel::backpressure`，本模块不自建第二套限流。
+
+### 8-9 collab::goal_tool（P3.01；形状 4 适配器）
+
+```rust
+pub enum GoalEffect {
+    Registered(GoalEntry),
+    Conflicted { entry: GoalEntry, with: GoalId, level: Option<Level> },
+}
+pub struct GoalDesk { /* run、owner、registered: Vec<GoalEntry>、effects、minted —— 私有 */ }
+impl GoalDesk {
+    pub fn new(run: RunId, owner: String, registered: Vec<GoalEntry>) -> GoalDesk;
+    pub fn take_effects(&mut self) -> Vec<GoalEffect>;
+}
+pub struct GoalTool { /* meta、desk: Rc<RefCell<GoalDesk>> —— 私有 */ }
+impl GoalTool { pub fn new(desk: Rc<RefCell<GoalDesk>>) -> Result<GoalTool, AxError>; }
+```
+
+- **三层各守其职，一层不多**：`kernel::goal::detect_conflict` 答撞没撞（纯判定）→ `collab::arbitrate` 答谁来裁（三级）→ 本模块只把两者接成一件工具。它恒不自己判冲突，也恒不自己定级。
+- **撞了就不登记**：冲突返回 `E_GOAL_CONFLICT` 三段式拒，第三段是仲裁给的那一级的可执行说法（串行等完某一件｜跟某人商量｜请 owner 裁）。一个只说「不行」的拒绝会让模型换个说法再试一次。
+- **`Circumstance` 三项里工具只知道一项**：`gate_refused` 与 `touches_intent` 是调用方才知道的事，机器调用方一律传 `false`；`arbitration_tried` 同理。结果是工具只走得到**机械可判**与**交人读**两条路——这是诚实的：意图判断本来就不归一个参数。
+- **同一 Run 内的第二次登记看得见第一次**：desk 把刚登记的条目接在 `registered` 尾上，否则一个 Run 能把同一个资源登记两次而不撞。
+- **登记后才入账**：同 8-8，工具只产 effect；`goal_registered` 与 `goal_conflict` 两种事件由工人在驱动返回后写，工人的目标表随之前推。**不写第三种 `arbitration_verdict`**：`conflict_payload` 已携着那一级，再写一条就是同一件事的第二个权威；该事件留给真正跑过一场仲裁的 Run（P3.07 三 Mode）。
+- **两个 effect 枚举都是穷尽的**（无 `#[non_exhaustive]`，与本库跨 crate 枚举的常规相反）：每个变体都是工人必须写下的一条账，所以新增一个得是**写账那一端的编译错误**，而不是一条直到某个 Signal 惄悄没入账才有人发现的运行期分支——理由同 `AxCode::carrier()` 的穷尽 match。
+
+### 8-10 collab::pr_tool（P3.02；形状 4 适配器）
+
+```rust
+pub struct OpenRequest { pub node: NodeId, pub implementer: String, pub branch: String, pub commit: String }
+impl OpenRequest {
+    pub fn payload(&self) -> Result<Payload, AxError>;              // pr_opened
+    pub fn from_payload(data: &Payload) -> Result<OpenRequest, AxError>;
+}
+pub enum PrEffect {
+    Opened { branch: String },
+    Merged { request: OpenRequest, by: String },
+    Rejected { request: OpenRequest, by: String, why: String },
+}
+pub struct PrDesk { /* who、room、branch、node、open、effects —— 私有 */ }
+impl PrDesk {
+    pub fn new(who: String, room: Address, branch: Option<String>, node: Option<NodeId>,
+               open: Vec<OpenRequest>) -> PrDesk;
+    pub fn take_effects(&mut self) -> Vec<PrEffect>;
+}
+pub struct PrTool { /* meta、desk */ }
+impl PrTool { pub fn new(room: Address, desk: Rc<RefCell<PrDesk>>) -> Result<PrTool, AxError>; }
+// 三个 action：open｜list｜check
+```
+
+- **验证与 merge 是一次调用的两个结果**，不是两个 action。一个 `Verified` 而无人 merge 的请求是第三种要人去追的状态；而 merge 不是第二个决定，它就是「验证通过」的含义。拒绝是同一次调用的另一个结果（`passed: false` 携 `why`）。
+- **typestate 是走过的不是相信的**：`check` 内部真的造 `Claim` → `verified(true, self.who)` → `Pr::open(..).verified(&artifact)`。于是「实现者不自测」被检查两次：工具先拒（三段式，`E_GATE_DENIED`），类型再拒（`Claim::verified` 的 verifier ≠ 生产者）。
+- **被判的是一个 commit 而不是一条分支**：`OpenRequest.commit` 记下开请求那一刻分支站在哪里，Artifact 的 digest 由它派生——**看过一个 commit 的人没有为后一个背书**。
+- **没有树的 Run 说得出自己没有**：`open` 在无树时报 `E_TOOL_UNAVAILABLE` 并指向「要审查的楼」，而不是把城里的文件当作自己的产出递出去。
+- **谁得到树：楼说了算**（`BUILDING.md` 的 `review: true`，见 `city-SPEC.md`）。默认不开：一个人派一个 Agent 去一个房间干活并盯着看，应当看得到文件变化；为它强制第二个 Agent 是没人要求过的纪律。
+
+### 8-11 collab::triage（P3.07；形状 1 判定）
+
+```rust
+pub enum Reflex { Discard, Notify, Light, Full }
+pub struct Arrival { pub source: String, pub subject: String, pub tainted: bool }
+pub struct Rule { pub matches: String, pub landing: Address, pub reflex: Reflex }
+pub struct Landing { pub addr: Address, pub reflex: Reflex, pub because: String }
+pub struct Triage { /* rules、fallback —— 私有 */ }
+impl Triage {
+    pub fn new(rules: Vec<Rule>, fallback: Address) -> Result<Triage, AxError>;  // 空匹配串在构造点拒
+    pub fn decide(&self, arrival: &Arrival) -> Landing;                          // 结果恒是一个 Address
+}
+```
+
+- **结果恒是 Address**，四路只决定「多重的反应体来接」。派活面因此只有一种形状：进来什么，出去的都是一个可派活的地址。
+- **规则不是模式语言**：子串、不分大小写、自上而下首中先胜。一张人手写的路由表被读的次数远多于被写，正则会在出事那一刻多一件要 debug 的东西。
+- **污染件可以被路由，不可以被开工**：规则写 `Full`，污染件也只到 `Notify`，且降级理由写进 `because`——一个没人能解释的路由决定也是没人能修的。
+- **判不出不是错误**，是「一个人读它」：回一个错误只会让调用方去发明一个兼容处理。
+- **`because` 恒在场**：它是这层唯一的可观测面，因为四路的差别在别处（谁被派活），不在这个返回值里。
+
+### 8-12 collab::claim_tool（P4.01；形状 4 适配器）
+
+```rust
+pub enum ClaimEffect {
+    Claimed  { index: u64, item: String },
+    Finished { index: u64, item: String, evidence: Locator },
+    Released { index: u64, item: String },
+}
+pub struct ClaimDesk { /* who、room、roadmap 文本、本次 drive 持有的行、effects —— 私有 */ }
+impl ClaimDesk {
+    pub fn new(who: String, room: Address, roadmap: String) -> ClaimDesk;
+    pub fn take_effects(&mut self) -> Vec<ClaimEffect>;
+    pub fn roadmap(&self) -> Option<&str>;   // Some 仅当本次 drive 改过；工人据此写盘一次
+}
+pub struct ClaimTool { /* meta、Rc<RefCell<ClaimDesk>> —— 私有 */ }
+impl ClaimTool { pub fn new(desk: Rc<RefCell<ClaimDesk>>) -> Result<ClaimTool, AxError>; }
+```
+
+四个动作：`list`（还没人做的行）、`claim`（认领一行）、`finish`（携证据结项）、`release`（交回）。
+
+- **`Roadmap.md` 是唯一权威，不另立认领登记表**。第二份登记表就是第二个「这一行归谁」的答案，而漂移的恒是没人读的那一份。文件本身既被人读、被 `tally` 数、又被这个工具改——一处事实，三个读者。
+- **状态迁移由文件的当前状态判，不由调用者声明**：`claim` 只接受 `Not started`，`finish`／`release` 只接受 `In progress`。拒词报出该行此刻的状态并指向下一个可认领的行号——「不行」会教模型改写参数再试，「3 号在做，5 号空着」不会。
+- **一次 drive 只持有一行**：一个 Run 同时占两行，会让两行的进度都读不出来，因为「正在做什么」的单位就是行。第二次 `claim` 恒拒并报出已持有的行号。
+- **`finish` 恒要 Locator**：证据由 `kernel::set_roadmap_status` 在写入点强制，本模块不重复判定——`Done` 缺证据的行正是 `tally` 拒绝计入分子的那种行。
+- **效果穷尽**（同 `SignalEffect`／`GoalEffect`／`PrEffect`，故意不加 `#[non_exhaustive]`）：每个变体都是工人必须写下的一条账，新增一个变体应当是写入处的编译错误。
+- **并发口径（诚实边界）**：今天工人一次驱动一个 Run，故 desk 手上的行状态在 `claim` 那一刻是当下事实。工人写盘前重读文件，行若已不是预期状态则丢弃该效果并留一条诊断，而不是覆盖——于是并发 Run 到来时的退化是「第二个认领没生效且说了出来」，不是「两个 Run 都以为自己拥有该行」。
+
+## 8.5 两个设计
+
+（两个实质不同的接口方案，按杠杆率与缝的位置比较；落选方案就地留痕。）
+
+**P3.01 第一对（工具怎么拿到活的跨 Run 状态）**：开一个 `peek` 让工具拿快照（落选）vs 把 Inbox 本体借给工具（选中）。快照方案要在 `memory::EventQueue` 与 `collab::Inbox` 两处各长一个新读面，并且它造出两份同时存在的队列——于是「谁才是顺序的权威」多了一个答案。借出方案零新 API，且与 bin 已有的 `interrupts` 借还同形。代价：借出期间工人手上没有该房间的队列，故归还必须在成败两条路上都发生（一条断言盯这件事）。
+
+**P3.02 一对（谁来定一个 Run 写在哪）**：每个 dispatch 都领一棵树（落选）vs 楼的规则说了算（选中）。均一方案读起来干净，但它让每一次普通派活都付一次全量检出的代价，并且把「我派一个 Agent 改一行字」变成「还得再派一个来看一眼」。楼级开关把选择交回给人，且它与 `confidential` 同形同位——一个已有的权威多一行，而不是新开一个。
+
+**P3.01 第二对（三件工具还是一件多臂工具）**：一件 `collab` 工具带 action 枚举（落选）vs 每个机制一件（选中）。合并方案省两份 schema 的常驻字节（工具表坐在缓存前缀里，这是真成本），但它把三件变更理由不同的东西绑成一个接口，而且 disclosure 只能写成一句拉长的话——模型按名字选工具，一个叫 `collab` 的工具不告诉它任何事。三件各自一句话说得清，多出的常驻字节是两份空 schema 的量级。
+
+## 9 工作流程
+
+## 10 实现逻辑
+
+## 11 边界枚举
+
+## 12 错误处理
+
+（逐码回答「能否让它不可能发生」——设计规则十。）
+
+## 13 依赖选型
+
+拓扑硬约束：`kernel` 与 `memory`（ARCHITECTURE.md §2）。新外部依赖随卡论证，无论证即不引。
+
+## 14 硬编码声明
+
+## 15 影响面
+
+## 16 测试与约束
+
+## 17 模型体验
+
+（入窗什么｜token 代价｜对 prefix 缓存的影响；无贡献则写「零字节，因为……」。）
+
+## 18 文档同步

@@ -1,0 +1,7 @@
+# Time is a parameter, never sampled inside decision or persistence code.
+# The only sanctioned sampling point is Main (bin::assembly), which must
+# carry #[expect(clippy::disallowed_methods, reason = "...")] per call site.
+disallowed-methods = [
+    { path = "std::time::Instant::now", reason = "inject time from assembly" },
+    { path = "std::time::SystemTime::now", reason = "inject time from assembly" },
+]

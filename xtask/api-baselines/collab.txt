@@ -1,0 +1,315 @@
+#[non_exhaustive] pub enum collab::Escalation
+#[non_exhaustive] pub enum collab::Level
+#[non_exhaustive] pub enum collab::SignalKind
+impl collab::AgentSteer
+impl collab::ArchiveDesk
+impl collab::ArchiveTool
+impl collab::Artifact
+impl collab::Claim
+impl collab::ClaimDesk
+impl collab::ClaimEffect
+impl collab::ClaimTool
+impl collab::Draft
+impl collab::Drafts
+impl collab::Escalation
+impl collab::FanIn
+impl collab::GoalDesk
+impl collab::GoalTool
+impl collab::HoldToken
+impl collab::Inbox
+impl collab::Joined
+impl collab::NodeContract
+impl collab::NodeId
+impl collab::OpenRequest
+impl collab::Pr<collab::Merged>
+impl collab::Pr<collab::Open>
+impl collab::Pr<collab::Verified>
+impl collab::PrDesk
+impl collab::PrTool
+impl collab::PrivateQuestion
+impl collab::Reflex
+impl collab::Return
+impl collab::Signal
+impl collab::SignalDesk
+impl collab::SignalId
+impl collab::SignalKind
+impl collab::SignalTool
+impl collab::Steer
+impl collab::Triage
+impl collab::Workshop
+impl core::fmt::Debug for collab::Inbox
+impl core::fmt::Debug for collab::SignalDesk
+impl kernel::tool::Tool for collab::ArchiveTool
+impl kernel::tool::Tool for collab::ClaimTool
+impl kernel::tool::Tool for collab::GoalTool
+impl kernel::tool::Tool for collab::PrTool
+impl kernel::tool::Tool for collab::SignalTool
+impl<S> collab::Pr<S>
+pub collab::ArchiveEffect::Recorded
+pub collab::ArchiveEffect::Recorded::kind: alloc::string::String
+pub collab::ArchiveEffect::Recorded::text: alloc::string::String
+pub collab::Arrival::source: alloc::string::String
+pub collab::Arrival::subject: alloc::string::String
+pub collab::Arrival::tainted: bool
+pub collab::Circumstance::arbitration_tried: bool
+pub collab::Circumstance::gate_refused: bool
+pub collab::Circumstance::touches_intent: bool
+pub collab::ClaimEffect::Claimed
+pub collab::ClaimEffect::Claimed::index: u64
+pub collab::ClaimEffect::Claimed::item: alloc::string::String
+pub collab::ClaimEffect::Finished
+pub collab::ClaimEffect::Finished::evidence: kernel::locator::Locator
+pub collab::ClaimEffect::Finished::index: u64
+pub collab::ClaimEffect::Finished::item: alloc::string::String
+pub collab::ClaimEffect::Released
+pub collab::ClaimEffect::Released::index: u64
+pub collab::ClaimEffect::Released::item: alloc::string::String
+pub collab::Escalation::ArbitrationExhausted
+pub collab::Escalation::GateRefused
+pub collab::Escalation::Intent
+pub collab::GoalEffect::Conflicted
+pub collab::GoalEffect::Conflicted::entry: kernel::goal::GoalEntry
+pub collab::GoalEffect::Conflicted::level: collab::Level
+pub collab::GoalEffect::Registered(kernel::goal::GoalEntry)
+pub collab::Held::kind: alloc::string::String
+pub collab::Held::text: alloc::string::String
+pub collab::Landing::addr: kernel::address::Address
+pub collab::Landing::because: alloc::string::String
+pub collab::Landing::reflex: collab::Reflex
+pub collab::Lane::Ordinary
+pub collab::Lane::Urgent
+pub collab::Level::Arbitrate
+pub collab::Level::Arbitrate::with: kernel::goal::GoalId
+pub collab::Level::Owner
+pub collab::Level::Owner::because: collab::Escalation
+pub collab::Level::Owner::with: kernel::goal::GoalId
+pub collab::Level::Serialize
+pub collab::Level::Serialize::after: kernel::goal::GoalId
+pub collab::OpenRequest::branch: alloc::string::String
+pub collab::OpenRequest::commit: alloc::string::String
+pub collab::OpenRequest::implementer: alloc::string::String
+pub collab::OpenRequest::node: collab::NodeId
+pub collab::PrEffect::Merged
+pub collab::PrEffect::Merged::by: alloc::string::String
+pub collab::PrEffect::Merged::request: collab::OpenRequest
+pub collab::PrEffect::Opened
+pub collab::PrEffect::Opened::branch: alloc::string::String
+pub collab::PrEffect::Rejected
+pub collab::PrEffect::Rejected::by: alloc::string::String
+pub collab::PrEffect::Rejected::request: collab::OpenRequest
+pub collab::PrEffect::Rejected::why: alloc::string::String
+pub collab::Reflex::Discard
+pub collab::Reflex::Full
+pub collab::Reflex::Light
+pub collab::Reflex::Notify
+pub collab::Resolution::Delivered
+pub collab::Resolution::Escalated
+pub collab::Resolution::Escalated::holds: u32
+pub collab::Resolution::Held
+pub collab::Resolution::Held::holds: u32
+pub collab::Resolution::Held::token: collab::HoldToken
+pub collab::Resolution::TokenVoid
+pub collab::Resolution::TokenVoid::token: collab::HoldToken
+pub collab::Resolution::Withdrawn
+pub collab::Return::ForceInformed
+pub collab::Return::Rewrite
+pub collab::Return::SendAsIs
+pub collab::Return::Withdraw
+pub collab::Rule::landing: kernel::address::Address
+pub collab::Rule::matches: alloc::string::String
+pub collab::Rule::reflex: collab::Reflex
+pub collab::SignalEffect::Consumed
+pub collab::SignalEffect::Consumed::by: alloc::string::String
+pub collab::SignalEffect::Consumed::signal: collab::Signal
+pub collab::SignalEffect::Enqueued(collab::Signal)
+pub collab::SignalKind::Broadcast
+pub collab::SignalKind::Mention
+pub collab::SignalKind::Steer
+pub collab::SignalKind::Thread
+pub collab::Submission::Delivered
+pub collab::Submission::Escalated
+pub collab::Submission::Escalated::holds: u32
+pub collab::Submission::Held
+pub collab::Submission::Held::holds: u32
+pub collab::Submission::Held::token: collab::HoldToken
+pub const collab::ARCHIVE_KINDS: [&str; 4]
+pub enum collab::ArchiveEffect
+pub enum collab::ClaimEffect
+pub enum collab::GoalEffect
+pub enum collab::Lane
+pub enum collab::PrEffect
+pub enum collab::Reflex
+pub enum collab::Resolution
+pub enum collab::Return
+pub enum collab::SignalEffect
+pub enum collab::Submission
+pub fn collab::AgentSteer::landing(&self) -> collab::Steer
+pub fn collab::AgentSteer::new(&str, &str) -> core::result::Result<collab::AgentSteer, kernel::error::AxError>
+pub fn collab::AgentSteer::signal(&self, collab::SignalId, kernel::address::Address, kernel::version::Version, kernel::event::TimeMs) -> core::result::Result<collab::Signal, kernel::error::AxError>
+pub fn collab::ArchiveDesk::new(kernel::address::Address, alloc::vec::Vec<collab::Held>) -> collab::ArchiveDesk
+pub fn collab::ArchiveDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::ArchiveEffect>
+pub fn collab::ArchiveTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::ArchiveTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::ArchiveTool::new(alloc::rc::Rc<core::cell::RefCell<collab::ArchiveDesk>>) -> core::result::Result<collab::ArchiveTool, kernel::error::AxError>
+pub fn collab::Artifact::at(&self) -> &kernel::locator::Locator
+pub fn collab::Artifact::node(&self) -> &collab::NodeId
+pub fn collab::Artifact::verified_by(&self) -> &str
+pub fn collab::Claim::at(&self) -> &kernel::locator::Locator
+pub fn collab::Claim::by(&self) -> &str
+pub fn collab::Claim::new(collab::NodeId, kernel::locator::Locator, kernel::locator::B3Hash, alloc::string::String) -> collab::Claim
+pub fn collab::Claim::node(&self) -> &collab::NodeId
+pub fn collab::Claim::verified(self, bool, &str) -> core::result::Result<collab::Artifact, kernel::error::AxError>
+pub fn collab::ClaimDesk::new(alloc::string::String, kernel::address::Address, alloc::string::String) -> collab::ClaimDesk
+pub fn collab::ClaimDesk::roadmap(&self) -> core::option::Option<&str>
+pub fn collab::ClaimDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::ClaimEffect>
+pub fn collab::ClaimDesk::who(&self) -> &str
+pub fn collab::ClaimEffect::expected_before(&self) -> kernel::spine::RoadmapStatus
+pub fn collab::ClaimEffect::index(&self) -> u64
+pub fn collab::ClaimEffect::payload(&self, &str) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::ClaimTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::ClaimTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::ClaimTool::new(alloc::rc::Rc<core::cell::RefCell<collab::ClaimDesk>>) -> core::result::Result<collab::ClaimTool, kernel::error::AxError>
+pub fn collab::Draft::author(&self) -> &str
+pub fn collab::Draft::body(&self) -> &kernel::event::Payload
+pub fn collab::Draft::new(alloc::string::String, kernel::address::Address, kernel::version::Version, kernel::event::Payload) -> collab::Draft
+pub fn collab::Draft::room(&self) -> &kernel::address::Address
+pub fn collab::Draft::seen(&self) -> kernel::version::Version
+pub fn collab::Drafts::held_payload(&self, &collab::Draft, kernel::version::Version) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Drafts::holds(&self, &collab::Draft) -> u32
+pub fn collab::Drafts::new() -> collab::Drafts
+pub fn collab::Drafts::resolve(&mut self, &collab::Draft, collab::Return, kernel::version::Version, u32) -> collab::Resolution
+pub fn collab::Drafts::resolved_payload(&self, &collab::Draft, collab::Return) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Drafts::submit(&mut self, &collab::Draft, kernel::version::Version, u32) -> collab::Submission
+pub fn collab::Escalation::as_str(self) -> &'static str
+pub fn collab::FanIn::accept(&mut self, collab::Artifact)
+pub fn collab::FanIn::decide(&self, &str) -> core::result::Result<collab::Joined, kernel::error::AxError>
+pub fn collab::FanIn::is_empty(&self) -> bool
+pub fn collab::FanIn::len(&self) -> usize
+pub fn collab::FanIn::new() -> collab::FanIn
+pub fn collab::FanIn::question(&self) -> core::result::Result<collab::PrivateQuestion, kernel::error::AxError>
+pub fn collab::GoalDesk::new(kernel::event::RunId, alloc::string::String, alloc::vec::Vec<kernel::goal::GoalEntry>) -> collab::GoalDesk
+pub fn collab::GoalDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::GoalEffect>
+pub fn collab::GoalTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::GoalTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::GoalTool::new(kernel::address::Address, alloc::rc::Rc<core::cell::RefCell<collab::GoalDesk>>) -> core::result::Result<collab::GoalTool, kernel::error::AxError>
+pub fn collab::HoldToken::shown(&self) -> kernel::version::Version
+pub fn collab::HoldToken::turn(&self) -> u32
+pub fn collab::Inbox::deliver(&mut self, &collab::Signal) -> core::result::Result<kernel::backpressure::Admission, kernel::error::AxError>
+pub fn collab::Inbox::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn collab::Inbox::new(u64, u32) -> collab::Inbox
+pub fn collab::Inbox::pending(&self) -> u32
+pub fn collab::Inbox::pull(&mut self) -> core::result::Result<alloc::vec::Vec<collab::Signal>, kernel::error::AxError>
+pub fn collab::Joined::nodes(&self) -> &[collab::NodeId]
+pub fn collab::NodeContract::budget(&self) -> kernel::budget::BudgetCap
+pub fn collab::NodeContract::depends_on(&self) -> impl core::iter::traits::iterator::Iterator<Item = &collab::NodeId>
+pub fn collab::NodeContract::done_check(&self) -> &str
+pub fn collab::NodeContract::goal(&self) -> &str
+pub fn collab::NodeContract::id(&self) -> &collab::NodeId
+pub fn collab::NodeContract::job_text(&self) -> alloc::string::String
+pub fn collab::NodeContract::new(collab::NodeId, alloc::string::String, alloc::collections::btree::set::BTreeSet<collab::NodeId>, alloc::vec::Vec<(kernel::locator::Locator, kernel::version::Version)>, kernel::address::Address, alloc::string::String, alloc::string::String, kernel::budget::BudgetCap, alloc::string::String) -> core::result::Result<collab::NodeContract, kernel::error::AxError>
+pub fn collab::NodeContract::owner(&self) -> &str
+pub fn collab::NodeContract::reads(&self) -> &[(kernel::locator::Locator, kernel::version::Version)]
+pub fn collab::NodeContract::stop(&self) -> &str
+pub fn collab::NodeContract::write_domain(&self) -> &kernel::address::Address
+pub fn collab::NodeId::as_str(&self) -> &str
+pub fn collab::NodeId::parse(&str) -> core::result::Result<collab::NodeId, kernel::error::AxError>
+pub fn collab::OpenRequest::from_payload(&kernel::event::Payload) -> core::result::Result<collab::OpenRequest, kernel::error::AxError>
+pub fn collab::OpenRequest::payload(&self) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Pr<S>::branch(&self) -> &str
+pub fn collab::Pr<S>::implementer(&self) -> &str
+pub fn collab::Pr<S>::node(&self) -> &collab::NodeId
+pub fn collab::Pr<collab::Merged>::commit(&self) -> &str
+pub fn collab::Pr<collab::Merged>::merged_payload(&self) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Pr<collab::Open>::open(collab::NodeId, alloc::string::String, alloc::string::String) -> core::result::Result<collab::Pr<collab::Open>, kernel::error::AxError>
+pub fn collab::Pr<collab::Open>::opened_payload(&self) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Pr<collab::Open>::rejected_payload(&self, &str, &str) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Pr<collab::Open>::verified(self, &collab::Artifact) -> core::result::Result<collab::Pr<collab::Verified>, kernel::error::AxError>
+pub fn collab::Pr<collab::Verified>::merged(self, alloc::string::String) -> collab::Pr<collab::Merged>
+pub fn collab::Pr<collab::Verified>::verified_by(&self) -> &str
+pub fn collab::PrDesk::new(alloc::string::String, kernel::address::Address, core::option::Option<alloc::string::String>, core::option::Option<collab::NodeId>, alloc::vec::Vec<collab::OpenRequest>) -> collab::PrDesk
+pub fn collab::PrDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::PrEffect>
+pub fn collab::PrTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::PrTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::PrTool::new(kernel::address::Address, alloc::rc::Rc<core::cell::RefCell<collab::PrDesk>>) -> core::result::Result<collab::PrTool, kernel::error::AxError>
+pub fn collab::PrivateQuestion::node(&self) -> &collab::NodeId
+pub fn collab::PrivateQuestion::prompt(&self) -> &str
+pub fn collab::Reflex::as_str(self) -> &'static str
+pub fn collab::Return::as_str(self) -> &'static str
+pub fn collab::Signal::at(&self) -> kernel::event::TimeMs
+pub fn collab::Signal::consumed_payload(&self, &str) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Signal::enqueued_payload(&self) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::Signal::from(&self) -> &str
+pub fn collab::Signal::from_payload(&kernel::event::Payload) -> core::result::Result<collab::Signal, kernel::error::AxError>
+pub fn collab::Signal::id(&self) -> &collab::SignalId
+pub fn collab::Signal::kind(&self) -> collab::SignalKind
+pub fn collab::Signal::lane(&self) -> collab::Lane
+pub fn collab::Signal::new(collab::SignalId, collab::SignalKind, alloc::string::String, kernel::address::Address, kernel::version::Version, kernel::event::Payload, kernel::event::TimeMs) -> core::result::Result<collab::Signal, kernel::error::AxError>
+pub fn collab::Signal::payload(&self) -> &kernel::event::Payload
+pub fn collab::Signal::room(&self) -> &kernel::address::Address
+pub fn collab::Signal::room_version(&self) -> kernel::version::Version
+pub fn collab::SignalDesk::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn collab::SignalDesk::new(kernel::event::RunId, kernel::address::Address, alloc::string::String, kernel::address::Address, kernel::event::TimeMs, collab::Inbox) -> collab::SignalDesk
+pub fn collab::SignalDesk::pending(&self) -> u32
+pub fn collab::SignalDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::SignalEffect>
+pub fn collab::SignalDesk::take_inbox(&mut self) -> collab::Inbox
+pub fn collab::SignalId::as_str(&self) -> &str
+pub fn collab::SignalId::parse(&str) -> core::result::Result<collab::SignalId, kernel::error::AxError>
+pub fn collab::SignalKind::as_str(self) -> &'static str
+pub fn collab::SignalKind::parse(&str) -> core::result::Result<collab::SignalKind, kernel::error::AxError>
+pub fn collab::SignalTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::SignalTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::SignalTool::new(alloc::rc::Rc<core::cell::RefCell<collab::SignalDesk>>) -> core::result::Result<collab::SignalTool, kernel::error::AxError>
+pub fn collab::Steer::from_person(&str) -> core::result::Result<collab::Steer, kernel::error::AxError>
+pub fn collab::Steer::from_signal(&collab::Signal) -> core::result::Result<collab::Steer, kernel::error::AxError>
+pub fn collab::Steer::source(&self) -> &str
+pub fn collab::Steer::text(&self) -> &str
+pub fn collab::Triage::decide(&self, &collab::Arrival) -> collab::Landing
+pub fn collab::Triage::new(alloc::vec::Vec<collab::Rule>, kernel::address::Address) -> core::result::Result<collab::Triage, kernel::error::AxError>
+pub fn collab::Workshop::contract(&self, &collab::NodeId) -> core::option::Option<&collab::NodeContract>
+pub fn collab::Workshop::is_empty(&self) -> bool
+pub fn collab::Workshop::len(&self) -> usize
+pub fn collab::Workshop::new(alloc::vec::Vec<collab::NodeContract>) -> core::result::Result<collab::Workshop, kernel::error::AxError>
+pub fn collab::Workshop::ready(&self, &alloc::collections::btree::set::BTreeSet<collab::NodeId>) -> alloc::vec::Vec<collab::NodeId>
+pub fn collab::Workshop::schedule(&self) -> alloc::vec::Vec<collab::NodeId>
+pub fn collab::arbitrate(&[kernel::goal::GoalEntry], &kernel::goal::GoalEntry, collab::Circumstance) -> core::option::Option<collab::Level>
+pub fn collab::conflict_payload(&kernel::goal::GoalEntry, &collab::Level) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn collab::evidence_of(&str, u64) -> core::option::Option<kernel::locator::Locator>
+pub fn collab::still_true(&str, &collab::ClaimEffect) -> bool
+pub mod collab
+pub struct collab::AgentSteer
+pub struct collab::ArchiveDesk
+pub struct collab::ArchiveTool
+pub struct collab::Arrival
+pub struct collab::Artifact
+pub struct collab::Circumstance
+pub struct collab::Claim
+pub struct collab::ClaimDesk
+pub struct collab::ClaimTool
+pub struct collab::Draft
+pub struct collab::Drafts
+pub struct collab::FanIn
+pub struct collab::GoalDesk
+pub struct collab::GoalTool
+pub struct collab::Held
+pub struct collab::HoldToken
+pub struct collab::Inbox
+pub struct collab::Joined
+pub struct collab::Landing
+pub struct collab::Merged
+pub struct collab::NodeContract
+pub struct collab::NodeId(_)
+pub struct collab::Open
+pub struct collab::OpenRequest
+pub struct collab::Pr<S>
+pub struct collab::PrDesk
+pub struct collab::PrTool
+pub struct collab::PrivateQuestion
+pub struct collab::Rule
+pub struct collab::Signal
+pub struct collab::SignalDesk
+pub struct collab::SignalId(_)
+pub struct collab::SignalTool
+pub struct collab::Steer
+pub struct collab::Triage
+pub struct collab::Verified
+pub struct collab::Workshop

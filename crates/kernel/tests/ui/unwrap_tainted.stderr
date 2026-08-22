@@ -1,0 +1,5 @@
+error[E0616]: field `value` of struct `kernel::Tainted` is private
+  --> tests/ui/unwrap_tainted.rs:11:32
+   |
+11 |     let bare: String = tainted.value;
+   |                                ^^^^^ private field

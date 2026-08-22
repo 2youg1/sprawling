@@ -1,0 +1,50 @@
+impl kernel::tool::Tool for protocol::McpTool
+impl protocol::Incoming
+impl protocol::McpTool
+impl protocol::Outbound for protocol::ScriptedOutbound
+impl protocol::Outbound for protocol::ScriptedOutbound
+impl protocol::Progress
+impl protocol::Rpc
+impl protocol::ScriptedOutbound
+pub const protocol::EXTERNAL_CALL_PATIENCE: kernel::tool::TimeoutMs
+pub enum protocol::Admitted
+pub fn protocol::Incoming::parse(&serde_json::value::Value) -> core::result::Result<protocol::Incoming, kernel::error::AxError>
+pub fn protocol::McpTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn protocol::McpTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn protocol::McpTool::new(kernel::tool::ToolMeta, alloc::string::String, alloc::boxed::Box<dyn protocol::Outbound>, bool) -> core::result::Result<protocol::McpTool, kernel::error::AxError>
+pub fn protocol::McpTool::remote(&self) -> &str
+pub fn protocol::Outbound::call(&mut self, &str, kernel::tool::TimeoutMs) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn protocol::Progress::to_body(&self) -> serde_json::value::Value
+pub fn protocol::Rpc::call_tool(&mut self, &str, &serde_json::value::Value) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn protocol::Rpc::discover(&mut self) -> alloc::string::String
+pub fn protocol::Rpc::list_tools(&mut self) -> alloc::string::String
+pub fn protocol::Rpc::new() -> protocol::Rpc
+pub fn protocol::Rpc::read(&str) -> core::result::Result<serde_json::value::Value, kernel::error::AxError>
+pub fn protocol::ScriptedOutbound::answer(&mut self, &str, &str) -> core::result::Result<(), kernel::error::AxError>
+pub fn protocol::ScriptedOutbound::call(&mut self, &str, kernel::tool::TimeoutMs) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn protocol::ScriptedOutbound::call(&mut self, &str, kernel::tool::TimeoutMs) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn protocol::ScriptedOutbound::missed(&self) -> &[alloc::string::String]
+pub fn protocol::ScriptedOutbound::new() -> protocol::ScriptedOutbound
+pub fn protocol::admit(&protocol::Incoming, bool) -> core::result::Result<protocol::Admitted, kernel::error::AxError>
+pub fn protocol::tools_from(&kernel::tool::ServerLabel, &serde_json::value::Value) -> core::result::Result<alloc::vec::Vec<protocol::Listed>, kernel::error::AxError>
+pub mod protocol
+pub protocol::Admitted::Dispatch
+pub protocol::Admitted::Dispatch::addr: kernel::address::Address
+pub protocol::Admitted::Dispatch::goal: alloc::string::String
+pub protocol::Admitted::Dispatch::task: alloc::string::String
+pub protocol::Incoming::addr: kernel::address::Address
+pub protocol::Incoming::goal: alloc::string::String
+pub protocol::Incoming::task: alloc::string::String
+pub protocol::Incoming::token: alloc::string::String
+pub protocol::Listed::meta: kernel::tool::ToolMeta
+pub protocol::Listed::remote: alloc::string::String
+pub protocol::Progress::finished: bool
+pub protocol::Progress::run: alloc::string::String
+pub protocol::Progress::turns: u32
+pub struct protocol::Incoming
+pub struct protocol::Listed
+pub struct protocol::McpTool
+pub struct protocol::Progress
+pub struct protocol::Rpc
+pub struct protocol::ScriptedOutbound
+pub trait protocol::Outbound

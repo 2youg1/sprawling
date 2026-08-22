@@ -1,0 +1,13 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! V0: "unrepresentable" is itself tested.
+//! Every file under tests/ui must fail to compile; the stderr snapshots
+//! pin the reason. The runtime crate carries the prefix/turn cases.
+
+#[test]
+fn the_hardening_counterexamples_do_not_compile() {
+    let cases = trybuild::TestCases::new();
+    cases.compile_fail("tests/ui/*.rs");
+}

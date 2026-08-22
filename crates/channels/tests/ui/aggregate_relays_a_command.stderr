@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/ui/aggregate_relays_a_command.rs:18:39
+   |
+18 |     let _ = aggregate.ask(&elsewhere, stop_their_work);
+   |                       ---             ^^^^^^^^^^^^^^^ expected `Query`, found `Command<_>`
+   |                       |
+   |                       arguments to this method are incorrect
+   |
+   = note: expected enum `channels::Query`
+              found enum `channels::Command<_>`
+note: method defined here
+  --> src/aggregate.rs
+   |
+   |     pub fn ask(&self, label: &CityLabel, query: Query) -> Result<Forwarded, AxError> {
+   |            ^^^

@@ -1,0 +1,2 @@
+# Bytes as authored: no eol conversion anywhere (V8 asserts byte identity).
+* -text
