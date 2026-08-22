@@ -64,13 +64,35 @@ Agent记忆的确是实现RSI很重要的途径，但不是依靠Harness做注�
 
 ## 跑起来
 
-拿到那一个二进制就够了。不装 npm，不装 node，不装任何运行时。
+### 快速上手
+
+1. 从 [latest release](../../releases/latest) 下载对应系统的压缩包。
+2. 解压到任意位置。
+3. 运行 **`start.cmd`**（Windows）或 **`./start.sh`**（macOS、Linux）。
+
+这就是全部安装。不写注册表，不装服务，那个文件夹之外一字不动，删掉文件夹即全部清除。会弹出一个控制台窗口并一直开着：**那个窗口就是那座城**。浏览器会自己打开 `http://127.0.0.1:8787`；没打开就自己输这个地址。在那个窗口按 `Ctrl-C` 停城。
+
+二进制没有代码签名，所以第一次运行会被拦：Windows 提示「已保护你的电脑」，选**更多信息 → 仍要运行**；macOS 首次拒绝，在访达里右键打开一次即可。
+
+**它自己不会思考，开工前你得先给它一个模型**：一把说 OpenAI 或 Anthropic 方言的 provider 的 API key，或者一个订阅登录。sprawling 负责调度 Agent、记录它们做了什么并展示给你。
+
+### 从终端
+
+拿到那一个二进制就够了。不装 npm，不装 node，不装任何运行时。启动器跑的就是下面这一条：
+
+```bash
+sprawling up [city-dir] [addr]      # 城不在就先建，然后起服，然后开 WebUI
+```
+
+拆开来写：
 
 ```bash
 sprawling init  <city-dir>          # 建一座城；城名写进创世记录
 sprawling serve <city-dir> [addr]   # 起控制面；默认只听回环
 # 然后打开 http://127.0.0.1:8787
 ```
+
+> **不要用 `cargo install` 装它。**客户端是先编好再嵌进二进制的 WebAssembly；单跑 cargo build 跑不了那一步，装出来的二进制页面是空白的。要么拿 release 压缩包，要么用 `just dist` 自己构。
 
 页面上四步，大约十秒：
 
@@ -89,7 +111,10 @@ sprawling replay <ledger-dir>       # 离线验链，只读
 sprawling export <city-dir> <file>  # 打包一座城；清单就是完整性判据
 sprawling restore <file> <city-dir> # 在另一台机器上解开
 sprawling status [--deps]           # 这台机器的情况；--deps 列出编进来的依赖
+sprawling help                      # 所有命令，一屏列完
 ```
+
+一个命令也不带地启动它——比如双击——它只给一屏：写出它打算建在哪里，等你点头才动手。建城要写创世记录，而那件事不会因为有人双击了一个文件就发生。
 
 从空目录到第一个 Run，一步不跳的走法在 [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md)。
 
