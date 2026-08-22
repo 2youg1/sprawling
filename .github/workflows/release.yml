@@ -31,6 +31,9 @@ jobs:
           fetch-depth: 0
       - name: install pinned toolchain
         run: rustup show
+      # The first run after a workflow change is cold: 494 packages compiled
+      # from zero. Every run after that reuses the cache instead.
+      - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-deny,cargo-public-api
@@ -52,8 +55,9 @@ jobs:
 
   # The absence of Linux is written here rather than left to be noticed:
   # a platform missing from a release page is a decision, not an oversight.
+  # Archive does not wait for verify: the two are independent, publish
+  # waits for both, and the wall clock is the slower one instead of the sum.
   archive:
-    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +93,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: archive
+    needs: [verify, archive]
     runs-on: ubuntu-latest
     permissions:
       contents: write
