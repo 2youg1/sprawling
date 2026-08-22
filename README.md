@@ -1,182 +1,182 @@
 # sprawling
 
-**Organise a crowd of agents into a city, on your own machine. One Rust binary, and one page in a browser.**
+**Turn a swarm of agents into a city on your own machine. One Rust binary. The UI lives in the browser.**
 
 ![binary](docs/badges/release_binary.svg) ![client](docs/badges/frontend_artifact.svg)
 
-The binary those badges weigh is attached to the [latest release](../../releases/latest); the numbers are rendered from the same measurement the build gate takes, so nobody types a size into a document.
+The binary the badges refer to is attached to the [latest release](../../releases/latest). Both numbers are produced by the same build gate that weighs the artifacts—no one hand-writes sizes into the docs.
 
-> **Status: pre-alpha, under research and development.** The main loop is connected: register a provider in the browser, raise a building, dispatch a piece of work, and the model really calls tools and writes files into that building. Several agents work at the same time, each in its own room.
+> **Status: pre-alpha, research & development.** The main loop works: register a provider in the browser, raise a building, dispatch a job; the model actually calls tools and writes files into that building. Multiple agents can work at the same time, each in its own room.
 >
-> What is not connected yet is in [what works today](#what-works-today). Read that section before you put real work through it.
+> What’s still missing is listed under [What works / what doesn’t](#what-works-what-doesnt). Read that section before you hand it real work.
 >
-> 中文：[README.zh-CN.md](README.zh-CN.md)
+> 中文: [README.zh-CN.md](README.zh-CN.md)
 
-**Strengths**: small; concepts that are genuinely cool; built for many agents rather than for one agent with extensions bolted on.
+**Strengths**: tiny footprint; concepts that feel genuinely cool; built for multi-agent from the start, not a single agent with a pile of extensions.
 
-**Countless weaknesses**: a student project, funded by no API reseller and maintained by no lab; no anime mascot; I want the WebUI to be good and I am not quite good enough at it yet; stability and usability both still need debugging.
+**Weaknesses are many**: a student project with no lab or middleware sponsor behind it; no anime mascot; the WebUI wants to be good but the implementation still lags; stability and usability both need work.
 
 ---
 
-## Why I built this
+## Why this exists
 
-> The author's own words, in Chinese, kept verbatim. An English translation waits for his review rather than being made on his behalf.
+I don’t want to sit in front of a computer 24/7 until the 5-hour quota wall hits and I finally go to sleep. Neither do you.
 
-我不想24/7守在电脑面前，直到5h额度撞墙再去睡觉，你也不想。
+I’ve tried a lot of harnesses. Some feel conceptually outdated; others overshoot what’s actually useful. Take RSI: until the LLM itself leaves the stateless regime, a harness can only keep adapting to the newest models and learning a company’s existing workflows so it can run them faster. The first trend looks like an ablation study; the second needs privacy.
 
-我换过很多Harness，有些理念落后，有些超出实际：就以RSI来说，在LLM本身脱离无状态之前，Harness能做的只是不断地针对最新的模型做适配和学习公司的现有业务流程并更高速地运行，前者的趋势是消融实验，后者则需要隐私。
+More and more small companies are appearing—tiny teams shipping online services with a large number of agents. Ninety-nine percent of them are a pile of Markdown plus a few talented people.
 
-越来越多的小规模公司正在出现，它们是有着大量Agent开发在线服务的小型团队，其中99%就是Markdown集+几个天才。
+So I wanted a harness that keeps up with the emerging multi-agent (graph engineering) wave while remaining pragmatic about RSI and memory-related fashion. I put practical extensibility, saving the user’s attention, experimental cost control for agent scale-up, privacy & reliability, and long-running capability at the core of the design, and mixed in a few ideas from urban studies and sociology. That’s how sprawling took shape.
 
-因而我想要制作一个跟上新生的多Agent（Graph engineering）又同时能务实地处理RSI和记忆相关概念风潮的Harness，我将务实的可拓展、节省用户精力、实验性的agent规模化的成本控制、隐私与可靠性、长时运行能力这些放在了设计的核心，并结合了一些城市学与社会学的内容设计了sprawling。
+The stronger and larger agents become, the more expensive human attention gets. I refuse to let sprawling become just another app that tries to hijack yours. Unlike most harnesses that obsess over prompt writing, the best way to use sprawling is to shift toward the loop: design the workflow, let agents develop sprawling itself, and hand over your fixed work… so you can focus on designing new business, learning new skills, and only occasionally checking how things are running.
 
-Agent的能力和规模越强，人的注意力就越贵，我不想sprawling成为无数希望劫持你注意力应用中的一个。sprawling区别于常规Hanress聚焦于编写Prompt，最佳使用实践应是转向Loop，安排工作流，让Agent开发sprawling，接管你的固定工作……让你本人专注于新业务的设计，新技能的学习，偶尔回来看一眼跑的怎么样。
+Honestly, no multi-agent scheme yet delivers performance gains that justify the cost of scale. But exploration of this technology for business automation, social simulation, and AI alignment is only just beginning. We still need a lot of effort and resources to study how models interact, collaborate, and exhibit social behavior inside agent clusters.
 
-诚实地说目前还没有一种多Agent方案提升的性能对得起规模化提升的成本，但探索这项技术在自动化业务，社会模拟以及AI对齐方面的研究刚刚起步，我们还需要花费很多精力和资源探索Agent集群场景下模型的交互行为、协作效率与社会性表现。
+Agent memory is indeed an important path toward RSI, but not via harness-level injection. Your files, code, and document libraries *are* the memory. Attempts to make an agent truly grow with you are, before LLMs leave the stateless regime, mostly a drag on the model.
 
-Agent记忆的确是实现RSI很重要的途径，但不是依靠Harness做注入，你的文件、代码，文档库就是记忆，Agent真正和你一起成长的尝试在LLM脱离无状态之前大多是对模型的拖累。
+If you prefer a harness you already like, try RefRain. sprawling is aimed at persistent operations for small teams and at research platforms (computer science or the humanities/social sciences). It is still in R&D. Contributions and conversations are both welcome.
 
-如果你想要用自己喜欢的Harness可以试一下RefRain。sprawling主要面向为小团队持久化运营和学术（无论计算机还是人文社科）研究平台，目前还处于研究与开发阶段，欢迎一起开发，也欢迎和我联系/讨论。
+Apart from migrating the necessary business skills / MCP / ACP pieces, I recommend staying lean for now and only adding things manually when you hit a concrete problem. Even the same model behaves completely differently under different harnesses.
 
-除了迁移必要的业务skill/MCP/ACP之外，推荐暂时保持精简，在使用中遇到问题时再手动追加内容，即使是相同的模型搭配不同的Harness都会有完全不同的行为。
+My own machine is modest, so I refuse to let multi-agent workloads explode in performance cost. That also makes it suitable for old laptops or cheap cloud boxes.
 
-我用的电脑不好，所以我不会放任多Agent产生性能开销指数增长的问题，也适合部署在你的旧电脑或云电脑上。
-
-我不卖API也买不起装你信息的硬盘，因而数据都留在本地，我设计了专门的保密楼，配上本地模型完全可以用于处理隐私数据，但这也意味着我没法运行巨大规模的测试。
+I don’t sell APIs and I can’t afford a hard drive full of your data, so everything stays local. There is a dedicated confidential building; paired with a local model it is fully usable for private data. The trade-off is that I cannot run enormous-scale tests myself.
 
 ---
 
 ## What it is
 
-One binary, one page in a browser. The client is Rust compiled to WebAssembly and embedded in that binary; there is no second client, and no npm or node appears in the build chain, which a gate checks rather than a convention.
+One binary, one browser page. The client is Rust compiled to WebAssembly and embedded inside that binary. There is no second client; the build chain contains neither npm nor node—this is enforced by a gate, not by good intentions.
 
-The directory tree on disk is the space: a **City** is a tree, a project is a **Building**, and an agent's workplace is a **Room**.
+The directory tree on disk *is* the space: a **City** is a directory tree, a project is a **Building**, an agent’s workspace is a **Room**.
 
-**One address settles four things at once.** `lab/room1` says where the files are, which files that agent may write, what context it starts with, and who it reports to. Nothing has to keep those four in agreement, because they are one fact.
+**One address freezes four things at once.** `lab/room1` tells you where the files live, which files this agent may write, what context it starts with, and whom it reports to. These four never need a mechanism to stay consistent—they are the same fact.
 
-**The Ledger is the only history.** Every effect becomes an event before it becomes an effect. Every view in the interface is a projection of that stream: throw one away, rebuild it from the Ledger, get the same bytes. Change one byte of the log and verification names the line and refuses to go on.
+**The Ledger is the only history.** Every effect first becomes an event, then becomes an effect. Every view in the UI is a projection of that event stream: delete one, rebuild from the Ledger, and the bytes match. Change a single byte in the log and chain verification reports the line number and refuses to proceed.
 
-**A deletion carries its own way back.** The type that represents discarding a file has no constructor without a Restoration — "deleted with no way back" is not refused at runtime, it cannot be written at all. Every row in the recycle bin carries the sentence that brings that file back.
+**Deletion comes with its own undo path.** The type that means “discard a file” has no constructor without a Restoration—“deleted and gone forever” is not rejected at runtime; it cannot even be written. Every row in the recycle bin carries the exact sentence that can restore it.
 
-**Cost is attributed five ways**, and each dimension sums exactly to the amount the provider actually billed. Where a provider reports no price — a subscription, for instance — the interface says so instead of printing `$0.00`, because zero and unknown are different facts.
+**Cost is attributed across five dimensions**, each of which sums exactly to the number the provider actually bills. When a provider supplies no price (e.g. a subscription), the UI says there is no price instead of printing `$0.00`. Zero and unknown are different things.
 
-**The interface is built to leave you alone.** No red dots, no unread counts, no infinite feed, no animation on a progress bar. One thing interrupts you: something that needs a person. Everything else waits where you will find it.
+**The UI’s design goal is not to bother you.** No red dots, no unread counts, no infinite scroll, no animated progress bars. The only thing that interrupts you is a decision that requires a human. Everything else waits where you will find it.
 
-**Some states are unrepresentable rather than validated.** Forging an event reference, deserialising a finished-with-evidence, entering a credential over the network, drawing a percentage with no denominator — none of these can be written in the type system. Each has a compile-failure counterexample in the test suite, because "cannot be expressed" is itself a claim that needs proving.
+**Some states are not validated—they are unrepresentable.** Forging an event reference, deserializing a “completed” status, entering credentials across the network, drawing a percentage without a denominator—these cannot be expressed in the type system. Each has a compile-fail counter-example in the tests, because “cannot be written” is itself an assertion that must be proven.
 
-## Running it
+## Getting it running
 
-The single binary is enough. No npm, no node, no runtime to install.
+One binary is enough. No npm, no node, no extra runtime.
 
 ```bash
-sprawling init  <city-dir>          # raise a city; its name goes into the genesis record
-sprawling serve <city-dir> [addr]   # start the control surface, loopback only by default
+sprawling init  <city-dir>          # found a city; the name is written into the genesis record
+sprawling serve <city-dir> [addr]   # start the control plane; defaults to loopback only
 # then open http://127.0.0.1:8787
 ```
 
-Four steps in the page, about ten seconds:
+Four steps on the page, roughly ten seconds:
 
-1. **settings** — the provider's base URL, its dialect (OpenAI or Anthropic) and the key. The key goes straight into the platform credential service; from then on the page only ever shows a `secret:realm/name` reference.
-2. Same page, choose a model per tag: `main` thinks, `digest` reads long documents on its behalf.
+1. **settings** — enter the provider’s base URL, dialect (OpenAI or Anthropic), and key. The key goes straight into the OS credential store; thereafter the page only ever sees a reference of the form `secret:realm/name`.
+2. On the same page, pick models by role: `main` does the thinking, `digest` reads long documents for it.
 3. **city** — raise a building.
-4. The control surface at the bottom — an address, what to produce, what counts as done. **It does not ask for a budget**: nobody can price a piece of work before it runs, and a subscription has no unit price at all; what it cost is reported afterwards from the record.
+4. The control surface at the bottom — address, what should be produced, what counts as done. **It never asks for a budget**: no one can price a job before it runs, and subscriptions have no unit price anyway. Actual spend is reported from the record afterwards.
 
-The rest of the commands:
+Other commands:
 
 ```bash
-sprawling resume <city-dir>         # after a restart: verify the chain, close tool calls whose
-                                    # outcome was lost, report what waits for a person
-sprawling fork <city> <run> <seq>   # branch a lineage from one step of a run
-sprawling adopt <city> <dir>        # take an existing directory in as a building, overwriting nothing
-sprawling replay <ledger-dir>       # verify a chain offline, read-only
-sprawling export <city-dir> <file>  # pack a whole city; the manifest is the integrity test
+sprawling resume <city-dir>         # after a restart: verify the chain, close tool calls whose results are lost, report who is waiting for a human
+sprawling fork <city> <run> <seq>   # branch a lineage from a given step of a Run
+sprawling adopt <city> <dir>        # absorb an existing directory as a building without overwriting any files
+sprawling replay <ledger-dir>       # offline chain verification, read-only
+sprawling export <city-dir> <file>  # pack a city; the manifest is the integrity criterion
 sprawling restore <file> <city-dir> # unpack it on another machine
-sprawling status [--deps]           # this machine; --deps lists what is compiled in
+sprawling status [--deps]           # state of this machine; --deps lists the compiled-in dependencies
 ```
 
-The whole path from an empty directory to a finished run, skipping no step, is [`docs/getting-started.md`](docs/getting-started.md).
+A step-by-step walk from empty directory to first Run lives in [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md) (English version coming).
 
 ## Five words
 
 | Word | What it is |
 |---|---|
-| **City** | One city on one machine: one directory tree, one Ledger, one complete history. Two cities never reference each other. |
-| **Building** | A building in a city, one line of business. Configuration, archive and write domains are scoped to it. |
-| **Room** | A room in a building, which is a subdirectory. One agent works in one room. |
-| **Run** | One piece of work with a start and an end. **A resident is an identity; a run is the cost** — the two numbers differ by two orders of magnitude. |
-| **Ledger** | The only history. One line per event, append-only, verifiable offline. |
+| **City** | One city on one machine: a directory tree, one Ledger, one complete history. Two cities never reference each other. |
+| **Building** | A building inside the city; one building, one business line. Configuration, Archive, and WriteDomain are all scoped to it. |
+| **Room** | A room inside a building, i.e. a subdirectory. One agent works in one room. |
+| **Run** | A piece of work with a beginning and an end. **Resident is identity; Run is cost**—the two numbers differ by two orders of magnitude. |
+| **Ledger** | The only history. One line, one event; append-only; offline-verifiable. |
 
-The rest of the vocabulary is [`docs/glossary.md`](docs/glossary.md).
+The rest of the vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
-## What works today
+## What works / what doesn’t
 
-**Works**, each with an end-to-end assertion or a real measurement behind it: registering a provider and choosing models; raising buildings and dispatching work; a model really calling tools and writing files into that building; giving a building an outside MCP server; several agents at once, each with its own git worktree, and nothing merging into a building without somebody other than its author verifying it (a compile error, not a rule); ten pages (city, live, approvals, recycle bin, archive, cost, ledger, building, room mailbox, settings); halting a city and letting it go on; verifying a chain offline; exporting a city and restoring it on another machine.
+**Works**, each backed by an end-to-end assertion or a real measurement: register a provider and select models; raise a building and dispatch work; the model actually calls tools and writes files into that building; attach an external MCP server to a building; multiple agents working concurrently, each with its own git worktree, changes only merge back after others have reviewed them (this is a compile error, not a rule); ten pages (city, live, approvals, recycle bin, archive, cost, ledger, building, room mailbox, settings); pause a city and release it; offline chain verification; export a city and restore it on another machine.
 
-**Built, but never met the real thing**: a hosted MCP server, a real subscription login, a real inbound ACP request over HTTP. All three chains are proven against servers written for the purpose, which proves the chain and not the far end. One real call in the Anthropic dialect hung with no return and the cause is not established; the OpenAI dialect is clear.
+**Built but never seen the real thing**: hosted MCP servers, real subscription login, real inbound ACP requests over HTTP. All three chains have only been verified against servers we wrote ourselves—that proves the chain, not the far side. Anthropic dialect once hung on a live call and never returned; root cause still unknown. OpenAI dialect is clean.
 
-**Not built, and why**:
+**Not done, and why**:
 
-| Not built | Why |
+| Missing piece | Reason |
 |---|---|
-| An OS-level sandbox | It binds per platform and this machine can verify one of three. Unverified isolation is worse than none, because it gets treated as a defence. So today's sentence is "a deletion can be undone", not "a deletion cannot happen" |
-| A browser end-to-end run in CI | The loop is a command a developer runs, not a gate |
-| A reproducible build | The fixture is written; the compiler flag that makes two builds byte-identical is not set |
-| Attributing spend to skills | A decision rather than a gap: a tool call does not happen "under" a skill — a skill is a line of disclosure in the prefix, not a calling context — so attributing spend by call would be inventing a basis |
+| OS-level sandbox | Requires per-platform work; only one-third can be verified on this machine. Unverified isolation is worse than none, because people will treat it as a defense. Today’s claim is therefore “a deletion can be undone,” not “a deletion cannot happen.” |
+| Browser end-to-end in CI | The loop is a local command, not a gate. |
+| Reproducible builds | Fixtures are ready; the compiler flags that would make two builds byte-identical are not yet set. |
+| Attributing spend to skills | This is a decision, not a debt: a tool call does not happen “under” a skill—a skill is a disclosure line in the prefix, not call context. Charging by skill would invent a metric. |
 
-## Parts you can replace
+## What you can swap
 
-Nothing here is hosted and no account is held on your behalf, so everything that reaches outside sits on a seam and can be swapped without touching anything else:
+I sell neither APIs nor account hosting, so everything external sits on a seam and can be replaced without touching the rest:
 
-| Part | Where it lives | How to replace it |
+| Piece | Lives in | How to replace |
 |---|---|---|
-| Subscription-login intelligence (followed from openai/codex and earendil-works/pi) | `gateway::oauth_profiles` (data only, zero branches), `gateway::credential` (flow and renewal) | add a profile row. **Credential custody is never delegated**: plaintext reaches the platform vault and nothing else |
-| Model endpoints and dialects | `gateway::endpoint`, `gateway::dialect`; local inference goes through `gateway::native` | fill in a base URL and a dialect on the settings page; a local model is reached directly, not through the outbound gateway |
-| SaaS and outside tools ([Composio](https://composio.dev) is one MCP server among them) | the `Outbound` seam in `protocol::mcp`, `bin::mcp_stdio` and `bin::mcp_http`, a building's `CONFIG.toml` | change one URL or one command. A confidential building starts none of them |
-| The sandbox | the `runtime::sandbox` seam (today's adapter is wasmtime with fuel) | implement the seam and pass its conformance suite |
-| The client | `channels::wire` is the whole API surface | write a second client against that wire |
+| Subscription-login intel (following openai/codex and earendil-works/pi) | `gateway::oauth_profiles` (data only, zero branches), `gateway::credential` (flow & renewal) | Add one profile line. **Credential custody is never outsourced**: plaintext reaches only the local credential store. |
+| Model endpoint & dialect | `gateway::endpoint`, `gateway::dialect`; local inference via `gateway::native` | Enter base URL and dialect on the settings page; local models connect directly, bypassing the gateway. |
+| SaaS & external tools ([Composio](https://composio.dev) is one MCP server among others) | `protocol::mcp` `Outbound` seam, `bin::mcp_stdio` & `bin::mcp_http`, the building’s `CONFIG.toml` | Change one URL or one command to switch servers; confidential buildings start none. |
+| Sandbox | `runtime::sandbox` seam (current adapter is wasmtime fuel) | Implement the seam and pass its conformance assertion suite. |
+| Client | `channels::wire` is the sole API surface | Want a second client? Write against this wire format. |
 
-Where each of these sits, and what stays fixed, is in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Location and replacement steps for each piece are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Where it listens, where credentials live
 
-**Loopback only, by default.** To let another machine on your network connect, bind a non-loopback address and set `SPRAWLING_PAIRING_TOKEN`; with no token configured it **refuses to start** rather than starting and refusing connections later. Beyond your network this repository ships no tunnel and no relay: each carries its own trust model, and bundling one would be making a security decision that is yours.
+**Defaults to loopback only.** To let another machine on the same network connect, bind a non-loopback address and set `SPRAWLING_PAIRING_TOKEN`. Without a pairing token it **refuses to start**—it does not come up and then reject connections one by one. Beyond that, this repository ships neither tunnel nor relay: those two things each carry their own trust model, and choosing one for you would be making a security decision on your behalf.
 
-**Plaintext credentials reach no file, no event and no log.** Keys go into the platform credential service and configuration holds only a `secret:realm/name` reference. Model output passes the same secret scan on its way into history, so a key a model repeated does not become permanent.
+**Credential plaintext never enters any file, any event, or any log.** Keys go into the OS credential store; configuration keeps only `secret:realm/name`. Model output is run through the same secret scanner before it is recorded, so a key the model happens to echo never becomes permanent history.
 
 ## Documentation
 
-Everything except the Chinese README and the Chinese getting-started is in English.
+Apart from this page and the getting-started guide, the docs are in English.
 
-- **Just arrived**: this page is enough; one layer deeper is [`docs/glossary.md`](docs/glossary.md).
-- **Going to use it**: [`docs/getting-started.md`](docs/getting-started.md) → [`docs/operating.md`](docs/operating.md).
-- **Going to change it**: [`ARCHITECTURE.md`](ARCHITECTURE.md) → [`AGENTS.md`](AGENTS.md) → the code and tests next to what you are touching.
+- Just arrived and want to know what this is: this page is enough; one level deeper is [`docs/glossary.md`](docs/glossary.md).
+- Want to put it to work: [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md) → [`docs/operating.md`](docs/operating.md).
+- Want to change it: [`ARCHITECTURE.md`](ARCHITECTURE.md) → [`AGENTS.md`](AGENTS.md) → the code and tests of the neighboring modules.
 
-Also: [`docs/logging.md`](docs/logging.md) (why the log is not history) and [`docs/third-party.md`](docs/third-party.md) (whose shoulders this stands on, and the licence obligations). [`docs/City.md`](docs/City.md) and [`docs/templates/`](docs/templates/) are the documents the city writes into a building — the agents read them, and so can you.
+Also available: [`docs/logging.md`](docs/logging.md) (why logs are not history), [`docs/third-party.md`](docs/third-party.md) (whose shoulders we stand on, and the license obligations). [`docs/City.md`](docs/City.md) and [`docs/templates/`](docs/templates/) are the documents the city writes into buildings—agents read them, and so can you.
 
 ## Contributing
 
-Read [`AGENTS.md`](AGENTS.md); the thirty-second version:
+Start with [`AGENTS.md`](AGENTS.md). The thirty-second version:
 
 ```bash
 cargo install just cargo-nextest --locked
 just check
 ```
 
-A change is finished when that is green. **Write pull requests, issues and review comments in your own language.** A parallel translation — English if you wrote another language, Chinese if you wrote English — is welcome rather than required: with both side by side a reader is faster, and a mistranslation is visible instead of silent.
+When that is green, a change is considered finished. **PR bodies, issues, and review comments may be written in your native language.** If you can, attach a parallel translation (English if your native language is not English, Chinese if it is)—a side-by-side version lets both humans and agents read faster and keeps meaning from being lost in translation.
 
-## Whose shoulders
+## Standing on the shoulders of others
 
-Signing in to a provider requires knowing a handful of endpoints and parameters. Rather than watch those API docs myself, I follow two actively maintained projects:
+Logging into a provider requires a small set of endpoints and parameters. Rather than stare at those API docs myself, I follow two actively maintained projects:
 
-| Project | Licence | What is followed |
+| Project | License | What is followed |
 |---|---|---|
-| [openai/codex](https://github.com/openai/codex) | Apache-2.0 | OpenAI's subscription login: endpoints, client id, scopes, device-code flow |
-| [earendil-works/pi](https://github.com/earendil-works/pi) | MIT | the same intelligence for Anthropic and the other subscription providers |
+| [openai/codex](https://github.com/openai/codex) | Apache-2.0 | OpenAI subscription login: endpoints, client id, scope, device-code flow |
+| [earendil-works/pi](https://github.com/earendil-works/pi) | MIT | The equivalent intel for Anthropic and the other subscription providers |
 
-**What is followed is intelligence, not code.** Endpoints and parameters are facts; the flow and the credential custody are implemented here.
+**What is followed is intelligence, not code.** Endpoints and parameters are facts; the flow and credential custody are implemented here.
 
-Connections to outside applications are outsourced the same way: the city speaks **MCP** to any server, Composio among them, and this repository bundles nobody's key, pays for nothing, and proxies nothing. The full list, how to re-check it, and the licence handling are in [`docs/third-party.md`](docs/third-party.md). Licences of code dependencies are checked one by one by `cargo deny`; the allowlist is [`deny.toml`](deny.toml).
+Connections to external applications are likewise outsourced: the city speaks MCP to any MCP server; Composio is one of them. This repository carries no one’s keys, pays for no one, and acts as no proxy. The full list, how to re-verify, and how licenses are handled live in [`docs/third-party.md`](docs/third-party.md). Licenses of code dependencies are checked one by one by `cargo deny`; the allow-list is [`deny.toml`](deny.toml).
 
-## Licence
+## License
 
-MPL-2.0, see [`LICENSE`](LICENSE).
+MPL-2.0 — see [`LICENSE`](LICENSE).
+
+---
+If you want any section more aggressive / more modest / shorter for X promotion, just say the word and I’ll adjust.
