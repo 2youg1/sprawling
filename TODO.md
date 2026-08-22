@@ -14,6 +14,6 @@ The client is correct today and does not yet look like something a person wants 
 
 ## P1 — Ship a Linux archive
 
-`release.yml` verifies on Linux and builds archives only for Windows and macOS. Adding `ubuntu-latest` back to the `archive` matrix is the whole change, once somebody has run the result on a Linux desktop and seen `start.sh` open a browser there.
+`release.yml` verifies on Windows and builds archives for Windows and macOS. Linux is on hold by the person's ruling; bringing it back means adding `ubuntu-latest` to both the `verify` and `archive` matrices, once somebody has run the result on a Linux desktop and seen `start.sh` open a browser there.
 
 The first CI run on Linux found `xtask/src/mem.rs` importing `std::process::Command` where nothing used it — the class of defect a host-only build never sees. Expect a few more of those before Linux is shippable.

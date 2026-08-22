@@ -20,8 +20,11 @@ permissions:
 
 jobs:
   # Nothing is built for release out of a tree that has not passed.
+  # The host is the shipped platform, by the person's ruling: Linux is
+  # neither verified nor shipped for now, and its fitness is tracked in
+  # TODO.md rather than blocking a release that does not carry it.
   verify:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,9 +50,8 @@ jobs:
       - name: xtask gates
         run: cargo xtask gates
 
-  # Linux is verified above but not shipped yet, by the person's ruling.
-  # The absence is written here rather than left to be noticed: a platform
-  # missing from a release page is a decision, not an oversight.
+  # The absence of Linux is written here rather than left to be noticed:
+  # a platform missing from a release page is a decision, not an oversight.
   archive:
     needs: verify
     strategy:
