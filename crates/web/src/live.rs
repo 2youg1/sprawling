@@ -178,8 +178,12 @@ pub fn LiveView(
     rsx! {
         section { class: "live",
             crate::panel::Panel {
+                // Never a claim about the city: this window opens when the
+                // page connects, so "no run has been dispatched here" is a
+                // sentence it has no standing to say. The overview reads
+                // the city's own count for that.
                 title: match (known, run) {
-                    (0, _) => "no run has been dispatched in this city".to_owned(),
+                    (0, _) => "nothing has happened since this page connected".to_owned(),
                     (_, Some(_)) => "one session, as it happens".to_owned(),
                     (_, None) => "every run in this city, as it happens".to_owned(),
                 },
@@ -238,10 +242,10 @@ pub fn LiveView(
             }
             if feed.lines().is_empty() {
                 crate::panel::Empty {
-                    status: if known == 0 { "no run has started yet".to_owned() }
+                    status: if known == 0 { "no run has reported here yet".to_owned() }
                         else { "nothing has happened here since this page connected".to_owned() },
                     what: if known == 0 {
-                        "send work from the bar at the bottom of the window, or from a building on the city page. Every turn it takes appears here as it happens.".to_owned()
+                        "this window holds what arrives from now on, so a run that finished before you opened this page is in the Ledger rather than here. Send work from the bar below and every turn it takes appears as it happens.".to_owned()
                     } else {
                         "this window holds what arrived after the page connected. Earlier lines are in the Ledger, which the record page reads.".to_owned()
                     },

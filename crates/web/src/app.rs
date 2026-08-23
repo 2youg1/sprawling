@@ -474,7 +474,11 @@ pub fn spend_line(snapshot: &Snapshot) -> String {
     ));
     if usage.priced_calls == 0 {
         return if usage.unpriced_calls == 0 {
-            "nothing spent yet".to_owned()
+            // Not "nothing spent yet": this figure is folded from the
+            // stream, which begins when the page connects, so a city that
+            // spent money an hour ago would be described as having spent
+            // nothing. The window is named instead of being implied.
+            "nothing spent since this page connected".to_owned()
         } else {
             format!("{consumed} used - no price reported")
         };
@@ -1050,7 +1054,6 @@ pub fn App() -> Element {
     // click writes the fragment and hears its own change back, so a
     // click and the browser's back button travel the same path and
     // cannot disagree about where the person is.
-    follow_the_address_bar(view);
     let endpoints = use_signal(|| None::<channels::EndpointsAnswer>);
     let city = use_signal(|| None::<channels::CityAnswer>);
     let cost = use_signal(|| None::<channels::CostAnswer>);
@@ -1062,6 +1065,12 @@ pub fn App() -> Element {
     let vitals = use_signal(|| None::<channels::MetricsAnswer>);
     let records = use_signal(Vec::<EventRecord>::new);
     let mut refused = use_signal(|| None::<crate::alert::Refused>);
+    // The address bar is the authority for which page is showing, and the
+    // listener below is the only thing that moves the signal, so a click
+    // and the browser's back button travel one path and cannot disagree
+    // about where the person is. A fragment this build cannot resolve
+    // becomes a refusal rather than a silent landing on the first page.
+    follow_the_address_bar(view, refused);
     let mut selected = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
@@ -1172,13 +1181,30 @@ struct Wiring {
 /// first render only, so the listener is not rebuilt on every state
 /// change - a second listener would apply the same change twice.
 #[cfg(target_arch = "wasm32")]
-fn follow_the_address_bar(mut view: Signal<View>) {
+fn follow_the_address_bar(
+    mut view: Signal<View>,
+    mut refused: Signal<Option<crate::alert::Refused>>,
+) {
     use dioxus::prelude::use_hook;
     use wasm_bindgen::JsCast as _;
     use_hook(move || {
         // What the person arrived at, before any event has happened.
-        if let Some(arrived) = crate::route::current() {
-            view.set(arrived);
+        match crate::route::current() {
+            Some(arrived) => view.set(arrived),
+            // A link that does not land is a fact the person may want to
+            // act on. Leaving them on the first page without a word is the
+            // quiet substitution this design refuses: it teaches somebody
+            // their own bookmarks are unreliable while never admitting it.
+            None => {
+                if let Some(named) = crate::route::unresolved() {
+                    refused.set(Some(crate::alert::Refused {
+                        code: "E_NO_SUCH_PAGE".to_owned(),
+                        what: format!("this build has no page at {named}"),
+                        recovery: "the pages this build has are in the list on the left;                                    the address bar shows the one you are on"
+                            .to_owned(),
+                    }));
+                }
+            }
         }
         let Some(window) = web_sys::window() else {
             return;
@@ -1205,7 +1231,7 @@ fn follow_the_address_bar(mut view: Signal<View>) {
 /// Off the browser there is no address bar, so the signal is the only
 /// authority and nothing has to follow anything.
 #[cfg(not(target_arch = "wasm32"))]
-fn follow_the_address_bar(_view: Signal<View>) {}
+fn follow_the_address_bar(_view: Signal<View>, _refused: Signal<Option<crate::alert::Refused>>) {}
 
 #[cfg(target_arch = "wasm32")]
 fn connect(wiring: Wiring) -> Outbound {

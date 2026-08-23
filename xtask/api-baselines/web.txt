@@ -419,5 +419,7 @@ pub web::View::Overview
 pub web::View::RecycleBin
 pub web::View::Settings
 pub web::Working::buildings: usize
+pub web::Working::frozen: usize
+pub web::Working::known: usize
 pub web::Working::raised: usize
 pub web::Working::runs: usize

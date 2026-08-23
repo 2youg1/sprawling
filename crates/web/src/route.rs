@@ -35,7 +35,7 @@ pub fn to_fragment(view: &View) -> String {
         View::Approvals => "#/approvals".to_owned(),
         View::RecycleBin => "#/recycle-bin".to_owned(),
         View::Archive => "#/archive".to_owned(),
-        View::Dashboard => "#/dashboard".to_owned(),
+        View::Dashboard => "#/cost".to_owned(),
         View::Ledger => "#/ledger".to_owned(),
         View::Building(addr) => format!("#/building/{}", addr.as_str()),
         View::Settings => "#/settings".to_owned(),
@@ -61,12 +61,32 @@ pub fn from_fragment(raw: &str) -> Option<View> {
         ("approvals", "") => Some(View::Approvals),
         ("recycle-bin", "") => Some(View::RecycleBin),
         ("archive", "") => Some(View::Archive),
-        ("dashboard", "") => Some(View::Dashboard),
+        // `cost` is what the nav calls it and what this page writes; the
+        // older spelling still resolves, because a link somebody kept is
+        // a promise this build did not get to withdraw.
+        ("cost", "") | ("dashboard", "") => Some(View::Dashboard),
         ("ledger", "") => Some(View::Ledger),
         ("settings", "") => Some(View::Settings),
         ("building", addr) => Address::parse(addr).ok().map(View::Building),
         _ => None,
     }
+}
+
+/// What the address bar says, when this build cannot resolve it.
+///
+/// `None` for an empty fragment, which is the first page rather than a
+/// broken link. Separate from [`current`] because the two answers are
+/// different questions: one asks where to go, the other asks what to say
+/// about not going anywhere.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn unresolved() -> Option<String> {
+    let hash = web_sys::window()?.location().hash().ok()?;
+    let named = hash.trim_start_matches('#').trim_start_matches('/');
+    if named.is_empty() || from_fragment(&hash).is_some() {
+        return None;
+    }
+    Some(format!("#/{named}"))
 }
 
 /// Reads the address bar. `None` when there is no browser to read.
@@ -173,6 +193,20 @@ mod tests {
 
     /// A link that does not resolve says so rather than landing
     /// somewhere else quietly.
+    #[test]
+    fn the_nav_label_and_the_address_agree() {
+        // They did not: the nav said "cost" and the address bar said
+        // "#/dashboard", so a person who typed what they were shown landed
+        // on a fragment this build could not resolve.
+        assert_eq!(to_fragment(&View::Dashboard), "#/cost");
+        assert_eq!(from_fragment("#/cost"), Some(View::Dashboard));
+        assert_eq!(
+            from_fragment("#/dashboard"),
+            Some(View::Dashboard),
+            "and a link somebody already kept still lands"
+        );
+    }
+
     #[test]
     fn a_fragment_that_names_nothing_answers_nothing() {
         for wrong in [

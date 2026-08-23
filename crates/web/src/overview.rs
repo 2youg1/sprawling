@@ -39,6 +39,12 @@ pub struct Working {
     /// them. Carried so the headline can say *two of five* rather than
     /// *two*, which is a different fact.
     pub raised: usize,
+    /// Runs that stopped with work left, as the city reports them.
+    pub frozen: usize,
+    /// Every run the city has ever held. Distinguishes "nothing is running"
+    /// from "nothing has ever run", which are different sentences and only
+    /// one of them is ever true of a city that has done work.
+    pub known: usize,
 }
 
 /// Reads the two counts off the fold.
@@ -50,22 +56,38 @@ pub struct Working {
 #[must_use]
 pub fn working(snapshot: &Snapshot, city: Option<&CityAnswer>) -> Working {
     let mut buildings: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-    let mut runs = 0usize;
+    let mut folded = 0usize;
     for (_, row) in snapshot.runs() {
         if !matches!(row.phase, RunPhase::Running | RunPhase::AwaitingApproval) {
             continue;
         }
-        runs = runs.saturating_add(1);
+        folded = folded.saturating_add(1);
         if let Some(addr) = row.addr.as_ref()
             && let Some(building) = addr.as_str().split('/').next()
         {
             buildings.insert(building);
         }
     }
+    // The city's own count leads, and the fold only ever raises it.
+    //
+    // The fold begins when this page connects, so on its own it says "no
+    // run has started in this city" about a city that ran one an hour ago
+    // - a claim the page has no standing to make, and the exact defect the
+    // ledger page avoids by saying what window it is looking through. The
+    // city query answers for the whole history. The fold still matters
+    // because it is newer than the last answer, so the larger of the two
+    // is the honest one.
+    let told = city.map_or(0, |answer| {
+        usize::try_from(answer.active).unwrap_or(usize::MAX)
+    });
     Working {
-        runs,
+        runs: folded.max(told),
         buildings: buildings.len(),
         raised: city.map_or(0, |answer| answer.buildings.len()),
+        frozen: city.map_or(0, |answer| {
+            usize::try_from(answer.frozen).unwrap_or(usize::MAX)
+        }),
+        known: city.map_or(folded, |answer| answer.runs.len().max(folded)),
     }
 }
 
@@ -78,6 +100,10 @@ pub fn working(snapshot: &Snapshot, city: Option<&CityAnswer>) -> Working {
 pub fn headline(working: &Working) -> String {
     match (working.runs, working.raised) {
         (0, 0) => "this city has no buildings yet".to_owned(),
+        (0, raised) if working.frozen > 0 => format!(
+            "nothing is running; {} run(s) stopped with work left, across {raised} building(s)",
+            working.frozen
+        ),
         (0, raised) => format!("nothing is running in any of the {raised} building(s) here"),
         (1, _) => format!(
             "1 run in flight, in 1 of the {} building(s) here",
@@ -231,17 +257,32 @@ pub fn OverviewView(
                 }
             }
             crate::panel::Panel {
-                title: if in_flight.is_empty() { "no run has started in this city".to_owned() }
-                    else { "what is being worked on".to_owned() },
-                scope: "one row per run this client knows of, by where it is working; a halted run is left out because halting is a decision, not a state to watch"
+                title: match (in_flight.is_empty(), working.known) {
+                    (false, _) => "what is being worked on".to_owned(),
+                    (true, 0) => "no run has ever started in this city".to_owned(),
+                    (true, known) => {
+                        format!("{known} run(s) are on the city's books, and none is working now")
+                    }
+                },
+                scope: "one row per run whose events this page has seen; a halted run is left out because halting is a decision, not a state to watch"
                     .to_owned(),
-                source: "the run's own events - started, each turn, frozen - as they arrived"
+                source: "the run's own events as they arrive here. This window opens when the page connects, so the counts above - which the city answers for its whole history - are what to trust for anything earlier."
                     .to_owned(),
                 if in_flight.is_empty() {
                     crate::panel::Empty {
-                        status: "no work has been sent yet".to_owned(),
-                        what: "send some from the bar at the bottom of the window: a room to work in, what to produce, and what counts as done. A run appears here the moment it starts."
-                            .to_owned(),
+                        status: if working.known == 0 {
+                            "no work has been sent yet".to_owned()
+                        } else {
+                            format!(
+                                "nothing is working now; the city holds {} run(s) that already ran",
+                                working.known
+                            )
+                        },
+                        what: if working.known == 0 {
+                            "send some from the bar at the bottom of the window: a room to work in, what to produce, and what counts as done. A run appears here the moment it starts.".to_owned()
+                        } else {
+                            "earlier runs are in the Ledger rather than in this window, and the record pages read that. Send more work and it appears here as it happens.".to_owned()
+                        },
                     }
                 } else {
                     table { class: "in-flight",
@@ -362,11 +403,72 @@ mod tests {
     }
 
     #[test]
+    fn a_page_that_just_connected_does_not_claim_a_city_has_never_worked() {
+        // The defect this replaced was visible on a real machine: a run had
+        // finished an hour earlier, and the overview - folding a stream
+        // that begins when the page connects - said "no run has started in
+        // this city". The fold cannot know that, and the city can.
+        let working = Working {
+            runs: 0,
+            buildings: 0,
+            raised: 3,
+            frozen: 1,
+            known: 1,
+        };
+        let said = headline(&working);
+        assert!(said.contains("nothing is running"), "{said}");
+        assert!(
+            said.contains("stopped with work left"),
+            "a frozen run is not the same as an idle city: {said}"
+        );
+    }
+
+    #[test]
+    fn the_citys_own_count_leads_and_the_fold_only_raises_it() {
+        // Two sources, and the rule between them is stated rather than
+        // implied: the city answers for its whole history, the fold is
+        // newer than the last answer, so the larger is the honest one.
+        let mut snapshot = Snapshot::new();
+        let city = channels::CityAnswer {
+            runs: Vec::new(),
+            active: 2,
+            frozen: 0,
+            buildings: Vec::new(),
+        };
+        assert_eq!(working(&snapshot, Some(&city)).runs, 2, "the city's count");
+        let started = |seq: u64, run: [u8; 16]| {
+            channels::EventRecord::from_draft(
+                channels::EventDraft {
+                    run: channels::RunId::from_bytes(run),
+                    t: channels::TimeMs::new(seq),
+                    who: "lab/room1".to_owned(),
+                    addr: Some(Address::parse("lab/room1").unwrap()),
+                    kind: channels::EventKind::RunStarted,
+                    data: channels::Payload::empty(),
+                    ig: false,
+                },
+                channels::Seq::new(seq),
+                channels::B3Hash::digest(b"prev"),
+            )
+        };
+        snapshot.apply(&started(1, [1u8; 16]));
+        snapshot.apply(&started(2, [2u8; 16]));
+        snapshot.apply(&started(3, [3u8; 16]));
+        assert_eq!(
+            working(&snapshot, Some(&city)).runs,
+            3,
+            "three arrived after the answer, so three is what is happening"
+        );
+    }
+
+    #[test]
     fn a_city_with_buildings_and_no_work_says_which_of_the_two_it_is() {
         let working = Working {
             runs: 0,
             buildings: 0,
             raised: 5,
+            frozen: 0,
+            known: 0,
         };
         assert!(headline(&working).contains("nothing is running"));
         assert!(
@@ -384,6 +486,8 @@ mod tests {
             runs: 2,
             buildings: 1,
             raised: 3,
+            frozen: 0,
+            known: 0,
         };
         let said = headline(&working);
         assert!(said.contains("2 runs"), "{said}");
