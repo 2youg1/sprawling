@@ -32,6 +32,10 @@ web-sys = { workspace = true, features = [
     "Window",
     "WebSocket",
     "Location",
+    # The language a person reads in: asked of the browser once, then
+    # remembered where they chose it (`web::lang`).
+    "Navigator",
+    "Storage",
     "XmlHttpRequest",
 ] }
 

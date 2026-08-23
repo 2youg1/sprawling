@@ -655,6 +655,22 @@ fn city_view::session_name(task: &str) -> String;   // 任务的前四个词
 - **城市页不再把每一件活都扔进 `room1`**：原先 `city_view::dispatch_command` 写死 `{building}/room1`，于是同一栋楼上发出的第二件活盖掉第一件的文件。现在地址给楼，名字取自任务的前四个词——人刚写完的词，一小时后在文件夹列表里认得出来。
 - **名字不合法就拒整条命令**（`SessionName::parse` 答 `None`），而不是自作主张改拼写：一个没人敲过的名字不应该出现在别人的目录里。
 
+### 8-37 web::lang：界面说谁的话（F2.14；形状 6 数据面）
+
+```rust
+pub enum Lang { En, Zh }                 // 两种，不是一张 locale 表
+pub enum Msg { … }                       // 穷举；新增一条不翻就编译不过
+pub struct Phrase { pub en, pub zh }     // 一条消息两种语言并排
+pub fn phrase(Msg) -> Phrase;  pub fn say(Lang, Msg) -> &'static str;
+pub fn preferred() -> Lang;    pub fn remember(Lang);
+```
+
+- **漏译不可表示**：一条消息就是一个 `Phrase`，两个字段必须都填。换成「每种语言一张表」就会多出一个能忘的地方；单测另外拒绝「中文栏里没有一个汉字」的假翻译。
+- **语言走 context 而不走 prop**：人读什么语言是整页的事实，不是某一块面板的。`App` 提供，测试的 harness 同样提供——不提供就 panic，而不是静默退到英文。
+- **默认取浏览器自己的设置**，选过一次就记在 localStorage；存不了不算错，选择在本页仍然生效。
+- **译名跟 `README.zh-CN.md`**：城／楼／房间／会话／Ledger。一个概念两种叫法就是两个概念。
+- **本卡的范围是人最先碰到的那一层**：左栏十二条、派活条十一条、停城与取消、语言开关自身。剩下的二百多条（panel 的 scope／source 长句为主）随后续卡分批迁入，**迁一条少一条硬编码**。
+
 ### 8-36 从一栋楼到它里面的活（F2.13）
 
 ```rust

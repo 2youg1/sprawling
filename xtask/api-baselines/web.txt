@@ -1,4 +1,5 @@
 impl core::default::Default for web::Feed
+impl core::fmt::Display for web::Lang
 impl web::AlertKind
 impl web::Alerts
 impl web::AttachReadiness
@@ -9,7 +10,9 @@ impl web::CostDimension
 impl web::Feed
 impl web::Filter
 impl web::Frame
+impl web::Lang
 impl web::Link
+impl web::Phrase
 impl web::ProviderHealth
 impl web::ReturnPath
 impl web::RunPhase
@@ -30,6 +33,7 @@ pub const web::HUE_AXIS: u16
 pub const web::INFORMATION_FLOOR: &str
 pub const web::L_CEILING: u16
 pub const web::L_FLOOR: u16
+pub const web::Lang::ALL: [web::Lang; 2]
 pub const web::MARGIN: i32
 pub const web::PAGE_ROWS: usize
 pub const web::PROGRESS_DONE: (&str, &str)
@@ -44,10 +48,12 @@ pub enum web::AttachReadiness
 pub enum web::BarState
 pub enum web::CostDimension
 pub enum web::Enrolment
+pub enum web::Lang
 pub enum web::Leaf
 pub enum web::LinkAction
 pub enum web::LinkEvent
 pub enum web::LinkState
+pub enum web::Msg
 pub enum web::ProviderHealth
 pub enum web::Raise
 pub enum web::ReturnPath
@@ -87,6 +93,10 @@ pub fn web::Feed::replay<'a>(impl core::iter::traits::collect::IntoIterator<Item
 pub fn web::Feed::stop_following(&mut self)
 pub fn web::Filter::keeps(&self, &kernel::event::EventRecord) -> bool
 pub fn web::Frame::attr(&self) -> alloc::string::String
+pub fn web::Lang::endonym(self) -> &'static str
+pub fn web::Lang::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn web::Lang::of(&str) -> web::Lang
+pub fn web::Lang::tag(self) -> &'static str
 pub fn web::LedgerView(web::ledger_view::LedgerViewProps) -> dioxus_core::innerlude::Element
 pub fn web::Link::advance(&mut self, web::LinkEvent) -> web::LinkAction
 pub fn web::Link::city(&self) -> core::option::Option<&kernel::address::Address>
@@ -97,6 +107,7 @@ pub fn web::Link::new(core::option::Option<alloc::string::String>) -> Self
 pub fn web::Link::state(&self) -> &web::LinkState
 pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Element
 pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::innerlude::Element
+pub fn web::Phrase::in_lang(self, web::Lang) -> &'static str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::as_str(self) -> &'static str
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
@@ -167,6 +178,7 @@ pub fn web::page<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a k
 pub fn web::painter_order(alloc::vec::Vec<web::Prism>) -> alloc::vec::Vec<web::Prism>
 pub fn web::per_mille(u16) -> alloc::string::String
 pub fn web::per_mille_of(u32, u32) -> u16
+pub fn web::phrase(web::Msg) -> web::Phrase
 pub fn web::place(&str, u32) -> (i32, i32)
 pub fn web::points_attr(&[(i32, i32); 4]) -> alloc::string::String
 pub fn web::policy_admits(&kernel::approval::ApprovalItem) -> bool
@@ -181,6 +193,7 @@ pub fn web::resolved_chroma(u16, u16, u16) -> u16
 pub fn web::rollback_command(&str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::room_addr(&kernel::address::Address, &str) -> core::option::Option<kernel::address::Address>
 pub fn web::room_asked_for(&channels::wire::ClientFrame) -> core::option::Option<alloc::string::String>
+pub fn web::say(web::Lang, web::Msg) -> &'static str
 pub fn web::searchable(&str) -> core::option::Option<alloc::string::String>
 pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> u16
 pub fn web::shelves(&channels::wire::ArchiveAnswer) -> alloc::vec::Vec<web::Shelf>
@@ -222,6 +235,7 @@ pub struct web::Line
 pub struct web::Link
 pub struct web::NavGroup
 pub struct web::Page
+pub struct web::Phrase
 pub struct web::Prism
 pub struct web::Refused
 pub struct web::Row
@@ -288,7 +302,7 @@ pub web::CostRow::label: alloc::string::String
 pub web::CostRow::share: u16
 pub web::CostRow::spent: kernel::budget::UsdMicros
 pub web::CostRow::trend: web::Trend
-pub web::Destination::label: &'static str
+pub web::Destination::label: web::Msg
 pub web::Destination::view: web::View
 pub web::Destination::waiting: core::option::Option<u32>
 pub web::DisplayList::camera: web::Camera
@@ -316,6 +330,8 @@ pub web::Frame::height: u32
 pub web::Frame::width: u32
 pub web::Frame::x: i32
 pub web::Frame::y: i32
+pub web::Lang::En
+pub web::Lang::Zh
 pub web::Leaf::Archive
 pub web::Leaf::Doc(alloc::string::String)
 pub web::Leaf::Room(alloc::string::String)
@@ -347,11 +363,41 @@ pub web::LinkState::Opening
 pub web::LinkState::Refused(alloc::boxed::Box<kernel::error::AxError>)
 pub web::LinkState::Suspended
 pub web::LinkState::Suspended::resume_from: core::option::Option<kernel::event::Seq>
-pub web::NavGroup::label: &'static str
+pub web::Msg::CancelLastRun
+pub web::Msg::DispatchCallIt
+pub web::Msg::DispatchCallItHint
+pub web::Msg::DispatchDoneWhen
+pub web::Msg::DispatchDoneWhenHint
+pub web::Msg::DispatchMode
+pub web::Msg::DispatchRoom
+pub web::Msg::DispatchRoomHint
+pub web::Msg::DispatchSend
+pub web::Msg::DispatchTask
+pub web::Msg::DispatchTaskHint
+pub web::Msg::HaltCity
+pub web::Msg::NavApprovals
+pub web::Msg::NavArchive
+pub web::Msg::NavCity
+pub web::Msg::NavCost
+pub web::Msg::NavHappeningNow
+pub web::Msg::NavLedger
+pub web::Msg::NavLive
+pub web::Msg::NavOverview
+pub web::Msg::NavRecycleBin
+pub web::Msg::NavSettings
+pub web::Msg::NavSetup
+pub web::Msg::NavTheRecord
+pub web::Msg::ReleaseCity
+pub web::Msg::SettingsLanguage
+pub web::Msg::SettingsLanguageScope
+pub web::Msg::SettingsLanguageSource
+pub web::NavGroup::label: web::Msg
 pub web::NavGroup::places: alloc::vec::Vec<web::Destination>
 pub web::Page::filtered_out: usize
 pub web::Page::next_from: core::option::Option<kernel::event::Seq>
 pub web::Page::rows: alloc::vec::Vec<web::Row>
+pub web::Phrase::en: &'static str
+pub web::Phrase::zh: &'static str
 pub web::Prism::active: bool
 pub web::Prism::done: u32
 pub web::Prism::id: alloc::string::String

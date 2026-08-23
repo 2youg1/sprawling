@@ -476,7 +476,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | channels::auth | crates/channels/src/auth.rs | pairing tokens: minting, the one readable form, constant-time comparison | value | S4 | built |
 | channels::aggregate | crates/channels/src/aggregate.rs | watching several cities from one interface, queries and events only | decision | S4 | built |
 
-### web (17) — the only client, compiled to WebAssembly
+### web (18) — the only client, compiled to WebAssembly
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -489,6 +489,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::approval | crates/web/src/approval.rs | two lists that share one shape: what waits for a person, and what was discarded | decision | S4 | built |
 | web::ledger_view | crates/web/src/ledger_view.rs | browsing the one history; a filter always says how much it hid | decision | S4 | built |
 | web::alert | crates/web/src/alert.rs | the only module that may interrupt a person, and only once per fact | decision | S4 | built |
+| web::lang | crates/web/src/lang.rs | every word this client says, in the two languages it says them in | data | F2 | built |
 | web::theme | crates/web/src/theme.rs | the single-hue language: the only place that produces a colour | data | S4 | built |
 | web::building_view | crates/web/src/building_view.rs | one building, what it has written down, and what waits in each room | decision | R1 | built |
 | web::vitals | crates/web/src/vitals.rs | the few numbers no other surface states, and the four it refuses to state | decision | F1 | built |

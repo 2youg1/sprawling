@@ -367,6 +367,7 @@ pub fn Settings(
     live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
     let mut form = use_signal(AttachForm::default);
     let mut choice = use_signal(SelectForm::default);
     let mut key = use_signal(String::new);
@@ -700,6 +701,30 @@ pub fn Settings(
                 onclick: move |_| on_frame.call(ClientFrame::Query(Query::EndpointView)),
                 "read it again"
             }
+            }
+            // The language every word this client writes is said in.
+            // Above the type panel because it is the setting a person
+            // came here for, and beside it because both are about how
+            // this interface reads rather than what the city did.
+            crate::panel::Panel {
+                title: crate::lang::say(lang(), crate::lang::Msg::SettingsLanguage).to_owned(),
+                scope: crate::lang::say(lang(), crate::lang::Msg::SettingsLanguageScope).to_owned(),
+                source: crate::lang::say(lang(), crate::lang::Msg::SettingsLanguageSource)
+                    .to_owned(),
+                div { class: "languages",
+                    for choice in crate::lang::Lang::ALL {
+                        button {
+                            key: "{choice}",
+                            "aria-current": if lang() == choice { "true" } else { "false" },
+                            onclick: move |_| {
+                                let mut held = lang;
+                                held.set(choice);
+                                crate::lang::remember(choice);
+                            },
+                            "{choice.endonym()}"
+                        }
+                    }
+                }
             }
             // Interface. One setting, and it is not ours to hold.
             crate::panel::Panel {

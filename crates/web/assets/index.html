@@ -398,6 +398,10 @@
      whose hints are different heights were sharing one baseline, so the
      eye had no line to follow and the two buttons read as alternatives
      rather than as the order they must be pressed in. */
+  /* The language switch: two words, each in its own language, and the
+     one in use marked the way the nav marks the page you are on. */
+  .languages { display: flex; gap: var(--space-snug); }
+  .languages button[aria-current="true"] { border-color: var(--ACCENT); color: var(--G10); }
   .settings .attach { align-items: start; }
   .settings .attach .field { flex: 1 1 20ch; }
   .settings .attach .field.wide, .settings .attach .enrolment { flex-basis: 100%; }

@@ -27,6 +27,7 @@ use channels::{Address, ApprovalItem, EventKind, EventRecord, RunId, Seq, Tokens
 // The `component` macro expands to a `Props` derive and to `rsx!` internals
 // that resolve against the prelude by bare name. This is the one glob import
 // in the crate, and it is a requirement of the macro, not a convenience.
+use crate::lang::Msg;
 use dioxus::prelude::*;
 
 /// Which central region is showing. The five regions of the layout contract
@@ -513,7 +514,10 @@ pub fn render_tokens(tokens: Tokens) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Destination {
     pub view: View,
-    pub label: &'static str,
+    /// What this destination is called, in whichever language the
+    /// person reads. The word itself lives in `web::lang`, so the nav
+    /// and the translation cannot disagree about which page is which.
+    pub label: crate::lang::Msg,
     /// How many things are waiting behind this destination, when waiting
     /// is a thing that can happen there.
     pub waiting: Option<u32>,
@@ -522,7 +526,7 @@ pub struct Destination {
 /// A heading in the left nav, and the destinations under it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavGroup {
-    pub label: &'static str,
+    pub label: crate::lang::Msg,
     pub places: Vec<Destination>,
 }
 
@@ -542,60 +546,60 @@ pub fn destinations(snapshot: &Snapshot) -> Vec<NavGroup> {
     let waiting = snapshot.approvals_pending();
     vec![
         NavGroup {
-            label: "happening now",
+            label: crate::lang::Msg::NavHappeningNow,
             places: vec![
                 Destination {
                     view: View::Overview,
-                    label: "overview",
+                    label: crate::lang::Msg::NavOverview,
                     waiting: None,
                 },
                 Destination {
                     view: View::City,
-                    label: "city",
+                    label: crate::lang::Msg::NavCity,
                     waiting: None,
                 },
                 Destination {
                     view: View::Live(latest_run(snapshot)),
-                    label: "live",
+                    label: crate::lang::Msg::NavLive,
                     waiting: None,
                 },
                 Destination {
                     view: View::Approvals,
-                    label: "approvals",
+                    label: crate::lang::Msg::NavApprovals,
                     waiting: (waiting > 0).then_some(waiting),
                 },
             ],
         },
         NavGroup {
-            label: "the record",
+            label: crate::lang::Msg::NavTheRecord,
             places: vec![
                 Destination {
                     view: View::Ledger,
-                    label: "ledger",
+                    label: crate::lang::Msg::NavLedger,
                     waiting: None,
                 },
                 Destination {
                     view: View::Archive,
-                    label: "archive",
+                    label: crate::lang::Msg::NavArchive,
                     waiting: None,
                 },
                 Destination {
                     view: View::RecycleBin,
-                    label: "recycle bin",
+                    label: crate::lang::Msg::NavRecycleBin,
                     waiting: None,
                 },
                 Destination {
                     view: View::Dashboard,
-                    label: "cost",
+                    label: crate::lang::Msg::NavCost,
                     waiting: None,
                 },
             ],
         },
         NavGroup {
-            label: "setup",
+            label: crate::lang::Msg::NavSetup,
             places: vec![Destination {
                 view: View::Settings,
-                label: "settings",
+                label: crate::lang::Msg::NavSettings,
                 waiting: None,
             }],
         },
@@ -856,6 +860,11 @@ pub fn Root(
     let busy = busy_buildings(&snapshot);
     let spots = destinations(&snapshot);
     let running = latest_run(&snapshot);
+    // The language every word on this page is said in. One signal for
+    // the whole tree rather than a prop through twenty components: what
+    // a person reads in is a fact about the page, not about a panel.
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: crate::lang::Msg| crate::lang::say(lang(), msg);
     rsx! {
         main { class: "layout",
             header { class: "top-bar",
@@ -876,18 +885,18 @@ pub fn Root(
             }
             nav { class: "left-nav",
                 for group in spots {
-                    div { key: "{group.label}", class: "nav-group",
-                        h2 { class: "nav-heading", "{group.label}" }
+                    div { key: "{group.label:?}", class: "nav-group",
+                        h2 { class: "nav-heading", "{word(group.label)}" }
                         for spot in group.places {
                             button {
-                                key: "{spot.label}",
+                                key: "{spot.label:?}",
                                 class: "nav-item",
                                 "aria-current": if spot.view == view { "page" } else { "false" },
                                 onclick: {
                                     let going = spot.view.clone();
                                     move |_| on_view.call(going.clone())
                                 },
-                                "{spot.label}"
+                                "{word(spot.label)}"
                                 if let Some(waiting) = spot.waiting {
                                     span { class: "badge", "{waiting}" }
                                 }
@@ -1011,13 +1020,17 @@ pub fn Root(
                 button {
                     class: "halt",
                     onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
-                    if snapshot.is_halted() { "let the city go on" } else { "stop the city" }
+                    if snapshot.is_halted() {
+                        "{word(crate::lang::Msg::ReleaseCity)}"
+                    } else {
+                        "{word(crate::lang::Msg::HaltCity)}"
+                    }
                 }
                 if let Some(run) = running {
                     button {
                         class: "cancel",
                         onclick: move |_| on_frame.call(cancel_command(run)),
-                        "cancel the last run"
+                        "{word(crate::lang::Msg::CancelLastRun)}"
                     }
                 }
             }
@@ -1060,6 +1073,8 @@ fn DispatchBar(
     let mut goal = use_signal(String::new);
     let mut mode = use_signal(|| "plan".to_owned());
     let mut session = use_signal(String::new);
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| crate::lang::say(lang(), msg);
     rsx! {
         form {
             class: "dispatch",
@@ -1085,50 +1100,50 @@ fn DispatchBar(
                 }
             },
             div { class: "field",
-                label { r#for: "dispatch-addr", "room" }
+                label { r#for: "dispatch-addr", "{word(Msg::DispatchRoom)}" }
                 input {
                     id: "dispatch-addr",
                     name: "addr",
                     // Short, because the label above already said what
                     // the field is: a placeholder wider than its column
                     // teaches half a format.
-                    placeholder: "lab",
+                    placeholder: "{word(Msg::DispatchRoomHint)}",
                     value: "{at}",
                     oninput: move |event| at.set(event.value()),
                 }
             }
             div { class: "field",
-                label { r#for: "dispatch-session", "call it" }
+                label { r#for: "dispatch-session", "{word(Msg::DispatchCallIt)}" }
                 input {
                     id: "dispatch-session",
                     name: "session",
-                    placeholder: "give it a name",
+                    placeholder: "{word(Msg::DispatchCallItHint)}",
                     value: "{session}",
                     oninput: move |event| session.set(event.value()),
                 }
             }
             div { class: "field",
-                label { r#for: "dispatch-task", "task" }
+                label { r#for: "dispatch-task", "{word(Msg::DispatchTask)}" }
                 input {
                     id: "dispatch-task",
                     name: "task",
-                    placeholder: "what to produce, in one line",
+                    placeholder: "{word(Msg::DispatchTaskHint)}",
                     value: "{task}",
                     oninput: move |event| task.set(event.value()),
                 }
             }
             div { class: "field",
-                label { r#for: "dispatch-goal", "done when" }
+                label { r#for: "dispatch-goal", "{word(Msg::DispatchDoneWhen)}" }
                 input {
                     id: "dispatch-goal",
                     name: "goal",
-                    placeholder: "what counts as done, and when to stop",
+                    placeholder: "{word(Msg::DispatchDoneWhenHint)}",
                     value: "{goal}",
                     oninput: move |event| goal.set(event.value()),
                 }
             }
             div { class: "field",
-                label { r#for: "dispatch-mode", "mode" }
+                label { r#for: "dispatch-mode", "{word(Msg::DispatchMode)}" }
                 select {
                     id: "dispatch-mode",
                     name: "mode",
@@ -1148,7 +1163,7 @@ fn DispatchBar(
                         &session.read(),
                     )
                     .is_none(),
-                "send it"
+                "{word(Msg::DispatchSend)}"
             }
         }
     }
@@ -1182,6 +1197,11 @@ fn cancel_command(run: RunId) -> channels::ClientFrame {
 /// together and decides nothing itself.
 #[component]
 pub fn App() -> Element {
+    // Provided before anything renders, because every component below
+    // reads it. The first value is the browser's own setting: a person
+    // whose machine is in Chinese should not have to find a switch to
+    // be spoken to in Chinese.
+    use_context_provider(|| Signal::new(crate::lang::preferred()));
     let snapshot = use_signal(Snapshot::new);
     #[cfg_attr(
         target_arch = "wasm32",
@@ -1911,6 +1931,10 @@ mod tests {
         // Live, because a test that rendered the disconnected client
         // would be asserting about the waiting room rather than the city.
         let live = use_signal(|| true);
+        // The language, as `App` provides it in a browser. Without it
+        // every component that says a word would be reading a context
+        // nobody put there.
+        use_context_provider(|| Signal::new(crate::lang::Lang::En));
         rsx! {
             Root {
                 live,
@@ -2308,16 +2332,20 @@ mod tests {
         let mut snapshot = Snapshot::new();
         snapshot.adopt_approvals(vec![waiting_item()]);
         let painted = paint(View::City, snapshot.clone(), Vec::new());
+        // In the language the harness renders in, which is this
+        // client's own: what matters here is that every destination
+        // reaches the page, and `lang` holds that both languages exist.
+        let word = |msg| crate::lang::say(crate::lang::Lang::En, msg);
         for group in destinations(&snapshot) {
             assert!(
-                painted.says(group.label),
-                "the nav does not head {}",
+                painted.says(word(group.label)),
+                "the nav does not head {:?}",
                 group.label
             );
             for spot in group.places {
                 assert!(
-                    painted.says(spot.label),
-                    "the nav does not offer {}",
+                    painted.says(word(spot.label)),
+                    "the nav does not offer {:?}",
                     spot.label
                 );
             }
