@@ -441,7 +441,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | collab::claim_tool | crates/collab/src/claim_tool.rs | the face `Roadmap.md` shows a model: one claimed row at a time | adapter | P4 | built |
 | collab::triage | crates/collab/src/triage.rs | where something from outside lands, and whether it starts work | decision | P3 | built |
 
-### city (10) — space, identity, and the documents a building keeps
+### city (11) — space, identity, and the documents a building keeps
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -453,6 +453,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | city::config_layers | crates/city/src/config_layers.rs | the three configuration files a run is governed by | decision | P2 | built |
 | city::policy | crates/city/src/policy.rs | `BUILDING.md` evaluated into rules a machine can hold | decision | P1 | built |
 | city::schedule | crates/city/src/schedule.rs | work that starts by itself, counted in whole minutes | decision | P2 | built |
+| city::room | crates/city/src/room.rs | which room a named session works in, and how a new one comes into being | decision | F2 | built |
 | city::watch | crates/city/src/watch.rs | what the city is listening to, and which building answers | value | P4 | built |
 | city::wizard | crates/city/src/wizard.rs | starting a city, and moving a resident inside one | decision | P4 | built |
 

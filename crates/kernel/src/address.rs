@@ -175,6 +175,37 @@ mod tests {
     }
 
     #[test]
+    fn a_session_name_is_one_segment_a_person_typed() {
+        // What it is for: the word a person gives a session becomes the
+        // directory that session works in, so anything that is not a
+        // single segment is a path they did not mean to write.
+        let named = SessionName::parse(" refactor the ledger ").unwrap();
+        assert_eq!(
+            named.as_str(),
+            "refactor the ledger",
+            "the ends are trimmed and the middle is theirs"
+        );
+        for wrong in [
+            "",
+            "   ",
+            "lab/room1",
+            ".",
+            "..",
+            ".sprawling",
+            "a\\b",
+            "c:name",
+        ] {
+            let err = SessionName::parse(wrong).unwrap_err();
+            assert_eq!(err.code(), &AxCode::InvalidArgs, "{wrong:?} was accepted");
+            assert!(!err.recovery().is_empty(), "{wrong:?}");
+        }
+        // Long enough to be a sentence is long enough to be a mistake:
+        // this becomes a directory name on somebody's file system.
+        assert!(SessionName::parse(&"x".repeat(65)).is_err());
+        assert!(SessionName::parse(&"x".repeat(64)).is_ok());
+    }
+
+    #[test]
     fn a_reserved_subtree_is_reserved_at_whatever_depth_it_sits() {
         assert!(Address::parse(".sprawling").unwrap().is_reserved());
         assert!(Address::parse(".sprawling/ledger/x").unwrap().is_reserved());

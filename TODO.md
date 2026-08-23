@@ -4,6 +4,14 @@ Future work, highest priority first. A row names an outcome; its design lands in
 
 Where a row says **needs a ruling**, it touches something in the `guard` row of AGENTS.md and cannot start without the person's word, recorded as a `Verdict:` trailer.
 
+## P0 — The session a person can name, and the interface in their language
+
+Three cards landed the first half of this programme: a `.sprawling` subtree is reserved at any depth (F2.08), a building's rules and configuration moved into its own (F2.09), and a building keeps its own skills there (F2.10). What is left, in order:
+
+1. **A session has a name, and the name is the room it works in** — designed in `channels-SPEC.md` §8-7, not yet written. `Dispatch` carries `session: Option<SessionName>`, `WIRE_V` goes 4 → 5, the city mints `<building>/<name>` and suffixes a collision, and every surface shows the name instead of a `RunId` prefix. This is what stops several dispatches to one address from overwriting each other's files
+2. **The interface in Chinese, with a switch** — `web::lang`, an exhaustive `Msg` enum so a missing translation fails to compile. **Measured, not estimated: 248 prose literals — a quoted string carrying a space, outside every test module — across 17 modules of `crates/web/src`, the heaviest being `settings` (39), `overview` (33) and `live` (28), plus the page shell.** The nav, the dispatch bar, the settings page and the first screen are perhaps forty of them and are worth doing first; the panel `scope` and `source` sentences are the long tail
+3. **The three configured capabilities nothing writes** — `[model] effort`, `[sandbox]` and `[mcp]` resolve down city → building → room in `city::config_layers`, and no surface writes a `CONFIG.toml` at any layer. Thinking effort and a building's MCP servers are therefore built and unreachable
+
 ## P1 — What is left of the front end
 
 The rebuild landed the shell, the first screen, the isometric city as shapes, and the interventions that had no way to be sent. Three pieces are left, and none of them blocks the others:

@@ -333,6 +333,28 @@ impl Aggregate {
 
 > **施工纪律（本期被 apisync 门咬两次后写下）**：动本 crate 的再导出列表就是动公开面。本节必须与该变更**同一提交**更新——它很容易被当成「只是多写一行 `pub use`」而漏掉，而门不接受这个理由。
 
+### 8-7 一次会话有名字，而名字就是它干活的那个房间（F2.11；未实现，设计已定）
+
+> **状态：设计落定，代码未写。** 下一个会话从这里开工；先写失败测试，再实现。
+
+```rust
+pub const WIRE_V: u32 = 5;                     // 4 → 5：一个字段，一次握手拒绝
+WireCommand::Dispatch { addr, task, goal, mode, budget, idem,
+                        session: Option<SessionName> }
+pub struct SessionName(String);                // 形状 2；一个构造点，内容即一个地址段
+```
+
+**问题不在线格式上，在于没有人给新会话开房间。** ARCHITECTURE §6 自己写着 `JOB.md — the task for this session`：房间本来就是会话的工作区。今天派活要人手打一个 `building/room`，于是所有派活撞进同一个地址，模板文件互相覆盖。
+
+- **不加第四层**：每个 Run 一个目录会切断 Handoff 的连续性，而连续性正是一个 session 之所以是 session 的东西；`collab` 整套（draft／PR／fanin）也都建立在「几个居民在同一栋楼里不互相踩」上。
+- **地址给楼，名字给会话**：`addr` 可以只是一栋楼；`session` 在它底下开一个房间。重名加数字后缀（`refactor`、`refactor-2`），而不是拒绝——一个人连着开两次同名会话是常事。
+- **向已有房间派活即继续那条会话**：它的 `Handoff.md` 与 `JOB.md` 就是连续性。「回复某个 session」因此不需要新概念。
+- **`RunId` 不变**：账上的身份仍是 `b3(job|addr|now)`；名字是房间的标签，不是 Run 的。一个房间一生中的多次 Run 合起来才是一条会话。
+- **`SessionName` 是值类型而非 `String`**：它必须能当一个地址段（无 `/`、无 `.`／`..`、无控制字符、非空、不叫 `.sprawling`），否则一个人输入的字会变成一条路径。构造点一个，拒绝携 recovery。
+- **`WIRE_V` 4 → 5**：握手处的 schema hash 因此变，旧页面拒绝而不是误读——这正是那个机制存在的理由。
+- **服务端开房间落在 `city`**（新一节，同期写）：已存在名字→加后缀，目录建在楼下；`.sprawling` 不得为会话名（F2.08 的谓词直接答这件事）。
+- **客户端（同期写在 web-SPEC）**：派活条第一格从「你猜 building/room」变成「选一栋楼 ＋ 这次叫什么」；直播页与楼页显示名字而不是 `short_run` 的十六进制。
+
 ## 9 工作流程
 
 （随 S4.02 填：从监听、绑定面判定、握手、鉴权，到帧解码、处理器分派、Event 推送的完整通路。）
