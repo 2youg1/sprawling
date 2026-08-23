@@ -130,7 +130,7 @@ pub fn ApprovalsView(
             crate::panel::Panel {
                 title: if clusters.is_empty() { "nothing is waiting for you".to_owned() }
                     else { "what the city stopped to ask you".to_owned() },
-                figure: "{waiting}",
+                figure: (waiting > 0).then(|| waiting.to_string()),
                 scope: "one row per action a gate escalated rather than decided; grouped where one answer can settle several"
                     .to_owned(),
                 source: "the approval queue as the city holds it, plus every approval_requested that has arrived since this page connected"
@@ -357,7 +357,7 @@ pub fn RecycleBinView(
             crate::panel::Panel {
                 title: if rows.is_empty() { "nothing has been discarded".to_owned() }
                     else { "what was deleted, and the way back to each of it".to_owned() },
-                figure: "{outstanding}",
+                figure: (outstanding > 0).then(|| outstanding.to_string()),
                 scope: "the newest first; the figure counts what has not been taken back yet, and rows that already came back stay listed as evidence that a return path works"
                     .to_owned(),
                 source: "folded from the Ledger's file_discarded and discard_restored records; the way back is the Restoration the discard was constructed with"

@@ -163,7 +163,7 @@ pub fn BuildingView(
         section { class: "building",
             crate::panel::Panel {
                 title: format!("what {} has written down", answer.addr.as_str()),
-                figure: "{rooms}",
+                figure: (rooms > 0).then(|| rooms.to_string()),
                 scope: "the documents this building keeps, its archive, and what waits in each of its rooms. The figure counts rooms; this page reads and never writes."
                     .to_owned(),
                 source: "the building's own directory on disk, read when this page asked. A room's queue is folded from the Ledger, so looking at it is not taking from it."

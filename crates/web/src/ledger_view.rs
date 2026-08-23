@@ -155,7 +155,7 @@ pub fn LedgerView(
             crate::panel::Panel {
                 title: if held == 0 { "the city has not said anything since this page connected".to_owned() }
                     else { "what this city has done, newest first".to_owned() },
-                figure: "{held}",
+                figure: (held > 0).then(|| held.to_string()),
                 scope: "every kind of event, unless the two filters below narrow it; fifty rows to a page"
                     .to_owned(),
                 source: "the live event stream since this page connected. The Ledger on disk holds the rest, and `sprawling replay` verifies the chain over all of it - including the part this page never saw."

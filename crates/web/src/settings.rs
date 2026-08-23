@@ -389,7 +389,7 @@ pub fn Settings(
             crate::panel::Panel {
                 title: if dispatchable { "this city can be dispatched to".to_owned() }
                     else { "no model answers for main, so a dispatch is refused".to_owned() },
-                figure: "{attached}",
+                figure: (attached > 0).then(|| attached.to_string()),
                 scope: "every provider attached to this city, and which of its models answers for each job"
                     .to_owned(),
                 source: "the city's own endpoint book, re-read whenever a provider is attached or a model is chosen"

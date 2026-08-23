@@ -832,7 +832,6 @@ pub fn Root(
                         }
                     },
                     View::City => rsx! {
-                        crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
                         crate::city_view::CityView {
                             city: city.clone(),
                             busy: busy.clone(),
@@ -917,8 +916,13 @@ pub fn Root(
             }
             aside { class: "right-status",
                 for item in status.iter().skip(1) {
-                    p { key: "{item}", "{item}" }
+                    p { key: "{item}", class: "standing", "{item}" }
                 }
+                // The three counts no page states. They stand here rather
+                // than above one page's heading: they are facts about the
+                // city, they are true on every page, and the right-hand
+                // column is where facts that outlive a page belong.
+                crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
             }
             footer { class: "control-surface",
                 DispatchBar { addr: selected.clone(), on_frame }

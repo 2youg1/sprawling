@@ -206,6 +206,7 @@ impl HotView {
 ```
 
 - 界面查询在此命中不读盘；run_started→Active，run_frozen→Frozen；其余事件只推进 last_seq/last_kind。S4 界面接线前唯一消费者＝citysim 与测试（台账登记）。
+- **城市级记录不进 run 表**（F2.04 抳出）：`RunId::CITY`（nil）标记的是属于城而不属于任何 Run 的记录——创世记录、`building_created`。旧实现把它们折进 run 表，于是 `active_count()` 在一座**从未派过活的城**里返回 1。这个缺陷是在界面上被看见的：城市页读服务端的这个数、写「1 run in flight」，而总览页折同一条流写「什么都没在跑」——**一个问题两个答案，而错的那个是服务端的**。
 
 ### 8-6 memory::projection（S3.05；形状 7；redb）
 

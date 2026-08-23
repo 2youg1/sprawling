@@ -858,7 +858,6 @@ pub fn CityView(
             crate::panel::Panel {
                 title: if raised == 0 { "this city has no buildings yet".to_owned() }
                     else { format!("{raised} building(s), {busy_now} run(s) in flight") },
-                figure: "{raised}",
                 scope: "a tower's height is the work its plan has taken on, not the work it has finished; a lit window is a run in flight right now"
                     .to_owned(),
                 source: "where the buildings stand comes from one query, asked when this page opened; which of them are lit is folded from the event stream, record by record, and is never polled"

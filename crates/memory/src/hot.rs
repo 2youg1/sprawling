@@ -49,6 +49,15 @@ impl HotView {
     /// ignored, so re-feeding a segment is free of consequence.
     pub fn apply(&mut self, record: &EventRecord) -> Result<(), MemoryError> {
         let run = record.run();
+        // A city-level record belongs to the city, not to a run: raising a
+        // building and the genesis record both carry the nil id, and the
+        // Ledger says so (`kernel::event`: "RunId::CITY (nil) marks
+        // city-level records"). Admitting one here invented a run nobody
+        // started, and the count it fed said a city was working the
+        // moment it existed.
+        if run == RunId::CITY {
+            return Ok(());
+        }
         let seq = record.seq();
         let kind = record.kind();
         match self.runs.get_mut(&run) {
@@ -148,6 +157,30 @@ mod tests {
         assert_eq!(view.active_count(), 1);
         assert_eq!(view.frozen_count(), 1);
         assert_eq!(view.get(&one).unwrap().phase, RunPhase::Frozen);
+    }
+
+    #[test]
+    fn a_city_level_record_is_not_a_run() {
+        // `RunId::CITY` is the nil id that marks a record belonging to the
+        // city rather than to any run - raising a building, the genesis
+        // record. Folding one into the run table made a city that had
+        // never been dispatched to report one run in flight, which the
+        // interface then showed on its city page while its overview,
+        // folding the same stream client-side, showed none. Two answers to
+        // one question, and the wrong one was the server's.
+        let mut view = HotView::new();
+        view.apply(&record(RunId::CITY, 0, EventKind::CityInitialized))
+            .unwrap();
+        view.apply(&record(RunId::CITY, 1, EventKind::BuildingCreated))
+            .unwrap();
+        assert_eq!(view.active_count(), 0, "a city is not working by existing");
+        assert_eq!(view.runs().count(), 0);
+        assert!(view.get(&RunId::CITY).is_none());
+
+        // And a real run in the same city still counts.
+        let one = RunId::from_bytes([1u8; 16]);
+        view.apply(&record(one, 2, EventKind::RunStarted)).unwrap();
+        assert_eq!(view.active_count(), 1);
     }
 
     #[test]

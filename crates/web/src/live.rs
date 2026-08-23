@@ -182,7 +182,7 @@ pub fn LiveView(
                     (_, Some(_)) => "one session, as it happens".to_owned(),
                     (_, None) => "every run in this city, as it happens".to_owned(),
                 },
-                figure: "{held}",
+                figure: (held > 0).then(|| held.to_string()),
                 scope: "a bounded window: the figure counts the lines held here, and a line that leaves the window has not left the Ledger"
                     .to_owned(),
                 source: "the live event stream, folded one record at a time. Nothing here is re-asked or polled - the same fold the server does, running in this page."

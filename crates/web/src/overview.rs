@@ -198,7 +198,6 @@ pub fn OverviewView(
         section { class: "overview",
             crate::panel::Panel {
                 title: headline(&working),
-                figure: "{working.runs}",
                 scope: "work in flight only: a frozen or halted run is listed below but is not counted here, because a stopped city must not read as a busy one"
                     .to_owned(),
                 source: "folded from the event stream this page is already receiving, plus one city query asked when it opened. Nothing on this page is polled."

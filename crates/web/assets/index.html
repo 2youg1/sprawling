@@ -61,8 +61,17 @@
   .centre { grid-area: centre; background: var(--G1); overflow: auto;
             padding: var(--space-wide); border: 1px solid var(--G3);
             border-radius: var(--corner-panel); corner-shape: var(--corner-panel-shape); }
+  /* The standing column: facts that are true on every page. It stacks
+     rather than runs across, because it is 264px wide and a row of counts
+     in that space wraps into an unreadable block. */
   .right-status { grid-area: status; display: flex; flex-direction: column;
-                  gap: var(--space-base); }
+                  gap: var(--space-base); background: var(--G1);
+                  border: 1px solid var(--G3); border-radius: var(--corner-panel);
+                  corner-shape: var(--corner-panel-shape); padding: var(--space-pane); }
+  .right-status .standing { color: var(--G8); }
+  .right-status .vitals { flex-direction: column; gap: var(--space-snug); margin: 0;
+                          padding-top: var(--space-base); border-top: 1px solid var(--G2); }
+  .right-status .sign { display: flex; gap: var(--space-snug); align-items: baseline; }
   .control-surface { grid-area: foot; border-top: 1px solid var(--G3);
                      padding-top: var(--space-base); display: flex;
                      gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap; }
@@ -237,7 +246,8 @@
                           min-width: 2ch; }
   .attention-row .what { color: var(--G9); }
   .overview .in-flight td.addr { color: var(--G10); }
-  .overview .index-row { grid-template-columns: 1fr 160px 90px; }
+  .overview .index-row { grid-template-columns: minmax(0, 22ch) 120px 1fr;
+                         padding: var(--space-snug) var(--space-snug); }
 
   /* Approvals: a group is a card, and a tainted one is bordered in the
      colour that means a person is needed and cannot be waived. */
@@ -273,6 +283,7 @@
      needed. */
   .vitals { display: flex; gap: var(--space-wide); flex-wrap: wrap; color: var(--G6);
             font-size: var(--text-small); margin-bottom: var(--space-base); }
+  .vitals.empty { border: 0; background: none; padding: 0; }
   .vitals b { color: var(--G9); font-weight: var(--weight-heading); }
 
   /* The archive: a search over the shelves, and what the record says went
