@@ -163,11 +163,33 @@ mod tests {
     }
 
     #[test]
-    fn reserved_prefix_is_detected_on_the_first_segment_only() {
+    fn a_reserved_subtree_is_reserved_at_whatever_depth_it_sits() {
         assert!(Address::parse(".sprawling").unwrap().is_reserved());
         assert!(Address::parse(".sprawling/ledger/x").unwrap().is_reserved());
         assert!(!Address::parse(".sprawlingx/a").unwrap().is_reserved());
-        assert!(!Address::parse("a/.sprawling").unwrap().is_reserved());
+        // The rule this card widened. A building keeps what governs it -
+        // its rules, its configuration, its own skills - in a reserved
+        // subtree of its own, and the run that works in that building has
+        // the whole building as its write domain unless BUILDING.md says
+        // otherwise. Reserved on the first segment only meant the file
+        // declaring the write domain sat inside the write domain.
+        assert!(Address::parse("lab/.sprawling").unwrap().is_reserved());
+        assert!(
+            Address::parse("lab/.sprawling/CONFIG.toml")
+                .unwrap()
+                .is_reserved()
+        );
+        assert!(
+            Address::parse("lab/room1/.sprawling/CONFIG.toml")
+                .unwrap()
+                .is_reserved()
+        );
+        assert!(
+            !Address::parse("lab/sprawling/notes.md")
+                .unwrap()
+                .is_reserved(),
+            "a segment that merely looks like it is not it"
+        );
     }
 
     #[test]

@@ -230,7 +230,7 @@ impl Address {
     /// empty segments, backslash, NUL/control, leading/trailing `/`.
     pub fn parse(raw: &str) -> Result<Self, AxError>;   // E_INVALID_ARGS
     pub fn is_within(&self, prefix: &Address) -> bool;  // 段边界字节前缀；WriteDomain 原语
-    pub fn is_reserved(&self) -> bool;                  // 首段 == RESERVED_PREFIX（C17）
+    pub fn is_reserved(&self) -> bool;                  // 任一段 == RESERVED_PREFIX（C17，见 8-28）
     pub fn as_str(&self) -> &str;
 }
 ```
@@ -982,6 +982,20 @@ pub fn dedup(seen: &BTreeSet<IdemKey>, key: &IdemKey) -> DedupVerdict;   // 去�
 - **Taint 升档的 S2 实例**：Discard 门 Tainted 恒 Escalate（住 discard::decide）＋Escalate item 的 tainted 标记位（封 Policy/代答）。其余门的升档语义随其审批面出现时实例化（P1/P2），本期不造无消费者的规则。
 - **首次公网出网**：`egress` 对 Public 且 `!prior_public_egress` 置 `first_public_egress`；NetNotice 挂信封属 pipeline（S3）。Loopback/Private 恒不触发（对 localhost 提醒注入只会训练模型忽略提醒）。
 - kani：五门组合 fail-closed——reserved 目标恒不 Allow；spans 非空恒 Deny；超预算恒不 Allow；Unplanned Discard 恒不 Allow；Delegated 再派生恒不 Allow。
+
+### 8-28 C17 从「首段」扩到「任一段」（F2.08；形状 2 value 的一条原语）
+
+```rust
+pub fn is_reserved(&self) -> bool;   // 任一段 == RESERVED_PREFIX（原：仅首段）
+```
+
+**改它的理由是一个现存的洞，不是一个新需求。** 一次派活的写域由 `city::policy::write_domain()` 给出，而 `docs/templates/BUILDING.md` 的「Write domains」一节出厂就是一句空括号说明，于是 `write_prefixes` 为空、回落到 `[self.addr]`——**默认写域是整栋楼**。`runtime::tools::edit` 对路径只有 `WriteDomain::admits` 一道判据，`city::load` 又在**每次派活**时重读 `BUILDING.md`。三条合起来：一个 agent 现在就改得了它自己那栋楼的 `BUILDING.md` 与 `CONFIG.toml`——它自己的写域、`confidential`、思考强度与 MCP server 全在那两个文件里，而改动在下一次派活即生效。词汇表写着「一个 agent 改不了自己的账与自己的配置」，BUILDING.md 自己的第一行写着「agents read it and leave it unchanged」——**两句话今天都没有任何东西执行**。
+
+- **一条规则，三处实例**：一个 scope 的治理字节住在它自己的 `.sprawling/` 里。城是 `<city>/.sprawling/`（今天已然），楼是 `<building>/.sprawling/`，房间是 `<building>/<room>/.sprawling/`。城的现行布局因此不是特例，而是同一条规则在根 scope 上的实例。
+- **失效关闭，只会拒绝得更多**：改后 `is_reserved` 对任何含 `.sprawling` 段的地址答真，`WriteDomain::new` 与 `admits` 两处因此同时收紧。今天库里没有任何代码造得出嵌套的 `.sprawling` 路径，故本改动在行为上是空的，只把不变式先立起来。
+- **不改的东西**：`Address::parse` 的文法不变（`.sprawling` 仍然是一个合法段名，只是含它的地址不再可写）；`RESERVED_PREFIX` 常量不改名，词汇表里它仍叫 reserved prefix。
+- **被改写的旧断言**：`reserved_prefix_is_detected_on_the_first_segment_only` 断言过 `!Address::parse("a/.sprawling").is_reserved()`。那条断言编码的是旧规则，规则改了它就该改；它变红的那一下就是本卡的红。
+- **随后两张卡才搬字节**：F2.09 把 `CONFIG.toml` 与 `BUILDING.md` 搬进 `<building>/.sprawling/`，F2.10 把楼自己的 skill 存货放进 `<building>/.sprawling/skills/`。先立不变式再搬东西，是为了搬的那一刻目的地已经受保护；反过来就会有一段时间配置坐在新位置上而仍然可写。
 
 ## 8.5 两个设计（crate 级）
 

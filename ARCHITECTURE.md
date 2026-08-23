@@ -158,25 +158,30 @@ A city is one directory. Copy it and it is the same city; delete it and nothing 
 
 ```
 <city>/
-├─ .sprawling/                 reserved prefix: outside every write domain, always
+├─ .sprawling/                 the city's own reserved subtree
 │  ├─ ledger/                  the only history — jsonl segments, appended, chain-verified
 │  ├─ cas/                     content-addressed store, BLAKE3, one copy per content
 │  ├─ views/                   redb: cold projections, disposable, rebuilt from the ledger
 │  ├─ worktrees/               one git worktree per reviewing run, objects shared
 │  ├─ staging/                 uploads land here read-only, never in a worktree
+│  ├─ library/                 skills more than one building admits
 │  └─ CONFIG.toml              city layer of the three-layer configuration
 └─ <building>/                 one building, one line of business
-   ├─ BUILDING.md              the building's rules: confidential, review, write domains
-   ├─ CONFIG.toml              building layer, including its MCP servers
+   ├─ .sprawling/              the building's reserved subtree: what governs it (F2.09, F2.10)
+   │  ├─ BUILDING.md           the building's rules: confidential, review, write domains
+   │  ├─ CONFIG.toml           building layer, including its MCP servers
+   │  └─ skills/               skills only this building admits
    ├─ Roadmap.md               the only task table, and the denominator of every progress reading
    ├─ Memo.md                  decisions and corrections
    ├─ Handoff.md               what the next session needs
-   └─ <room>/                  one agent's workplace; the write domain is this subtree
+   └─ <room>/                  one session's workplace, named by the person who started it
       ├─ URBANITE.md           who this resident is and how it works
       └─ JOB.md                the task for this session
 ```
 
-An agent cannot write into `.sprawling/`, so it cannot edit its own accounting, its own configuration, or the history of what it did. That is a path check in `kernel::address`, not a convention.
+**One rule, applied at every scope: what governs a scope lives in that scope's `.sprawling/`, and no write domain reaches it.** `is_reserved` answers true for an address with `.sprawling` in any segment, so the check is one predicate in `kernel::address` rather than a list of protected file names. An agent therefore cannot edit its own accounting, its own configuration, its own building's rules, or the history of what it did.
+
+A run's write domain is what its building's `BUILDING.md` declares, and **the whole building when it declares nothing** — which is the shipped template. The room is where a session works, not the boundary that contains it.
 
 ## 7 The wire
 

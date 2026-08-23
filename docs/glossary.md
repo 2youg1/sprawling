@@ -37,7 +37,7 @@ Two more relations are worth stating because they are easy to invert. A **Gate**
 | **Fork** | A new run branched from a point in another run's history. It records a lineage; it does not start driving by itself. |
 | **resume** | Reopening a city after the process died: the chain is verified, tool calls whose outcome was lost are closed as unknown, and what waits for a person is reported. |
 | **Address** | A path newtype relative to the city root. It sets the write domain, the default context, and who the work reports to. |
-| **reserved prefix** | `.sprawling/` and its subtree, always outside every write domain. An agent cannot edit its own accounting or configuration. |
+| **reserved prefix** | A `.sprawling/` directory and its subtree, at any depth, always outside every write domain. Each scope keeps what governs it there — the city, and from F2.09 each building. An agent cannot edit its own accounting, its own configuration, or its own building's rules. |
 
 ## 2 History and content
 
