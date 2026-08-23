@@ -41,7 +41,8 @@ pub use archive_search::{filed_at, filed_lately, filed_line, searchable, shelves
 pub use building_view::{BuildingView, Leaf, RoomQueue, day_label, opening_leaf};
 pub use building_view::{room_addr, waiting_in};
 pub use city_view::{Camera, DisplayList, Face, Prism, ZOOM_STOPS};
-pub use city_view::{draw, face_tokens, faces_of, painter_order, pick, place, storeys};
+pub use city_view::{Frame, MARGIN, TILE_WIDTH, done_band_of, points_attr, view_box};
+pub use city_view::{draw, face_tokens, faces_of, painter_order, place, storeys};
 pub use dashboard::CostsView;
 pub use dashboard::{CostDimension, CostRow, SavingsRow, Trend, cost_rows, drawable, fold_line};
 pub use dashboard::{SERIES_DASHES, SERIES_PER_CHART_MAX, SERIES_WIDTHS, share_per_mille};

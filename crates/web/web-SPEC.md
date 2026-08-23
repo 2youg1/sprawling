@@ -523,6 +523,32 @@ pub fn from_fragment(raw: &str) -> Option<View>;   // 认不出就是 None
 
 **真机验收**：`http://127.0.0.1:<port>/#/settings` 直接打开设置页并截图成功；本卡之前该页无法被拍到。
 
+### 8-28 等距城市改画成 SVG，并把数据放进天际线（F2.02；形状 1 判定 ＋ Humble Object）
+
+```rust
+pub const TILE_WIDTH: u32 = 64;   pub const MARGIN: i32 = 96;
+pub struct Camera { pub tile_width: u32, pub tile_height: u32 }
+impl Camera { pub const fn tiles() -> Self; pub fn project(&self, u: i32, v: i32) -> (i32, i32); }
+pub struct Frame { pub x: i32, pub y: i32, pub width: u32, pub height: u32 }
+impl Frame { pub fn attr(&self) -> String; }
+pub fn view_box(list: &DisplayList, stop: usize, pan: (i32, i32)) -> Frame;
+pub fn done_band_of(camera: &Camera, prism: &Prism) -> Vec<Face>;
+pub fn points_attr(points: &[(i32, i32); 4]) -> String;
+// 删除：paint / paint_mounted / canvas_pixel / pick / contains /
+//       Camera::{fit, origin, at_stop, panned_by, unproject}
+```
+
+**推翻了 §3 那条记录**（理由已就地写入 §3）：那条的论据是「一千个 Resident 不做一千个节点」，而这幅图从未画过 Resident——它画 Building，一座城几十栋。为一个不存在的节约，canvas 正在支付四件确定的代价：固定位图被 CSS 重采样；读不到 CSS 自定义属性（`city_view.rs:703` 想要 `--ACCENT` 却只能退到 `G10`）；hover／focus／键盘三样都要自己重写；绘制只存在于 wasm，宿主侧的门与测试**一行都盖不到它**。
+
+- **命中测试不再是第二次推导**：浏览器对它自己画出的 polygon 做命中，于是「画得出来的就是点得中的」从一条断言变成一条构造。反投影、凸四边形内判定、指针坐标限幅三者随之删除（含全库唯一一处 `as_conversions` 的 `#[expect]`）。
+- **viewBox 取显示表自己的包围盒**，图因此填满给它的空间。旧 `fit` 横向为一个 n 瓦片宽的菱形预留 `2n+1` 个瓦片宽，超额约两倍——那就是三栋楼的城缩成中间一小块的来源。**包围盒不预留，它量。**
+- **缩放只能是裁剪**：窗口跟着内容走时，瓦片放大与窗口放大互相抵消，画面纹丝不动。故瓦片成常量，三档缩放改为按档位收窄 viewBox，平移改为移动窗口中心；`Camera::fit`／`origin`／`at_stop`／`panned_by` 随之删除。一条断言钉住「档位越靠后窗口越小」，以免日后被「修」回瓦片缩放。
+- **天际线就是数据**（`done_band_of`）：楼高是计划揽下的活，从地面亮上去的那一段是已完成的部分，于是进度从天际线上读而不是从旁边的数字读。**差一行没完的计划在城的另一头也不得看起来像完了**（`min(storeys-1)`）；无分母即**不画带**而不是画一条零高的带——后者在声称一个比值。
+- **一栋楼一个 `<g>`**，带 `tabindex`、`role="button"`、`aria-pressed` 与 `<title>`；Enter 与空格都选中它。hover 与 focus 说 stroke 而不说 fill：面的 fill 是由几何按令牌写在行内的，**一条需要盖过行内样式的规则总会在某处输掉**。
+- **标签在全部楼之后统一画**：写在各自的组里时，近处的楼会把远处的楼名盖掉（真机截图抳出）。名字仍在组的 `aria-label` 里，故不看像素的读者什么都没失去。
+- **标签横向留白是估算的**（`MARGIN`，§14 硬编码声明）：文本宽度要字体度量才知道，而宿主侧没有；`text-anchor: middle` 使估小了也只是两端各差几个单位。
+- **败诉线**：这幅图若有朝一日要画 Resident，或城中楼数越过 200（实测一栋楼约 30 个节点），节点数论据重新成立，届时回到画布并把本节改回去。
+
 ### 8-29 呈现常量收口，与两条覆盖全部页面的语法（F2.03；形状 6 数据面 ＋ 新模块 `web::panel`）
 
 ```rust
@@ -700,6 +726,9 @@ Trunk 的 npm 接触面是**可关闭的可选配置**，不构成 C1 的当场�
 **不引**：任何 Markdown 解析器（服务端已渲染 HTML）；任何颜色空间转换库（浏览器做色域映射）；任何 UI 组件库（组件即样式，样式的权威是 `theme`）。
 
 ## 14 硬编码声明
+
+`city_view::MARGIN`（F2.02）是一个估算值：楼名居中画在塔下，而本库量不了文本——宿主侧没有字体度量，向浏览器要一个则把一次测量放进了纯函数中间。故取一个够宽的常数，并用 `text-anchor: middle` 使溢出对称：估小了的后果是两端各差几个单位，而不是一侧被截。
+
 
 `theme` 的七项源头常量是**故意的硬编码**，且是全 crate 唯一允许的颜色产地——「常量三源」把呈现类常量的产地定在 `web::theme`，`xtask color` 以它为权威扫描全仓颜色字面量。占位页 `assets/index.html` 中的三个十六进制值是待清理的过渡物（见 §4）。
 

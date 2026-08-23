@@ -19,10 +19,6 @@ wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }
 web-sys = { workspace = true, features = [
     "BinaryType",
-    # The isometric city is painted, not laid out: two canvas features
-    # rather than a thousand elements the browser has to keep styled.
-    "CanvasRenderingContext2d",
-    "HtmlCanvasElement",
     "CloseEvent",
     "Document",
     "Element",

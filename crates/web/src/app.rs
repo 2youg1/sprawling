@@ -1956,6 +1956,29 @@ mod tests {
     }
 
     #[test]
+    fn the_city_is_drawn_as_shapes_a_person_can_reach() {
+        // What a canvas could not be asked. Before F2.02 the drawing
+        // existed only on wasm, so no host test could see whether the
+        // picture had been drawn at all - which is how it once shipped
+        // painting the ground and no buildings.
+        let painted = paint(View::City, Snapshot::new(), Vec::new());
+        assert!(painted.tags.iter().any(|tag| tag == "svg"));
+        assert!(painted.tags.iter().any(|tag| tag == "polygon"));
+        assert!(
+            painted.tags.iter().any(|tag| tag == "text"),
+            "a tower says its own name; there is no legend to look away to"
+        );
+        assert!(
+            painted.has_class("prism"),
+            "each building is one group, which is what hover, focus and a keyboard reach"
+        );
+        assert!(
+            painted.attrs.iter().any(|value| value == "button"),
+            "and the group says it is a button, so a screen reader can say so too"
+        );
+    }
+
+    #[test]
     fn every_page_says_where_its_numbers_came_from() {
         // The rule this holds is the product's own claim turned into a
         // property of the interface: a city whose whole promise is an

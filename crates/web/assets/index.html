@@ -347,9 +347,28 @@
   /* The isometric city is drawn as shapes in the document, so it reads the
      tokens every other surface reads, scales without resampling, and is
      reachable by hover, focus and a keyboard. */
-  .city-view .stage { display: block; width: 100%; background: var(--G0);
+  /* height: auto, so the box takes the drawing's own proportions and there
+     is no letterbox to leave empty. A fixed height would put the picture
+     back inside a field it does not fill, which is what the canvas did. */
+  .city-view .stage { display: block; width: 100%; height: auto; background: var(--G0);
                       border: 1px solid var(--G3); border-radius: var(--corner-panel);
                       corner-shape: var(--corner-panel-shape); }
+  /* A building is one group, and the group is what a pointer, a focus ring
+     and a keyboard all reach. The fill of each face is written inline from
+     the token the geometry chose, so hover and focus speak in stroke
+     instead - a rule that has to out-shout an inline style is a rule that
+     will lose somewhere. */
+  .stage .prism { cursor: pointer; outline: none; }
+  .stage .prism polygon { stroke-width: 0; }
+  .stage .prism:hover polygon.body { stroke: var(--G9); stroke-width: 1.5;
+                                     vector-effect: non-scaling-stroke; }
+  .stage .prism:focus-visible polygon.body { stroke: var(--ACCENT); stroke-width: 2;
+                                             vector-effect: non-scaling-stroke; }
+  .stage .chosen { fill: none; stroke: var(--ACCENT); stroke-width: 2.5;
+                   vector-effect: non-scaling-stroke; pointer-events: none; }
+  .stage text { text-anchor: middle; }
+  .stage text.name { font-size: 13px; font-weight: var(--weight-heading); }
+  .stage text.note { font-size: 12px; font-family: var(--font-mono); }
   .city-view .camera { display: flex; gap: var(--space-tight); flex-wrap: wrap;
                        margin-top: var(--space-snug); }
   .city-view .camera button { padding: 4px 9px; font-size: var(--text-small); }

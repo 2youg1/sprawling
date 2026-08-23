@@ -2,20 +2,34 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! The isometric canvas. Stage 4 builds the geometry
-//! and the interface; the drawing layer arrives at P2 and this file's
-//! signatures do not move when it does.
+//! The isometric city, drawn as shapes in the document.
 //!
-//! **It is a canvas, not a thousand DOM nodes.** A thousand Residents given
-//! to the document object model is a thousand elements whose style and
-//! layout the browser must maintain, when the layer only ever needs "draw
-//! shapes at coordinates". Drawing in Rust also lets the headless bitmap
-//! regression share the exact code the browser runs, which is a stronger
-//! check than a screenshot that depends on font rendering.
+//! **It was a canvas until F2.02, and the reason it was one did not reach
+//! this picture.** The recorded argument was that a thousand Residents must
+//! not become a thousand elements. This view has never drawn a Resident: it
+//! draws Buildings, of which a city holds tens, and the canvas was charging
+//! four certain costs for that hypothetical saving - a fixed bitmap resampled
+//! by CSS on every display that is not exactly its size, no way to read a
+//! custom property (which is why the selection outline settled for a grey
+//! where the code plainly wanted `--ACCENT`), no hover, focus, or keyboard
+//! reach without reimplementing all three, and a drawing path that existed
+//! only on wasm and so was reachable by no host test or gate.
 //!
-//! **One geometry, two readers.** Hit testing and drawing use the same
-//! functions here. Two implementations of one projection is two authorities,
-//! and the one that drifts is always the one nobody is looking at.
+//! **Hit testing is no longer a second derivation.** The browser tests hits
+//! against the very polygons it painted, so "what is drawn is what can be
+//! picked" stopped being an assertion and became the construction. The
+//! inverse projection, the point-in-quadrilateral test and the pointer
+//! coordinate clamp went with it.
+//!
+//! **The picture fills what it is given.** The viewBox is the bounding box
+//! of what was drawn, so a city of three buildings is a picture of three
+//! buildings rather than three specks in a fixed 1000x560 field. The old
+//! fit reserved `2n+1` tile widths for a diamond `n` tiles wide, which is
+//! where most of that empty field came from.
+//!
+//! **The silhouette is the data.** A tower's height is the work its plan
+//! took on and the lit band up its walls is the part that is done, so
+//! progress is read off the skyline rather than from a number beside it.
 
 use std::collections::BTreeSet;
 
@@ -24,6 +38,25 @@ use dioxus::prelude::*;
 
 /// Logical tile, 2:1 axonometric.
 pub const TILE_RATIO: u32 = 2;
+
+/// One tile, in user units.
+///
+/// A constant rather than a fit, because the viewBox is fitted to the
+/// drawing instead of the drawing to a viewport - so this number sets the
+/// *proportion* of a tile to a label and nothing else. A multiple of four:
+/// two halvings happen between a tile and a point, and an odd width breaks
+/// the 2:1 ratio the projection is built on.
+pub const TILE_WIDTH: u32 = 64;
+
+/// Room left around the drawing inside the viewBox, in user units.
+///
+/// Labels are centred under their tower and this library cannot measure
+/// text - there is no font metric on the host, and asking the browser for
+/// one would put a measurement in the middle of a pure function. So the
+/// margin is generous enough for the longest label a building name is
+/// likely to be, and `text-anchor: middle` makes any overflow symmetric
+/// rather than one-sided.
+pub const MARGIN: i32 = 96;
 
 /// How wide the city's grid is. Placement is a hash into this square, so
 /// the extent decides how much room the hash has before two buildings
@@ -34,162 +67,138 @@ pub const CITY_EXTENT: u32 = 12;
 /// hunt for the right level instead of reading the city.
 pub const ZOOM_STOPS: [u32; 3] = [1, 2, 4];
 
-/// Tile size in pixels, derived from the viewport and the city's extent.
+/// Turns a tile coordinate into a point. Nothing else.
+///
+/// It used to carry a viewport, an extent and a pan offset, because the
+/// drawing had to be fitted into a fixed bitmap and hit testing had to be
+/// inverted out of the same numbers. The viewBox is fitted to the drawing
+/// now and the browser does the hit testing, so a camera that still held a
+/// viewport would be holding it for nobody.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Camera {
-    /// Tile width in pixels.
+    /// Tile width in user units.
     pub tile_width: u32,
     /// Tile height: always half the width, by the 2:1 projection.
     pub tile_height: u32,
-    /// The viewport this camera was fitted to, and the city extent it was
-    /// fitted for. Both are kept because the city is *centred*: without
-    /// them `project` has no idea where the middle is, and every tile
-    /// whose `v` exceeds its `u` lands at a negative x. That is not
-    /// hypothetical - it is why the city page was a blank canvas with one
-    /// grey sliver in the top-left corner.
-    pub viewport_width: u32,
-    pub viewport_height: u32,
-    pub extent: u32,
-    /// What a person panned, on top of the centred origin. Added when
-    /// projecting and removed when unprojecting, in that one pair of
-    /// methods, so panning cannot make the picture and the pick disagree.
-    pub pan_x: i32,
-    pub pan_y: i32,
 }
 
 impl Camera {
-    /// Fits an `extent` by `extent` city into a viewport.
-    ///
-    /// `min(width / (2n+1), height / (n+3))`, then clamped. The content
-    /// height uses `n * tile_width` rather than `n * tile_height`, because
-    /// the extruded prisms stand above their tiles and a city sized to the
-    /// flat diamond would clip its own towers.
+    /// The one camera. There is nothing to fit, so there is nothing to
+    /// choose.
     #[must_use]
-    pub fn fit(viewport_width: u32, viewport_height: u32, extent: u32) -> Self {
-        let horizontal_tiles = extent.saturating_mul(2).saturating_add(1);
-        let vertical_tiles = extent.saturating_add(3);
-        let by_width = viewport_width
-            .checked_div(horizontal_tiles.max(1))
-            .unwrap_or_default();
-        let by_height = viewport_height
-            .checked_div(vertical_tiles.max(1))
-            .unwrap_or_default();
-        // Down to a multiple of four. Two halvings happen on the way from a
-        // tile to a pixel - width to height, then each to its half - so an
-        // odd width makes `tile_height * 2 != tile_width` and hit testing
-        // stops inverting drawing. Found by the 2:1 assertion on a 9-pixel
-        // fit; the alternative was to carry the error and let picks drift.
-        let fitted = by_width.min(by_height).clamp(8, 128);
-        let tile_width = fitted.checked_div(4).unwrap_or(2).max(2).saturating_mul(4);
+    pub const fn tiles() -> Self {
         Self {
-            tile_width,
-            tile_height: tile_width
-                .checked_div(TILE_RATIO)
-                .unwrap_or(tile_width)
-                .max(1),
-            viewport_width,
-            viewport_height,
-            extent: extent.max(1),
-            pan_x: 0,
-            pan_y: 0,
+            tile_width: TILE_WIDTH,
+            tile_height: TILE_WIDTH / TILE_RATIO,
         }
     }
 
-    /// Where tile `(0, 0)` sits, before any panning.
-    ///
-    /// Horizontally the middle, because the diamond grows both ways from
-    /// there. Vertically high enough that the whole diamond is on screen
-    /// and the towers standing on its near edge still have air above them.
-    #[must_use]
-    pub fn origin(&self) -> (i32, i32) {
-        let half_viewport =
-            i32::try_from(self.viewport_width.checked_div(2).unwrap_or(0)).unwrap_or_default();
-        let diamond = i32::try_from(
-            self.extent
-                .saturating_sub(1)
-                .saturating_mul(self.tile_height),
-        )
-        .unwrap_or_default();
-        let middle =
-            i32::try_from(self.viewport_height.checked_div(2).unwrap_or(0)).unwrap_or_default();
-        let headroom = i32::try_from(self.tile_height).unwrap_or_default();
-        (
-            half_viewport,
-            middle
-                .saturating_sub(diamond.checked_div(2).unwrap_or_default())
-                .saturating_add(headroom),
-        )
-    }
-
-    /// The same camera at one of the three stops.
-    ///
-    /// Stops rather than a continuous zoom, because a slider invites a
-    /// person to hunt for the right level instead of reading the city.
-    /// An index past the end takes the last stop: a control that cannot
-    /// go further should stop, not wrap around to the smallest view.
-    #[must_use]
-    pub fn at_stop(self, stop: usize) -> Self {
-        let factor = ZOOM_STOPS
-            .get(stop)
-            .copied()
-            .unwrap_or_else(|| ZOOM_STOPS.last().copied().unwrap_or(1));
-        let tile_width = self.tile_width.saturating_mul(factor);
-        Self {
-            tile_width,
-            // Recomputed rather than scaled, so the 2:1 ratio holds at
-            // every stop and hit testing keeps inverting drawing.
-            tile_height: tile_width
-                .checked_div(TILE_RATIO)
-                .unwrap_or(tile_width)
-                .max(1),
-            ..self
-        }
-    }
-
-    /// The same camera moved by a pixel offset.
-    #[must_use]
-    pub fn panned_by(self, dx: i32, dy: i32) -> Self {
-        Self {
-            pan_x: self.pan_x.saturating_add(dx),
-            pan_y: self.pan_y.saturating_add(dy),
-            ..self
-        }
-    }
-
-    /// Projects a tile coordinate to a pixel position.
+    /// Projects a tile coordinate to a point.
     #[must_use]
     pub fn project(&self, u: i32, v: i32) -> (i32, i32) {
         let half_width = i32::try_from(self.tile_width.checked_div(2).unwrap_or(1)).unwrap_or(1);
         let half_height = i32::try_from(self.tile_height.checked_div(2).unwrap_or(1)).unwrap_or(1);
-        let (origin_x, origin_y) = self.origin();
-        let x = u
-            .saturating_sub(v)
-            .saturating_mul(half_width)
-            .saturating_add(origin_x)
-            .saturating_add(self.pan_x);
-        let y = u
-            .saturating_add(v)
-            .saturating_mul(half_height)
-            .saturating_add(origin_y)
-            .saturating_add(self.pan_y);
-        (x, y)
+        (
+            u.saturating_sub(v).saturating_mul(half_width),
+            u.saturating_add(v).saturating_mul(half_height),
+        )
     }
+}
 
-    /// Inverts [`Camera::project`]. The same halves, read backwards: hit
-    /// testing cannot drift from drawing because it is not a second
-    /// derivation.
+/// The window onto the drawing: `x y width height`, as a viewBox reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Frame {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Frame {
+    /// The attribute a viewBox takes.
     #[must_use]
-    pub fn unproject(&self, x: i32, y: i32) -> (i32, i32) {
-        let half_width = i32::try_from(self.tile_width.checked_div(2).unwrap_or(1)).unwrap_or(1);
-        let half_height = i32::try_from(self.tile_height.checked_div(2).unwrap_or(1)).unwrap_or(1);
-        let (origin_x, origin_y) = self.origin();
-        let x = x.saturating_sub(origin_x).saturating_sub(self.pan_x);
-        let y = y.saturating_sub(origin_y).saturating_sub(self.pan_y);
-        let a = x.checked_div(half_width).unwrap_or_default();
-        let b = y.checked_div(half_height).unwrap_or_default();
-        let u = a.saturating_add(b).checked_div(2).unwrap_or_default();
-        let v = b.saturating_sub(a).checked_div(2).unwrap_or_default();
-        (u, v)
+    pub fn attr(&self) -> String {
+        format!("{} {} {} {}", self.x, self.y, self.width, self.height)
+    }
+}
+
+/// The window that shows the whole drawing at `stop` 0, and a portion of
+/// it at each stop after that.
+///
+/// **Zoom has to crop rather than magnify.** With the window fitted to the
+/// drawing, making every tile larger makes the window larger by the same
+/// factor and the picture on screen does not move at all. So the tile is a
+/// constant and a zoom stop divides the window instead, around the centre
+/// the person has panned to.
+///
+/// A stop past the last one takes the last: a control that cannot go
+/// further should stop rather than wrap round to the widest view.
+#[must_use]
+pub fn view_box(list: &DisplayList, stop: usize, pan: (i32, i32)) -> Frame {
+    let points = list
+        .ground
+        .iter()
+        .chain(list.faces.iter())
+        .flat_map(|face| face.points.iter().copied())
+        .chain(list.labels.iter().map(|label| label.at));
+    let (mut low_x, mut low_y, mut high_x, mut high_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+    let mut any = false;
+    for (x, y) in points {
+        any = true;
+        low_x = low_x.min(x);
+        low_y = low_y.min(y);
+        high_x = high_x.max(x);
+        high_y = high_y.max(y);
+    }
+    if !any {
+        // An empty city still needs a window, or the browser scales
+        // nothing to fill everything.
+        return Frame {
+            x: -MARGIN,
+            y: -MARGIN,
+            width: u32::try_from(MARGIN.saturating_mul(2)).unwrap_or(1),
+            height: u32::try_from(MARGIN.saturating_mul(2)).unwrap_or(1),
+        };
+    }
+    let whole_width = u32::try_from(
+        high_x
+            .saturating_sub(low_x)
+            .saturating_add(MARGIN.saturating_mul(2)),
+    )
+    .unwrap_or(1)
+    .max(1);
+    let whole_height = u32::try_from(
+        high_y
+            .saturating_sub(low_y)
+            .saturating_add(MARGIN.saturating_mul(2)),
+    )
+    .unwrap_or(1)
+    .max(1);
+    let factor = ZOOM_STOPS
+        .get(stop)
+        .copied()
+        .unwrap_or_else(|| ZOOM_STOPS.last().copied().unwrap_or(1))
+        .max(1);
+    let width = whole_width
+        .checked_div(factor)
+        .unwrap_or(whole_width)
+        .max(1);
+    let height = whole_height
+        .checked_div(factor)
+        .unwrap_or(whole_height)
+        .max(1);
+    // Centred on the middle of the drawing, then moved by what the person
+    // panned. Panning at stop 0 does nothing visible, and that is correct:
+    // the whole city is already in view.
+    let centre_x = low_x.saturating_add(high_x).checked_div(2).unwrap_or(0);
+    let centre_y = low_y.saturating_add(high_y).checked_div(2).unwrap_or(0);
+    let half_width = i32::try_from(width.checked_div(2).unwrap_or(0)).unwrap_or(0);
+    let half_height = i32::try_from(height.checked_div(2).unwrap_or(0)).unwrap_or(0);
+    Frame {
+        x: centre_x.saturating_sub(half_width).saturating_add(pan.0),
+        y: centre_y.saturating_sub(half_height).saturating_add(pan.1),
+        width,
+        height,
     }
 }
 
@@ -202,6 +211,14 @@ pub struct Prism {
     /// Storeys: the logarithmic order of the Building's Asset count, so a
     /// city with one huge Building is still readable.
     pub storeys: u32,
+    /// How many of those storeys the plan has finished.
+    ///
+    /// The reason the silhouette carries data at all: a tower's height is
+    /// what its plan took on and this is the part that is done, so a person
+    /// reads progress off the skyline instead of off a number beside it.
+    /// A building with no denominator has no finished part either - the
+    /// same refusal to invent a ratio that `Progress` makes in the type.
+    pub done: u32,
     pub active: bool,
     /// What the tower says about itself under its own footprint - the
     /// plan's own numbers. Annotated directly rather than through a
@@ -282,11 +299,13 @@ pub fn prisms_of(buildings: &[BuildingProgress], busy: &BTreeSet<Address>) -> Ve
         .iter()
         .map(|building| {
             let (u, v) = place(building.addr.as_str(), CITY_EXTENT);
+            let storeys = storeys(scale_of(building.progress));
             Prism {
                 id: building.addr.as_str().to_owned(),
                 u,
                 v,
-                storeys: storeys(scale_of(building.progress)),
+                storeys,
+                done: done_storeys(building.progress, storeys),
                 active: busy.contains(&building.addr),
                 // The words for a plan's progress come from the one
                 // module that writes them, so the
@@ -324,6 +343,30 @@ fn scale_of(progress: Progress) -> u64 {
         Progress::Planned(planned) => u64::from(planned.ratio().1),
         Progress::Unplanned(_) => 0,
     }
+}
+
+/// How many storeys of a tower are finished.
+///
+/// The plan's own ratio, carried onto the height the tower actually has.
+/// Rounded down, and never the whole tower unless the plan is whole: a
+/// building one row short of done should not look done from across the
+/// city, which is the only distance this picture is read from.
+fn done_storeys(progress: Progress, storeys: u32) -> u32 {
+    let Progress::Planned(planned) = progress else {
+        return 0;
+    };
+    let (done, total) = planned.ratio();
+    if total == 0 {
+        return 0;
+    }
+    if done >= total {
+        return storeys;
+    }
+    storeys
+        .checked_mul(done)
+        .and_then(|scaled| scaled.checked_div(total))
+        .unwrap_or(0)
+        .min(storeys.saturating_sub(1))
 }
 
 /// The rows a building's plan could not state. Shown rather than dropped:
@@ -438,6 +481,7 @@ pub fn faces_of(camera: &Camera, prism: &Prism, selected: bool) -> [Face; 3] {
 /// below it and nothing of the same prism can occlude it.
 #[must_use]
 pub fn draw(camera: &Camera, prisms: Vec<Prism>, selected: Option<&str>) -> DisplayList {
+    let extent = occupied_extent(&prisms);
     let mut faces = Vec::new();
     let mut labels = Vec::new();
     let mut outline = None;
@@ -448,12 +492,13 @@ pub fn draw(camera: &Camera, prisms: Vec<Prism>, selected: Option<&str>) -> Disp
             outline = sides.first().map(|top| top.points);
         }
         faces.extend(sides);
+        faces.extend(done_band_of(camera, &prism));
         faces.extend(windows_of(camera, &prism));
         labels.extend(labels_of(camera, &prism));
     }
     DisplayList {
         camera: *camera,
-        ground: ground_of(camera),
+        ground: ground_of(camera, extent),
         faces,
         outline,
         labels,
@@ -464,8 +509,8 @@ pub fn draw(camera: &Camera, prisms: Vec<Prism>, selected: Option<&str>) -> Disp
 /// step lighter than the page behind it. Drawn first, so a building at
 /// the far corner still reads as standing *on* something.
 #[must_use]
-pub fn ground_of(camera: &Camera) -> Vec<Face> {
-    let last = i32::try_from(camera.extent.saturating_sub(1)).unwrap_or_default();
+pub fn ground_of(camera: &Camera, extent: u32) -> Vec<Face> {
+    let last = i32::try_from(extent.saturating_sub(1)).unwrap_or_default();
     let plate = Face {
         id: String::new(),
         token: "G1",
@@ -519,6 +564,47 @@ pub fn occupied_extent(prisms: &[Prism]) -> u32 {
     let us = span(prisms.iter().map(|prism| prism.u).collect());
     let vs = span(prisms.iter().map(|prism| prism.v).collect());
     us.max(vs).saturating_add(1).clamp(3, CITY_EXTENT)
+}
+
+/// The lit band up a tower's two walls: the part of the plan that is done.
+///
+/// Drawn over the walls rather than instead of them, from the base up, so
+/// the reading is the one a person already has for a filled bar - except
+/// that here the bar is the building. A tower with nothing finished gets
+/// no band at all, which is not the same as a band of zero height: one
+/// says nothing is done, the other would be drawing a claim about a plan
+/// that has no denominator.
+#[must_use]
+pub fn done_band_of(camera: &Camera, prism: &Prism) -> Vec<Face> {
+    if prism.done == 0 {
+        return Vec::new();
+    }
+    let unit = storey_lift(camera);
+    let done = unit.saturating_mul(i32::try_from(prism.done).unwrap_or(0));
+    let [_, left, right] = faces_of(camera, prism, false);
+    let mut band = Vec::new();
+    for wall in [left, right] {
+        // A wall runs top-edge, top-edge, base, base. The finished part
+        // rises `done` from the base.
+        let (Some(top_a), Some(top_b), Some(base_b), Some(base_a)) = (
+            wall.points.first().copied(),
+            wall.points.get(1).copied(),
+            wall.points.get(2).copied(),
+            wall.points.get(3).copied(),
+        ) else {
+            continue;
+        };
+        let raise = |point: (i32, i32)| (point.0, point.1.saturating_sub(done));
+        let (head_a, head_b) = (raise(base_a), raise(base_b));
+        // Never above the roof, whatever rounding did.
+        let clamp = |head: (i32, i32), roof: (i32, i32)| (head.0, head.1.max(roof.1));
+        band.push(Face {
+            id: prism.id.clone(),
+            token: "G7",
+            points: [clamp(head_a, top_a), clamp(head_b, top_b), base_b, base_a],
+        });
+    }
+    band
 }
 
 /// A point `num/den` of the way from `a` to `b`, dropped by `fall`
@@ -610,127 +696,21 @@ pub fn labels_of(camera: &Camera, prism: &Prism) -> Vec<Label> {
     ]
 }
 
-/// Which building is under a pixel, or none.
+/// The `points` attribute of one face.
 ///
-/// Reads the same faces `draw` emits, in reverse: the last prism painted
-/// is the one on top, so it is the one a person means when they click
-/// where two overlap.
+/// The one place a shape becomes an attribute, so a polygon written by
+/// the ground loop and a polygon written by a tower cannot be spelled
+/// differently.
 #[must_use]
-pub fn pick(camera: &Camera, prisms: Vec<Prism>, x: i32, y: i32) -> Option<String> {
-    for prism in painter_order(prisms).iter().rev() {
-        if faces_of(camera, prism, false)
-            .iter()
-            .any(|face| contains(&face.points, x, y))
-        {
-            return Some(prism.id.clone());
+pub fn points_attr(points: &[(i32, i32); 4]) -> String {
+    let mut out = String::new();
+    for (index, (x, y)) in points.iter().enumerate() {
+        if index > 0 {
+            out.push(' ');
         }
+        out.push_str(&format!("{x},{y}"));
     }
-    None
-}
-
-/// Point in convex quadrilateral, in integers. Every cross product has
-/// the same sign inside; a zero means the point is on an edge, which
-/// counts as inside so that two touching faces never leave a seam a click
-/// can fall through.
-fn contains(points: &[(i32, i32); 4], x: i32, y: i32) -> bool {
-    let mut positive = false;
-    let mut negative = false;
-    for (index, (ax, ay)) in points.iter().copied().enumerate() {
-        let next = index
-            .saturating_add(1)
-            .checked_rem(points.len())
-            .unwrap_or(0);
-        let Some((bx, by)) = points.get(next).copied() else {
-            continue;
-        };
-        let cross = i64::from(bx.saturating_sub(ax))
-            .saturating_mul(i64::from(y.saturating_sub(ay)))
-            .saturating_sub(
-                i64::from(by.saturating_sub(ay)).saturating_mul(i64::from(x.saturating_sub(ax))),
-            );
-        if cross > 0 {
-            positive = true;
-        }
-        if cross < 0 {
-            negative = true;
-        }
-    }
-    !(positive && negative)
-}
-
-/// Turns one display list into canvas calls, and decides nothing.
-///
-/// The humble half of the pair: every question about where a face is or
-/// what colour it takes was answered in the pure functions above, so the
-/// browser-only code has no branch a test would want to reach.
-#[cfg(target_arch = "wasm32")]
-pub fn paint(canvas: &web_sys::HtmlCanvasElement, list: &DisplayList) -> Option<()> {
-    use wasm_bindgen::JsCast;
-
-    let context = canvas
-        .get_context("2d")
-        .ok()
-        .flatten()?
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .ok()?;
-    let width = f64::from(canvas.width());
-    let height = f64::from(canvas.height());
-    context.clear_rect(0.0, 0.0, width, height);
-    if let Some(backdrop) = crate::theme::gray_colour("G0") {
-        context.set_fill_style_str(&backdrop);
-        context.fill_rect(0.0, 0.0, width, height);
-    }
-    for face in list.ground.iter().chain(list.faces.iter()) {
-        let Some(colour) = crate::theme::gray_colour(face.token) else {
-            continue;
-        };
-        context.set_fill_style_str(&colour);
-        context.begin_path();
-        for (index, (x, y)) in face.points.iter().enumerate() {
-            let (x, y) = (f64::from(*x), f64::from(*y));
-            if index == 0 {
-                context.move_to(x, y);
-            } else {
-                context.line_to(x, y);
-            }
-        }
-        context.close_path();
-        context.fill();
-    }
-    // The only stroke in the picture, and the only accent: what a person
-    // has selected. Form is carried by lightness everywhere else.
-    if let Some(points) = list.outline {
-        context.set_stroke_style_str("var(--ACCENT)");
-        if let Some(accent) = crate::theme::gray_colour("G10") {
-            context.set_stroke_style_str(&accent);
-        }
-        context.set_line_width(2.0);
-        context.begin_path();
-        for (index, (x, y)) in points.iter().enumerate() {
-            let (x, y) = (f64::from(*x), f64::from(*y));
-            if index == 0 {
-                context.move_to(x, y);
-            } else {
-                context.line_to(x, y);
-            }
-        }
-        context.close_path();
-        context.stroke();
-    }
-    context.set_text_align("center");
-    for label in &list.labels {
-        let Some(colour) = crate::theme::gray_colour(label.token) else {
-            continue;
-        };
-        context.set_fill_style_str(&colour);
-        context.set_font(if label.leading {
-            "600 13px 'Noto Sans SC', system-ui, sans-serif"
-        } else {
-            "12px 'Noto Sans SC', system-ui, sans-serif"
-        });
-        let _ = context.fill_text(&label.text, f64::from(label.at.0), f64::from(label.at.1));
-    }
-    Some(())
+    out
 }
 
 /// What a person typed into the building form, and whether it is a
@@ -830,9 +810,9 @@ pub fn CityView(
         .map(|prism| (prism.id.clone(), prism.note.clone()))
         .collect();
     let (dx, dy) = *pan.read();
-    let camera = Camera::fit(CANVAS_WIDTH, CANVAS_HEIGHT, occupied_extent(&prisms))
-        .at_stop(*stop.read())
-        .panned_by(dx, dy);
+    let camera = Camera::tiles();
+    let list = draw(&camera, prisms.clone(), selected.as_deref());
+    let frame = view_box(&list, *stop.read(), (dx, dy));
     let problems = unreadable_rows(&city.buildings);
     // The selected building's name, held twice outside the markup: the
     // submit closure keeps one for the length of the page, and the
@@ -840,17 +820,6 @@ pub fn CityView(
     // is selected, which is the case where the panel is not drawn.
     let submitting = selected.clone().unwrap_or_default();
     let checking = submitting.clone();
-    let picking = prisms.clone();
-    #[cfg(target_arch = "wasm32")]
-    {
-        let list = draw(&camera, prisms.clone(), selected.as_deref());
-        // `use_reactive` because the display list is built from props,
-        // and a plain effect closure captures the props of the *first*
-        // render only. That is why the canvas showed the ground and no
-        // buildings: it was painted once, before the city answered, and
-        // never again.
-        use_effect(use_reactive!(|(list,)| paint_mounted(&list)));
-    }
     let raised = city.buildings.len();
     let busy_now = city.active;
     rsx! {
@@ -858,24 +827,110 @@ pub fn CityView(
             crate::panel::Panel {
                 title: if raised == 0 { "this city has no buildings yet".to_owned() }
                     else { format!("{raised} building(s), {busy_now} run(s) in flight") },
-                scope: "a tower's height is the work its plan has taken on, not the work it has finished; a lit window is a run in flight right now"
+                scope: "a tower is as tall as the work its plan took on and lit as far up as that work is done; a lit window is a run in flight right now"
                     .to_owned(),
                 source: "where the buildings stand comes from one query, asked when this page opened; which of them are lit is folded from the event stream, record by record, and is never polled"
                     .to_owned(),
-            canvas {
-                id: CANVAS_ID,
-                width: "{CANVAS_WIDTH}",
-                height: "{CANVAS_HEIGHT}",
-                onclick: move |event| {
-                    let point = event.data().element_coordinates();
-                    let hit = pick(
-                        &camera,
-                        picking.clone(),
-                        canvas_pixel(point.x, CANVAS_WIDTH),
-                        canvas_pixel(point.y, CANVAS_HEIGHT),
-                    );
-                    on_select.call(hit);
-                },
+            svg {
+                class: "stage",
+                view_box: "{frame.attr()}",
+                preserve_aspect_ratio: "xMidYMid meet",
+                role: "group",
+                "aria-label": "the buildings of this city",
+                // A click that lands on no building clears the selection.
+                // The groups below stop their own clicks here, so this is
+                // the ground and only the ground.
+                onclick: move |_| on_select.call(None),
+                for face in list.ground.clone() {
+                    polygon {
+                        key: "g{face.points[0].0}-{face.points[0].1}",
+                        points: "{points_attr(&face.points)}",
+                        style: "fill:var(--{face.token})",
+                    }
+                }
+                for prism in painter_order(prisms.clone()) {
+                    g {
+                        key: "{prism.id}",
+                        class: if selected.as_deref() == Some(prism.id.as_str()) { "prism here" } else { "prism" },
+                        tabindex: "0",
+                        role: "button",
+                        "aria-pressed": if selected.as_deref() == Some(prism.id.as_str()) { "true" } else { "false" },
+                        "aria-label": "{prism.id}, {prism.note}",
+                        onclick: {
+                            let name = prism.id.clone();
+                            move |event: MouseEvent| {
+                                event.stop_propagation();
+                                on_select.call(Some(name.clone()));
+                            }
+                        },
+                        onkeydown: {
+                            let name = prism.id.clone();
+                            move |event: KeyboardEvent| {
+                                // Enter and Space, the two keys a role of
+                                // button owes a keyboard.
+                                let pressed = match event.key() {
+                                    Key::Enter => true,
+                                    Key::Character(ref typed) => typed == " ",
+                                    _ => false,
+                                };
+                                if pressed {
+                                    event.prevent_default();
+                                    on_select.call(Some(name.clone()));
+                                }
+                            }
+                        },
+                        title { "{prism.id} - {prism.note}" }
+                        for (index , face) in faces_of(&camera, &prism, selected.as_deref() == Some(prism.id.as_str())).into_iter().enumerate() {
+                            polygon {
+                                key: "f{index}",
+                                class: "body",
+                                points: "{points_attr(&face.points)}",
+                                style: "fill:var(--{face.token})",
+                            }
+                        }
+                        for (index , face) in done_band_of(&camera, &prism).into_iter().enumerate() {
+                            polygon {
+                                key: "d{index}",
+                                class: "done",
+                                points: "{points_attr(&face.points)}",
+                                style: "fill:var(--{face.token})",
+                            }
+                        }
+                        for (index , face) in windows_of(&camera, &prism).into_iter().enumerate() {
+                            polygon {
+                                key: "w{index}",
+                                points: "{points_attr(&face.points)}",
+                                style: "fill:var(--{face.token})",
+                            }
+                        }
+                    }
+                }
+                // Every label after every tower, because a label belongs to
+                // the picture rather than to the building it names: drawn
+                // inside its own group, a far building's name was painted
+                // over by the near building in front of it. The group keeps
+                // the name in its aria-label, so nothing is lost to a
+                // reader who is not looking at pixels.
+                for (index , label) in list.labels.clone().into_iter().enumerate() {
+                    text {
+                        key: "t{index}-{label.id}",
+                        x: "{label.at.0}",
+                        y: "{label.at.1}",
+                        class: if label.leading { "name" } else { "note" },
+                        style: "fill:var(--{label.token})",
+                        "{label.text}"
+                    }
+                }
+                if let Some(points) = list.outline {
+                    // The one stroke in the picture, and the one place the
+                    // accent appears here. On a canvas this had to settle
+                    // for a grey, because `fillStyle` takes a value and a
+                    // custom property is not one.
+                    polygon {
+                        class: "chosen",
+                        points: "{points_attr(&points)}",
+                    }
+                }
             }
             form {
                 class: "new-building",
@@ -1046,51 +1101,6 @@ pub fn CityView(
     }
 }
 
-/// A browser pointer coordinate as a canvas pixel.
-///
-/// Pointer positions arrive as `f64` and there is no fallible conversion
-/// to `i32` to lean on, so the value is clamped into the canvas first:
-/// after the clamp the cast is total, and a click outside the canvas was
-/// never going to hit a prism anyway. A `NaN` clamps to zero, which is
-/// the top-left corner and hits nothing.
-#[expect(
-    clippy::as_conversions,
-    reason = "f64 to i32 has no TryFrom; the value is clamped into the canvas first, and Rust's \
-              float-to-int casts saturate, so this conversion is total"
-)]
-#[must_use]
-fn canvas_pixel(value: f64, bound: u32) -> i32 {
-    let ceiling = f64::from(bound);
-    let bounded = if value.is_nan() {
-        0.0
-    } else {
-        value.clamp(0.0, ceiling)
-    };
-    bounded as i32
-}
-
-/// Canvas identity and size. Fixed rather than measured: a canvas that
-/// resized itself would change the projection under the reader's spatial
-/// memory, which is the one thing the metaphor is for.
-const CANVAS_ID: &str = "city-canvas";
-const CANVAS_WIDTH: u32 = 1000;
-const CANVAS_HEIGHT: u32 = 560;
-
-#[cfg(target_arch = "wasm32")]
-fn paint_mounted(list: &DisplayList) {
-    use wasm_bindgen::JsCast;
-
-    let Some(element) = web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.get_element_by_id(CANVAS_ID))
-    else {
-        return;
-    };
-    if let Ok(canvas) = element.dyn_into::<web_sys::HtmlCanvasElement>() {
-        paint(&canvas, list);
-    }
-}
-
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -1171,23 +1181,6 @@ mod tests {
     }
 
     #[test]
-    fn what_is_drawn_is_what_can_be_picked() {
-        let buildings = vec![planned("lab", 1, 8, Vec::new())];
-        let prisms = prisms_of(&buildings, &BTreeSet::new());
-        let camera = Camera::fit(CANVAS_WIDTH, CANVAS_HEIGHT, CITY_EXTENT);
-        let list = draw(&camera, prisms.clone(), None);
-        let top = list.faces.first().expect("a building has faces");
-        let (x, y) = top.points[0];
-        let (bx, by) = top.points[2];
-        let hit = pick(&camera, prisms, (x + bx) / 2, (y + by) / 2);
-        assert_eq!(
-            hit.as_deref(),
-            Some("lab"),
-            "the middle of a face belongs to the prism that face came from"
-        );
-    }
-
-    #[test]
     fn sending_work_needs_a_room_a_task_and_a_definition_of_done() {
         assert!(dispatch_command("lab", "fix the timer", "the test passes").is_some());
         assert!(
@@ -1222,128 +1215,137 @@ mod tests {
     }
 
     #[test]
-    fn the_pick_follows_the_picture_at_every_stop_and_every_offset() {
-        // The property the whole camera exists to keep: however the view
-        // is zoomed or moved, clicking the middle of a drawn face names
-        // the building that face came from. Projection and inversion are
-        // one pair of methods, and this is the assertion that says so.
-        let buildings = vec![
-            planned("lab", 1, 8, Vec::new()),
-            planned("mill", 2, 4, Vec::new()),
-        ];
-        let prisms = prisms_of(&buildings, &BTreeSet::new());
-        for stop in 0..ZOOM_STOPS.len() {
-            for (dx, dy) in [(0, 0), (37, -14), (-120, 60)] {
-                let camera = Camera::fit(CANVAS_WIDTH, CANVAS_HEIGHT, CITY_EXTENT)
-                    .at_stop(stop)
-                    .panned_by(dx, dy);
-                let list = draw(&camera, prisms.clone(), None);
-                for face in &list.faces {
-                    let (ax, ay) = face.points[0];
-                    let (bx, by) = face.points[2];
-                    let hit = pick(&camera, prisms.clone(), (ax + bx) / 2, (ay + by) / 2);
-                    assert_eq!(
-                        hit.as_deref(),
-                        Some(face.id.as_str()),
-                        "stop {stop}, pan ({dx}, {dy}): the picture and the pick disagree"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn a_stop_past_the_last_one_stops_rather_than_wrapping_to_the_smallest() {
-        let base = Camera::fit(CANVAS_WIDTH, CANVAS_HEIGHT, CITY_EXTENT);
-        let last = base.at_stop(ZOOM_STOPS.len() - 1);
-        assert_eq!(base.at_stop(ZOOM_STOPS.len() + 5), last);
-        assert!(last.tile_width > base.at_stop(0).tile_width);
-    }
-
-    #[test]
-    fn a_tile_stays_twice_as_wide_as_it_is_tall_at_every_stop() {
-        for stop in 0..ZOOM_STOPS.len() {
-            let camera = Camera::fit(1920, 1080, 8).at_stop(stop);
-            assert_eq!(
-                camera.tile_width,
-                camera.tile_height * 2,
-                "stop {stop}: hit testing stops inverting drawing the moment this breaks"
-            );
-        }
-    }
-
-    #[test]
-    fn panning_moves_the_city_and_leaves_its_shape_alone() {
-        let camera = Camera::fit(CANVAS_WIDTH, CANVAS_HEIGHT, CITY_EXTENT);
-        let moved = camera.panned_by(40, -25);
-        assert_eq!(camera.project(3, 4).0 + 40, moved.project(3, 4).0);
-        assert_eq!(camera.project(3, 4).1 - 25, moved.project(3, 4).1);
-        assert_eq!(
-            moved.unproject(moved.project(3, 4).0, moved.project(3, 4).1),
-            (3, 4),
-            "a round trip through a moved camera is still the identity"
-        );
-    }
-
-    #[test]
-    fn a_pointer_outside_the_canvas_lands_on_its_edge_and_never_off_it() {
-        assert_eq!(canvas_pixel(12.7, CANVAS_WIDTH), 12);
-        assert_eq!(canvas_pixel(-40.0, CANVAS_WIDTH), 0);
-        assert_eq!(
-            canvas_pixel(f64::from(u32::MAX), CANVAS_WIDTH),
-            i32::try_from(CANVAS_WIDTH).unwrap()
-        );
-        assert_eq!(canvas_pixel(f64::NAN, CANVAS_HEIGHT), 0);
-    }
-
-    #[test]
-    fn a_tile_is_always_twice_as_wide_as_it_is_tall() {
-        for (width, height, extent) in [(1920, 1080, 8), (800, 600, 3), (320, 240, 16)] {
-            let camera = Camera::fit(width, height, extent);
-            assert_eq!(
-                camera.tile_width,
-                camera.tile_height * TILE_RATIO,
-                "the projection is 2:1 at every fit"
-            );
-        }
-    }
-
-    #[test]
-    fn a_tiny_viewport_still_yields_a_drawable_tile() {
-        let camera = Camera::fit(1, 1, 1000);
-        assert!(camera.tile_width >= 8, "clamped rather than zero");
-        assert!(camera.tile_height >= 1);
-    }
-
-    #[test]
-    fn every_fit_lands_on_a_multiple_of_four() {
-        // Two halvings separate a tile from a pixel offset. Anything else
-        // makes the projection lossy and hit testing stops inverting it.
-        for width in [1, 7, 9, 101, 321, 1920, 4000] {
-            for height in [1, 13, 99, 1080] {
-                let camera = Camera::fit(width, height, 8);
-                assert_eq!(
-                    camera.tile_width % 4,
-                    0,
-                    "a {width}x{height} viewport produced {}",
-                    camera.tile_width
+    fn the_window_holds_everything_that_was_drawn() {
+        // What replaced "a fitted city is inside the viewport it was
+        // fitted to". The window is now derived from the drawing rather
+        // than the drawing fitted into a window, so the property is
+        // stronger: it cannot fail for a city of any shape.
+        let list = draw(&Camera::tiles(), city(), None);
+        let frame = view_box(&list, 0, (0, 0));
+        let right = frame
+            .x
+            .saturating_add(i32::try_from(frame.width).unwrap_or(i32::MAX));
+        let bottom = frame
+            .y
+            .saturating_add(i32::try_from(frame.height).unwrap_or(i32::MAX));
+        for face in list.ground.iter().chain(list.faces.iter()) {
+            for (x, y) in face.points {
+                assert!(
+                    x >= frame.x && x <= right && y >= frame.y && y <= bottom,
+                    "({x},{y}) escaped the window {}",
+                    frame.attr()
                 );
-                assert_eq!(camera.tile_width, camera.tile_height * TILE_RATIO);
             }
         }
     }
 
     #[test]
-    fn hit_testing_inverts_drawing_because_they_share_one_geometry() {
-        let camera = Camera::fit(1920, 1080, 8);
-        for (u, v) in [(0, 0), (3, 1), (7, 7), (2, 6)] {
-            let (x, y) = camera.project(u, v);
-            assert_eq!(
-                camera.unproject(x, y),
-                (u, v),
-                "projecting then hit-testing must return the same tile"
-            );
-        }
+    fn zooming_crops_rather_than_magnifying_and_the_last_stop_stops() {
+        // With the window fitted to the drawing, scaling every tile scales
+        // the window with it and the picture on screen does not move. So a
+        // stop has to take a smaller window, and this is the assertion
+        // that keeps somebody from "fixing" it back into a tile scale.
+        let list = draw(&Camera::tiles(), city(), None);
+        let whole = view_box(&list, 0, (0, 0));
+        let closer = view_box(&list, 1, (0, 0));
+        let closest = view_box(&list, 2, (0, 0));
+        assert!(closer.width < whole.width && closer.height < whole.height);
+        assert!(closest.width < closer.width);
+        // Past the end it stops rather than wrapping round to the widest
+        // view: a control that cannot go further should stop.
+        assert_eq!(view_box(&list, 99, (0, 0)), closest);
+    }
+
+    #[test]
+    fn panning_moves_the_window_and_leaves_the_shapes_alone() {
+        let list = draw(&Camera::tiles(), city(), None);
+        let still = view_box(&list, 1, (0, 0));
+        let moved = view_box(&list, 1, (PAN_STEP, -PAN_STEP));
+        assert_eq!(moved.x, still.x + PAN_STEP);
+        assert_eq!(moved.y, still.y - PAN_STEP);
+        assert_eq!((moved.width, moved.height), (still.width, still.height));
+        // The drawing itself does not know it was panned.
+        assert_eq!(draw(&Camera::tiles(), city(), None), list);
+    }
+
+    #[test]
+    fn a_tile_is_twice_as_wide_as_it_is_tall() {
+        // Two halvings happen between a tile and a point, so an odd width
+        // breaks the projection. The constant is the only place this can
+        // now go wrong.
+        let camera = Camera::tiles();
+        assert_eq!(camera.tile_height * 2, camera.tile_width);
+        assert_eq!(TILE_WIDTH % 4, 0);
+    }
+
+    #[test]
+    fn the_lit_band_rises_with_the_plan_and_never_above_the_roof() {
+        let camera = Camera::tiles();
+        let tower = |done: u32| Prism {
+            id: "lab".to_owned(),
+            u: 0,
+            v: 0,
+            storeys: 4,
+            done,
+            active: false,
+            note: String::new(),
+        };
+        let top_of = |prism: &Prism| {
+            done_band_of(&camera, prism)
+                .first()
+                .map(|face| face.points[0].1)
+        };
+        let low = top_of(&tower(1)).unwrap();
+        let high = top_of(&tower(3)).unwrap();
+        assert!(high < low, "more done means the band reaches higher");
+        let roof = faces_of(&camera, &tower(4), false)[0].points[0].1;
+        assert!(
+            top_of(&tower(4)).unwrap() >= roof,
+            "a full band stops at the roof rather than growing past it"
+        );
+    }
+
+    #[test]
+    fn a_building_with_nothing_done_gets_no_band_rather_than_an_empty_one() {
+        // Not the same statement: a band of zero height claims a ratio,
+        // and a building with no denominator has none to claim.
+        let camera = Camera::tiles();
+        let unplanned = Prism {
+            id: "lab".to_owned(),
+            u: 0,
+            v: 0,
+            storeys: 1,
+            done: 0,
+            active: false,
+            note: String::new(),
+        };
+        assert!(done_band_of(&camera, &unplanned).is_empty());
+        assert_eq!(
+            done_storeys(
+                Progress::Unplanned(UnplannedProgress {
+                    steps: 9,
+                    budget: channels::BudgetUse::default(),
+                }),
+                4
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn a_plan_one_row_short_does_not_look_finished_from_across_the_city() {
+        // The only distance this picture is read from.
+        let planned = |done: u32, total: u32| planned("lab", done, total, Vec::new()).progress;
+        assert_eq!(done_storeys(planned(6, 7), 4), 3, "short of done is short");
+        assert_eq!(done_storeys(planned(7, 7), 4), 4, "and done is done");
+    }
+
+    #[test]
+    fn one_shape_is_spelled_one_way() {
+        assert_eq!(
+            points_attr(&[(0, 1), (2, 3), (4, 5), (6, 7)]),
+            "0,1 2,3 4,5 6,7"
+        );
     }
 
     #[test]
@@ -1374,6 +1376,7 @@ mod tests {
             u,
             v,
             storeys: 1,
+            done: 0,
             active: false,
             note: "1/2".to_owned(),
         };
@@ -1393,6 +1396,7 @@ mod tests {
             u,
             v,
             storeys: 1,
+            done: 0,
             active: false,
             note: "1/2".to_owned(),
         };
@@ -1422,6 +1426,7 @@ mod tests {
                     u,
                     v,
                     storeys: storeys(10u64.saturating_mul(u64::try_from(n).unwrap_or(0) + 1)),
+                    done: 0,
                     active: n == 0,
                     note: "3/7".to_owned(),
                 }
@@ -1430,43 +1435,8 @@ mod tests {
     }
 
     #[test]
-    fn a_fitted_city_is_inside_the_viewport_it_was_fitted_to() {
-        // The defect this pins: `fit` computed a tile size and left the
-        // origin at (0, 0), so every tile whose v exceeded its u projected
-        // to a negative x and the page showed an empty canvas with one
-        // grey sliver in the corner. Fitting means fitting.
-        let camera = Camera::fit(CANVAS_WIDTH, CANVAS_HEIGHT, CITY_EXTENT);
-        let last = i32::try_from(CITY_EXTENT - 1).unwrap();
-        let tall = Prism {
-            id: "lab".to_owned(),
-            u: 0,
-            v: 0,
-            storeys: 8,
-            active: true,
-            note: "7/11".to_owned(),
-        };
-        let mut points = vec![];
-        for (u, v) in [(0, 0), (last, 0), (0, last), (last, last)] {
-            points.push(camera.project(u, v));
-        }
-        for face in faces_of(&camera, &tall, false) {
-            points.extend(face.points);
-        }
-        for (x, y) in points {
-            assert!(
-                (0..=i32::try_from(CANVAS_WIDTH).unwrap()).contains(&x),
-                "x {x} is outside the canvas"
-            );
-            assert!(
-                (0..=i32::try_from(CANVAS_HEIGHT).unwrap()).contains(&y),
-                "y {y} is outside the canvas"
-            );
-        }
-    }
-
-    #[test]
     fn the_same_city_draws_the_same_shapes_in_the_same_order() {
-        let camera = Camera::fit(1920, 1080, 8);
+        let camera = Camera::tiles();
         let first = draw(&camera, city(), None);
         let mut shuffled = city();
         shuffled.reverse();
@@ -1488,62 +1458,14 @@ mod tests {
     }
 
     #[test]
-    fn a_click_lands_on_the_building_a_person_sees_there() {
-        let camera = Camera::fit(1920, 1080, 8);
-        for prism in city() {
-            // The centre of a top face belongs to that prism and no other.
-            let top = faces_of(&camera, &prism, false)[0].points;
-            let x = (top[1].0 + top[3].0) / 2;
-            let y = (top[0].1 + top[2].1) / 2;
-            assert_eq!(
-                pick(&camera, city(), x, y).as_deref(),
-                Some(prism.id.as_str()),
-                "picking reads the faces drawing wrote"
-            );
-        }
-        // Far outside the city, nothing is picked rather than the nearest.
-        assert_eq!(pick(&camera, city(), 100_000, 100_000), None);
-    }
-
-    #[test]
-    fn where_two_buildings_overlap_the_one_in_front_is_picked() {
-        let camera = Camera::fit(1920, 1080, 8);
-        // Same tile column, one nearer: their silhouettes overlap.
-        let behind = Prism {
-            id: "behind".to_owned(),
-            u: 2,
-            v: 2,
-            storeys: 4,
-            active: false,
-            note: "1/2".to_owned(),
-        };
-        let front = Prism {
-            id: "front".to_owned(),
-            u: 3,
-            v: 3,
-            storeys: 1,
-            active: false,
-            note: "1/2".to_owned(),
-        };
-        let prisms = vec![behind.clone(), front.clone()];
-        let list = draw(&camera, prisms.clone(), None);
-        let last = list.faces.last().unwrap();
-        assert_eq!(last.id, "front", "the nearer prism is painted last");
-
-        let top = faces_of(&camera, &front, false)[0].points;
-        let x = (top[1].0 + top[3].0) / 2;
-        let y = (top[0].1 + top[2].1) / 2;
-        assert_eq!(pick(&camera, prisms, x, y).as_deref(), Some("front"));
-    }
-
-    #[test]
     fn a_taller_building_stands_higher_and_a_selected_one_is_lighter() {
-        let camera = Camera::fit(1920, 1080, 8);
+        let camera = Camera::tiles();
         let short = Prism {
             id: "a".to_owned(),
             u: 1,
             v: 1,
             storeys: 1,
+            done: 0,
             active: false,
             note: "1/2".to_owned(),
         };

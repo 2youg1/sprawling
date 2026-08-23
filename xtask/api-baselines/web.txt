@@ -8,12 +8,14 @@ impl web::Cluster
 impl web::CostDimension
 impl web::Feed
 impl web::Filter
+impl web::Frame
 impl web::Link
 impl web::ProviderHealth
 impl web::ReturnPath
 impl web::RunPhase
 impl web::Snapshot
 impl web::Trend
+pub const fn web::Camera::tiles() -> Self
 pub const web::ACCENT_CHROMA_PERCENT: u16
 pub const web::ALERT_CHROMA_PERCENT: u16
 pub const web::CHROMA_COEFFICIENT: &str
@@ -28,11 +30,13 @@ pub const web::HUE_AXIS: u16
 pub const web::INFORMATION_FLOOR: &str
 pub const web::L_CEILING: u16
 pub const web::L_FLOOR: u16
+pub const web::MARGIN: i32
 pub const web::PAGE_ROWS: usize
 pub const web::PROGRESS_DONE: (&str, &str)
 pub const web::SERIES_DASHES: [&str; 4]
 pub const web::SERIES_PER_CHART_MAX: usize
 pub const web::SERIES_WIDTHS: [&str; 4]
+pub const web::TILE_WIDTH: u32
 pub const web::WINDOW: usize
 pub const web::ZOOM_STOPS: [u32; 3]
 pub enum web::AlertKind
@@ -66,12 +70,7 @@ pub fn web::BarState::desaturated_lightness(self) -> u16
 pub fn web::BarState::fill_token(self) -> &'static str
 pub fn web::BarState::has_end_rule(self) -> bool
 pub fn web::BuildingView(web::building_view::BuildingViewProps) -> dioxus_core::innerlude::Element
-pub fn web::Camera::at_stop(self, usize) -> Self
-pub fn web::Camera::fit(u32, u32, u32) -> Self
-pub fn web::Camera::origin(&self) -> (i32, i32)
-pub fn web::Camera::panned_by(self, i32, i32) -> Self
 pub fn web::Camera::project(&self, i32, i32) -> (i32, i32)
-pub fn web::Camera::unproject(&self, i32, i32) -> (i32, i32)
 pub fn web::Cluster::count(&self) -> usize
 pub fn web::Cluster::waiting_since(&self) -> core::option::Option<kernel::event::TimeMs>
 pub fn web::CostDimension::all() -> [Self; 5]
@@ -87,6 +86,7 @@ pub fn web::Feed::push(&mut self, &kernel::event::EventRecord) -> bool
 pub fn web::Feed::replay<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>, core::option::Option<kernel::event::RunId>, bool) -> web::Feed
 pub fn web::Feed::stop_following(&mut self)
 pub fn web::Filter::keeps(&self, &kernel::event::EventRecord) -> bool
+pub fn web::Frame::attr(&self) -> alloc::string::String
 pub fn web::LedgerView(web::ledger_view::LedgerViewProps) -> dioxus_core::innerlude::Element
 pub fn web::Link::advance(&mut self, web::LinkEvent) -> web::LinkAction
 pub fn web::Link::city(&self) -> core::option::Option<&kernel::address::Address>
@@ -139,6 +139,7 @@ pub fn web::describe(&kernel::event::EventRecord) -> alloc::string::String
 pub fn web::destinations(&web::Snapshot) -> alloc::vec::Vec<web::NavGroup>
 pub fn web::dispatch_command(&str, &str, &str, &str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::distinguishable_without_colour() -> bool
+pub fn web::done_band_of(&web::Camera, &web::Prism) -> alloc::vec::Vec<web::Face>
 pub fn web::draw(&web::Camera, alloc::vec::Vec<web::Prism>, core::option::Option<&str>) -> web::DisplayList
 pub fn web::drawable(usize) -> bool
 pub fn web::endpoint_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::EndpointRow>
@@ -165,8 +166,8 @@ pub fn web::page<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a k
 pub fn web::painter_order(alloc::vec::Vec<web::Prism>) -> alloc::vec::Vec<web::Prism>
 pub fn web::per_mille(u16) -> alloc::string::String
 pub fn web::per_mille_of(u32, u32) -> u16
-pub fn web::pick(&web::Camera, alloc::vec::Vec<web::Prism>, i32, i32) -> core::option::Option<alloc::string::String>
 pub fn web::place(&str, u32) -> (i32, i32)
+pub fn web::points_attr(&[(i32, i32); 4]) -> alloc::string::String
 pub fn web::policy_admits(&kernel::approval::ApprovalItem) -> bool
 pub fn web::read_frame(&str) -> web::LinkEvent
 pub fn web::ready(&web::AttachForm) -> web::AttachReadiness
@@ -190,6 +191,7 @@ pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::T
 pub fn web::to_fragment(&web::View) -> alloc::string::String
 pub fn web::track_token() -> &'static str
 pub fn web::url_is_safe(&str) -> bool
+pub fn web::view_box(&web::DisplayList, usize, (i32, i32)) -> web::Frame
 pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
 pub fn web::waiting_line(&web::Snapshot) -> alloc::string::String
 pub fn web::watchable(&web::Snapshot) -> alloc::vec::Vec<(kernel::event::RunId, alloc::string::String)>
@@ -210,6 +212,7 @@ pub struct web::EndpointRow
 pub struct web::Face
 pub struct web::Feed
 pub struct web::Filter
+pub struct web::Frame
 pub struct web::Line
 pub struct web::Link
 pub struct web::NavGroup
@@ -266,13 +269,8 @@ pub web::BinRow::discarded_at: kernel::event::TimeMs
 pub web::BinRow::restored: bool
 pub web::BinRow::return_path: web::ReturnPath
 pub web::BinRow::what: alloc::string::String
-pub web::Camera::extent: u32
-pub web::Camera::pan_x: i32
-pub web::Camera::pan_y: i32
 pub web::Camera::tile_height: u32
 pub web::Camera::tile_width: u32
-pub web::Camera::viewport_height: u32
-pub web::Camera::viewport_width: u32
 pub web::Cluster::answer_individually: bool
 pub web::Cluster::members: alloc::vec::Vec<kernel::approval::ApprovalItem>
 pub web::Cluster::summary: alloc::string::String
@@ -309,6 +307,10 @@ pub web::Filter::actor: alloc::string::String
 pub web::Filter::kinds: alloc::vec::Vec<kernel::event::EventKind>
 pub web::Filter::since: core::option::Option<kernel::event::TimeMs>
 pub web::Filter::until: core::option::Option<kernel::event::TimeMs>
+pub web::Frame::height: u32
+pub web::Frame::width: u32
+pub web::Frame::x: i32
+pub web::Frame::y: i32
 pub web::Leaf::Archive
 pub web::Leaf::Doc(alloc::string::String)
 pub web::Leaf::Room(alloc::string::String)
@@ -346,6 +348,7 @@ pub web::Page::filtered_out: usize
 pub web::Page::next_from: core::option::Option<kernel::event::Seq>
 pub web::Page::rows: alloc::vec::Vec<web::Row>
 pub web::Prism::active: bool
+pub web::Prism::done: u32
 pub web::Prism::id: alloc::string::String
 pub web::Prism::note: alloc::string::String
 pub web::Prism::storeys: u32
