@@ -158,11 +158,12 @@ impl DelegateTool {
             desk,
             meta: ToolMeta {
                 name: ToolName::parse("delegate")?,
-                disclosure: "Hand one piece of work to another agent in this building, one level \
-                             down. Only when the person has allowed it."
+                disclosure: "Hand one piece of work to another agent in this building, one \
+                             level down. The person is asked the first time; until they \
+                             answer, the call comes back pending."
                     .to_owned(),
                 params: Payload::new(params)?,
-                effect: Effect::Read,
+                effect: Effect::Spawn,
                 cost_tier: CostTier::Heavy,
                 timeout: None,
                 render: RenderIntent::Generic,

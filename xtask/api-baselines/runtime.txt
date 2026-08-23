@@ -308,6 +308,7 @@ pub fn runtime::stamp(kernel::event::TimeMs, &[kernel::config::ClockZone]) -> co
 pub fn runtime::structure_of(&str) -> alloc::vec::Vec<runtime::digest::StructureNode>
 pub fn runtime::tools::parse_arm(&serde_json::map::Map<alloc::string::String, serde_json::value::Value>) -> core::result::Result<kernel::tool::ExecArm, kernel::error::AxError>
 pub fn runtime::tools::version_of(&[u8]) -> alloc::string::String
+pub fn runtime::turn::ToolBench::for_job(self, kernel::address::Address, kernel::locator::Locator) -> runtime::turn::ToolBench
 pub fn runtime::turn::ToolBench::grant(&mut self, kernel::approval::ClusterKey)
 pub fn runtime::turn::ToolBench::invoke(&mut self, &kernel::tool::ToolCall, &kernel::idem::IdemKey, &kernel::gate::GateContext) -> core::result::Result<runtime::turn::BenchOutcome, kernel::error::AxError>
 pub fn runtime::turn::ToolBench::meta_of(&self, &str) -> core::option::Option<&kernel::tool::ToolMeta>

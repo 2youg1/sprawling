@@ -16,11 +16,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use kernel::{
-    ApprovalItem, AxCode, AxError, B3Hash, BuildingPolicy, ChatMessage, ChatRequest, ContentBlock,
-    DedupVerdict, DiscardForecast, Effect, EgressOutcome, EgressTarget, EventDraft, EventKind,
-    EventRef, GateContext, GateOutcome, IdemKey, Ledger, Model, ModelRequest, ModelReturn, Payload,
-    Role, RunId, TaintSet, TimeMs, Tool, ToolCall, ToolDef, ToolOutcome, WriteDomain,
-    content_from_message,
+    Address, ApprovalItem, AxCode, AxError, B3Hash, BuildingPolicy, ChatMessage, ChatRequest,
+    ContentBlock, DedupVerdict, DiscardForecast, Effect, EgressOutcome, EgressTarget, EventDraft,
+    EventKind, EventRef, GateContext, GateOutcome, IdemKey, Ledger, Locator, Model, ModelRequest,
+    ModelReturn, Payload, Role, RunId, TaintSet, TimeMs, Tool, ToolCall, ToolDef, ToolOutcome,
+    WriteDomain, content_from_message,
 };
 use serde_json::{Map, Value};
 
@@ -1024,6 +1024,14 @@ pub struct ToolBench {
     /// and a gate that read history mid-wave would be a second reader
     /// of the thing the driver is writing.
     granted: Vec<kernel::ClusterKey>,
+    /// What this run was given to do, as the approvals list refers to
+    /// it. An item that named no artifact would leave a person deciding
+    /// about a spawn with nothing to open.
+    job: Option<Locator>,
+    /// Where this run works, which is what a delegation approval
+    /// clusters by: the person is asked whether this resident may hand
+    /// work down, once.
+    asking: Option<Address>,
 }
 
 /// What the bench decided, alongside what the tool produced.
@@ -1058,7 +1066,22 @@ impl ToolBench {
             checkpoint: None,
             scope: String::new(),
             granted: Vec::new(),
+            job: None,
+            asking: None,
         }
+    }
+
+    /// Hands the bench the work it serves: where the run stands and what
+    /// it was given to do.
+    ///
+    /// Without it a spawn is refused rather than allowed, because an
+    /// approval item that named neither the asker nor an artifact would
+    /// reach a person as a question about nothing.
+    #[must_use]
+    pub fn for_job(mut self, asking: Address, job: Locator) -> ToolBench {
+        self.asking = Some(asking);
+        self.job = Some(job);
+        self
     }
 
     /// Records that this cluster has already been allowed.
@@ -1239,6 +1262,44 @@ impl ToolBench {
                     }
                 }
             }
+            Effect::Spawn => {
+                let (Some(asking), Some(job)) = (self.asking.as_ref(), self.job.as_ref()) else {
+                    return Err(AxError::failure(
+                        AxCode::ToolUnavailable,
+                        "invoke tool",
+                        format!("`{name}` declares Spawn and this bench was built without a job"),
+                    )
+                    .with_recovery(
+                        "build the bench with `for_job`; a spawn a person cannot be asked about \
+                         is a spawn nobody allowed",
+                    ));
+                };
+                // The room is the tool's own argument, so the person is
+                // told where the work is going without this layer
+                // learning the tool's schema: an unreadable room reads
+                // as the asking address, and the item still names a real
+                // place.
+                let room = call
+                    .args
+                    .as_map()
+                    .get("room")
+                    .and_then(Value::as_str)
+                    .and_then(|raw| Address::parse(raw).ok())
+                    .unwrap_or_else(|| asking.clone());
+                match kernel::delegation(ctx, asking, &room, job, &self.taint) {
+                    GateOutcome::Allow => {}
+                    GateOutcome::Deny { refusal } => {
+                        return Ok(BenchOutcome::Refused { refusal });
+                    }
+                    GateOutcome::Escalate { item } => {
+                        if !self.granted.contains(&item.cluster_key) {
+                            return Ok(BenchOutcome::Pending {
+                                item: Box::new(item),
+                            });
+                        }
+                    }
+                }
+            }
             Effect::Spend => {
                 // No Spend tool instance exists until the egress proxy
                 // lands (P1); the door is wired so the first one meets it.
@@ -1357,6 +1418,95 @@ mod bench_tests {
             std::fs::read_to_string(tmp.path().join("work/a.txt")).unwrap(),
             "two\n"
         );
+    }
+
+    /// A tool that declares `Spawn` and nothing else. The bench's job
+    /// here is the door, not the tool, so the tool does as little as a
+    /// tool can.
+    struct SpawnTool(kernel::ToolMeta);
+
+    impl SpawnTool {
+        fn new() -> SpawnTool {
+            SpawnTool(kernel::ToolMeta {
+                name: kernel::ToolName::parse("delegate").unwrap(),
+                disclosure: "hand work down".to_owned(),
+                params: Payload::empty(),
+                effect: Effect::Spawn,
+                cost_tier: kernel::CostTier::Heavy,
+                timeout: None,
+                render: kernel::RenderIntent::Generic,
+                temporal: kernel::Temporal::Timeless,
+            })
+        }
+    }
+
+    impl Tool for SpawnTool {
+        fn meta(&self) -> &kernel::ToolMeta {
+            &self.0
+        }
+
+        fn invoke(&mut self, _call: &ToolCall) -> Result<ToolOutcome, AxError> {
+            Ok(ToolOutcome {
+                result: Payload::empty(),
+            })
+        }
+    }
+
+    fn spawn_call() -> ToolCall {
+        let mut args = Map::new();
+        args.insert("room".to_owned(), Value::String("work/helper".to_owned()));
+        ToolCall {
+            id: "c1".to_owned(),
+            name: kernel::ToolName::parse("delegate").unwrap(),
+            args: Payload::new(args).unwrap(),
+        }
+    }
+
+    fn spawn_bench() -> ToolBench {
+        let domain = WriteDomain::new(vec![Address::parse("work").unwrap()]).unwrap();
+        let mut bench = ToolBench::new(domain).for_job(
+            Address::parse("work/room1").unwrap(),
+            Locator::parse(&format!("file:work/room1/JOB.md@{}", "a".repeat(40))).unwrap(),
+        );
+        bench.register(Box::new(SpawnTool::new())).unwrap();
+        bench
+    }
+
+    /// City.md told a model not to delegate unless the person allowed
+    /// it, and nothing checked. Now the first spawn stops at a door.
+    #[test]
+    fn a_spawn_waits_for_the_person_and_a_granted_cluster_walks_through() {
+        let mut bench = spawn_bench();
+        let waiting = bench.invoke(&spawn_call(), &key(1), &ctx()).unwrap();
+        let BenchOutcome::Pending { item } = waiting else {
+            panic!("the first spawn of a run is the person's to allow");
+        };
+        assert_eq!(item.cluster_key.class, kernel::ApprovalClass::Delegation);
+        assert_eq!(
+            item.cluster_key.detail, "work/room1",
+            "the cluster is the resident asking, so one answer covers its whole session"
+        );
+        assert!(item.action_desc.contains("work/helper"), "{item:?}");
+
+        let mut allowed = spawn_bench();
+        allowed.grant(item.cluster_key.clone());
+        assert!(matches!(
+            allowed.invoke(&spawn_call(), &key(1), &ctx()).unwrap(),
+            BenchOutcome::Ran { .. }
+        ));
+    }
+
+    /// Fail-closed: a bench nobody told what work it serves cannot mint
+    /// an item a person could answer, so it refuses rather than letting
+    /// the spawn through unasked.
+    #[test]
+    fn a_spawn_on_a_bench_with_no_job_is_refused_rather_than_waved_through() {
+        let domain = WriteDomain::new(vec![Address::parse("work").unwrap()]).unwrap();
+        let mut bench = ToolBench::new(domain);
+        bench.register(Box::new(SpawnTool::new())).unwrap();
+        let err = bench.invoke(&spawn_call(), &key(1), &ctx()).unwrap_err();
+        assert_eq!(*err.code(), AxCode::ToolUnavailable);
+        assert!(err.recovery().contains("for_job"));
     }
 
     #[test]

@@ -375,6 +375,7 @@ pub fn kernel::commitment(core::option::Option<&kernel::CommitmentDecision>, &ke
 pub fn kernel::content_from_message(&kernel::Payload) -> core::result::Result<alloc::vec::Vec<kernel::ContentBlock>, kernel::AxError>
 pub fn kernel::decide_discard(&kernel::DiscardRequest, &kernel::Registry) -> kernel::DiscardVerdict
 pub fn kernel::dedup(&alloc::collections::btree::set::BTreeSet<kernel::IdemKey>, &kernel::IdemKey) -> kernel::DedupVerdict
+pub fn kernel::delegation(&kernel::GateContext, &kernel::Address, &kernel::Address, &kernel::Locator, &kernel::TaintSet) -> kernel::GateOutcome
 pub fn kernel::detect_conflict(&[kernel::GoalEntry], &kernel::GoalEntry) -> kernel::GoalVerdict
 pub fn kernel::domain(&kernel::WriteDomain, &kernel::Address, &kernel::TaintSet) -> kernel::GateOutcome
 pub fn kernel::egress(&[kernel::SecretSpan], &kernel::EgressTarget, bool) -> kernel::EgressOutcome
@@ -408,6 +409,7 @@ pub kernel::Answerer::Resident(kernel::ResidentId)
 pub kernel::ApprovalClass::AgentQuestion
 pub kernel::ApprovalClass::BudgetLimit
 pub kernel::ApprovalClass::Commitment
+pub kernel::ApprovalClass::Delegation
 pub kernel::ApprovalClass::DiscardEscalate
 pub kernel::ApprovalItem::action_desc: alloc::string::String
 pub kernel::ApprovalItem::actor: alloc::string::String
@@ -554,6 +556,7 @@ pub kernel::Effect::Connector
 pub kernel::Effect::Connector::label: kernel::ServerLabel
 pub kernel::Effect::Egress
 pub kernel::Effect::Read
+pub kernel::Effect::Spawn
 pub kernel::Effect::Spend
 pub kernel::Effect::Write
 pub kernel::Effect::Write::domain: kernel::Address

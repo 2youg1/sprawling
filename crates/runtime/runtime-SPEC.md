@@ -498,12 +498,17 @@ impl ToolBench {
     /// Gate routing by declared Effect（Handoff 裁定 10：收进回合层，executor 归还薄形）：
     /// exec 先 forecast（Suspected → **强制 checkpoint 先行**，见下）；Write → domain 门；
     /// Egress → egress 门（target 由调用自报 host，不自报即 E_INVALID_ARGS）；Spend → 门已接但 P1 前无实例；
+    /// Spawn → delegation 门（恒 Escalate；granted 命中即放行，未命中即 Pending）；
     /// Deny → 以 refusal 作 tool_result 回流（不吞掉回合）；Escalate → BenchOutcome::Pending 回流（S3 无应答面）。
     pub fn invoke(&mut self, call: &ToolCall, key: &IdemKey, ctx: &GateContext)
         -> Result<BenchOutcome, AxError>;
     /// S3.14 长入：包信封的调用者要读 `temporal` 才知道时钟行该不该发。
     pub fn meta_of(&self, name: &str) -> Option<&ToolMeta>;
     pub fn with_checkpoint(self, checkpoint: Checkpoint, scope: &str) -> ToolBench;
+    /// P1.04：本 bench 服务的那份活。Spawn 门要铸一个人答得出的条目，
+    /// 条目要有 actor（问谁）与 artifact（看什么）；两者都不在一次工具调用里。
+    /// 未给即拒（fail-closed）——一个人问不到的派生就是没人批准的派生。
+    pub fn for_job(self, asking: Address, job: Locator) -> ToolBench;
     /// P3.03: a cluster the person already allowed. An escalation whose
     /// cluster is granted runs instead of parking, which is what lets an
     /// answer carry the work on rather than send it back to the door it

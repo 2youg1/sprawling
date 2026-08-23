@@ -408,6 +408,41 @@ pub fn discard(
     }
 }
 
+/// The Delegation door: a second agent starts because a person allowed
+/// it, not because a prompt asked politely.
+///
+/// Always escalates. Whether this person has already said yes is the
+/// caller's own record of what was granted - the same shape the write
+/// door uses - and keeping the two apart is what lets one answer cover a
+/// cluster instead of one call.
+///
+/// The cluster detail is the *asking* address rather than the room being
+/// opened: the person is being asked whether this resident may hand work
+/// to anybody, which is the question, and asking again per room would
+/// train them to click through it.
+pub fn delegation(
+    ctx: &GateContext,
+    asking: &Address,
+    room: &Address,
+    artifact: &Locator,
+    taint: &TaintSet,
+) -> GateOutcome {
+    GateOutcome::Escalate {
+        item: item(
+            ctx,
+            ApprovalClass::Delegation,
+            asking.as_str().to_owned(),
+            format!(
+                "{} wants to hand work to another agent, in {}",
+                asking.as_str(),
+                room.as_str()
+            ),
+            artifact.clone(),
+            !taint.is_empty(),
+        ),
+    }
+}
+
 /// The spawn admission: delegates do not delegate (10.1). The refusal
 /// teaches the alternative instead of hiding the tool.
 pub fn spawn(parent: Depth, kind: &DelegateKind) -> GateOutcome {

@@ -53,6 +53,12 @@ pub enum ApprovalClass {
     BudgetLimit,
     DiscardEscalate,
     AgentQuestion,
+    /// Handing work to a second agent. No `PolicyClass` variant, which
+    /// is the type-level half of "a standing rule never grants this":
+    /// the answer holds for the cluster the person was shown and
+    /// expires with the process, because a permanent waiver on
+    /// delegation is the one waiver that can spend without asking again.
+    Delegation,
 }
 
 /// The clustering key: class + free detail. One human verdict on a key

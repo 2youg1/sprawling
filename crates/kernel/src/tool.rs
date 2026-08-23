@@ -146,6 +146,11 @@ pub enum Effect {
     Connector {
         label: ServerLabel,
     },
+    /// Starts a second agent on part of this work. Its own class rather
+    /// than a `Read`: what a spawn costs and what it can reach is not
+    /// bounded by anything the calling run's other gates check, and the
+    /// only thing that bounds it is the person.
+    Spawn,
     Spend,
 }
 

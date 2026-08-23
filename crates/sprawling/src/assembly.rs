@@ -1624,9 +1624,14 @@ impl RunWorker {
             who: who.to_owned(),
             addr: Some(addr),
             kind,
-            data,
+            data: data.clone(),
             ig: false,
         })?;
+        // The book states what the history says, whoever wrote the line.
+        // Without this an approval a run raised was on the ledger and
+        // absent from `pending`, so the person could not answer it until
+        // the process restarted and folded the ledger again.
+        self.govern(kind, &data);
         Ok(())
     }
 
@@ -2955,10 +2960,12 @@ impl RunWorker {
         // wave, so whatever a wave deletes has a commit to come back
         // from. Both stand where the run writes, which is its own tree
         // when the building asks for review.
-        let mut bench = ToolBench::new(rules.write_domain()?).with_checkpoint(
-            memory::Checkpoint::open(&write_root).map_err(memory::MemoryError::into_ax)?,
-            addr.as_str(),
-        );
+        let mut bench = ToolBench::new(rules.write_domain()?)
+            .with_checkpoint(
+                memory::Checkpoint::open(&write_root).map_err(memory::MemoryError::into_ax)?,
+                addr.as_str(),
+            )
+            .for_job(addr.clone(), job_locator.clone());
         bench.register(Box::new(edit))?;
         bench.register(Box::new(status))?;
         bench.register(Box::new(signal_tool))?;
@@ -6602,6 +6609,26 @@ addr = \"gone/room1\"
         );
     }
 
+    /// Answers the one thing waiting, as the person would. Delegation
+    /// now asks before it hands anything down, so a test that wants a
+    /// delegate has to say yes first - which is the point of the door.
+    fn allow_the_one_pending_item(worker: &mut RunWorker) -> kernel::ClusterKey {
+        let item = worker
+            .pending
+            .values()
+            .next()
+            .cloned()
+            .expect("exactly one thing is waiting");
+        worker
+            .handle(channels::Command::Approve {
+                item: item.id.clone(),
+                verdict: kernel::PolicyVerdict::Allow,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"allow"),
+            })
+            .unwrap();
+        item.cluster_key
+    }
+
     /// A run that hands work down starts a real second run, and that
     /// run cannot hand work down again.
     ///
@@ -6621,6 +6648,17 @@ addr = \"gone/room1\"
                     "handing it down",
                     "delegate",
                     "tu_1",
+                    serde_json::json!({
+                        "room": "lab/helper",
+                        "task": "measure the thing",
+                        "goal": "a number, then stop",
+                    }),
+                ),
+                completion("waiting on a person", None),
+                completion_with(
+                    "handing it down",
+                    "delegate",
+                    "tu_2",
                     serde_json::json!({
                         "room": "lab/helper",
                         "task": "measure the thing",
@@ -6650,6 +6688,18 @@ addr = \"gone/room1\"
                 effort: None,
             })
             .unwrap();
+        // Nothing has been handed down yet: the first spawn of a run
+        // waits for the person, and answering carries the work on.
+        assert!(
+            !city::job_path(dir.path(), &Address::parse("lab/helper").unwrap()).exists(),
+            "a delegate started before anybody allowed it"
+        );
+        let cluster = allow_the_one_pending_item(&mut worker);
+        assert_eq!(cluster.class, kernel::ApprovalClass::Delegation);
+        assert_eq!(
+            cluster.detail, "lab/room1",
+            "the person is asked once per resident, not once per room it picks"
+        );
 
         let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
         let history: String = verified
@@ -6699,6 +6749,9 @@ addr = \"gone/room1\"
         let (base_url, _provider) = fake_openai(
             &["m-local"],
             vec![
+                // Asked, refused pending, gave up. The person then
+                // allows it, the work is dispatched again, and the
+                // second ask goes through.
                 completion_with(
                     "handing it down",
                     "delegate",
@@ -6709,7 +6762,18 @@ addr = \"gone/room1\"
                         "goal": "a number, then stop",
                     }),
                 ),
-                completion_with("where did it go", "status", "tu_2", serde_json::json!({})),
+                completion("waiting on a person", None),
+                completion_with(
+                    "handing it down",
+                    "delegate",
+                    "tu_2",
+                    serde_json::json!({
+                        "room": "lab/helper",
+                        "task": "measure the thing",
+                        "goal": "a number, then stop",
+                    }),
+                ),
+                completion_with("where did it go", "status", "tu_3", serde_json::json!({})),
                 completion("done", None),
             ],
         );
@@ -6734,6 +6798,7 @@ addr = \"gone/room1\"
                 effort: None,
             })
             .unwrap();
+        allow_the_one_pending_item(&mut worker);
 
         let waiting = worker
             .inboxes
@@ -6784,7 +6849,19 @@ addr = \"gone/room1\"
                         "kind": "ephemeral",
                     }),
                 ),
-                completion_with("where did it go", "status", "tu_2", serde_json::json!({})),
+                completion("waiting on a person", None),
+                completion_with(
+                    "handing it down",
+                    "delegate",
+                    "tu_2",
+                    serde_json::json!({
+                        "room": "lab/helper",
+                        "task": "measure the thing",
+                        "goal": "a number, then stop",
+                        "kind": "ephemeral",
+                    }),
+                ),
+                completion_with("where did it go", "status", "tu_3", serde_json::json!({})),
                 completion("done", None),
             ],
         );
@@ -6808,6 +6885,7 @@ addr = \"gone/room1\"
                 effort: None,
             })
             .unwrap();
+        allow_the_one_pending_item(&mut worker);
 
         let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
         let history: String = verified
