@@ -201,6 +201,26 @@ pub fn conflict_payload(candidate: &GoalEntry, level: &Level) -> Result<Payload,
 - **机械可判的只有一种形状**：双方都claim路径，且常设性一高一低——「常设的先走」不需要任何判断。其余（两个常设、外部资源同名）都要读目标陈述，那是模型的活。
 - **机器恒不推翻门**：`gate_refused` 排在最前，压过本可机械串行化的情形；`Circumstance` 三项都是调用方已知而目标条目里看不出来的事实。
 
+### 8-8b collab::delegate_tool（P1.01；形状 4 适配器）
+
+```rust
+pub struct Delegated { pub room: Address, pub task: String, pub goal: String, pub kind: DelegateKind }
+pub struct DelegateDesk { /* depth: Depth、building: Address、asked —— 私有 */ }
+impl DelegateDesk {
+    pub fn new(depth: Depth, building: Address) -> DelegateDesk;
+    pub fn ask(&mut self, work: Delegated) -> Result<&Delegated, AxError>;   // 门在这里被叫
+    pub fn take(&mut self) -> Vec<Delegated>;                                 // 回合落定后装配层取走
+}
+pub struct DelegateTool { /* 模型的那一面：{room, task, goal, kind?} */ }
+```
+
+- **`kernel::gate::spawn` 自 S2 建好，到本卡才有第一个生产调用者**。「一层深」不是本模块的判定，本模块只是把问题递给它；拒绝文字也是门自己的三段式，不在这里重写。
+- **深度是被携入的，不是被推算的**：`DelegateDesk::new` 收 `Depth`。一个自己推算深度的 Run，错一次就是一个孙代理。
+- **一次请求不是一个 Run**。工具答的是「在哪个房间开」，不是结果：在工具调用里驱一个 Run，等于在另一个 Run 的 tool bench 里驱 Run。装配层在父回合落定后取走并派活，子 Run 自己的 `run_started` 携着那个房间。
+- **不新增 EventKind**：父的 `tool_called{name:"delegate"}` 与子的 `run_started{addr}` 已经把这件事记了两遍，再加一个事件种类就是第三遍。
+- **代理不出楼**：房间必须 `is_within` 父的楼，否则 `E_CROSS_BUILDING_DENIED`，并告知跨楼的正路是 `signal`。
+- **未做，已知**：父拿不到子的结果（同步汇流属 `fanin`），`status.children` 仍为空，前端没有父子视图。三条都在 TODO P1。
+
 ### 8-8 collab::signal_tool（P3.01；形状 4 适配器）
 
 ```rust

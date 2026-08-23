@@ -1993,7 +1993,14 @@ impl RunWorker {
                 if let Some(effort) = effort {
                     city::write_effort(&self.city_root, &addr, effort)?;
                 }
-                self.dispatch_in(addr, task, goal, mode_of(&mode), budget)
+                self.dispatch_in(
+                    addr,
+                    task,
+                    goal,
+                    mode_of(&mode),
+                    budget,
+                    kernel::Depth::Root,
+                )
             }
             channels::Command::Wake {
                 source,
@@ -2620,6 +2627,7 @@ impl RunWorker {
             goal,
             runtime::Mode::PlanGoal,
             kernel::BudgetCap::default(),
+            kernel::Depth::Root,
         )
     }
 
@@ -2654,6 +2662,7 @@ impl RunWorker {
         goal: String,
         mode: runtime::Mode,
         budget: kernel::BudgetCap,
+        depth: kernel::Depth,
     ) -> Result<(), AxError> {
         // Nothing is written before the city agrees to take the work:
         // a halted city that laid a job file down would leave a task in
@@ -2859,6 +2868,14 @@ impl RunWorker {
         let goal_tool = collab::GoalTool::new(addr.clone(), std::rc::Rc::clone(&goals))?;
         let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
         let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
+        // Where this run stands, carried rather than worked out: a run
+        // that inferred its own depth would be one wrong answer away
+        // from a delegate that delegates.
+        let delegates = std::rc::Rc::new(std::cell::RefCell::new(collab::DelegateDesk::new(
+            depth,
+            building.addr().clone(),
+        )));
+        let delegate_tool = collab::DelegateTool::new(std::rc::Rc::clone(&delegates))?;
         let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
         catalog
             .borrow_mut()
@@ -2899,6 +2916,9 @@ impl RunWorker {
         catalog
             .borrow_mut()
             .admit_tool(kernel::Tool::meta(&pr_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&delegate_tool))?;
         // The one tool that reads, and the only caller of the catalog's
         // second-level disclosure: without it a building's reading room
         // could name a skill and never hand it over. It holds the
@@ -2922,6 +2942,7 @@ impl RunWorker {
         bench.register(Box::new(goal_tool))?;
         bench.register(Box::new(pr_tool))?;
         bench.register(Box::new(claim_tool))?;
+        bench.register(Box::new(delegate_tool))?;
         bench.register(Box::new(archive_tool))?;
         bench.register(Box::new(exec))?;
         bench.register(Box::new(read))?;
@@ -3515,6 +3536,27 @@ impl RunWorker {
             "runtime::run",
             &format!("dispatch at {} finished on {}", addr.as_str(), model.id),
         );
+        // Who this run handed work to. Started here rather than inside
+        // the tool call, because a run is built by this layer and a tool
+        // that drove one would be driving a run from inside another
+        // run's tool bench. Each child is dispatched at `Delegated`, so
+        // the gate refuses the grand-delegate without anybody having to
+        // work out their own depth.
+        for work in delegates.borrow_mut().take() {
+            self.note(
+                runtime::diagnostics::Level::Effect,
+                "collab::delegate",
+                &format!("{} handed work to {}", addr.as_str(), work.room.as_str()),
+            );
+            self.dispatch_in(
+                work.room,
+                work.task,
+                work.goal,
+                mode,
+                kernel::BudgetCap::default(),
+                kernel::Depth::Delegated,
+            )?;
+        }
         Ok(())
     }
 }
@@ -4142,6 +4184,26 @@ mod tests {
     /// contract (create form), so these tests exercise the same argument
     /// shape a model is told about - an invented shape here once hid the
     /// fact that no canary edit had ever landed on disk.
+    /// One reply that calls a named tool with the arguments given.
+    fn completion_with(text: &str, tool: &str, id: &str, arguments: serde_json::Value) -> String {
+        serde_json::json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": text,
+                    "tool_calls": [{
+                        "id": id,
+                        "type": "function",
+                        "function": { "name": tool, "arguments": arguments.to_string() },
+                    }],
+                },
+                "finish_reason": "tool_calls",
+            }],
+            "usage": { "prompt_tokens": 12, "completion_tokens": 5 },
+        })
+        .to_string()
+    }
+
     fn completion(text: &str, call: Option<(&str, &str)>) -> String {
         let mut message = serde_json::json!({ "role": "assistant", "content": text });
         let mut finish = "stop";
@@ -6432,6 +6494,78 @@ addr = \"gone/room1\"
         assert!(
             !asked.contains("cas:b3-"),
             "no content hash reaches a model that cannot resolve one"
+        );
+    }
+
+    /// A run that hands work down starts a real second run, and that
+    /// run cannot hand work down again.
+    ///
+    /// `kernel::gate::spawn` had held the one-level rule since S2 with
+    /// no caller in production; this is the caller. The child is
+    /// dispatched after the parent's turn settles rather than inside the
+    /// tool call, because a tool that drove a run would be driving one
+    /// from inside another run's tool bench.
+    #[test]
+    fn work_handed_down_becomes_a_run_that_cannot_hand_it_down_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                completion_with(
+                    "handing it down",
+                    "delegate",
+                    "tu_1",
+                    serde_json::json!({
+                        "room": "lab/helper",
+                        "task": "measure the thing",
+                        "goal": "a number, then stop",
+                    }),
+                ),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("lab/room1").unwrap(),
+                task: "get it measured".to_owned(),
+                goal: "the number is written down, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let history: String = verified
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(
+            history.contains("lab/helper"),
+            "the delegate's own run started in the room it was given"
+        );
+        assert!(
+            city::job_path(dir.path(), &Address::parse("lab/helper").unwrap()).exists(),
+            "and it was given a task file of its own"
+        );
+        // The second run asked to hand work down in turn, and the gate
+        // that had never been called refused it.
+        assert!(
+            history.contains("E_DELEGATION_DEPTH") || !history.contains("lab/grandchild"),
+            "a delegate that delegated would have opened a third room"
         );
     }
 

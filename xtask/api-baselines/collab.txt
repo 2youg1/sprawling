@@ -9,6 +9,8 @@ impl collab::Claim
 impl collab::ClaimDesk
 impl collab::ClaimEffect
 impl collab::ClaimTool
+impl collab::DelegateDesk
+impl collab::DelegateTool
 impl collab::Draft
 impl collab::Drafts
 impl collab::Escalation
@@ -41,6 +43,7 @@ impl core::fmt::Debug for collab::Inbox
 impl core::fmt::Debug for collab::SignalDesk
 impl kernel::tool::Tool for collab::ArchiveTool
 impl kernel::tool::Tool for collab::ClaimTool
+impl kernel::tool::Tool for collab::DelegateTool
 impl kernel::tool::Tool for collab::GoalTool
 impl kernel::tool::Tool for collab::PrTool
 impl kernel::tool::Tool for collab::SignalTool
@@ -64,6 +67,10 @@ pub collab::ClaimEffect::Finished::item: alloc::string::String
 pub collab::ClaimEffect::Released
 pub collab::ClaimEffect::Released::index: u64
 pub collab::ClaimEffect::Released::item: alloc::string::String
+pub collab::Delegated::goal: alloc::string::String
+pub collab::Delegated::kind: kernel::delegation::DelegateKind
+pub collab::Delegated::room: kernel::address::Address
+pub collab::Delegated::task: alloc::string::String
 pub collab::Escalation::ArbitrationExhausted
 pub collab::Escalation::GateRefused
 pub collab::Escalation::Intent
@@ -169,6 +176,12 @@ pub fn collab::ClaimEffect::payload(&self, &str) -> core::result::Result<kernel:
 pub fn collab::ClaimTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub fn collab::ClaimTool::meta(&self) -> &kernel::tool::ToolMeta
 pub fn collab::ClaimTool::new(alloc::rc::Rc<core::cell::RefCell<collab::ClaimDesk>>) -> core::result::Result<collab::ClaimTool, kernel::error::AxError>
+pub fn collab::DelegateDesk::ask(&mut self, collab::Delegated) -> core::result::Result<&collab::Delegated, kernel::error::AxError>
+pub fn collab::DelegateDesk::new(kernel::delegation::Depth, kernel::address::Address) -> collab::DelegateDesk
+pub fn collab::DelegateDesk::take(&mut self) -> alloc::vec::Vec<collab::Delegated>
+pub fn collab::DelegateTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::DelegateTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::DelegateTool::new(alloc::rc::Rc<core::cell::RefCell<collab::DelegateDesk>>) -> core::result::Result<collab::DelegateTool, kernel::error::AxError>
 pub fn collab::Draft::author(&self) -> &str
 pub fn collab::Draft::body(&self) -> &kernel::event::Payload
 pub fn collab::Draft::new(alloc::string::String, kernel::address::Address, kernel::version::Version, kernel::event::Payload) -> collab::Draft
@@ -285,6 +298,9 @@ pub struct collab::Circumstance
 pub struct collab::Claim
 pub struct collab::ClaimDesk
 pub struct collab::ClaimTool
+pub struct collab::DelegateDesk
+pub struct collab::DelegateTool
+pub struct collab::Delegated
 pub struct collab::Draft
 pub struct collab::Drafts
 pub struct collab::FanIn
