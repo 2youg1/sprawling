@@ -69,7 +69,7 @@ theme（OKLCH 源头常量 → CSS 自定义属性）── 全 crate 唯一颜�
 pub enum View { City, Live(RunId), Approvals, Dashboard, Ledger }   // 中央区路由
 pub enum ProviderHealth { Unknown, Healthy, Degraded, Lost }
 pub enum RunPhase { Running, AwaitingApproval, Frozen, Halted }
-pub struct RunRow { addr, phase, steps_done, steps_planned, started_at_seq }
+pub struct RunRow { addr, parent, phase, steps_done, steps_planned, started_at_seq }
 pub struct Snapshot { /* 字段全私有 */ }
 impl Snapshot {
     pub fn apply(&mut self, &EventRecord) -> bool;   // 前进式；返回“是否真的动了”
@@ -716,6 +716,16 @@ fn live::named(runs: &[(RunId, String)], run: RunId) -> String;
 - **没有地址时回落短哈希**：一个本页没见过地址的 Run 仍然要有一个按得下去的按钮，难读好过空白。
 - **Run 标识符不从页面上拿掉**，只是变安静：人读名字，而 `sprawling fork` 与账本寻址用的是它。
 - **标题与按钮同源**：`named()` 从 picker 的同一份列表里取字，于是两处不会对不上。
+
+### 8-35b 看得出谁替谁干活（P1.03）
+
+```rust
+pub struct RunRow { /* … */ pub parent: Option<RunId> }   // 折自 run_started.parent
+// watchable：先按新到旧排根，每个根后紧跟它的子；子的标签冠 ↳ 并在括号里报父的 session
+```
+
+- **平列表变成树，而不是变成一个新控件**：插入序＋一个字符的前缀就把层级说完了；一个树形控件要自己的展开态，而展开态是一份新的客户端状态。
+- **父的名字取自同一个 `session_of`**：两处对得上，因为它们是同一个函数。父不在本页已知集里时只冠 ↳ 而不编造名字。
 
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 

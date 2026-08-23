@@ -176,6 +176,7 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
         goal,
         opening: runtime::Opening::FromJob,
         job,
+        parent: None,
         budget_turns,
         shape: CallShape {
             model: "script".to_owned(),

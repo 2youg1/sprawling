@@ -94,6 +94,10 @@ impl ProviderHealth {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunRow {
     pub addr: Option<Address>,
+    /// The run that handed this work down, when one did. Folded from
+    /// `run_started`, so a page and an offline replay draw the same
+    /// tree.
+    pub parent: Option<RunId>,
     pub phase: RunPhase,
     pub steps_done: u32,
     pub steps_planned: Option<u32>,
@@ -299,6 +303,12 @@ impl Snapshot {
                     run,
                     RunRow {
                         addr: event.addr().cloned(),
+                        parent: event
+                            .data()
+                            .as_map()
+                            .get("parent")
+                            .and_then(serde_json::Value::as_str)
+                            .and_then(|raw| RunId::parse(raw).ok()),
                         phase: RunPhase::Running,
                         steps_done: 0,
                         steps_planned: None,
@@ -639,11 +649,33 @@ pub fn opened_building(selected: Option<&str>) -> Option<Address> {
 /// reading is written. Without it the picker said only
 /// "running", and how much a run had actually done was a number this
 /// client folded and never showed anybody.
+///
+/// Work that was handed down follows the run that handed it down, one
+/// arrow deep, because delegation is one level deep. A person watching a
+/// city where several runs are going otherwise cannot tell which run
+/// answers for which.
 #[must_use]
 pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
     let mut runs: Vec<(RunId, &RunRow)> = snapshot.runs().map(|(id, row)| (*id, row)).collect();
     runs.sort_by_key(|(_, row)| std::cmp::Reverse(row.started_at_seq));
-    runs.into_iter()
+    let known: std::collections::BTreeSet<RunId> = runs.iter().map(|(id, _)| *id).collect();
+    let mut ordered: Vec<(RunId, &RunRow)> = Vec::with_capacity(runs.len());
+    for (id, row) in &runs {
+        // A child whose parent this page has not seen stands on its own
+        // rather than disappearing: an orphan is still a run somebody
+        // may want to watch.
+        if row.parent.is_some_and(|parent| known.contains(&parent)) {
+            continue;
+        }
+        ordered.push((*id, *row));
+        for (child, child_row) in &runs {
+            if child_row.parent == Some(*id) {
+                ordered.push((*child, *child_row));
+            }
+        }
+    }
+    ordered
+        .into_iter()
         .map(|(id, row)| {
             let walked = crate::progress::bar(
                 &channels::Progress::Unplanned(channels::UnplannedProgress {
@@ -657,11 +689,22 @@ pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
                 crate::progress::Subject::Run,
                 crate::lang::Lang::En,
             );
+            // The parent's own name, taken from the same function the
+            // parent's own row uses, so the two cannot disagree.
+            let under = row
+                .parent
+                .and_then(|parent| snapshot.run(&parent).map(|up| session_of(&parent, up)));
+            let name = match (&row.parent, under) {
+                (None, _) => session_of(&id, row),
+                (Some(_), Some(parent)) => {
+                    format!("\u{21b3} {} ({parent})", session_of(&id, row))
+                }
+                (Some(_), None) => format!("\u{21b3} {}", session_of(&id, row)),
+            };
             (
                 id,
                 format!(
-                    "{} \u{b7} {} \u{b7} {}",
-                    session_of(&id, row),
+                    "{name} \u{b7} {} \u{b7} {}",
                     row.phase.as_str(),
                     walked.label
                 ),
@@ -2627,6 +2670,48 @@ mod tests {
         assert!(
             painted.says("refactor-the-ledger"),
             "the page being watched does not say which session it is"
+        );
+    }
+
+    /// The session list was flat, so a person watching a city where a
+    /// run had handed work down saw two peers and no way to tell which
+    /// answered for which.
+    #[test]
+    fn work_handed_down_is_listed_under_the_run_that_handed_it_down() {
+        let mut snapshot = Snapshot::new();
+        let parent = RunId::from_bytes([3u8; 16]);
+        let mut opened = kernel_draft(EventKind::RunStarted, [3u8; 16]);
+        opened.addr = Some(Address::parse("lab/room1").unwrap());
+        snapshot.apply(&EventRecord::from_draft(
+            opened,
+            Seq::new(1),
+            B3Hash::digest(b"prev"),
+        ));
+
+        let mut handed = kernel_draft(EventKind::RunStarted, [4u8; 16]);
+        handed.addr = Some(Address::parse("lab/helper").unwrap());
+        let mut data = serde_json::Map::new();
+        data.insert(
+            "parent".to_owned(),
+            serde_json::Value::String(parent.to_string()),
+        );
+        handed.data = Payload::new(data).unwrap();
+        snapshot.apply(&EventRecord::from_draft(
+            handed,
+            Seq::new(2),
+            B3Hash::digest(b"prev2"),
+        ));
+
+        let offered = watchable(&snapshot);
+        let labels: Vec<&str> = offered.iter().map(|(_, label)| label.as_str()).collect();
+        assert_eq!(labels.len(), 2);
+        assert!(
+            labels[0].starts_with("room1"),
+            "the run that asked comes first: {labels:?}"
+        );
+        assert!(
+            labels[1].starts_with("\u{21b3} helper (room1)"),
+            "the delegate is listed under it and says whose it is: {labels:?}"
         );
     }
 

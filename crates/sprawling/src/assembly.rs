@@ -1993,15 +1993,8 @@ impl RunWorker {
                 if let Some(effort) = effort {
                     city::write_effort(&self.city_root, &addr, effort)?;
                 }
-                self.dispatch_in(
-                    addr,
-                    task,
-                    goal,
-                    mode_of(&mode),
-                    budget,
-                    kernel::Depth::Root,
-                )
-                .map(drop)
+                self.dispatch_in(addr, task, goal, mode_of(&mode), budget, None)
+                    .map(drop)
             }
             channels::Command::Wake {
                 source,
@@ -2628,7 +2621,7 @@ impl RunWorker {
             goal,
             runtime::Mode::PlanGoal,
             kernel::BudgetCap::default(),
-            kernel::Depth::Root,
+            None,
         )
         .map(drop)
     }
@@ -2664,8 +2657,16 @@ impl RunWorker {
         goal: String,
         mode: runtime::Mode,
         budget: kernel::BudgetCap,
-        depth: kernel::Depth,
+        parent: Option<RunId>,
     ) -> Result<Dispatched, AxError> {
+        // Depth is derived from whether somebody handed this work down,
+        // rather than passed beside it. Two parameters that must agree
+        // are two chances to disagree, and the one that disagrees here
+        // is a grand-delegate.
+        let depth = match parent {
+            None => kernel::Depth::Root,
+            Some(_) => kernel::Depth::Delegated,
+        };
         // Nothing is written before the city agrees to take the work:
         // a halted city that laid a job file down would leave a task in
         // a room no run ever opened.
@@ -2846,30 +2847,6 @@ impl RunWorker {
         catalog.borrow_mut().set_mode(mode);
         let edit = EditTool::new(&write_root, addr.clone(), rules.write_domain()?)?;
         let writable = rules.write_domain()?;
-        let status = StatusTool::new(status_snapshot(Situation {
-            addr: &addr,
-            who: &who,
-            signals_pending: waiting,
-            mode,
-            write_domain: &writable,
-            worktree: &write_root,
-            trust: &self.autonomy,
-            context_tokens: model.context_tokens,
-            budget,
-            // What this resident already holds, so a model asking what
-            // it may touch is answered from the same list the conflict
-            // check reads.
-            locks: self
-                .goals
-                .iter()
-                .filter(|entry| entry.owner == who)
-                .map(|entry| entry.statement.clone())
-                .collect(),
-        }))?;
-        let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&signals))?;
-        let goal_tool = collab::GoalTool::new(addr.clone(), std::rc::Rc::clone(&goals))?;
-        let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
-        let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
         // Where this run stands, carried rather than worked out: a run
         // that inferred its own depth would be one wrong answer away
         // from a delegate that delegates.
@@ -2877,6 +2854,50 @@ impl RunWorker {
             depth,
             building.addr().clone(),
         )));
+        // What `status.children` reads. A borrowed desk answers nothing
+        // rather than refusing: `status` reporting its own plumbing to a
+        // model would teach it about a lock it can do nothing about.
+        let watched = std::rc::Rc::clone(&delegates);
+        let status = StatusTool::watching(
+            status_snapshot(Situation {
+                addr: &addr,
+                who: &who,
+                signals_pending: waiting,
+                mode,
+                write_domain: &writable,
+                worktree: &write_root,
+                trust: &self.autonomy,
+                context_tokens: model.context_tokens,
+                budget,
+                // What this resident already holds, so a model asking
+                // what it may touch is answered from the same list the
+                // conflict check reads.
+                locks: self
+                    .goals
+                    .iter()
+                    .filter(|entry| entry.owner == who)
+                    .map(|entry| entry.statement.clone())
+                    .collect(),
+            }),
+            Box::new(move || {
+                watched.try_borrow().map_or_else(
+                    |_| Vec::new(),
+                    |desk| {
+                        desk.asked()
+                            .iter()
+                            .map(|work| runtime::ChildStatus {
+                                room: work.room.clone(),
+                                kind: work.kind,
+                            })
+                            .collect()
+                    },
+                )
+            }),
+        )?;
+        let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&signals))?;
+        let goal_tool = collab::GoalTool::new(addr.clone(), std::rc::Rc::clone(&goals))?;
+        let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
+        let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
         let delegate_tool = collab::DelegateTool::new(std::rc::Rc::clone(&delegates))?;
         let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
         catalog
@@ -3024,6 +3045,7 @@ impl RunWorker {
                 city::RunBrief::Principal => runtime::Opening::WithPerson,
             },
             job: job.clone(),
+            parent,
             budget_turns: DISPATCH_TURN_BUDGET,
             shape: CallShape {
                 model: model.id.clone(),
@@ -3566,7 +3588,7 @@ impl RunWorker {
                 work.goal,
                 mode,
                 kernel::BudgetCap::default(),
-                kernel::Depth::Delegated,
+                Some(run_id),
             )?;
             self.deliver_handback(&addr, &child)?;
         }
@@ -3859,7 +3881,6 @@ fn status_snapshot(situation: Situation<'_>) -> runtime::StatusSnapshot {
         worktree_path: situation.worktree.display().to_string(),
         worktree_disk: kernel::ByteLen::default(),
         signals_pending: situation.signals_pending,
-        children: Vec::new(),
         now: None,
         provider_mode: runtime::ProviderMode::Normal,
     }
@@ -6659,8 +6680,7 @@ addr = \"gone/room1\"
             "what came back is waiting in the room that asked: {history}"
         );
         assert!(
-            history.contains(r#"\"room\":\"lab/helper\""#)
-                || history.contains("lab/helper finished"),
+            history.contains("lab/helper finished"),
             "the handback names the room the work was done in"
         );
     }
@@ -6689,6 +6709,7 @@ addr = \"gone/room1\"
                         "goal": "a number, then stop",
                     }),
                 ),
+                completion_with("where did it go", "status", "tu_2", serde_json::json!({})),
                 completion("done", None),
             ],
         );
@@ -6739,6 +6760,71 @@ addr = \"gone/room1\"
         assert!(
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
+        );
+    }
+
+    /// `status.children` was a hardcoded empty list, so the one field a
+    /// run could have used to check what it had handed down always said
+    /// "none".
+    #[test]
+    fn status_tells_a_run_where_the_work_it_handed_down_went() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                completion_with(
+                    "handing it down",
+                    "delegate",
+                    "tu_1",
+                    serde_json::json!({
+                        "room": "lab/helper",
+                        "task": "measure the thing",
+                        "goal": "a number, then stop",
+                        "kind": "ephemeral",
+                    }),
+                ),
+                completion_with("where did it go", "status", "tu_2", serde_json::json!({})),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("lab/room1").unwrap(),
+                task: "get it measured".to_owned(),
+                goal: "the number is written down, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let history: String = verified
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(
+            history.contains("children: lab/helper (ephemeral)"),
+            "the status a model read did not name the work it had just handed down: {history}"
+        );
+        // And the child's own run says whose work it is, which is what
+        // the interface folds into a tree.
+        assert!(
+            history.contains(r#""parent":"#),
+            "run_started carries no parent: {history}"
         );
     }
 

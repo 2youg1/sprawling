@@ -687,6 +687,7 @@ pub web::RunPhase::Frozen
 pub web::RunPhase::Halted
 pub web::RunPhase::Running
 pub web::RunRow::addr: core::option::Option<kernel::address::Address>
+pub web::RunRow::parent: core::option::Option<kernel::event::RunId>
 pub web::RunRow::phase: web::RunPhase
 pub web::RunRow::started_at_seq: kernel::event::Seq
 pub web::RunRow::steps_done: u32

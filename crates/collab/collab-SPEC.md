@@ -210,6 +210,7 @@ pub struct DelegateDesk { /* depth: Depth、building: Address、asked —— 私
 impl DelegateDesk {
     pub fn new(depth: Depth, building: Address) -> DelegateDesk;
     pub fn ask(&mut self, work: Delegated) -> Result<&Delegated, AxError>;   // 门在这里被叫
+    pub fn asked(&self) -> &[Delegated];                                      // status.children 的真值
     pub fn take(&mut self) -> Vec<Delegated>;                                 // 回合落定后装配层取走
 }
 pub struct DelegateTool { /* 模型的那一面：{room, task, goal, kind?} */ }

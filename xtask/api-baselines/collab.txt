@@ -184,6 +184,7 @@ pub fn collab::ClaimTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::re
 pub fn collab::ClaimTool::meta(&self) -> &kernel::tool::ToolMeta
 pub fn collab::ClaimTool::new(alloc::rc::Rc<core::cell::RefCell<collab::ClaimDesk>>) -> core::result::Result<collab::ClaimTool, kernel::error::AxError>
 pub fn collab::DelegateDesk::ask(&mut self, collab::Delegated) -> core::result::Result<&collab::Delegated, kernel::error::AxError>
+pub fn collab::DelegateDesk::asked(&self) -> &[collab::Delegated]
 pub fn collab::DelegateDesk::new(kernel::delegation::Depth, kernel::address::Address) -> collab::DelegateDesk
 pub fn collab::DelegateDesk::take(&mut self) -> alloc::vec::Vec<collab::Delegated>
 pub fn collab::DelegateTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>

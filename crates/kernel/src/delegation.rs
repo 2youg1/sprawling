@@ -21,6 +21,19 @@ pub enum DelegateKind {
     Ephemeral,
 }
 
+impl DelegateKind {
+    /// The one spelling. Both the tool that parses these words and the
+    /// status line that prints them read it here, so a rename cannot
+    /// half-happen.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DelegateKind::Resident => "resident",
+            DelegateKind::Ephemeral => "ephemeral",
+        }
+    }
+}
+
 /// The depth-zero position: the only type with a `delegate` method
 /// (15.3-10). Who holds a `Delegator` is assembly's discipline; what a
 /// `Delegate` value can mint is this module's — nothing.

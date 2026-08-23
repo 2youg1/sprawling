@@ -140,8 +140,8 @@ pub fn runtime::ReadTool::meta(&self) -> &kernel::tool::ToolMeta
 pub fn runtime::ReadTool::new(&std::path::Path, alloc::rc::Rc<core::cell::RefCell<runtime::catalog::Catalog>>) -> core::result::Result<runtime::ReadTool, kernel::error::AxError>
 pub fn runtime::ReadTool::new(&std::path::Path, alloc::rc::Rc<core::cell::RefCell<runtime::catalog::Catalog>>) -> core::result::Result<runtime::ReadTool, kernel::error::AxError>
 pub fn runtime::Sandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
-pub fn runtime::StatusSnapshot::render(&self) -> alloc::string::String
-pub fn runtime::StatusSnapshot::render(&self) -> alloc::string::String
+pub fn runtime::StatusSnapshot::render(&self, &[runtime::ChildStatus]) -> alloc::string::String
+pub fn runtime::StatusSnapshot::render(&self, &[runtime::ChildStatus]) -> alloc::string::String
 pub fn runtime::StatusTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub fn runtime::StatusTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub fn runtime::StatusTool::meta(&self) -> &kernel::tool::ToolMeta
@@ -150,6 +150,8 @@ pub fn runtime::StatusTool::new(runtime::StatusSnapshot) -> core::result::Result
 pub fn runtime::StatusTool::new(runtime::StatusSnapshot) -> core::result::Result<runtime::StatusTool, kernel::error::AxError>
 pub fn runtime::StatusTool::set_snapshot(&mut self, runtime::StatusSnapshot)
 pub fn runtime::StatusTool::set_snapshot(&mut self, runtime::StatusSnapshot)
+pub fn runtime::StatusTool::watching(runtime::StatusSnapshot, alloc::boxed::Box<dyn core::ops::function::Fn() -> alloc::vec::Vec<runtime::ChildStatus>>) -> core::result::Result<runtime::StatusTool, kernel::error::AxError>
+pub fn runtime::StatusTool::watching(runtime::StatusSnapshot, alloc::boxed::Box<dyn core::ops::function::Fn() -> alloc::vec::Vec<runtime::ChildStatus>>) -> core::result::Result<runtime::StatusTool, kernel::error::AxError>
 pub fn runtime::Watchdog::fired_payload(&self, &runtime::Disposal) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
 pub fn runtime::Watchdog::new() -> runtime::Watchdog
 pub fn runtime::Watchdog::on_provider_failure(&mut self) -> runtime::Disposal
@@ -371,10 +373,8 @@ pub runtime::BreakerVerdict::Open::after: u32
 pub runtime::CatalogEntry::disclosure: alloc::string::String
 pub runtime::CatalogEntry::expansion: alloc::string::String
 pub runtime::CatalogEntry::name: alloc::string::String
-pub runtime::ChildStatus::ctx_lock: kernel::budget::Tokens
-pub runtime::ChildStatus::ctx_used: kernel::budget::Tokens
-pub runtime::ChildStatus::phase: alloc::string::String
-pub runtime::ChildStatus::run: kernel::event::RunId
+pub runtime::ChildStatus::kind: kernel::delegation::DelegateKind
+pub runtime::ChildStatus::room: kernel::address::Address
 pub runtime::ClockStamp::utc_ms: kernel::event::TimeMs
 pub runtime::ClockStamp::zones: alloc::vec::Vec<runtime::clock::ZoneEntry>
 pub runtime::DigestOutcome::Cached(runtime::digest::Digest)
@@ -447,6 +447,7 @@ pub runtime::RunPlan::budget_turns: u32
 pub runtime::RunPlan::goal: alloc::string::String
 pub runtime::RunPlan::job: kernel::locator::Locator
 pub runtime::RunPlan::opening: runtime::turn::Opening
+pub runtime::RunPlan::parent: core::option::Option<kernel::event::RunId>
 pub runtime::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::RunPlan::prefix: runtime::prefix::FrozenPrefix
 pub runtime::RunPlan::run: kernel::event::RunId
@@ -490,7 +491,6 @@ pub runtime::SourceDoc::bytes: core::option::Option<alloc::vec::Vec<u8>>
 pub runtime::StatusSnapshot::addr: kernel::address::Address
 pub runtime::StatusSnapshot::budget_tokens: kernel::budget::Tokens
 pub runtime::StatusSnapshot::budget_usd: kernel::budget::UsdMicros
-pub runtime::StatusSnapshot::children: alloc::vec::Vec<runtime::ChildStatus>
 pub runtime::StatusSnapshot::ctx_limit: kernel::budget::Tokens
 pub runtime::StatusSnapshot::ctx_used: kernel::budget::Tokens
 pub runtime::StatusSnapshot::locks: alloc::vec::Vec<alloc::string::String>
@@ -618,6 +618,7 @@ pub runtime::run::RunPlan::budget_turns: u32
 pub runtime::run::RunPlan::goal: alloc::string::String
 pub runtime::run::RunPlan::job: kernel::locator::Locator
 pub runtime::run::RunPlan::opening: runtime::turn::Opening
+pub runtime::run::RunPlan::parent: core::option::Option<kernel::event::RunId>
 pub runtime::run::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::run::RunPlan::prefix: runtime::prefix::FrozenPrefix
 pub runtime::run::RunPlan::run: kernel::event::RunId
@@ -633,17 +634,14 @@ pub runtime::run::SafePoint::BeforeSpawn
 pub runtime::run::SafePoint::BeforeSpawn::turn: u32
 pub runtime::run::SafePoint::BeforeWave
 pub runtime::run::SafePoint::BeforeWave::turn: u32
-pub runtime::tools::ChildStatus::ctx_lock: kernel::budget::Tokens
-pub runtime::tools::ChildStatus::ctx_used: kernel::budget::Tokens
-pub runtime::tools::ChildStatus::phase: alloc::string::String
-pub runtime::tools::ChildStatus::run: kernel::event::RunId
+pub runtime::tools::ChildStatus::kind: kernel::delegation::DelegateKind
+pub runtime::tools::ChildStatus::room: kernel::address::Address
 pub runtime::tools::ProviderMode::Degraded
 pub runtime::tools::ProviderMode::LocalOnly
 pub runtime::tools::ProviderMode::Normal
 pub runtime::tools::StatusSnapshot::addr: kernel::address::Address
 pub runtime::tools::StatusSnapshot::budget_tokens: kernel::budget::Tokens
 pub runtime::tools::StatusSnapshot::budget_usd: kernel::budget::UsdMicros
-pub runtime::tools::StatusSnapshot::children: alloc::vec::Vec<runtime::ChildStatus>
 pub runtime::tools::StatusSnapshot::ctx_limit: kernel::budget::Tokens
 pub runtime::tools::StatusSnapshot::ctx_used: kernel::budget::Tokens
 pub runtime::tools::StatusSnapshot::locks: alloc::vec::Vec<alloc::string::String>

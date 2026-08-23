@@ -639,6 +639,7 @@ pub fn request(active: &BTreeMap<Address, RunId>, scope: &Address, who: &RunId) 
 
 ```rust
 #[non_exhaustive] pub enum DelegateKind { Resident, Ephemeral }
+impl DelegateKind { pub fn as_str(self) -> &'static str; }   // P1.03：一个词一个权威（工具解析与 status 打印同源）
 /// Depth-zero position; the only type with a delegate method (15.3-10).
 pub struct Delegator(/* 私有单元 */);
 impl Delegator { pub fn root() -> Delegator;                     // 铸造点：装配/citysim

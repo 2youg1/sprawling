@@ -16,8 +16,8 @@
 //! make two calls in one turn disagree about "now".
 
 use kernel::{
-    Address, AxCode, AxError, ByteLen, CostTier, Effect, Payload, RenderIntent, RunId, Temporal,
-    Tokens, Tool, ToolCall, ToolMeta, ToolName, ToolOutcome, UsdMicros,
+    Address, AxCode, AxError, ByteLen, CostTier, DelegateKind, Effect, Payload, RenderIntent,
+    Temporal, Tokens, Tool, ToolCall, ToolMeta, ToolName, ToolOutcome, UsdMicros,
 };
 use serde_json::{Map, Value};
 
@@ -45,12 +45,17 @@ impl ProviderMode {
     }
 }
 
+/// One piece of work this run handed down.
+///
+/// Two fields, because two facts exist. A child starts after the run
+/// that asked for it has frozen, so while that run is still reading its
+/// own status the child has no id, no phase and no context reading - and
+/// a field that can only ever hold zero says "zero" where the truth is
+/// "not yet".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChildStatus {
-    pub run: RunId,
-    pub phase: String,
-    pub ctx_used: Tokens,
-    pub ctx_lock: Tokens,
+    pub room: Address,
+    pub kind: DelegateKind,
 }
 
 /// The twelve fields, in the frozen order.
@@ -69,23 +74,46 @@ pub struct StatusSnapshot {
     pub worktree_path: String,
     pub worktree_disk: ByteLen,
     pub signals_pending: u32,
-    pub children: Vec<ChildStatus>,
     pub now: Option<ClockStamp>,
     pub provider_mode: ProviderMode,
 }
 
 pub struct StatusTool {
     snapshot: StatusSnapshot,
+    children: Box<dyn Fn() -> Vec<ChildStatus>>,
     meta: ToolMeta,
 }
 
 impl StatusTool {
+    /// A run that hands nothing down.
+    ///
+    /// # Errors
+    /// Propagates a malformed parameter schema.
     pub fn new(snapshot: StatusSnapshot) -> Result<StatusTool, AxError> {
+        StatusTool::watching(snapshot, Box::new(Vec::new))
+    }
+
+    /// A run whose delegate desk is asked every time the model calls
+    /// `status`.
+    ///
+    /// A closure rather than a field, because delegation happens after
+    /// this tool is built: a snapshot taken before the run started is
+    /// empty for the whole run. A closure rather than a seam, because
+    /// the desk lives in `collab` and this crate may not depend on it -
+    /// the assembly layer owns both ends and hands one to the other.
+    ///
+    /// # Errors
+    /// Propagates a malformed parameter schema.
+    pub fn watching(
+        snapshot: StatusSnapshot,
+        children: Box<dyn Fn() -> Vec<ChildStatus>>,
+    ) -> Result<StatusTool, AxError> {
         let mut params = Map::new();
         params.insert("type".to_owned(), Value::String("object".to_owned()));
         params.insert("properties".to_owned(), Value::Object(Map::new()));
         Ok(StatusTool {
             snapshot,
+            children,
             meta: ToolMeta {
                 name: ToolName::parse("status")?,
                 disclosure:
@@ -116,29 +144,13 @@ impl StatusSnapshot {
     /// sorts its keys, so "the frozen order" would silently become
     /// alphabetical. Order is a property of what the model reads, so it
     /// is expressed where the model reads it.
-    pub fn render(&self) -> String {
+    pub fn render(&self, children: &[ChildStatus]) -> String {
         let locks = if self.locks.is_empty() {
             "none".to_owned()
         } else {
             self.locks.join(", ")
         };
-        let children = if self.children.is_empty() {
-            "none".to_owned()
-        } else {
-            self.children
-                .iter()
-                .map(|c| {
-                    format!(
-                        "{} {} ctx {}/{}",
-                        c.run,
-                        c.phase,
-                        c.ctx_used.get(),
-                        c.ctx_lock.get()
-                    )
-                })
-                .collect::<Vec<String>>()
-                .join("; ")
-        };
+        let children = render_children(children);
         let now = match &self.now {
             Some(stamp) => stamp.render(),
             None => "not stamped".to_owned(),
@@ -169,6 +181,20 @@ impl StatusSnapshot {
     }
 }
 
+/// Where each piece of handed-down work went, or the word for none.
+/// One line, because `status` is read as lines and a list that wrapped
+/// would break the field order the whole tool exists to keep.
+fn render_children(children: &[ChildStatus]) -> String {
+    if children.is_empty() {
+        return "none".to_owned();
+    }
+    children
+        .iter()
+        .map(|child| format!("{} ({})", child.room, child.kind.as_str()))
+        .collect::<Vec<String>>()
+        .join("; ")
+}
+
 impl Tool for StatusTool {
     fn meta(&self) -> &ToolMeta {
         &self.meta
@@ -183,7 +209,10 @@ impl Tool for StatusTool {
             ));
         }
         let mut result = Map::new();
-        result.insert("text".to_owned(), Value::String(self.snapshot.render()));
+        result.insert(
+            "text".to_owned(),
+            Value::String(self.snapshot.render(&(self.children)())),
+        );
         Ok(ToolOutcome {
             result: Payload::new(result)?,
         })
@@ -216,7 +245,6 @@ mod tests {
             worktree_path: "/city/work".to_owned(),
             worktree_disk: ByteLen::new(4096),
             signals_pending: 2,
-            children: vec![],
             now: None,
             provider_mode: ProviderMode::Normal,
         }
@@ -258,6 +286,33 @@ mod tests {
                 "expected {field}, got {line}"
             );
         }
+    }
+
+    /// `children` was a hardcoded empty list, so a run that had just
+    /// handed work down and then asked about its own situation was told
+    /// it had handed nothing down.
+    #[test]
+    fn the_children_line_says_where_the_work_went_and_which_kind_of_delegate() {
+        let handed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let seen = std::rc::Rc::clone(&handed);
+        let mut tool =
+            StatusTool::watching(snapshot(), Box::new(move || seen.borrow().clone())).unwrap();
+
+        let before = serde_json::to_value(&tool.invoke(&call()).unwrap().result).unwrap();
+        assert!(before["text"].as_str().unwrap().contains("children: none"));
+
+        handed.borrow_mut().push(ChildStatus {
+            room: Address::parse("work/helper").unwrap(),
+            kind: DelegateKind::Ephemeral,
+        });
+        let after = serde_json::to_value(&tool.invoke(&call()).unwrap().result).unwrap();
+        assert!(
+            after["text"]
+                .as_str()
+                .unwrap()
+                .contains("children: work/helper (ephemeral)"),
+            "the desk is asked at call time, not frozen with the tool: {after}"
+        );
     }
 
     #[test]

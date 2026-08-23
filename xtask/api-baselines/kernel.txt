@@ -50,6 +50,7 @@ impl kernel::ChatRequest
 impl kernel::Completion
 impl kernel::CtxLock
 impl kernel::Delegate
+impl kernel::DelegateKind
 impl kernel::Delegator
 impl kernel::Discard
 impl kernel::EgressAllowlist
@@ -231,6 +232,7 @@ pub fn kernel::ChatRequest::empty(&str, u64) -> kernel::ChatRequest
 pub fn kernel::Completion::extend_payload(&self, &mut serde_json::map::Map<alloc::string::String, serde_json::value::Value>) -> core::result::Result<(), kernel::AxError>
 pub fn kernel::Completion::name(&self) -> &'static str
 pub fn kernel::Delegate::kind(&self) -> &kernel::DelegateKind
+pub fn kernel::DelegateKind::as_str(self) -> &'static str
 pub fn kernel::Delegator::delegate(&self, kernel::DelegateKind) -> kernel::Delegate
 pub fn kernel::Delegator::root() -> kernel::Delegator
 pub fn kernel::Discard::new(alloc::vec::Vec<kernel::Address>, kernel::Restoration, kernel::TaintSet, kernel::ByteLen) -> core::result::Result<kernel::Discard, kernel::AxError>

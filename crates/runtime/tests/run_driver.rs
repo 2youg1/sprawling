@@ -124,6 +124,7 @@ fn plan(budget_turns: u32) -> RunPlan {
         goal: "one turn, then stop".to_owned(),
         opening: runtime::Opening::FromJob,
         job: Locator::parse(&format!("file:{}/JOB.md@{}", addr.as_str(), "a".repeat(40))).unwrap(),
+        parent: None,
         budget_turns,
         shape: CallShape {
             model: "script".to_owned(),

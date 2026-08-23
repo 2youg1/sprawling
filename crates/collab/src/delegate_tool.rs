@@ -92,6 +92,14 @@ impl DelegateDesk {
         })
     }
 
+    /// What has been asked for so far, without taking it. This is what
+    /// `status.children` reports: a run that handed work down and then
+    /// asked about its own situation used to be told "none".
+    #[must_use]
+    pub fn asked(&self) -> &[Delegated] {
+        &self.asked
+    }
+
     /// Everything asked for, in the order it was asked for, leaving the
     /// desk empty. Called once when the parent's turn settles.
     pub fn take(&mut self) -> Vec<Delegated> {
@@ -271,6 +279,11 @@ mod tests {
         let mut tool = DelegateTool::new(std::rc::Rc::clone(&desk)).unwrap();
         let outcome = tool.invoke(&call("lab/helper", None)).unwrap();
         assert_eq!(outcome.result.as_map()["room"], "lab/helper");
+        assert_eq!(
+            desk.borrow().asked().len(),
+            1,
+            "the desk answers what has been asked for before it is taken"
+        );
 
         let taken = desk.borrow_mut().take();
         assert_eq!(taken.len(), 1);

@@ -36,6 +36,11 @@ pub struct RunPlan {
     /// which situation the agent is in.
     pub opening: Opening,
     pub job: Locator,
+    /// The run that handed this work down, when one did. Written into
+    /// `run_started` so the tree is a fact anybody folding the ledger
+    /// can read, rather than an inference from two lines happening to
+    /// be next to each other.
+    pub parent: Option<RunId>,
     pub budget_turns: u32,
     pub shape: CallShape,
     pub prefix: FrozenPrefix,
@@ -157,6 +162,9 @@ impl Run<Active> {
         started.insert("task".to_owned(), Value::String(plan.task.clone()));
         started.insert("goal".to_owned(), Value::String(plan.goal.clone()));
         started.insert("job".to_owned(), Value::String(plan.job.to_string()));
+        if let Some(parent) = plan.parent {
+            started.insert("parent".to_owned(), Value::String(parent.to_string()));
+        }
         ledger.append(EventDraft {
             run: plan.run,
             t: start_t,

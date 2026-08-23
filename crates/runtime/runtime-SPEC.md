@@ -456,11 +456,15 @@ pub struct StatusSnapshot { pub who: String, pub addr: Address, pub mode: Mode, 
     pub write_domain: String, pub locks: Vec<String>, pub worktree_path: String, pub worktree_disk: ByteLen,
     pub signals_pending: u32, pub children: Vec<ChildStatus>, pub now: Option<ClockStamp>, pub provider_mode: ProviderMode }
 #[non_exhaustive] pub enum ProviderMode { Normal, Degraded, LocalOnly }
-pub struct ChildStatus { pub run: RunId, pub phase: String, pub ctx_used: Tokens, pub ctx_lock: Tokens }
-pub struct StatusTool { /* snapshot: StatusSnapshot —— 执行器逐回合更新（set_snapshot） */ }
+pub struct ChildStatus { pub room: Address, pub kind: DelegateKind }   // P1.03：重塑
+pub struct StatusTool { /* snapshot＋ children: Box<dyn Fn() -> Vec<ChildStatus>> */ }
+impl StatusTool { pub fn watching(snapshot: StatusSnapshot, children: Box<dyn Fn() -> Vec<ChildStatus>>) -> Result<StatusTool, AxError>; }
 impl Tool for StatusTool { /* meta：name=status、effect=Read、temporal=Timestamped、render=Generic */ }
 
 // ToolBench 住 turn.rs（S3.13 同卡加入）：按 Effect 过门是回合层职责（Handoff 裁定 10），不另立 bench 模块。
+
+- **`children` 为何重塑（P1.03）**：旧形状 `{run, phase, ctx_used, ctx_lock}` 预设子已在跑。真实情形是子 Run 在父嚽结之后才开，故父自己那一跑里 **子既无 run id 也无上下文读数**——四个字段里三个只能填零，而零与未知是两件事。现形状只携得出口的两件：派到哪个房间、哪一类代理。
+- **`children` 是闭包而不是快照字段**：派活发生在 `status` 工具造好之后，一份开跑前拍的快照永远是空的。派生台住 `collab`，而 depmap 不允许 runtime 依赖 collab，故本模块只收一个答「现在派了哪些」的闭包，装配层把台接上去——与 `RunHooks` 四个闭包同一纪律：第二实现不存在时不引 trait。
 // runtime::compaction（P3.14；形状 6 数据面＋形状 1 判定）
 pub enum Content { Prose, Code, Diff, Log, Structured, Table, Unknown }   // 七类，Unknown 是其中之一
 pub enum Strategy { Keep, Head, Ends, Tail, Offload }
@@ -529,6 +533,7 @@ pub struct Active(/* 私有 */);   pub struct Frozen { /* completion、turns */ 
 pub struct RunPlan {                 // 一个 Run 的全部常量，调用方先备齐
     pub run: RunId, pub who: String, pub addr: Address,
     pub task: String, pub goal: String, pub job: Locator,
+    pub parent: Option<RunId>,                            // P1.03：派活给它的那个 Run
     pub budget_turns: u32, pub shape: CallShape,
     pub prefix: FrozenPrefix, pub policy: BuildingPolicy, pub tools: Vec<ToolDef>,
 }
@@ -555,6 +560,7 @@ pub fn drive(plan: RunPlan, ledger: &mut dyn Ledger, model: &mut dyn Model,
 ```
 
 - **为什么要这个模块**：「Dispatch → N 回合 → 冻结」的事件序先前只存在于 `citysim::executor`。真城再写一遍就是两个权威，而两者一旦漂开，**仿真继续绿而真城错**——仿真的全部价值恰好建立在它跑的是同一份代码上。故 citysim 改为本模块的调用方，23 剧本从此直接验证生产回路。
+- **`run_started.parent`**（P1.03）：只在派生开的 Run 上出现。父子关系先前只存在于「两行相邻」这个巧合里，而相邻不是一个可查询的事实；写进载荷之后，前端折得出树，离线重放也折得出同一棵树。
 - **时间纪律**：dispatch 采两次（checkpoint、run_started），每回合一次；**自然结束与预算耗尽时 freeze 再采一次**，handoff 用它、run_frozen 用它＋1（两行同一件事，不值两次采样）；**取消时 freeze 沿用被打断那个回合的时间戳**，因为这次冻结属于那个回合而不是一件新事。三条合起来使一个计数器闭包（citysim）与一个壁钟闭包（真城）在同一驱动下各自正确。
 - **结束判定**：`calls_made == 0` 即 `Completion::Done(Evidence[model_returned])`；跑满 `budget_turns` 即 `Completion::Limit`；任一安全点命中 Cancel 即 `Completion::Cancelled`。三条均经 `freeze` 出口，故 **handoff_written＋run_frozen 是唯一出口**，无第二条退路。第四点 `BeforeSpawn` 与前三点同权：命中即 `Cancelled`，那个回合的 assistant 与 tool results **不入窗**，因为窗口前推是「回合成立」的后果而不是它的一部分。
 - **Window 归驱动持有**：入窗内容就是回合报告的前推结果（assistant＋tool results），放在调用方手里等于把一条不变量交给每个调用方自己维护。

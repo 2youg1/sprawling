@@ -6,16 +6,14 @@ Where a row says **needs a ruling**, it touches something in the `guard` row of 
 
 Where a row says **evidence**, the claim was checked by running something or by a search whose empty result is the finding. Rows without it are judgements, and are marked as such.
 
-## P1 — The sub-agent system: one level lands, the way back does not
+## P1 — The sub-agent system: what is left above one level
 
 **evidence**: a real dispatch whose model called `delegate` opened `lab/helper`, wrote its JOB.md, ran it, and left what came back waiting in the asking room's queue (`what_came_back_from_a_delegate_waits_in_the_room_that_asked_for_it`). `collab::workshop`'s `NodeContract` still has no caller outside its own file.
 
-The tool, the desk and the run-starting path landed in `card-P1.01`; the way back and the fourth cancellation point landed in `card-P1.02`. What is left, in dependency order:
+The tool, the desk and the run-starting path landed in `card-P1.01`; the way back and the fourth cancellation point in `card-P1.02`; `status.children`, `run_started.parent` and the tree in the session list in `card-P1.03`. What is left, in dependency order:
 
-1. **`status.children` is still empty, and honestly so.** A child starts after its parent's turn settles, so during the parent's run there is nothing to report. It becomes a real field only once a run can watch its children while they work.
-2. **The interface shows the tree.** `RunRow` carries no parent, so the live page's session list is flat. A person watching delegated work needs to see which run answers for which.
-3. **Workshop orchestration and fan-in.** `NodeContract` already states what a node reaches, reads at which version, may write, and when it stops — and says its disk form is that node's `JOB.md`. It is the layer above one-level delegation, not on its critical path.
-4. **Whether the person allowed it is a sentence, not a mechanism.** City.md says do not call `delegate` unless allowed; nothing enforces it. An approval class in front of the first spawn of a run would, and `kernel::approval` already has the shape.
+1. **Workshop orchestration and fan-in.** `NodeContract` already states what a node reaches, reads at which version, may write, and when it stops — and says its disk form is that node's `JOB.md`. It is the layer above one-level delegation, not on its critical path.
+2. **Whether the person allowed it is a sentence, not a mechanism.** City.md says do not call `delegate` unless allowed; nothing enforces it. An approval class in front of the first spawn of a run would, and `kernel::approval` already has the shape.
 
 ## P2 — A building's rules are drafted by an agent, not typed by a person
 

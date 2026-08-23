@@ -381,7 +381,6 @@ fn s3_14_one_resident_closes_the_loop_through_the_real_adapters() {
                 worktree_path: "sim/lobby/room1".to_owned(),
                 worktree_disk: kernel::ByteLen::new(14),
                 signals_pending: 0,
-                children: Vec::new(),
                 now: None,
                 provider_mode: runtime::ProviderMode::Normal,
             })
