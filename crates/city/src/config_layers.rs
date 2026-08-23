@@ -341,12 +341,28 @@ mod tests {
         );
     }
 
+    /// Every layer, not only the city's: the file that says how much a
+    /// run may think, which servers it reaches and what its sandbox
+    /// allows must not be writable by that run. The building layer used
+    /// to sit at `<building>/CONFIG.toml`, which is inside the default
+    /// write domain of every run in that building.
     #[test]
-    fn the_citys_own_layer_lives_where_no_write_domain_reaches() {
+    fn no_layer_of_the_ladder_is_writable_by_what_it_governs() {
         let dir = tempfile::tempdir().unwrap();
-        let city = path(dir.path(), &addr("lab"), Layer::City).unwrap();
-        assert!(city.starts_with(dir.path().join(RESERVED_PREFIX)));
-        assert!(city.ends_with(CONFIG_FILE));
+        let room = addr("lab/room1");
+        for layer in [Layer::City, Layer::Building, Layer::Resident] {
+            let file = path(dir.path(), &room, layer).unwrap();
+            assert!(file.ends_with(CONFIG_FILE), "{layer:?}: {}", file.display());
+            let relative = file
+                .strip_prefix(dir.path())
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            assert!(
+                Address::parse(&relative).unwrap().is_reserved(),
+                "{layer:?} is reachable from a write domain: {relative}"
+            );
+        }
         assert!(Address::parse(RESERVED_PREFIX).unwrap().is_reserved());
     }
 

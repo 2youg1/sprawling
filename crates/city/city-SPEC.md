@@ -271,6 +271,21 @@ pub fn index(city_root, building) -> Result<Vec<Entry>, AxError>;   // 算出来
 - **召回是结构化的**：按类与日期归档，循索引读**原文**。不做向量记忆；翻案条件写死——真实召回率 <90% 才重议。
 - **日期取整天**：给人浏览用，精度高过问题所需只会招来没人打算做的比较。
 
+### 8-11 楼的治理字节搬进它自己的保留子树（F2.09；沉淀一处路径权威）
+
+```rust
+pub fn building_path(city_root, addr) -> PathBuf;   // <building>/.sprawling/BUILDING.md
+pub fn config_layers::path(city_root, addr, layer) -> Result<PathBuf, AxError>;
+// 三层统一为 <scope>/.sprawling/CONFIG.toml；city 层因此不再是特例
+```
+
+承 F2.08：不变式已经立起来了，本卡把字节搬到它后面。
+
+- **三层一个表达式**：`path()` 先算出 scope 目录（城根、楼根、房间目录），再一律 `.join(RESERVED_PREFIX).join(CONFIG_FILE)`。原先 City 层写死了 `city_root.join(RESERVED_PREFIX)` 而另两层没有，那个不对称正是洞口。
+- **旧城必须报错，不得静默降级**：`policy::load` 把「BUILDING.md 不存在」当作默认策略（`confidential: false`）。搬完之后，一座旧城的楼就会从「机密」静默变成「不机密」——所以新位置缺失而旧位置存在时**拒绝**，`E_CONFIG_INVALID`，recovery 直接拿出要执行的那一步移动。这不是兼容适配层（它不读旧文件），是一道不让静默降级发生的门。
+- **楼页仍然看得见 BUILDING.md**：`assembly` 组楼页答案时跳过一切点头目录（房间枚举因此也不会把 `.sprawling` 当房间），故 BUILDING.md 改为**按路径显式读一次**再入档。人在界面上看得到、改得了；楼里的 agent 读得到、写不了。
+- **默认写域仍是整栋楼，这是故意的**：一次 Run 为它那栋楼产出一份楼级产物是正常的；把默认收紧到房间会把那件事一并禁掉，而洞口在于治理文件的位置，不在于写域的宽窄。
+
 ## 8.5 两个设计
 
 **A（选中）：`Identity` 两态枚举**。调用方拿到的东西自己会说自己是谁，段字节由它给出。
