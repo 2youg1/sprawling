@@ -8,7 +8,7 @@
 
 一个桌面浏览器，和 `sprawling` 这一个二进制。别的都不需要——不装 npm，不装 node，不装语言运行时，不装数据库。
 
-还需要一个能调用的模型：一个说 OpenAI 或 Anthropic 方言的 provider 的 API key，或者一个说这两种方言之一的本地服务。
+还需要一个能调用的模型：一个说 OpenAI 或 Anthropic 兼容格式的 provider 的 API key，或者一个说这两种格式之一的本地服务。
 
 想自己构建而不是拿现成的二进制，看 [`CONTRIBUTING.md`](CONTRIBUTING.md)。前端先构建、再被嵌进二进制，所以只跑一次 `cargo build` 得到的二进制里装的是昨天的页面。
 
@@ -40,7 +40,7 @@ SPRAWLING_PAIRING_TOKEN=<你自己定的令牌> sprawling serve ~/cities/first 0
 
 在左栏 *setup* 下打开 **settings**。
 
-填你要叫它什么、base URL、方言。URL 的规矩就写在你输入的地方：`https` 到哪都行，`http` 只能到本机。key 最后填。
+填你要叫它什么、base URL、兼容格式。URL 的规矩就写在你输入的地方：`https` 到哪都行，`http` 只能到本机。key 最后填。
 
 **key 不会成为一条命令的一部分。** 它走自己的路进操作系统的凭证服务，回到页面上的只有一个 `secret:realm/name` 形式的引用。此后出现在配置、事件、日志里的都是这个引用，明文只在凭证库里。输入框在发出的一刻就被清空。
 

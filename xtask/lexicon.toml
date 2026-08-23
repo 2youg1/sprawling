@@ -225,3 +225,7 @@ replacement = "ARCHITECTURE.md"
 [[entry]]
 banned = "constitution"
 replacement = "ARCHITECTURE.md"
+
+[[entry]]
+banned = "方言"
+replacement = "兼容格式 (glossary: dialect)"

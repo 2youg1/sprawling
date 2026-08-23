@@ -60,6 +60,8 @@ The directory tree on disk *is* the space: a **City** is a directory tree, a pro
 
 **The UI’s design goal is not to bother you.** No red dots, no unread counts, no infinite scroll, no animated progress bars. The only thing that interrupts you is a decision that requires a human. Everything else waits where you will find it.
 
+**Every component carries its SPEC beside it.** `crates/<crate>/<crate>-SPEC.md` states that crate's interfaces and the reasoning behind them, and it is written before the code and changed before the code changes. A person and an agent therefore alter this project by reading the same file, and a gate refuses a change whose public surface and SPEC move apart.
+
 **Some states are not validated—they are unrepresentable.** Forging an event reference, deserializing a “completed” status, entering credentials across the network, drawing a percentage without a denominator—these cannot be expressed in the type system. Each has a compile-fail counter-example in the tests, because “cannot be written” is itself an assertion that must be proven.
 
 ## Getting it running

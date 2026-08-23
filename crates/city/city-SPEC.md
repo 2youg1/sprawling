@@ -363,7 +363,7 @@ bin `RunWorker::dispatch` → `Identity::load(city_root, addr)` → `segment_byt
 
 只依赖 `kernel`（拓扑硬约束）＋ std。dev 依赖 `tempfile`。
 
-P2.01 增两件，均已在 workspace 钉版（不新增版本权威）：`toml` 与 `serde`（derive）。理由：三层配置的格式是 TOML，而 `toml` 已被 `xtask` 消费（budgets.toml／lexicon.toml）；解析走 serde derive 加 `deny_unknown_fields`，使「写错的键」在反序列化那一刻失败。手写一个 TOML 子集解析器是可行的另一条路，已落选：它会把一个已有权威的格式变成本库自己的方言。
+P2.01 增两件，均已在 workspace 钉版（不新增版本权威）：`toml` 与 `serde`（derive）。理由：三层配置的格式是 TOML，而 `toml` 已被 `xtask` 消费（budgets.toml／lexicon.toml）；解析走 serde derive 加 `deny_unknown_fields`，使「写错的键」在反序列化那一刻失败。手写一个 TOML 子集解析器是可行的另一条路，已落选：它会把一个已有权威的格式变成本库自己的私有变体。
 
 ## 14 硬编码声明
 

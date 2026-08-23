@@ -77,7 +77,7 @@ pub fn response_wire(kind: DialectKind, resp: &ChatResponse) -> Result<serde_jso
 - **保三样**：①断点位——canonical 的 `cache: true` 标记翻到 Anthropic 侧＝`cache_control{type:"ephemeral"}`，逐块原位；OpenAI 侧无显式断点（供应商缓存是隐式前缀匹配），翻译**记录性丢弃**（文档声明，不静默）；②工具形状——`ToolDef{name, description, input_schema}`↔Anthropic `tools[]`／OpenAI `tools[{type:"function",function:{…}}]`，逐字段；tool_use↔tool_calls（id/name/args 无失）；③usage——Anthropic `usage{input_tokens,output_tokens,cache_read_input_tokens,cache_creation_input_tokens}`／OpenAI `usage{prompt_tokens,completion_tokens,prompt_tokens_details.cached_tokens}`→`ModelUsage` 四整数字段，缺失字段取 0。
 - 未知 wire 字段：请求侧不产（我们只写自己声明的字段＋overrides）；响应侧忽略未知键、缺必需键报 `E_WIRE_MISMATCH`（subject 写键路径）。
 - S3.01 落地记录：canonical 枚举（Role／StopReason／ContentBlock）在 crate 外属 non_exhaustive，本模块通配臂恒 fail-closed（未知变体＝E_WIRE_MISMATCH，不猜不默）；wire JSON 键序＝serde_json BTreeMap 字典序（确定性，对端语义无关）。
-- `E_ENDPOINT_DIALECT_UNSUPPORTED`：DialectKind 之外的方言请求（wire 探查失败）；本模块两码之外不新增。
+- `E_ENDPOINT_DIALECT_UNSUPPORTED`：DialectKind 之外的兼容格式请求（wire 探查失败）；本模块两码之外不新增。
 
 **P1.10 增：思考块与思考强度的两侧翻译**
 
@@ -93,7 +93,7 @@ OpenAI 侧无对应物：出向翻译**记录性丢弃**思考块（同断点位
 | `None` | `thinking:{type:"disabled"}` | `reasoning:{effort:"none"}` |
 | `Low`／`Medium`／`High`／`XHigh`／`Max` | `effort:"…"` | `reasoning:{effort:"…"}` |
 
-两方言都拼得出全部六级，**唯一差别是「不思考」写在哪个字段**：Anthropic 的 `effort` 只收五级，无 `none`。通配臂仍 fail-closed，但它现在只能被「日后新增且尚未教会写的级别」触发（同 `role_str`／`stop_str` 的既有习惯）。
+两种兼容格式都拼得出全部六级，**唯一差别是「不思考」写在哪个字段**：Anthropic 的 `effort` 只收五级，无 `none`。通配臂仍 fail-closed，但它现在只能被「日后新增且尚未教会写的级别」触发（同 `role_str`／`stop_str` 的既有习惯）。
 
 **缓存后果写在这里，因为它是选型理由**：官方排错文档记明「switching thinking modes, changing the effort value, and changing `budget_tokens` all invalidate message cache breakpoints」。故强度住 `FrozenConfig`（kernel-SPEC §8-22），Run 内不可变；本模块只负责把已冻结的值翻上线。
 
@@ -132,7 +132,7 @@ impl kernel::Model for Native { /* 委托内部 Endpoint（OpenAi dialect、Auth
 ```
 
 - 本地推理恒走此路：S3 形＝回环 OpenAI 兼容服务的固定客户端；「恒回环」由构造子强制（fail-closed），出网面因此在类型上不存在。
-- 不是 pass-through 豁免：Native 的策略＝回环强制＋无凭证＋方言固定，三条都是 Endpoint 不持有的判定。
+- 不是 pass-through 豁免：Native 的策略＝回环强制＋无凭证＋兼容格式固定，三条都是 Endpoint 不持有的判定。
 
 ### 8-4 gateway::credential（S3.03；形状 4＋内缝 Vault）
 
@@ -236,7 +236,7 @@ pub struct AttachedEndpoint { pub name, pub base_url, pub dialect: DialectKind,
 impl AttachedEndpoint {
     pub fn is_local(&self) -> bool;          // 与本地适配器同一判据（native::is_loopback）
     pub fn has_credential(&self) -> bool;    // 关于凭证，金库外只能回答这一问
-    pub fn chat_url(&self) -> String;        // base_url ＋ 方言自己的路径
+    pub fn chat_url(&self) -> String;        // base_url ＋ 该兼容格式自己的路径
     pub fn models_url(&self) -> String;
 }
 pub struct EndpointBook { /* 私有：endpoints、chosen */ }
@@ -254,7 +254,7 @@ pub fn selected_payload(ModelTag, &str, &ModelEntry) -> Result<Payload, AxError>
 - **为何不是 duty pool**：多 Agent 功能未成形之前，职责池没有消费者，而没人读的权威只会漂。降为 `ModelTag` 两值枚举（`Main`／`Digest`）：**标签因为有人按它取模型而存在**，新增一个标签的前提是先有调用方。
 - **两个入口一个读者**：`apply`（重建路径，手里是 record）与 `apply_payload`（写入路径，手里是刚要写的 payload）共用同一套载荷读取，于是「写者以为的」与「重建得到的」不可能分岔。
 - **confidential 在选型点再守一次**：非本机 endpoint 对 confidential 楼恒拒（`E_GATE_DENIED`）。`gateway::endpoint` 的兜底拒同期改为**按本地性判定**（而非一律拒）：规则是「字节不出本机」，不是「不准用这个类型」；否则一个回环的 Anthropic 服务器会被误拒。
-- **路径归方言**：人输入 base URL（provider 文档就是那么印的），`messages`／`chat/completions`／`models` 由方言拼。这与 `EndpointConfig.base_url`「完整端点 URL、不拼路径」并不矛盾：适配器保持字面，拼路径的是上层登记面。
+- **路径归兼容格式**：人输入 base URL（provider 文档就是那么印的），`messages`／`chat/completions`／`models` 由兼容格式拼。这与 `EndpointConfig.base_url`「完整端点 URL、不拼路径」并不矛盾：适配器保持字面，拼路径的是上层登记面。
 
 ### 8-10 gateway::endpoint 探测面（P1.11）
 
@@ -286,7 +286,7 @@ dialect 先行（纯函数零依赖，golden 钉形）→endpoint 骨架（假 p
 
 - `E_PROVIDER`：不可定义掉——网络与对端是本 crate 的本质失败面；subject 写状态码与端点名，恒不含请求体。
 - `E_WIRE_MISMATCH`：不可定义掉——对端响应形状漂移是外部事实；subject 写键路径。
-- `E_ENDPOINT_DIALECT_UNSUPPORTED`：不可定义掉——用户可配任意 external provider，方言探查失败必须可报。
+- `E_ENDPOINT_DIALECT_UNSUPPORTED`：不可定义掉——用户可配任意 external provider，兼容格式探查失败必须可报。
 - `E_CREDENTIAL_MISSING`／`E_CONFIG_INVALID`：kernel 已有码，语义照 Custody 一节；不新增码。
 - `E_SECRET_EGRESS`：本 crate 不产（出口扫描住 gate::egress 与 checkpoint 面）；endpoint 组请求不做二次扫描（Custody 在入口已换引用，纵深由门守）。
 

@@ -254,7 +254,8 @@ pub fn build_prefix(plan: PrefixPlan) -> Result<PrefixBuild, AxError>;
 
 - **首轮不再指向任何东西（P6.03）**：`JOB.md` 的正文已是 Run 段，故 `FULL READ:` 那一行与它携的 `cas:b3-…` 一起取消——城里没有一个工具解析得了内容哈希，而溯源在 Ledger 里已记两遍。`Opening` 的两臂不是排版偏好：被派了一件活的会话与正在和人说话的会话要的第一句话不同，而把人那句话包成 `Task:`／`Goal:` 表单，换回来的也是一张表单。
 - **read 的两条路，差别在于谁选的（P6.04）**：**路径是模型选的，故受审**——`Address::parse` 杀穿越，`is_reserved` 杀保留子树（`E_GATE_DENIED`）；**catalog 里的名字是人选的**——楼的阅览室写下它时准入就已发生，故它解到的 skill 可以住在保留空间里。两条路共用一个参数，因为对模型而言它们是同一件事（把一份东西调到眼前）；**先问 catalog** ，一个同名文件不得遮蔽楼已经准入的 skill。
-- **`Catalog::expand` 改答 `Expansion` 而不是 `String`（P6.04）**：skill 展开成一个可打开的地址，mode 展开成一段**已在 prompt 里**的正文，两者压成一个字符串时，调用方只能拿它去试解析成地址——而一段恰好能解析成地址的 mode 正文就会被当成文件打开。这个错误真发生了，是一条红测试拿住的。
+- **`Catalog::expand` 改答 `Expansion { Skill { addr }, Said { text } }` 而不是 `String`（P6.04）**：skill 展开成一个可打开的地址，其余展开成目录自己持有的正文；两者压成一个字符串时，调用方只能拿它去试解析成地址，而一段恰好能解析成地址的正文就会被当成文件打开。这个错误真发生了，是一条红测试拿住的。
+- **正文不在 prompt 里，所以交出去而不是拒绝**：`render()` 只写每条的 disclosure，`expansion` 从未进过窗口。最初那版 `read` 对 mode 答「已在你的 prompt 里，没什么可打开」，是错的。
 - **它是 `Catalog::expand` 自 S3.10 以来的第一个调用者**：在它之前，一栋楼的阅览室能报出一个 skill 的名字而永远交不出它。
 - 跨段去重：同 addr 两段命中只装首次（段序 city→building→resident→run）；后段记 skipped{reason:"duplicate"}。
 - 截断：文件超段位余额即截到边界，原处留 ASCII 标记 `[truncated: N bytes]`（prefix 面向英文窗口），恒不静默丢尾；标记字节从段预算先扣。
@@ -362,7 +363,16 @@ impl Catalog {
 
 **第二级披露今天仍不可达，原因写在这里而不是留给人撞**：SKILL 的 `expansion` 是 `city::holding_address()` 给的一个地址，坐在**保留前缀 `.sprawling/` 下**，而本构建的工具台里**没有读文件的工具**（`edit` 只改不读）。故 `render()` 故意不印那个地址：叫一个模型去读它取不到的东西，比不告诉它更坏。补齐它需要一件读工具，那是一项新能力而不是本卡的缺陷修复。
 
-### 8-12 runtime::mode（S3.10；形状 6）
+### 8-12 runtime::mode（S3.10；形状 6；P6.05 增 dev 入口）
+
+```rust
+pub const DEV_ENTRY: &str = "dev";
+pub fn dev_entry() -> CatalogEntry;   // 一行披露，全部细则归 expansion
+```
+
+- **一个 Run 只被告知它所在的那个 mode**，于是没有任何 Agent 知道这座城自己的代码与 SPEC 是可改的。`dev` 行补上这一句，**而且只补一句**：三个模式的定义、阅读次序（SPEC → 代码 → 旁边的测试）与「下一步去跟人要模式」全在 expansion 里，由 `read` 按需取。**大多数会话不改这座城，就只付一行的价。**
+
+### 8-12b runtime::mode 原有面（S3.10）
 
 ```rust
 #[non_exhaustive] pub enum Mode { PlanGoal, Up, Sc, Ud, Experiment }

@@ -92,6 +92,8 @@ Two more relations are worth stating because they are easy to invert. A **Gate**
 | **exec** | The tool that runs a program, a Python artifact, or a shell line, inside the sandbox the frozen configuration allows. |
 | **edit** | The tool that changes a file, against a base version, inside the write domain. |
 | **status** | The tool that answers what a run's own situation is: turns, budget, what waits for it. |
+| **read** | The tool that opens one file by its path, or one catalog entry — a skill, a mode, the developer entry — by the name the catalog lists it under. A model-chosen path never reaches a reserved subtree; a catalog name may, because a person admitted it. |
+| **dialect** (兼容格式) | The request and reply format one provider speaks — OpenAI-shaped or Anthropic-shaped. `gateway::dialect` translates between the canonical shape and one of them, in both directions. Chinese prose says 兼容格式; the identifier stays English. |
 | **Endpoint** | One provider's chat URL, dialect, credential and headers. The city reaches an **external provider** only through one. |
 | **Connector** | An external tool server a building configured, reached over MCP. Its tools carry a `Connector` effect, so the egress door knows where they go without a model naming a host. |
 | **subscription login** | Signing in to a provider with a subscription instead of an API key: begin, approve in a browser, bring back the code the provider shows. |

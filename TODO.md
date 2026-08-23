@@ -46,10 +46,9 @@ In dependency order — each step is small, and none can be skipped:
 4. **The live page cannot see anything from before it opened.** The server broadcasts and never backfills. A `Query` returning a bounded slice of history would fix it; `memory::index` already maps `seq` to a byte offset, which is the half that would otherwise be hard.
 5. **Ctrl-C is still a process death.** `/quit` closes the console and leaves the city serving; `sprawling resume` recovers a hard stop. What is missing is the Handoff an orderly close would write, so a stop that was chosen and a stop that was a crash are indistinguishable in the record.
 
-## P5 — The words and the ledger of numbers
+## P5 — The ledger of numbers
 
-1. **`方言` retires in favour of `兼容格式`.** Six places in Chinese prose: `channels-SPEC.md`, `gateway-SPEC.md` (four), `kernel-SPEC.md`, `getting-started.zh-CN.md` (two), `README.zh-CN.md`. The English identifier `gateway::dialect` does not move — identifiers are English. Holding it needs an entry in `xtask/lexicon.toml`; **needs a ruling** (given in conversation 2026-08-24, to be recorded as the trailer).
-2. **Two size readings have drifted past their slack.** `frontend_artifact` measures 524,254 B against a best of 490,594 B, and `release_binary` 8,317,952 B against 7,249,920 B. The likely cause is `web::lang`'s two-language table (F2.14, F2.18) and the binary that embeds it. `just check` does not build either artifact, so CI is not red; a `just dist` is. Rebuild both, then either recover the size or record the readings with the reason. **needs a ruling**: `xtask/budgets.toml`.
+1. **Two size readings have drifted past their slack.** `frontend_artifact` measures 524,254 B against a best of 490,594 B, and `release_binary` 8,317,952 B against 7,249,920 B. The likely cause is `web::lang`'s two-language table (F2.14, F2.18) and the binary that embeds it. `just check` does not build either artifact, so CI is not red; a `just dist` is. Rebuild both, then either recover the size or record the readings with the reason. **needs a ruling**: `xtask/budgets.toml`.
 
 ## P6 — Claims made by construction rather than by observation
 
