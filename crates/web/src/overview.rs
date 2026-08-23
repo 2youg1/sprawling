@@ -382,7 +382,7 @@ pub fn OverviewView(
                                         "{building.addr.as_str()}"
                                     }
                                     span { class: "note",
-                                        "{crate::progress::bar(&building.progress, false, crate::progress::Subject::Plan).label}"
+                                        "{crate::progress::bar(&building.progress, false, crate::progress::Subject::Plan, lang()).label}"
                                     }
                                     span { class: "note",
                                         if working_here(&snapshot, &building.addr) {

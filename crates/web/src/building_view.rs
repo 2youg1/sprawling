@@ -194,6 +194,7 @@ pub fn BuildingView(
                         &answer.progress,
                         false,
                         crate::progress::Subject::Plan,
+                        lang(),
                     ),
                 }
                 if answer.rooms.is_empty() {
@@ -426,7 +427,12 @@ mod tests {
         // to phrase its own, which is how the city page and this one came
         // to say the same thing two ways.
         let held = answer(vec!["Roadmap.md"]);
-        let shown = crate::progress::bar(&held.progress, false, crate::progress::Subject::Plan);
+        let shown = crate::progress::bar(
+            &held.progress,
+            false,
+            crate::progress::Subject::Plan,
+            crate::lang::Lang::En,
+        );
         assert_eq!(shown.label, "3/7");
 
         let mut unplanned = held;
@@ -434,7 +440,12 @@ mod tests {
             steps: 0,
             budget: channels::BudgetUse::default(),
         });
-        let said = crate::progress::bar(&unplanned.progress, false, crate::progress::Subject::Plan);
+        let said = crate::progress::bar(
+            &unplanned.progress,
+            false,
+            crate::progress::Subject::Plan,
+            crate::lang::Lang::En,
+        );
         assert_eq!(said.label, "no plan");
         assert!(said.filled.is_none(), "a percentage nobody can compute");
     }

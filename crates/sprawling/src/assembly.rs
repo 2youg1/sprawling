@@ -2745,7 +2745,9 @@ impl RunWorker {
         let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
         let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
         let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&archive_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&archive_tool))?;
         // The execution boundary. What the run may reach is the frozen
         // config's answer; where the engine and the interpreter live is
         // the machine's, so a city carried elsewhere does not carry this
@@ -2766,12 +2768,22 @@ impl RunWorker {
             addr.clone(),
         )?;
         catalog.borrow_mut().admit_tool(kernel::Tool::meta(&exec))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&claim_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&claim_tool))?;
         catalog.borrow_mut().admit_tool(kernel::Tool::meta(&edit))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&status))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&signal_tool))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&goal_tool))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&pr_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&status))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&signal_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&goal_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&pr_tool))?;
         // The one tool that reads, and the only caller of the catalog's
         // second-level disclosure: without it a building's reading room
         // could name a skill and never hand it over. It holds the

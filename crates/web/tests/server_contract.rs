@@ -146,7 +146,12 @@ fn an_answer_reaches_the_view_that_asked_for_it() {
     assert_eq!((planned.done, planned.blocked, planned.total), (1, 1, 4));
 
     // And the bar that renders it is the one the theme knows about.
-    let bar = web::bar(&city.buildings[0].progress, false, web::Subject::Plan);
+    let bar = web::bar(
+        &city.buildings[0].progress,
+        false,
+        web::Subject::Plan,
+        web::Lang::En,
+    );
     assert_eq!(bar.filled, Some(web::per_mille_of(1, 4)));
     assert!(link.is_live());
 }

@@ -437,14 +437,18 @@ pub fn rebuild<'a>(events: impl IntoIterator<Item = &'a EventRecord>) -> Snapsho
 /// *what* the status says testable without a renderer, and leaves the
 /// decision of *how* it looks to the component below.
 #[must_use]
-pub fn status_line(snapshot: &Snapshot) -> [String; 4] {
+pub fn status_line(lang: crate::lang::Lang, snapshot: &Snapshot) -> [String; 4] {
     [
-        snapshot
-            .city()
-            .map_or_else(|| "no city".to_owned(), |a| a.as_str().to_owned()),
-        spend_line(snapshot),
-        waiting_line(snapshot),
-        format!("provider {}", snapshot.provider().as_str()),
+        snapshot.city().map_or_else(
+            || crate::lang::say(lang, Msg::StatusNoCity).to_owned(),
+            |a| a.as_str().to_owned(),
+        ),
+        spend_line(lang, snapshot),
+        waiting_line(lang, snapshot),
+        crate::lang::fill(
+            crate::lang::say(lang, Msg::StatusProvider),
+            &[("state", snapshot.provider().as_str())],
+        ),
     ]
 }
 
@@ -452,11 +456,17 @@ pub fn status_line(snapshot: &Snapshot) -> [String; 4] {
 /// cannot describe. An older client meeting a newer city says so instead
 /// of showing a smaller number.
 #[must_use]
-pub fn waiting_line(snapshot: &Snapshot) -> String {
-    let waiting = snapshot.approvals_pending();
+pub fn waiting_line(lang: crate::lang::Lang, snapshot: &Snapshot) -> String {
+    let waiting = snapshot.approvals_pending().to_string();
     match snapshot.unreadable_approvals() {
-        0 => format!("{waiting} awaiting you"),
-        blind => format!("{waiting} awaiting you - and {blind} this page cannot read"),
+        0 => crate::lang::fill(
+            crate::lang::say(lang, Msg::StatusAwaitingYou),
+            &[("count", &waiting)],
+        ),
+        blind => crate::lang::fill(
+            crate::lang::say(lang, Msg::StatusAwaitingAndUnreadable),
+            &[("count", &waiting), ("blind", &blind.to_string())],
+        ),
     }
 }
 
@@ -468,29 +478,37 @@ pub fn waiting_line(snapshot: &Snapshot) -> String {
 /// When no call carried a settled amount the line leads with tokens and
 /// says why there is no figure, because `$0.00` would read as free.
 #[must_use]
-pub fn spend_line(snapshot: &Snapshot) -> String {
+pub fn spend_line(lang: crate::lang::Lang, snapshot: &Snapshot) -> String {
     let usage = snapshot.usage();
     let consumed = render_tokens(Tokens::new(
         usage.input.get().saturating_add(usage.output.get()),
     ));
+    let word = |msg| crate::lang::say(lang, msg);
     if usage.priced_calls == 0 {
         return if usage.unpriced_calls == 0 {
             // Not "nothing spent yet": this figure is folded from the
             // stream, which begins when the page connects, so a city that
             // spent money an hour ago would be described as having spent
             // nothing. The window is named instead of being implied.
-            "nothing spent since this page connected".to_owned()
+            word(Msg::StatusNothingSpent).to_owned()
         } else {
-            format!("{consumed} used - no price reported")
+            crate::lang::fill(word(Msg::StatusUsedNoPrice), &[("used", &consumed)])
         };
     }
+    let spent = render_usd(snapshot.spent());
     if usage.unpriced_calls == 0 {
-        format!("{} spent - {consumed}", render_usd(snapshot.spent()))
+        crate::lang::fill(
+            word(Msg::StatusSpent),
+            &[("spent", &spent), ("used", &consumed)],
+        )
     } else {
-        format!(
-            "{} spent - {consumed} - {} call(s) unpriced",
-            render_usd(snapshot.spent()),
-            usage.unpriced_calls
+        crate::lang::fill(
+            word(Msg::StatusSpentSomeUnpriced),
+            &[
+                ("spent", &spent),
+                ("used", &consumed),
+                ("calls", &usage.unpriced_calls.to_string()),
+            ],
         )
     }
 }
@@ -637,6 +655,7 @@ pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
                 }),
                 row.phase == RunPhase::AwaitingApproval,
                 crate::progress::Subject::Run,
+                crate::lang::Lang::En,
             );
             (
                 id,
@@ -885,14 +904,14 @@ pub fn Root(
     on_follow: EventHandler<bool>,
     on_dismiss: EventHandler<()>,
 ) -> Element {
-    let status = status_line(&snapshot);
-    let busy = busy_buildings(&snapshot);
-    let spots = destinations(&snapshot);
-    let running = latest_run(&snapshot);
     // The language every word on this page is said in. One signal for
     // the whole tree rather than a prop through twenty components: what
     // a person reads in is a fact about the page, not about a panel.
     let lang = use_context::<Signal<crate::lang::Lang>>();
+    let status = status_line(lang(), &snapshot);
+    let busy = busy_buildings(&snapshot);
+    let spots = destinations(&snapshot);
+    let running = latest_run(&snapshot);
     let word = move |msg: crate::lang::Msg| crate::lang::say(lang(), msg);
     rsx! {
         main { class: "layout",
@@ -1253,6 +1272,12 @@ pub fn App() -> Element {
     // whose machine is in Chinese should not have to find a switch to
     // be spoken to in Chinese.
     use_context_provider(|| Signal::new(crate::lang::preferred()));
+    // Read back rather than kept from the line above: the signal is the
+    // one authority for what language this page reads in, and the
+    // listeners below say their words when they fire, not when they are
+    // registered - so a person who switches language mid-session is
+    // answered in the new one.
+    let lang = use_context::<Signal<crate::lang::Lang>>();
     let snapshot = use_signal(Snapshot::new);
     #[cfg_attr(
         target_arch = "wasm32",
@@ -1283,7 +1308,7 @@ pub fn App() -> Element {
     // and the browser's back button travel one path and cannot disagree
     // about where the person is. A fragment this build cannot resolve
     // becomes a refusal rather than a silent landing on the first page.
-    follow_the_address_bar(view, refused);
+    follow_the_address_bar(view, refused, lang);
     let mut selected = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
@@ -1308,6 +1333,7 @@ pub fn App() -> Element {
         view,
         expecting,
         refused,
+        lang,
     });
     #[cfg(not(target_arch = "wasm32"))]
     let outbound = Outbound;
@@ -1403,6 +1429,10 @@ struct Wiring {
     /// it is the answer to something one person asked, and the snapshot
     /// holds only what the ledger says.
     refused: Signal<Option<crate::alert::Refused>>,
+    /// What language the words this wiring produces are said in. A
+    /// signal rather than a value: these closures speak long after the
+    /// page mounted.
+    lang: Signal<crate::lang::Lang>,
 }
 
 /// Mounts the one reader of the address bar.
@@ -1414,6 +1444,7 @@ struct Wiring {
 fn follow_the_address_bar(
     mut view: Signal<View>,
     mut refused: Signal<Option<crate::alert::Refused>>,
+    lang: Signal<crate::lang::Lang>,
 ) {
     use dioxus::prelude::use_hook;
     use wasm_bindgen::JsCast as _;
@@ -1427,11 +1458,14 @@ fn follow_the_address_bar(
             // their own bookmarks are unreliable while never admitting it.
             None => {
                 if let Some(named) = crate::route::unresolved() {
+                    let said = lang();
                     refused.set(Some(crate::alert::Refused {
                         code: "E_NO_SUCH_PAGE".to_owned(),
-                        what: format!("this build has no page at {named}"),
-                        recovery: "the pages this build has are in the list on the left;                                    the address bar shows the one you are on"
-                            .to_owned(),
+                        what: crate::lang::fill(
+                            crate::lang::say(said, Msg::RouteNoSuchPage),
+                            &[("named", &named)],
+                        ),
+                        recovery: crate::lang::say(said, Msg::RouteNoSuchPageRecovery).to_owned(),
                     }));
                 }
             }
@@ -1461,7 +1495,12 @@ fn follow_the_address_bar(
 /// Off the browser there is no address bar, so the signal is the only
 /// authority and nothing has to follow anything.
 #[cfg(not(target_arch = "wasm32"))]
-fn follow_the_address_bar(_view: Signal<View>, _refused: Signal<Option<crate::alert::Refused>>) {}
+fn follow_the_address_bar(
+    _view: Signal<View>,
+    _refused: Signal<Option<crate::alert::Refused>>,
+    _lang: Signal<crate::lang::Lang>,
+) {
+}
 
 #[cfg(target_arch = "wasm32")]
 fn connect(wiring: Wiring) -> Outbound {
@@ -1483,6 +1522,7 @@ fn connect(wiring: Wiring) -> Outbound {
         mut view,
         mut expecting,
         mut refused,
+        lang,
     } = wiring;
     use_hook(move || {
         let outbound = std::rc::Rc::new(std::cell::RefCell::new(None));
@@ -1529,12 +1569,13 @@ fn connect(wiring: Wiring) -> Outbound {
                         // happened and whether it needs a person are two
                         // readings of one event, not two readers of the
                         // stream.
+                        let said = lang();
                         if let Ok(mut alerts) = alerts.try_borrow_mut()
-                            && crate::alert::absorb(&mut alerts, &event)
+                            && crate::alert::absorb(said, &mut alerts, &event)
                                 == crate::alert::Raise::Interrupt
-                            && let Some(alert) = crate::alert::alert_for(&event)
+                            && let Some(alert) = crate::alert::alert_for(said, &event)
                         {
-                            crate::alert::interrupt(&alert);
+                            crate::alert::interrupt(said, &alert);
                         }
                         if let Some(query) = invalidated_by(event.kind()) {
                             let _ =
@@ -1600,7 +1641,7 @@ fn connect(wiring: Wiring) -> Outbound {
                     // it. Before this, the client received the frame
                     // and dropped it, and the page said nothing at all.
                     crate::socket::LinkAction::Report(error) => {
-                        refused.set(Some(crate::alert::refused(&error)));
+                        refused.set(Some(crate::alert::refused(lang(), &error)));
                     }
                     // The retry ladder is not history either, and
                     // closing on the way out of view is the transport
@@ -1815,8 +1856,12 @@ mod tests {
     #[test]
     fn the_status_line_is_a_function_of_the_snapshot_alone() {
         let mut snapshot = Snapshot::new();
-        let first = status_line(&snapshot);
-        assert_eq!(first, status_line(&snapshot), "same input, same words");
+        let first = status_line(crate::lang::Lang::En, &snapshot);
+        assert_eq!(
+            first,
+            status_line(crate::lang::Lang::En, &snapshot),
+            "same input, same words"
+        );
         assert!(first[0].contains("no city"));
 
         // The payload of an approval is the item, because that is what
@@ -1841,7 +1886,7 @@ mod tests {
             Seq::new(2),
             channels::B3Hash::digest(b"prev"),
         ));
-        let after = status_line(&snapshot);
+        let after = status_line(crate::lang::Lang::En, &snapshot);
         assert_ne!(first, after, "and it moves when the snapshot moves");
         assert!(after[2].starts_with('1'));
     }
@@ -2445,7 +2490,7 @@ mod tests {
             Seq::new(1),
             channels::B3Hash::digest(b"prev"),
         ));
-        let line = spend_line(&snapshot);
+        let line = spend_line(crate::lang::Lang::En, &snapshot);
         assert!(!line.contains('$'), "{line}");
         assert!(line.contains("48.2k tokens"), "{line}");
         assert!(line.contains("no price reported"), "{line}");
@@ -2460,6 +2505,7 @@ mod tests {
     #[test]
     fn a_refusal_is_on_the_page_with_the_way_out_beside_it() {
         let told = crate::alert::refused(
+            crate::lang::Lang::En,
             &channels::AxError::failure(
                 channels::AxCode::ConfigInvalid,
                 "attach an endpoint",

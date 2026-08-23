@@ -114,11 +114,15 @@ impl ReadTool {
             };
         }
         let addr = kernel::Address::parse(asked).map_err(|err| {
-            AxError::failure(AxCode::InvalidArgs, "read", format!("{asked}: {}", err.subject()))
-                .with_recovery(
-                    "pass a city-relative path with no `..` and no leading slash, or a name from \
+            AxError::failure(
+                AxCode::InvalidArgs,
+                "read",
+                format!("{asked}: {}", err.subject()),
+            )
+            .with_recovery(
+                "pass a city-relative path with no `..` and no leading slash, or a name from \
                      the catalog",
-                )
+            )
         })?;
         if addr.is_reserved() {
             return Err(AxError::failure(
@@ -162,8 +166,12 @@ impl Tool for ReadTool {
             .get("path")
             .and_then(Value::as_str)
             .ok_or_else(|| {
-                AxError::failure(AxCode::InvalidArgs, "read", "missing string argument `path`")
-                    .with_recovery("pass one string: a city-relative path, or a catalog name")
+                AxError::failure(
+                    AxCode::InvalidArgs,
+                    "read",
+                    "missing string argument `path`",
+                )
+                .with_recovery("pass one string: a city-relative path, or a catalog name")
             })?;
         let path = self.resolve(asked)?;
         let text = std::fs::read_to_string(&path).map_err(|err| {
@@ -171,9 +179,10 @@ impl Tool for ReadTool {
                 std::io::ErrorKind::NotFound => AxCode::InvalidArgs,
                 _ => AxCode::StorageFatal,
             };
-            AxError::failure(code, "read", format!("{asked}: {err}"))
-                .with_recovery("check the name against what the catalog lists, or list the \
-                                directory with `exec` first")
+            AxError::failure(code, "read", format!("{asked}: {err}")).with_recovery(
+                "check the name against what the catalog lists, or list the \
+                                directory with `exec` first",
+            )
         })?;
         let mut out = Map::new();
         out.insert("path".to_owned(), Value::String(asked.to_owned()));
@@ -181,7 +190,11 @@ impl Tool for ReadTool {
         // thing: a result the pipeline shortened says so in its own
         // envelope, and this is what it was shortened from.
         let bytes = u64::try_from(text.len()).map_err(|_| {
-            AxError::failure(AxCode::StorageFatal, "read", format!("{asked}: length overflow"))
+            AxError::failure(
+                AxCode::StorageFatal,
+                "read",
+                format!("{asked}: length overflow"),
+            )
         })?;
         out.insert("bytes".to_owned(), Value::Number(bytes.into()));
         out.insert("text".to_owned(), Value::String(text));
@@ -246,7 +259,10 @@ mod tests {
         ] {
             let err = tool.invoke(&call(asked)).unwrap_err();
             assert_eq!(err.code(), &AxCode::GateDenied, "{asked} was allowed");
-            assert!(!err.recovery().is_empty(), "{asked} refused with no way out");
+            assert!(
+                !err.recovery().is_empty(),
+                "{asked} refused with no way out"
+            );
         }
     }
 

@@ -62,8 +62,8 @@ pub enum web::RunPhase
 pub enum web::Subject
 pub enum web::Trend
 pub enum web::View
-pub fn web::AlertKind::as_str(self) -> &'static str
 pub fn web::AlertKind::interrupts(self) -> bool
+pub fn web::AlertKind::title(self) -> web::Msg
 pub fn web::Alerts::clear(&mut self, &str) -> bool
 pub fn web::Alerts::new() -> Self
 pub fn web::Alerts::raise(&mut self, &web::Alert) -> web::Raise
@@ -135,10 +135,10 @@ pub fn web::Snapshot::usage(&self) -> web::Usage
 pub fn web::Trend::between(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> Self
 pub fn web::Trend::mark(self) -> &'static str
 pub fn web::Vitals(web::vitals::VitalsProps) -> dioxus_core::innerlude::Element
-pub fn web::absorb(&mut web::Alerts, &kernel::event::EventRecord) -> web::Raise
-pub fn web::alert_for(&kernel::event::EventRecord) -> core::option::Option<web::Alert>
+pub fn web::absorb(web::Lang, &mut web::Alerts, &kernel::event::EventRecord) -> web::Raise
+pub fn web::alert_for(web::Lang, &kernel::event::EventRecord) -> core::option::Option<web::Alert>
 pub fn web::backoff_ms(u32) -> u64
-pub fn web::bar(&kernel::completion::Progress, bool, web::Subject) -> web::Bar
+pub fn web::bar(&kernel::completion::Progress, bool, web::Subject, web::Lang) -> web::Bar
 pub fn web::bin_rows(&channels::wire::DiscardAnswer) -> alloc::vec::Vec<web::BinRow>
 pub fn web::can_dispatch(&channels::wire::EndpointsAnswer) -> bool
 pub fn web::cleared_by(&kernel::event::EventRecord) -> core::option::Option<alloc::string::String>
@@ -188,7 +188,7 @@ pub fn web::read_frame(&str) -> web::LinkEvent
 pub fn web::ready(&web::AttachForm) -> web::AttachReadiness
 pub fn web::rebuild<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> web::Snapshot
 pub fn web::recycle_bin(alloc::vec::Vec<web::BinRow>) -> alloc::vec::Vec<web::BinRow>
-pub fn web::refused(&kernel::error::AxError) -> web::Refused
+pub fn web::refused(web::Lang, &kernel::error::AxError) -> web::Refused
 pub fn web::render_tokens(kernel::budget::Tokens) -> alloc::string::String
 pub fn web::render_usd(kernel::budget::UsdMicros) -> alloc::string::String
 pub fn web::resolved_chroma(u16, u16, u16) -> u16
@@ -201,9 +201,9 @@ pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros
 pub fn web::shelves(&channels::wire::ArchiveAnswer) -> alloc::vec::Vec<web::Shelf>
 pub fn web::short_run(kernel::event::RunId) -> alloc::string::String
 pub fn web::signs(&channels::wire::MetricsAnswer) -> [web::Sign; 3]
-pub fn web::spend_line(&web::Snapshot) -> alloc::string::String
+pub fn web::spend_line(web::Lang, &web::Snapshot) -> alloc::string::String
 pub fn web::started_here(&kernel::event::EventRecord, &str) -> core::option::Option<kernel::event::RunId>
-pub fn web::status_line(&web::Snapshot) -> [alloc::string::String; 4]
+pub fn web::status_line(web::Lang, &web::Snapshot) -> [alloc::string::String; 4]
 pub fn web::storeys(u64) -> u32
 pub fn web::superellipse_tenths(u16) -> u16
 pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
@@ -213,7 +213,7 @@ pub fn web::track_token() -> &'static str
 pub fn web::url_is_safe(&str) -> bool
 pub fn web::view_box(&web::DisplayList, usize, (i32, i32)) -> web::Frame
 pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
-pub fn web::waiting_line(&web::Snapshot) -> alloc::string::String
+pub fn web::waiting_line(web::Lang, &web::Snapshot) -> alloc::string::String
 pub fn web::watchable(&web::Snapshot) -> alloc::vec::Vec<(kernel::event::RunId, alloc::string::String)>
 pub fn web::working(&web::Snapshot, core::option::Option<&channels::wire::CityAnswer>) -> web::Working
 pub mod web
@@ -372,6 +372,7 @@ pub web::Msg::AlertAwaitingApproval
 pub web::Msg::AlertNoRecovery
 pub web::Msg::AlertProviderNotAnswering
 pub web::Msg::AlertProviderTrouble
+pub web::Msg::AlertRefused
 pub web::Msg::AlertRunFrozen
 pub web::Msg::AlertRunStopped
 pub web::Msg::AlertSomethingWaiting
@@ -633,9 +634,14 @@ pub web::Msg::SettingsWhichWire
 pub web::Msg::SettingsWithCredential
 pub web::Msg::StateIdle
 pub web::Msg::StateWorking
+pub web::Msg::StatusAwaitingAndUnreadable
+pub web::Msg::StatusAwaitingYou
 pub web::Msg::StatusNoCity
 pub web::Msg::StatusNothingSpent
 pub web::Msg::StatusProvider
+pub web::Msg::StatusSpent
+pub web::Msg::StatusSpentSomeUnpriced
+pub web::Msg::StatusUsedNoPrice
 pub web::Msg::VitalsAsking
 pub web::Msg::VitalsDiscards
 pub web::Msg::VitalsRecords

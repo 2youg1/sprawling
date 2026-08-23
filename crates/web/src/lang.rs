@@ -347,12 +347,18 @@ pub enum Msg {
     AlertAwaitingApproval,
     AlertRunFrozen,
     AlertProviderTrouble,
+    AlertRefused,
     AlertSomethingWaiting,
     AlertRunStopped,
     AlertProviderNotAnswering,
     StatusNoCity,
     StatusProvider,
     StatusNothingSpent,
+    StatusAwaitingYou,
+    StatusAwaitingAndUnreadable,
+    StatusUsedNoPrice,
+    StatusSpent,
+    StatusSpentSomeUnpriced,
     RouteNoSuchPage,
     RouteNoSuchPageRecovery,
     SettingsAttachIt,
@@ -1245,6 +1251,10 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "provider trouble",
             zh: "provider 出问题",
         },
+        Msg::AlertRefused => Phrase {
+            en: "refused",
+            zh: "被拒绝",
+        },
         Msg::AlertSomethingWaiting => Phrase {
             en: "something is waiting for you",
             zh: "有东西在等你",
@@ -1268,6 +1278,26 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::StatusNothingSpent => Phrase {
             en: "nothing spent since this page connected",
             zh: "本页连上之后没花过钱",
+        },
+        Msg::StatusAwaitingYou => Phrase {
+            en: "{count} awaiting you",
+            zh: "{count} 件等你处理",
+        },
+        Msg::StatusAwaitingAndUnreadable => Phrase {
+            en: "{count} awaiting you - and {blind} this page cannot read",
+            zh: "{count} 件等你处理——另有 {blind} 件本页读不了",
+        },
+        Msg::StatusUsedNoPrice => Phrase {
+            en: "{used} used - no price reported",
+            zh: "用了 {used}——对方没报价",
+        },
+        Msg::StatusSpent => Phrase {
+            en: "{spent} spent - {used}",
+            zh: "花了 {spent}——{used}",
+        },
+        Msg::StatusSpentSomeUnpriced => Phrase {
+            en: "{spent} spent - {used} - {calls} call(s) unpriced",
+            zh: "花了 {spent}——{used}——另有 {calls} 次调用没报价",
         },
         Msg::RouteNoSuchPage => Phrase {
             en: "this build has no page at {named}",
@@ -1783,12 +1813,18 @@ mod tests {
             Msg::AlertAwaitingApproval,
             Msg::AlertRunFrozen,
             Msg::AlertProviderTrouble,
+            Msg::AlertRefused,
             Msg::AlertSomethingWaiting,
             Msg::AlertRunStopped,
             Msg::AlertProviderNotAnswering,
             Msg::StatusNoCity,
             Msg::StatusProvider,
             Msg::StatusNothingSpent,
+            Msg::StatusAwaitingYou,
+            Msg::StatusAwaitingAndUnreadable,
+            Msg::StatusUsedNoPrice,
+            Msg::StatusSpent,
+            Msg::StatusSpentSomeUnpriced,
             Msg::RouteNoSuchPage,
             Msg::RouteNoSuchPageRecovery,
             Msg::SettingsAttachIt,
@@ -2058,12 +2094,18 @@ mod tests {
                 | Msg::AlertAwaitingApproval
                 | Msg::AlertRunFrozen
                 | Msg::AlertProviderTrouble
+                | Msg::AlertRefused
                 | Msg::AlertSomethingWaiting
                 | Msg::AlertRunStopped
                 | Msg::AlertProviderNotAnswering
                 | Msg::StatusNoCity
                 | Msg::StatusProvider
                 | Msg::StatusNothingSpent
+                | Msg::StatusAwaitingYou
+                | Msg::StatusAwaitingAndUnreadable
+                | Msg::StatusUsedNoPrice
+                | Msg::StatusSpent
+                | Msg::StatusSpentSomeUnpriced
                 | Msg::RouteNoSuchPage
                 | Msg::RouteNoSuchPageRecovery
                 | Msg::SettingsAttachIt

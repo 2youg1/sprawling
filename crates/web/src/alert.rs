@@ -29,6 +29,8 @@ use std::collections::BTreeSet;
 
 use channels::{AxError, EventKind, EventRecord};
 
+use crate::lang::{Lang, Msg, say};
+
 /// What the city said back to the person who asked for something.
 ///
 /// Deliberately **not** an [`Alert`]: an `Alert` is a standing fact and
@@ -53,14 +55,19 @@ pub struct Refused {
 /// Before this existed the client received `ServerFrame::Refusal` and
 /// did nothing with it, so a mistyped base URL produced a page that said
 /// nothing at all and a line in a log file nobody was reading.
+///
+/// The action and the subject are quoted rather than translated: they
+/// are what the city said, and this client's language switch governs
+/// what this client writes (web-SPEC.md section 8-37). Only the sentence
+/// standing in for a missing recovery is ours to say.
 #[must_use]
-pub fn refused(error: &AxError) -> Refused {
+pub fn refused(lang: Lang, error: &AxError) -> Refused {
     let recovery = error.recovery();
     Refused {
         code: error.code().as_str().to_owned(),
         what: format!("cannot {} on {}", error.action(), error.subject()),
         recovery: if recovery.is_empty() {
-            "no way out was recorded with this refusal".to_owned()
+            say(lang, Msg::AlertNoRecovery).to_owned()
         } else {
             recovery.to_owned()
         },
@@ -83,13 +90,16 @@ pub enum AlertKind {
 }
 
 impl AlertKind {
+    /// What a notification is titled. A message rather than a string:
+    /// this is the one line a person reads with the tab closed, and it
+    /// reads in the language they chose.
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub fn title(self) -> Msg {
         match self {
-            Self::AwaitingApproval => "awaiting approval",
-            Self::RunFrozen => "run frozen",
-            Self::ProviderTrouble => "provider trouble",
-            Self::Refused => "refused",
+            Self::AwaitingApproval => Msg::AlertAwaitingApproval,
+            Self::RunFrozen => Msg::AlertRunFrozen,
+            Self::ProviderTrouble => Msg::AlertProviderTrouble,
+            Self::Refused => Msg::AlertRefused,
         }
     }
 
@@ -170,7 +180,7 @@ impl Alerts {
 /// nobody. Adding a kind here is where somebody has to argue that it
 /// really requires a human rather than merely worrying the author.
 #[must_use]
-pub fn alert_for(record: &EventRecord) -> Option<Alert> {
+pub fn alert_for(lang: Lang, record: &EventRecord) -> Option<Alert> {
     let map = record.data().as_map();
     match record.kind() {
         EventKind::ApprovalRequested => {
@@ -180,22 +190,24 @@ pub fn alert_for(record: &EventRecord) -> Option<Alert> {
             Some(Alert {
                 kind: AlertKind::AwaitingApproval,
                 key: format!("approval/{id}"),
+                // The city's own words when it wrote any; ours only
+                // when it did not.
                 message: map
                     .get("action_desc")
                     .and_then(serde_json::Value::as_str)
-                    .unwrap_or("something is waiting for you")
+                    .unwrap_or_else(|| say(lang, Msg::AlertSomethingWaiting))
                     .to_owned(),
             })
         }
         EventKind::RunFrozen | EventKind::BudgetLimit => Some(Alert {
             kind: AlertKind::RunFrozen,
             key: format!("run/{}", record.run()),
-            message: "a run stopped and will not start itself again".to_owned(),
+            message: say(lang, Msg::AlertRunStopped).to_owned(),
         }),
         EventKind::ProviderDegraded | EventKind::EndpointLost => Some(Alert {
             kind: AlertKind::ProviderTrouble,
             key: PROVIDER_KEY.to_owned(),
-            message: "the provider is not answering as it should".to_owned(),
+            message: say(lang, Msg::AlertProviderNotAnswering).to_owned(),
         }),
         _ => None,
     }
@@ -243,7 +255,7 @@ pub fn ask_to_interrupt() {
 /// could act on - a browser that refuses notifications has said its piece
 /// - so nothing is returned.
 #[cfg(target_arch = "wasm32")]
-pub fn interrupt(alert: &Alert) {
+pub fn interrupt(lang: Lang, alert: &Alert) {
     if web_sys::Notification::permission() != web_sys::NotificationPermission::Granted {
         return;
     }
@@ -252,7 +264,7 @@ pub fn interrupt(alert: &Alert) {
     // The tag is the alert key, so a browser that is still showing this
     // fact replaces it rather than stacking a second copy.
     options.set_tag(&alert.key);
-    let _ = web_sys::Notification::new_with_options(alert.kind.as_str(), &options);
+    let _ = web_sys::Notification::new_with_options(say(lang, alert.kind.title()), &options);
 }
 
 /// Folds one event into the alert state, and says what to do about it.
@@ -260,11 +272,11 @@ pub fn interrupt(alert: &Alert) {
 /// Called beside `Snapshot::apply`, from the one place events arrive, so
 /// "what needs a person" is decided in the same pass as "what happened"
 /// rather than by a second reader of the stream.
-pub fn absorb(alerts: &mut Alerts, record: &EventRecord) -> Raise {
+pub fn absorb(lang: Lang, alerts: &mut Alerts, record: &EventRecord) -> Raise {
     if let Some(key) = cleared_by(record) {
         alerts.clear(&key);
     }
-    match alert_for(record) {
+    match alert_for(lang, record) {
         Some(alert) => alerts.raise(&alert),
         None => Raise::Silent,
     }
@@ -285,7 +297,7 @@ mod tests {
         Alert {
             kind,
             key: key.to_owned(),
-            message: format!("{} at {key}", kind.as_str()),
+            message: format!("{} at {key}", say(Lang::En, kind.title())),
         }
     }
 
@@ -366,15 +378,15 @@ mod tests {
     fn an_answered_question_stops_asking_and_a_new_one_asks_again() {
         let mut alerts = Alerts::new();
         let asked = recorded(EventKind::ApprovalRequested, with_id("item-7"));
-        assert_eq!(absorb(&mut alerts, &asked), Raise::Interrupt);
+        assert_eq!(absorb(Lang::En, &mut alerts, &asked), Raise::Interrupt);
         // A reconnect re-delivers what it already sent; one fact, one
         // interruption.
-        assert_eq!(absorb(&mut alerts, &asked), Raise::Silent);
+        assert_eq!(absorb(Lang::En, &mut alerts, &asked), Raise::Silent);
 
         let answered = recorded(EventKind::ApprovalResolved, with_id("item-7"));
-        assert_eq!(absorb(&mut alerts, &answered), Raise::Silent);
+        assert_eq!(absorb(Lang::En, &mut alerts, &answered), Raise::Silent);
         assert_eq!(
-            absorb(&mut alerts, &asked),
+            absorb(Lang::En, &mut alerts, &asked),
             Raise::Interrupt,
             "asked again after being answered is a new fact"
         );
@@ -385,17 +397,18 @@ mod tests {
         let mut alerts = Alerts::new();
         let degraded = recorded(EventKind::ProviderDegraded, serde_json::Map::new());
         let lost = recorded(EventKind::EndpointLost, serde_json::Map::new());
-        assert_eq!(absorb(&mut alerts, &degraded), Raise::Mark);
-        assert_eq!(absorb(&mut alerts, &lost), Raise::Silent);
+        assert_eq!(absorb(Lang::En, &mut alerts, &degraded), Raise::Mark);
+        assert_eq!(absorb(Lang::En, &mut alerts, &lost), Raise::Silent);
         assert_eq!(
             absorb(
+                Lang::En,
                 &mut alerts,
                 &recorded(EventKind::EndpointAttached, serde_json::Map::new())
             ),
             Raise::Silent
         );
         assert_eq!(
-            absorb(&mut alerts, &degraded),
+            absorb(Lang::En, &mut alerts, &degraded),
             Raise::Mark,
             "a provider that goes bad again is a second fact"
         );
@@ -412,7 +425,11 @@ mod tests {
             EventKind::SignalEnqueued,
         ] {
             assert_eq!(
-                absorb(&mut alerts, &recorded(kind, serde_json::Map::new())),
+                absorb(
+                    Lang::En,
+                    &mut alerts,
+                    &recorded(kind, serde_json::Map::new())
+                ),
                 Raise::Silent,
                 "{kind:?} interrupted somebody"
             );
@@ -428,6 +445,7 @@ mod tests {
     #[test]
     fn a_refusal_reaches_the_person_with_its_way_out_attached() {
         let told = refused(
+            Lang::En,
             &AxError::failure(
                 channels::AxCode::ConfigInvalid,
                 "attach an endpoint",
@@ -444,11 +462,14 @@ mod tests {
     /// blank line, because a blank line reads as "nothing is wrong".
     #[test]
     fn a_refusal_with_no_way_out_says_that_much() {
-        let told = refused(&AxError::failure(
-            channels::AxCode::StorageFatal,
-            "append to the ledger",
-            "the disk is full",
-        ));
+        let told = refused(
+            Lang::En,
+            &AxError::failure(
+                channels::AxCode::StorageFatal,
+                "append to the ledger",
+                "the disk is full",
+            ),
+        );
         assert!(!told.recovery.is_empty());
     }
 
@@ -458,6 +479,6 @@ mod tests {
     #[test]
     fn the_same_refusal_twice_is_two_answers_not_one_fact() {
         let err = AxError::failure(channels::AxCode::InvalidArgs, "select a model", "nowhere");
-        assert_eq!(refused(&err), refused(&err));
+        assert_eq!(refused(Lang::En, &err), refused(Lang::En, &err));
     }
 }

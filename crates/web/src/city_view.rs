@@ -295,7 +295,11 @@ pub fn face_tokens(active: bool, selected: bool) -> (&'static str, &'static str,
 /// event stream already folds. Asking the server again on every event
 /// would turn a fold into a poll.
 #[must_use]
-pub fn prisms_of(buildings: &[BuildingProgress], busy: &BTreeSet<Address>) -> Vec<Prism> {
+pub fn prisms_of(
+    buildings: &[BuildingProgress],
+    busy: &BTreeSet<Address>,
+    said: crate::lang::Lang,
+) -> Vec<Prism> {
     let mut prisms: Vec<Prism> = buildings
         .iter()
         .map(|building| {
@@ -316,6 +320,7 @@ pub fn prisms_of(buildings: &[BuildingProgress], busy: &BTreeSet<Address>) -> Ve
                     &building.progress,
                     false,
                     crate::progress::Subject::Plan,
+                    said,
                 )
                 .label,
             }
@@ -836,7 +841,7 @@ pub fn CityView(
             }
         };
     };
-    let prisms = prisms_of(&city.buildings, &busy);
+    let prisms = prisms_of(&city.buildings, &busy, lang());
     let listing: Vec<(String, String)> = prisms
         .iter()
         .map(|prism| (prism.id.clone(), prism.note.clone()))
@@ -1164,7 +1169,7 @@ mod tests {
         ];
         let mut busy = BTreeSet::new();
         busy.insert(Address::parse("lab").unwrap());
-        let prisms = prisms_of(&buildings, &busy);
+        let prisms = prisms_of(&buildings, &busy, crate::lang::Lang::En);
         assert_eq!(prisms.len(), 2);
         let lab = prisms.iter().find(|p| p.id == "lab").unwrap();
         let mill = prisms.iter().find(|p| p.id == "mill").unwrap();
@@ -1175,7 +1180,7 @@ mod tests {
             "height is the work taken on, and lab took on eight rows to mill's one"
         );
         assert_eq!(
-            prisms_of(&buildings, &busy),
+            prisms_of(&buildings, &busy, crate::lang::Lang::En),
             prisms,
             "the same city places the same way twice"
         );
@@ -1191,7 +1196,7 @@ mod tests {
             }),
             problems: Vec::new(),
         }];
-        let prisms = prisms_of(&buildings, &BTreeSet::new());
+        let prisms = prisms_of(&buildings, &BTreeSet::new(), crate::lang::Lang::En);
         assert_eq!(
             prisms[0].storeys, 1,
             "forty steps is not a size; a plan is, and there is none"

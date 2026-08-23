@@ -117,7 +117,7 @@ pub enum Subject {
 /// function follows - it is the only thing it *can* do, because
 /// `UnplannedProgress` carries no denominator to divide by.
 #[must_use]
-pub fn bar(progress: &Progress, blocked: bool, subject: Subject) -> Bar {
+pub fn bar(progress: &Progress, blocked: bool, subject: Subject, lang: crate::lang::Lang) -> Bar {
     match *progress {
         Progress::Planned(planned) => {
             let (done, total) = planned.ratio();
@@ -146,7 +146,9 @@ pub fn bar(progress: &Progress, blocked: bool, subject: Subject) -> Bar {
             // spend, and printing its zeroes would report a run that never
             // happened.
             let label = match subject {
-                Subject::Plan => "no plan".to_owned(),
+                Subject::Plan => {
+                    crate::lang::say(lang, crate::lang::Msg::ProgressNoPlan).to_owned()
+                }
                 // Money only when there is some: zero and unknown are
                 // different, and a subscription reports neither. Same rule
                 // the spend line follows.
@@ -257,7 +259,8 @@ mod tests {
 
     #[test]
     fn a17_an_item_without_a_roadmap_never_shows_a_percentage() {
-        let Bar { filled, label, .. } = bar(&unplanned(7), false, Subject::Run);
+        let Bar { filled, label, .. } =
+            bar(&unplanned(7), false, Subject::Run, crate::lang::Lang::En);
         assert!(filled.is_none(), "there is no denominator to divide by");
         assert!(!label.contains('%'));
         assert!(!label.contains('/'), "a fraction would imply a total");
@@ -271,7 +274,8 @@ mod tests {
         // `Unplanned` value means "no numbers" here and "these numbers"
         // for a run. Printing "0 steps" under a building would report a
         // run that never happened.
-        let Bar { filled, label, .. } = bar(&unplanned(0), false, Subject::Plan);
+        let Bar { filled, label, .. } =
+            bar(&unplanned(0), false, Subject::Plan, crate::lang::Lang::En);
         assert!(filled.is_none());
         assert_eq!(label, "no plan");
         assert!(!label.contains('$'), "a plan has no money of its own");
@@ -285,7 +289,7 @@ mod tests {
             steps: 3,
             budget: BudgetUse::default(),
         });
-        let label = bar(&free, false, Subject::Run).label;
+        let label = bar(&free, false, Subject::Run, crate::lang::Lang::En).label;
         assert_eq!(label, "3 steps");
         assert!(!label.contains('$'));
     }
@@ -296,7 +300,12 @@ mod tests {
             filled,
             label,
             state,
-        } = bar(&planned(4, 0, 9), false, Subject::Plan);
+        } = bar(
+            &planned(4, 0, 9),
+            false,
+            Subject::Plan,
+            crate::lang::Lang::En,
+        );
         assert_eq!(label, "4/9");
         assert_eq!(filled, Some(444));
         assert_eq!(state, BarState::Running);
@@ -320,15 +329,33 @@ mod tests {
         // Painting it done would hide the thing the interface exists to
         // surface.
         assert_eq!(
-            bar(&planned(9, 1, 9), false, Subject::Plan).state,
+            bar(
+                &planned(9, 1, 9),
+                false,
+                Subject::Plan,
+                crate::lang::Lang::En
+            )
+            .state,
             BarState::Blocked
         );
         assert_eq!(
-            bar(&planned(9, 0, 9), true, Subject::Plan).state,
+            bar(
+                &planned(9, 0, 9),
+                true,
+                Subject::Plan,
+                crate::lang::Lang::En
+            )
+            .state,
             BarState::Blocked
         );
         assert_eq!(
-            bar(&planned(9, 0, 9), false, Subject::Plan).state,
+            bar(
+                &planned(9, 0, 9),
+                false,
+                Subject::Plan,
+                crate::lang::Lang::En
+            )
+            .state,
             BarState::Done
         );
     }
