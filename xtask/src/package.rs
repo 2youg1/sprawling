@@ -47,15 +47,6 @@ pub(crate) fn run(root: &Path) -> Result<String, XtaskError> {
         "sprawling"
     };
     entries.push((binary_name.to_owned(), binary));
-    // The launcher is per platform because the double-click target has to
-    // be: shipping the other one would only hand a person a file that
-    // cannot run on their machine.
-    let launcher = if cfg!(windows) {
-        "start.cmd"
-    } else {
-        "start.sh"
-    };
-    entries.push((launcher.to_owned(), root.join("dist").join(launcher)));
     entries.push((
         "QUICKSTART.md".to_owned(),
         root.join("dist").join("QUICKSTART.md"),
@@ -101,13 +92,9 @@ fn write_archive(
     for (name, source) in entries {
         let bytes = std::fs::read(source).map_err(|err| io(source, err))?;
         // Executable bits: the archive is the only thing that carries them
-        // to a machine that has never seen this file, and `start.sh` that
-        // arrives without them is a launcher that will not launch.
-        let mode = if name == "start.sh" || name == "sprawling" {
-            0o755
-        } else {
-            0o644
-        };
+        // to a machine that has never seen this file, and a binary that
+        // arrives without them is a binary nobody can run.
+        let mode = if name == "sprawling" { 0o755 } else { 0o644 };
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
             .last_modified_time(zip::DateTime::default())

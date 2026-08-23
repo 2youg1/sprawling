@@ -4,14 +4,14 @@ You have unpacked a folder. Nothing was installed, no service was registered, an
 
 ## 1 Start it
 
-- **Windows** — double-click `start.cmd`.
-- **macOS and Linux** — run `./start.sh` from a terminal.
+- **Windows** — double-click `sprawling.exe`.
+- **macOS and Linux** — run `./sprawling` from a terminal.
 
 The first time on Windows you will see **"Windows protected your PC"**, because this program carries no code-signing certificate. Choose **More info**, then **Run anyway**.
 
-A console window opens and stays open. **That window is the city** — closing it, or pressing `Ctrl-C` in it, stops the city. Your browser opens at <http://127.0.0.1:8787>; if it does not, open that address yourself.
+Started with no command, it asks one question before it creates anything, and shows you the folder it is about to create. Answer it and a console window opens and stays open. **That window is the city** — closing it, or pressing `Ctrl-C` in it, stops the city. Your browser opens at <http://127.0.0.1:8787>; if it does not, open that address yourself.
 
-The first screen asks one question before it creates anything, and shows you the folder it is about to create.
+To make `sprawling` a word your shell resolves from anywhere, run `sprawling install` once. It copies this binary into your own program directory and puts that directory on your PATH; `sprawling install --uninstall` reverses both. Nothing there needs administrator rights.
 
 ## 2 Give it a model to think with
 
@@ -22,16 +22,16 @@ This program schedules agents, records what they do, and shows it to you. **It d
 
 ## 3 Four steps in the page
 
-1. **settings** — the provider's base URL, its dialect, and the key. The key goes straight into your operating system's credential service; the page only ever shows a `secret:realm/name` reference afterwards.
+1. **settings** — the provider's base URL, its dialect, and the key, in the first form on the page. The key goes straight into your operating system's credential service; the page only ever shows a `secret:realm/name` reference afterwards.
 2. Same page — choose a model for `main` (the one that thinks) and for `digest` (the one that reads long documents on its behalf). They may be the same model.
 3. **city** — raise a building, for example `lab`.
-4. The bar at the bottom of every page — an address, what to produce, and what counts as done. Press **send it**.
+4. The bar at the bottom of every page — the building, a name for this session, what to produce, and what counts as done. Press **send it**, and the session you just started opens by itself.
 
 Then **live** follows the work, **approvals** holds anything that needs you, and **cost** is what it spent.
 
 ## Where your data is
 
-In `city/`, beside this file. One folder holds the whole history, and it can be moved, copied or deleted as a unit.
+In `city/`, beside this file. One folder holds the whole history, and it can be moved, copied or deleted as a unit. Each session keeps its own folder inside the building it works in, under the name you gave it.
 
 ## Everything else
 

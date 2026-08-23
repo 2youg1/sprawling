@@ -60,6 +60,5 @@ The server broadcasts and never backfills, so the live feed and the ledger page 
 
 Neither is known to be wrong; neither has been watched.
 
-- Nobody has unpacked the Linux archive on a Linux desktop and seen `start.sh` open a browser. `release.yml` builds it, `ci.yml` tests the tree that goes into it, and no human has run the result. **Split it**: the ubuntu job can prove the archive unpacks, `start.sh` computes the right URL, and the binary serves — what stays unproven is a person seeing a browser window, and the release notes say so rather than implying otherwise
+- Nobody has unpacked the Linux archive on a Linux desktop and watched the binary open a browser. `release.yml` builds it, `ci.yml` tests the tree that goes into it, and no human has run the result. **Split it**: the ubuntu job can prove the archive unpacks and the binary serves — what stays unproven is a person seeing a browser window, and the release notes say so rather than implying otherwise
 - Ctrl-C on a served city is still a process death rather than an orderly close. `/quit` closes the console and leaves the city serving; `sprawling resume` already recovers a hard stop, so what is missing is the Handoff a clean shutdown would write
-- `dist/start.cmd` and `dist/start.sh` lost their reason to exist when `sprawling install` landed. Removing them changes `xtask package`'s entry table — **needs a ruling**
