@@ -24,6 +24,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::lang::{Msg, say};
 use channels::{Address, ArchiveAnswer, ArchiveHit, ClientFrame, Query, RegistryAnswer};
 use channels::{RegistryLine, TimeMs};
 use dioxus::prelude::*;
@@ -135,17 +136,17 @@ pub fn ArchiveView(
             on_frame.call(ClientFrame::Query(Query::RegistryView));
         }
     });
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let mut needle = use_signal(String::new);
     let held = filed.as_ref().map_or(0, |record| record.assets.len());
     rsx! {
         section { class: "archive-search",
             crate::panel::Panel {
-                title: "what this city has written down".to_owned(),
+                title: word(Msg::ArchiveTitle).to_owned(),
                 figure: "{held}",
-                scope: "two sources, never merged: a search reads the shelves on disk at the moment you ask, and the list below it is folded from history. The same item can appear in both."
-                    .to_owned(),
-                source: "the search reads each building's Archive directory; `filed lately` is folded from the Ledger's asset_archived records, which is why it can say when something was filed and by whom"
-                    .to_owned(),
+                scope: word(Msg::ArchiveScope).to_owned(),
+                source: word(Msg::ArchiveSource).to_owned(),
             form {
                 class: "search",
                 onsubmit: move |event| {
@@ -155,12 +156,12 @@ pub fn ArchiveView(
                     }
                 },
                 div { class: "field",
-                    label { r#for: "archive-needle", "search the shelves for" }
+                    label { r#for: "archive-needle", "{word(Msg::ArchiveSearchFor)}" }
                     input {
                         id: "archive-needle",
                         r#type: "search",
                         value: "{needle}",
-                        placeholder: "a word the archives may hold",
+                        placeholder: "{word(Msg::ArchiveWordPlaceholder)}",
                         oninput: move |event| needle.set(event.value()),
                     }
                 }

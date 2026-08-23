@@ -16,6 +16,7 @@
 //! reading something; yanking them to the bottom on the next event would
 //! take it away. Following resumes when they return to the end themselves.
 
+use crate::lang::{Msg, fill, say};
 use channels::{ClientFrame, EventKind, EventRecord, RunId, Seq};
 use dioxus::prelude::*;
 
@@ -28,7 +29,11 @@ pub const WINDOW: usize = 200;
 pub struct Line {
     pub seq: Seq,
     pub kind: EventKind,
-    pub text: String,
+    /// What this line says, as a message; `None` for a kind this build
+    /// has no sentence for, which falls back to the kind's own name.
+    pub msg: Option<crate::lang::Msg>,
+    /// Who or where it happened: an address when the record has one.
+    pub who: String,
     /// Whether the line came from a person rather than from the Run. A human
     /// Steer is prefixed `user`; an Agent's carries its id and name
     ///. Both land in the same place, so the model only
@@ -120,7 +125,8 @@ impl Feed {
         self.lines.push(Line {
             seq: record.seq(),
             kind: record.kind(),
-            text: describe(record),
+            msg: describe(record).0,
+            who: describe(record).1,
             from_person: matches!(record.kind(), EventKind::SteerReceived)
                 && record.who() == "user",
         });
@@ -139,19 +145,33 @@ impl Feed {
 /// prints raw payloads is a log, and the reason to watch a session is to see
 /// its shape, not its bytes. The bytes are one click away in `ledger_view`.
 #[must_use]
-pub fn describe(record: &EventRecord) -> String {
-    let kind = record.kind();
-    let who = record.who();
-    match record.kind() {
-        EventKind::ToolCalled => format!("{who} calls a tool"),
-        EventKind::ToolResult => format!("{who} reads the result"),
-        EventKind::ModelCalled => format!("{who} asks the model"),
-        EventKind::ModelReturned => format!("the model answers {who}"),
-        EventKind::SteerReceived => format!("{who} steers"),
-        EventKind::GateDenied => format!("a gate refused {who}"),
-        EventKind::ApprovalRequested => format!("{who} needs a person"),
-        EventKind::RunFrozen => format!("{who} is frozen"),
-        _ => format!("{kind:?} · {who}"),
+pub fn describe(record: &EventRecord) -> (Option<Msg>, String) {
+    let who = record
+        .addr()
+        .map_or_else(|| record.who().to_owned(), |addr| addr.as_str().to_owned());
+    let msg = match record.kind() {
+        EventKind::ToolCalled => Some(Msg::LineToolCalled),
+        EventKind::ToolResult => Some(Msg::LineToolResult),
+        EventKind::ModelCalled => Some(Msg::LineModelCalled),
+        EventKind::ModelReturned => Some(Msg::LineModelReturned),
+        EventKind::SteerReceived => Some(Msg::LineSteered),
+        EventKind::GateDenied => Some(Msg::LineGateDenied),
+        EventKind::ApprovalRequested => Some(Msg::LineApprovalRequested),
+        EventKind::RunFrozen => Some(Msg::LineRunFrozen),
+        // A kind this build has no sentence for still produces a line:
+        // the kind's own name beside who did it.
+        _ => None,
+    };
+    (msg, who)
+}
+
+/// One line, said. `None` from [`describe`] falls back to the event's own
+/// kind, which is English in the Ledger and stays English here.
+#[must_use]
+pub fn describe_in(lang: crate::lang::Lang, record: &EventRecord) -> String {
+    match describe(record) {
+        (Some(msg), who) => crate::lang::fill(crate::lang::say(lang, msg), &[("who", &who)]),
+        (None, who) => format!("{:?} · {who}", record.kind()),
     }
 }
 
@@ -169,12 +189,15 @@ pub fn LiveView(
     on_follow: EventHandler<bool>,
     on_watch: EventHandler<Option<RunId>>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let mut steer = use_signal(String::new);
     let lines = feed.lines().to_vec();
     let dropped = feed.dropped();
     let held = lines.len();
     let known = runs.len();
     let last_seq = lines.last().map(|line| line.seq);
+    let dropped_line = fill(word(Msg::LiveDropped), &[("dropped", &dropped.to_string())]);
     rsx! {
         section { class: "live",
             crate::panel::Panel {
@@ -183,15 +206,13 @@ pub fn LiveView(
                 // sentence it has no standing to say. The overview reads
                 // the city's own count for that.
                 title: match (known, run) {
-                    (0, _) => "nothing has happened since this page connected".to_owned(),
-                    (_, Some(_)) => "one session, as it happens".to_owned(),
-                    (_, None) => "every run in this city, as it happens".to_owned(),
+                    (0, _) => word(Msg::LiveNothingSinceConnected).to_owned(),
+                    (_, Some(_)) => word(Msg::LiveOneSession).to_owned(),
+                    (_, None) => word(Msg::LiveEveryRun).to_owned(),
                 },
                 figure: (held > 0).then(|| held.to_string()),
-                scope: "a bounded window: the figure counts the lines held here, and a line that leaves the window has not left the Ledger"
-                    .to_owned(),
-                source: "the live event stream, folded one record at a time. Nothing here is re-asked or polled - the same fold the server does, running in this page."
-                    .to_owned(),
+                scope: word(Msg::LiveScope).to_owned(),
+                source: word(Msg::LiveSource).to_owned(),
             // Which session is being watched is a choice, not a guess.
             // With two runs in flight, "the latest one" is a coin toss,
             // and the page was showing one of them without saying so.
@@ -199,7 +220,7 @@ pub fn LiveView(
                 button {
                     "aria-current": if run.is_none() { "true" } else { "false" },
                     onclick: move |_| on_watch.call(None),
-                    "everything"
+                    "{word(Msg::LiveEverything)}"
                 }
                 for (id, said) in runs.clone() {
                     button {
@@ -218,9 +239,9 @@ pub fn LiveView(
                     // are addressed by.
                     Some(id) => rsx! {
                         span { class: "run", "{named(&runs, id)}" }
-                        span { class: "run-id", "run {id}" }
+                        span { class: "run-id", "{run_id_line(lang(), id)}" }
                     },
-                    None => rsx! { span { class: "run", "every run in this city" } },
+                    None => rsx! { span { class: "run", "{word(Msg::LiveEveryRun)}" } },
                 }
                 label { class: "follow",
                     input {
@@ -228,13 +249,11 @@ pub fn LiveView(
                         checked: following,
                         onchange: move |event| on_follow.call(event.checked()),
                     }
-                    "follow the end"
+                    "{word(Msg::LiveFollowEnd)}"
                 }
             }
             if dropped > 0 {
-                p { class: "dropped",
-                    "{dropped} earlier line(s) left this window; the ledger still has them"
-                }
+                p { class: "dropped", "{dropped_line}" }
             }
             ol { class: "lines",
                 for line in lines {
@@ -243,18 +262,21 @@ pub fn LiveView(
                         class: if line.from_person { "line person" } else { "line" },
                         span { class: "seq", "{line.seq.value()}" }
                         span { class: "kind", "{line.kind:?}" }
-                        span { class: "text", "{line.text}" }
+                        span { class: "text", "{line_text(lang(), &line)}" }
                     }
                 }
             }
             if feed.lines().is_empty() {
                 crate::panel::Empty {
-                    status: if known == 0 { "no run has reported here yet".to_owned() }
-                        else { "nothing has happened here since this page connected".to_owned() },
-                    what: if known == 0 {
-                        "this window holds what arrives from now on, so a run that finished before you opened this page is in the Ledger rather than here. Send work from the bar below and every turn it takes appears as it happens.".to_owned()
+                    status: if known == 0 {
+                        word(Msg::LiveNoRunYet).to_owned()
                     } else {
-                        "this window holds what arrived after the page connected. Earlier lines are in the Ledger, which the record page reads.".to_owned()
+                        word(Msg::LiveNothingSince).to_owned()
+                    },
+                    what: if known == 0 {
+                        word(Msg::LiveNoRunYetWhat).to_owned()
+                    } else {
+                        word(Msg::LiveNothingSinceWhat).to_owned()
                     },
                 }
             }
@@ -264,7 +286,7 @@ pub fn LiveView(
             match run {
                 None => rsx! {
                     p { class: "note",
-                        "pick a session above to speak into it; what you send arrives at its next safe point"
+                        "{word(Msg::LivePickASession)}"
                     }
                 },
                 Some(id) => rsx! {
@@ -281,14 +303,14 @@ pub fn LiveView(
                         },
                         input {
                             name: "steer",
-                            placeholder: "say something into this run",
+                            placeholder: "{word(Msg::LiveSteerPlaceholder)}",
                             value: "{steer}",
                             oninput: move |event| steer.set(event.value()),
                         }
                         button {
                             r#type: "submit",
                             disabled: steer.read().trim().is_empty(),
-                            "send at the next safe point"
+                            "{word(Msg::LiveSteerSend)}"
                         }
                     }
                 },
@@ -301,7 +323,7 @@ pub fn LiveView(
                     button {
                         class: "quiet",
                         onclick: move |_| on_frame.call(takeover_command(id)),
-                        "answer for this run from here"
+                        "{word(Msg::LiveTakeover)}"
                     }
                     button {
                         class: "quiet",
@@ -312,18 +334,41 @@ pub fn LiveView(
                             }
                         },
                         match last_seq {
-                            Some(at) => rsx! { "branch a new run from step {at.value()}" },
-                            None => rsx! { "nothing to branch from yet" },
+                            Some(at) => rsx! { "{fork_line(lang(), at)}" },
+                            None => rsx! { "{word(Msg::LiveNothingToBranch)}" },
                         }
                     }
                     p { class: "note",
-                        "A branch records where it came from and does not start working by itself. Taking over answers for this run from here; what it already did is not undone."
+                        "{word(Msg::LiveInterventionNote)}"
                     }
                 }
             }
             }
         }
     }
+}
+
+/// One line of the feed, said. The kind stays as the Ledger spells it -
+/// it is an identifier, not a sentence - and only the description is
+/// translated.
+fn line_text(lang: crate::lang::Lang, line: &Line) -> String {
+    match line.msg {
+        Some(msg) => fill(say(lang, msg), &[("who", &line.who)]),
+        None => format!("{:?} \u{b7} {}", line.kind, line.who),
+    }
+}
+
+/// The run identifier, said.
+fn run_id_line(lang: crate::lang::Lang, run: RunId) -> String {
+    fill(say(lang, Msg::LiveRunId), &[("id", &run.to_string())])
+}
+
+/// Where a branch would be taken from, said.
+fn fork_line(lang: crate::lang::Lang, at: Seq) -> String {
+    fill(
+        say(lang, Msg::LiveForkFrom),
+        &[("seq", &at.value().to_string())],
+    )
 }
 
 /// What this page calls the session being watched, taken from the same
@@ -451,11 +496,18 @@ mod tests {
 
     #[test]
     fn a_line_describes_the_shape_and_not_the_bytes() {
-        let text = describe(&record(1, EventKind::ToolCalled, "resident"));
+        let text = describe_in(
+            crate::lang::Lang::En,
+            &record(1, EventKind::ToolCalled, "resident"),
+        );
         assert_eq!(text, "resident calls a tool");
-        // An unmodelled kind still produces a line rather than a blank.
-        let fallback = describe(&record(2, EventKind::PromptAssembled, "resident"));
+        // An unmodelled kind still produces a line rather than a blank,
+        // and the kind keeps the spelling the Ledger uses.
+        let fallback = describe_in(
+            crate::lang::Lang::Zh,
+            &record(2, EventKind::PromptAssembled, "resident"),
+        );
         assert!(fallback.contains("resident"));
-        assert!(!fallback.is_empty());
+        assert!(fallback.contains("PromptAssembled"));
     }
 }

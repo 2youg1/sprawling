@@ -23,6 +23,7 @@ use channels::{Address, CityAnswer, ClientFrame, Query};
 use dioxus::prelude::*;
 
 use crate::app::{RunPhase, Snapshot, View};
+use crate::lang::{Msg, fill, say};
 
 /// How much of this city is working, and across how much of it.
 ///
@@ -97,23 +98,45 @@ pub fn working(snapshot: &Snapshot, city: Option<&CityAnswer>) -> Working {
 /// with numbers substituted in: "nothing is running" and "0 runs in 0
 /// buildings" are the same fact, and only one of them is a sentence.
 #[must_use]
-pub fn headline(working: &Working) -> String {
+pub fn headline(working: &Working) -> (Msg, Vec<(&'static str, String)>) {
     match (working.runs, working.raised) {
-        (0, 0) => "this city has no buildings yet".to_owned(),
-        (0, raised) if working.frozen > 0 => format!(
-            "nothing is running; {} run(s) stopped with work left, across {raised} building(s)",
-            working.frozen
+        (0, 0) => (Msg::OverviewNoBuildings, Vec::new()),
+        (0, raised) if working.frozen > 0 => (
+            Msg::OverviewNothingRunningFrozen,
+            vec![
+                ("frozen", working.frozen.to_string()),
+                ("raised", raised.to_string()),
+            ],
         ),
-        (0, raised) => format!("nothing is running in any of the {raised} building(s) here"),
-        (1, _) => format!(
-            "1 run in flight, in 1 of the {} building(s) here",
-            working.raised
+        (0, raised) => (
+            Msg::OverviewNothingRunning,
+            vec![("raised", raised.to_string())],
         ),
-        (runs, raised) => format!(
-            "{runs} runs in flight, across {} of the {raised} building(s) here",
-            working.buildings
+        (1, raised) => (
+            Msg::OverviewOneRunning,
+            vec![("raised", raised.to_string())],
+        ),
+        (runs, raised) => (
+            Msg::OverviewManyRunning,
+            vec![
+                ("runs", runs.to_string()),
+                ("busy", working.buildings.to_string()),
+                ("raised", raised.to_string()),
+            ],
         ),
     }
+}
+
+/// One headline, said. Kept beside [`headline`] so a caller cannot hold
+/// the message and forget the values it needs.
+#[must_use]
+pub fn headline_in(lang: crate::lang::Lang, working: &Working) -> String {
+    let (msg, slots) = headline(working);
+    let borrowed: Vec<(&str, &str)> = slots
+        .iter()
+        .map(|(name, value)| (*name, value.as_str()))
+        .collect();
+    crate::lang::fill(crate::lang::say(lang, msg), &borrowed)
 }
 
 /// One thing waiting on a person, and where they go to deal with it.
@@ -122,7 +145,9 @@ pub fn headline(working: &Working) -> String {
 /// it: the row is the button.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attention {
-    pub what: String,
+    pub what: Msg,
+    /// Values the sentence needs, when it has any.
+    pub slots: Vec<(&'static str, String)>,
     pub count: u32,
     pub view: View,
 }
@@ -140,7 +165,8 @@ pub fn needs_you(snapshot: &Snapshot) -> Vec<Attention> {
     let waiting = snapshot.approvals_pending();
     if waiting > 0 {
         rows.push(Attention {
-            what: "waiting for you to allow or refuse".to_owned(),
+            what: Msg::OverviewWaitingApprovals,
+            slots: Vec::new(),
             count: waiting,
             view: View::Approvals,
         });
@@ -150,7 +176,8 @@ pub fn needs_you(snapshot: &Snapshot) -> Vec<Attention> {
         rows.push(Attention {
             // Counted and named rather than dropped: a queue quietly one
             // item short is wrong about the only thing a person came for.
-            what: "approval record(s) this client could not read".to_owned(),
+            what: Msg::OverviewUnreadable,
+            slots: Vec::new(),
             count: unreadable,
             view: View::Approvals,
         });
@@ -163,7 +190,8 @@ pub fn needs_you(snapshot: &Snapshot) -> Vec<Attention> {
         && frozen > 0
     {
         rows.push(Attention {
-            what: "run(s) frozen, each holding a handoff for whoever resumes it".to_owned(),
+            what: Msg::OverviewFrozenRuns,
+            slots: Vec::new(),
             count: frozen,
             view: View::Live(None),
         });
@@ -173,7 +201,8 @@ pub fn needs_you(snapshot: &Snapshot) -> Vec<Attention> {
         crate::app::ProviderHealth::Healthy | crate::app::ProviderHealth::Unknown
     ) {
         rows.push(Attention {
-            what: format!("the provider is {}", snapshot.provider().as_str()),
+            what: Msg::OverviewProviderIs,
+            slots: vec![("state", snapshot.provider().as_str().to_owned())],
             count: 1,
             view: View::Settings,
         });
@@ -193,6 +222,8 @@ pub fn OverviewView(
     /// The way into one building's own pages, which the nav cannot carry.
     on_open: EventHandler<String>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let asked = use_signal(|| false);
     use_effect(move || {
         let mut asked = asked;
@@ -223,34 +254,29 @@ pub fn OverviewView(
     rsx! {
         section { class: "overview",
             crate::panel::Panel {
-                title: headline(&working),
-                scope: "work in flight only: a frozen or halted run is listed below but is not counted here, because a stopped city must not read as a busy one"
-                    .to_owned(),
-                source: "folded from the event stream this page is already receiving, plus one city query asked when it opened. Nothing on this page is polled."
-                    .to_owned(),
+                title: headline_in(lang(), &working),
+                scope: word(Msg::OverviewScope).to_owned(),
+                source: word(Msg::OverviewSource).to_owned(),
                 if halted {
-                    p { class: "problems",
-                        "This city is halted: nothing new will start until it is released."
-                    }
+                    p { class: "problems", "{word(Msg::OverviewHalted)}" }
                 }
                 if attention.is_empty() {
                     crate::panel::Empty {
-                        status: "nothing is waiting for you".to_owned(),
-                        what: "a run reaches a person only when a gate refuses to decide by itself, or when it freezes with work left. Neither has happened."
-                            .to_owned(),
+                        status: word(Msg::OverviewNothingWaiting).to_owned(),
+                        what: word(Msg::OverviewNothingWaitingWhat).to_owned(),
                     }
                 } else {
                     div { class: "attention",
                         for row in attention.clone() {
                             button {
-                                key: "{row.what}",
+                                key: "{row.what:?}",
                                 class: "attention-row",
                                 onclick: {
                                     let view = row.view.clone();
                                     move |_| on_view.call(view.clone())
                                 },
                                 span { class: "count", "{row.count}" }
-                                span { class: "what", "{row.what}" }
+                                span { class: "what", "{fill(word(row.what), &row.slots.iter().map(|(n, v)| (*n, v.as_str())).collect::<Vec<_>>())}" }
                             }
                         }
                     }
@@ -258,39 +284,38 @@ pub fn OverviewView(
             }
             crate::panel::Panel {
                 title: match (in_flight.is_empty(), working.known) {
-                    (false, _) => "what is being worked on".to_owned(),
-                    (true, 0) => "no run has ever started in this city".to_owned(),
-                    (true, known) => {
-                        format!("{known} run(s) are on the city's books, and none is working now")
-                    }
+                    (false, _) => word(Msg::OverviewWorkedOn).to_owned(),
+                    (true, 0) => word(Msg::OverviewNeverStarted).to_owned(),
+                    (true, known) => fill(
+                        word(Msg::OverviewNoneWorkingNow),
+                        &[("known", &known.to_string())],
+                    ),
                 },
-                scope: "one row per run whose events this page has seen; a halted run is left out because halting is a decision, not a state to watch"
-                    .to_owned(),
-                source: "the run's own events as they arrive here. This window opens when the page connects, so the counts above - which the city answers for its whole history - are what to trust for anything earlier."
-                    .to_owned(),
+                scope: word(Msg::OverviewInFlightScope).to_owned(),
+                source: word(Msg::OverviewInFlightSource).to_owned(),
                 if in_flight.is_empty() {
                     crate::panel::Empty {
                         status: if working.known == 0 {
-                            "no work has been sent yet".to_owned()
+                            word(Msg::OverviewNoWorkSent).to_owned()
                         } else {
-                            format!(
-                                "nothing is working now; the city holds {} run(s) that already ran",
-                                working.known
+                            fill(
+                                word(Msg::OverviewNothingWorkingNow),
+                                &[("known", &working.known.to_string())],
                             )
                         },
                         what: if working.known == 0 {
-                            "send some from the bar at the bottom of the window: a room to work in, what to produce, and what counts as done. A run appears here the moment it starts.".to_owned()
+                            word(Msg::OverviewSendSome).to_owned()
                         } else {
-                            "earlier runs are in the Ledger rather than in this window, and the record pages read that. Send more work and it appears here as it happens.".to_owned()
+                            word(Msg::OverviewEarlierRuns).to_owned()
                         },
                     }
                 } else {
                     table { class: "in-flight",
                         thead {
                             tr {
-                                th { "where" }
-                                th { "phase" }
-                                th { "steps" }
+                                th { "{word(Msg::ColumnWhere)}" }
+                                th { "{word(Msg::ColumnPhase)}" }
+                                th { "{word(Msg::ColumnSteps)}" }
                             }
                         }
                         tbody {
@@ -300,10 +325,14 @@ pub fn OverviewView(
                                     td { "{phase}" }
                                     td { class: "num",
                                         match planned {
-                                            Some(planned) => rsx! { "{done} of {planned}" },
+                                            Some(planned) => rsx! {
+                                                "{fill(word(Msg::OverviewStepsOf), &[(\"done\", &done.to_string()), (\"planned\", &planned.to_string())])}"
+                                            },
                                             // No denominator, no ratio: the type
                                             // refuses to invent one and so does this.
-                                            None => rsx! { "{done} so far" },
+                                            None => rsx! {
+                                                "{fill(word(Msg::OverviewStepsSoFar), &[(\"done\", &done.to_string())])}"
+                                            },
                                         }
                                     }
                                 }
@@ -313,27 +342,30 @@ pub fn OverviewView(
                 }
             }
             crate::panel::Panel {
-                title: if working.raised == 0 { "no building has been raised".to_owned() }
-                    else { format!("the {} building(s) this city holds", working.raised) },
-                scope: "each with what its own plan says about it; a building with no readable plan says so rather than showing a zero"
-                    .to_owned(),
-                source: "one city query, asked when this page opened. Buildings appear when somebody raises one, so this is not re-asked on every event."
-                    .to_owned(),
+                title: if working.raised == 0 {
+                        word(Msg::OverviewNoBuildingRaised).to_owned()
+                    } else {
+                        fill(
+                            word(Msg::OverviewBuildingsHeld),
+                            &[("raised", &working.raised.to_string())],
+                        )
+                    },
+                scope: word(Msg::OverviewBuildingsScope).to_owned(),
+                source: word(Msg::OverviewBuildingsSource).to_owned(),
                 match city.as_ref() {
                     None => rsx! {
                         crate::panel::Empty {
-                            status: "asking the city what it holds".to_owned(),
-                            what: "its buildings and their plans".to_owned(),
+                            status: word(Msg::AskingWhatItHolds).to_owned(),
+                            what: word(Msg::OverviewItsBuildings).to_owned(),
                         }
                     },
                     Some(answer) if answer.buildings.is_empty() => rsx! {
                         crate::panel::Empty {
-                            status: "this city has no buildings yet".to_owned(),
-                            what: "a building is one line of business, with its own rules, plan and archive. Raise one on the city page and work can be sent to it."
-                                .to_owned(),
+                            status: word(Msg::OverviewNoBuildings).to_owned(),
+                            what: word(Msg::OverviewRaiseOneOnCity).to_owned(),
                             button {
                                 onclick: move |_| on_view.call(View::City),
-                                "go to the city"
+                                "{word(Msg::OverviewGoToCity)}"
                             }
                         }
                     },
@@ -354,9 +386,9 @@ pub fn OverviewView(
                                     }
                                     span { class: "note",
                                         if working_here(&snapshot, &building.addr) {
-                                            "working"
+                                            "{word(Msg::StateWorking)}"
                                         } else {
-                                            "idle"
+                                            "{word(Msg::StateIdle)}"
                                         }
                                     }
                                 }
@@ -397,9 +429,11 @@ mod tests {
     #[test]
     fn an_empty_city_says_so_rather_than_reporting_zeroes() {
         let working = Working::default();
-        assert_eq!(headline(&working), "this city has no buildings yet");
+        assert_eq!(headline(&working).0, Msg::OverviewNoBuildings);
         // "0 runs in 0 buildings" is the same fact and is not a sentence.
-        assert!(!headline(&working).starts_with('0'));
+        for lang in crate::lang::Lang::ALL {
+            assert!(!headline_in(lang, &working).starts_with('0'));
+        }
     }
 
     #[test]
@@ -415,12 +449,17 @@ mod tests {
             frozen: 1,
             known: 1,
         };
-        let said = headline(&working);
+        assert_eq!(headline(&working).0, Msg::OverviewNothingRunningFrozen);
+        let said = headline_in(crate::lang::Lang::En, &working);
         assert!(said.contains("nothing is running"), "{said}");
         assert!(
             said.contains("stopped with work left"),
             "a frozen run is not the same as an idle city: {said}"
         );
+        // Every slot the sentence names is filled, in both languages.
+        for lang in crate::lang::Lang::ALL {
+            assert!(!headline_in(lang, &working).contains('{'));
+        }
     }
 
     #[test]
@@ -470,9 +509,10 @@ mod tests {
             frozen: 0,
             known: 0,
         };
-        assert!(headline(&working).contains("nothing is running"));
+        let said = headline_in(crate::lang::Lang::En, &working);
+        assert!(said.contains("nothing is running"));
         assert!(
-            headline(&working).contains('5'),
+            said.contains('5'),
             "a reader has to be able to tell an idle city from an empty one"
         );
     }
@@ -489,7 +529,7 @@ mod tests {
             frozen: 0,
             known: 0,
         };
-        let said = headline(&working);
+        let said = headline_in(crate::lang::Lang::En, &working);
         assert!(said.contains("2 runs"), "{said}");
         assert!(said.contains("across 1 of the 3"), "{said}");
     }

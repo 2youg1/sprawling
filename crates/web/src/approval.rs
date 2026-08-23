@@ -21,6 +21,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::lang::{Msg, say};
 use channels::{ApprovalClass, ApprovalItem, ClientFrame, Locator, PolicyVerdict, TimeMs};
 use dioxus::prelude::*;
 
@@ -113,6 +114,8 @@ pub fn ApprovalsView(
     live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let asked = use_signal(|| false);
     // What was already waiting before this page connected. The stream
     // carries what happens next and nothing earlier.
@@ -128,18 +131,15 @@ pub fn ApprovalsView(
     rsx! {
         section { class: "approvals",
             crate::panel::Panel {
-                title: if clusters.is_empty() { "nothing is waiting for you".to_owned() }
+                title: if clusters.is_empty() { word(Msg::ApprovalNothingWaiting).to_owned() }
                     else { "what the city stopped to ask you".to_owned() },
                 figure: (waiting > 0).then(|| waiting.to_string()),
-                scope: "one row per action a gate escalated rather than decided; grouped where one answer can settle several"
-                    .to_owned(),
-                source: "the approval queue as the city holds it, plus every approval_requested that has arrived since this page connected"
-                    .to_owned(),
+                scope: word(Msg::ApprovalScope).to_owned(),
+                source: word(Msg::ApprovalSource).to_owned(),
             if clusters.is_empty() {
                 crate::panel::Empty {
-                    status: "no gate has escalated anything".to_owned(),
-                    what: "a run reaches a person only when a door refuses to decide by itself - a write outside its domain, a discard with no way back, an action a policy has not yet settled. Until then work runs without asking."
-                        .to_owned(),
+                    status: word(Msg::ApprovalNoneEscalated).to_owned(),
+                    what: word(Msg::ApprovalNoneEscalatedWhat).to_owned(),
                 }
             }
             for cluster in clusters {
@@ -151,7 +151,7 @@ pub fn ApprovalsView(
                         span { class: "count", "{cluster.count()} waiting" }
                         if cluster.answer_individually {
                             span { class: "note",
-                                "this one began with someone else's text: answered alone, and no policy can waive it"
+                                "{word(Msg::ApprovalTainted)}"
                             }
                         }
                     }
@@ -182,7 +182,7 @@ pub fn ApprovalsView(
                                         let id = item.id.clone();
                                         move |_| on_frame.call(policy_command(&id))
                                     },
-                                    "and stop asking me this"
+                                    "{word(Msg::ApprovalAndStopAsking)}"
                                 }
                             }
                         }
@@ -356,6 +356,8 @@ pub fn RecycleBinView(
     live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let asked = use_signal(|| false);
     use_effect(move || {
         let mut asked = asked;
@@ -368,8 +370,8 @@ pub fn RecycleBinView(
         return rsx! {
             section { class: "recycle-bin",
                 crate::panel::Empty {
-                    status: "asking the city what it discarded".to_owned(),
-                    what: "the list appears when the answer arrives".to_owned(),
+                    status: word(Msg::BinAsking).to_owned(),
+                    what: word(Msg::BinAskingWhat).to_owned(),
                 }
             }
         };
@@ -380,18 +382,18 @@ pub fn RecycleBinView(
     rsx! {
         section { class: "recycle-bin",
             crate::panel::Panel {
-                title: if rows.is_empty() { "nothing has been discarded".to_owned() }
-                    else { "what was deleted, and the way back to each of it".to_owned() },
+                title: if rows.is_empty() {
+                        word(Msg::BinNothingDiscarded).to_owned()
+                    } else {
+                        word(Msg::BinTitle).to_owned()
+                    },
                 figure: (outstanding > 0).then(|| outstanding.to_string()),
-                scope: "the newest first; the figure counts what has not been taken back yet, and rows that already came back stay listed as evidence that a return path works"
-                    .to_owned(),
-                source: "folded from the Ledger's file_discarded and discard_restored records; the way back is the Restoration the discard was constructed with"
-                    .to_owned(),
+                scope: word(Msg::BinScope).to_owned(),
+                source: word(Msg::BinSource).to_owned(),
             if rows.is_empty() {
                 crate::panel::Empty {
-                    status: "no run has discarded anything".to_owned(),
-                    what: "a deletion in this city cannot be constructed without a way back, so anything that disappears from a worktree lands here carrying the checkpoint or the content address it can be fetched from."
-                        .to_owned(),
+                    status: word(Msg::BinNoneYet).to_owned(),
+                    what: word(Msg::BinNoneYetWhat).to_owned(),
                 }
             }
             for row in rows {
@@ -401,7 +403,7 @@ pub fn RecycleBinView(
                     span { class: "what", "{row.what}" }
                     span { class: "way-back", "{row.return_path.sentence()}" }
                     if row.restored {
-                        span { class: "note", "already restored" }
+                        span { class: "note", "{word(Msg::BinAlreadyRestored)}" }
                     } else if let ReturnPath::FromCheckpoint(ref oid) = row.return_path {
                         button {
                             class: "quiet",
@@ -413,14 +415,14 @@ pub fn RecycleBinView(
                                     }
                                 }
                             },
-                            "put the whole worktree back to that checkpoint"
+                            "{word(Msg::BinRollback)}"
                         }
                     }
                 }
             }
             if count > 0 {
                 p { class: "note",
-                    "A checkpoint row can be rolled back, and that puts the whole worktree back to that point - not this one file. Rows whose way back is a content address or a rebuild have no button, because the wire has no command that restores one file, and a button that did nothing would be worse than the sentence beside it."
+                    "{word(Msg::BinRollbackNote)}"
                 }
             }
             }

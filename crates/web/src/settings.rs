@@ -17,6 +17,7 @@
 //! holds nothing: a page that decided anything would be a second place
 //! where "is this registration complete" is defined.
 
+use crate::lang::{Msg, fill, say};
 use channels::{ChosenSummary, ClientFrame, DialectKind, EndpointSummary, EndpointsAnswer};
 use channels::{IdemKey, LoginStep, ModelTag, ProviderName, Query, RunId, Seq, WireCommand};
 use dioxus::prelude::*;
@@ -53,13 +54,13 @@ pub enum AttachReadiness {
 impl AttachReadiness {
     /// The sentence shown beside the form.
     #[must_use]
-    pub fn sentence(&self) -> &'static str {
+    pub fn sentence(&self) -> Msg {
         match self {
-            AttachReadiness::Ready => "attach it",
-            AttachReadiness::NeedsName => "give this provider a name you will recognise later",
-            AttachReadiness::NeedsUrl => "paste the base URL from the provider's documentation",
-            AttachReadiness::UrlNotSafe => "use https, or http only for a server on this machine",
-            AttachReadiness::NeedsDialect => "say which wire this provider speaks",
+            AttachReadiness::Ready => Msg::SettingsAttachIt,
+            AttachReadiness::NeedsName => Msg::SettingsNeedsName,
+            AttachReadiness::NeedsUrl => Msg::SettingsNeedsUrl,
+            AttachReadiness::UrlNotSafe => Msg::SettingsUrlNotSafe,
+            AttachReadiness::NeedsDialect => Msg::SettingsNeedsDialect,
         }
     }
 }
@@ -109,9 +110,11 @@ pub struct EndpointRow {
     pub dialect: DialectKind,
     /// What this endpoint serves, and what a tag may be pointed at.
     pub models: Vec<String>,
-    /// The sentence about reach and credential. One sentence rather than
-    /// two badges: a person reading this page is deciding one thing.
-    pub note: String,
+    /// Where this endpoint is, and whether a credential is enrolled for
+    /// it. Two messages rather than one sentence, because the words are
+    /// joined in the reader's own language at the point of drawing.
+    pub reach: Msg,
+    pub credential: Msg,
 }
 
 /// The rows for what is attached.
@@ -122,21 +125,22 @@ pub fn endpoint_rows(answer: &EndpointsAnswer) -> Vec<EndpointRow> {
 
 fn row_of(endpoint: &EndpointSummary) -> EndpointRow {
     let reach = if endpoint.local {
-        "on this machine"
+        Msg::SettingsOnThisMachine
     } else {
-        "off this machine"
+        Msg::SettingsOffThisMachine
     };
     let credential = if endpoint.has_credential {
-        "with an enrolled credential"
+        Msg::SettingsWithCredential
     } else {
-        "with no credential"
+        Msg::SettingsNoCredential
     };
     EndpointRow {
         name: endpoint.name.clone(),
         base_url: endpoint.base_url.clone(),
         dialect: endpoint.dialect,
         models: endpoint.models.clone(),
-        note: format!("{reach}, {credential}"),
+        reach,
+        credential,
     }
 }
 
@@ -148,7 +152,7 @@ pub struct TagRow {
     /// `None` means no model is chosen; the page shows what that costs
     /// rather than leaving the row blank.
     pub chosen: Option<ChosenSummary>,
-    pub consequence: &'static str,
+    pub consequence: Msg,
 }
 
 /// Every tag this build knows, in the order the page offers them.
@@ -174,13 +178,13 @@ pub fn tag_rows(answer: &EndpointsAnswer) -> Vec<TagRow> {
 
 /// What not choosing a model for this tag means. Stated as the effect on
 /// the person's work, because "main is unset" tells them nothing.
-fn consequence_of(tag: ModelTag) -> &'static str {
+fn consequence_of(tag: ModelTag) -> Msg {
     match tag {
-        ModelTag::Main => "without this, a dispatch is refused",
-        ModelTag::Digest => "without this, long documents are read whole by the main model",
+        ModelTag::Main => Msg::SettingsMainConsequence,
+        ModelTag::Digest => Msg::SettingsDigestConsequence,
         // A tag added upstream without a sentence here still appears,
         // saying only that its effect is unrecorded.
-        _ => "the effect of leaving this unset is not recorded",
+        _ => Msg::SettingsUnknownConsequence,
     }
 }
 
@@ -230,11 +234,14 @@ pub fn attach_command(form: &AttachForm) -> Option<WireCommand> {
 /// leaves behind. Pure, so the sentence and the reference are decided in
 /// one place rather than inside a browser callback.
 #[must_use]
-pub fn enrolment_note(answer: &Enrolment) -> (Option<String>, String) {
+pub fn enrolment_note(lang: crate::lang::Lang, answer: &Enrolment) -> (Option<String>, String) {
     match answer {
         Enrolment::Stored { reference } => (
             Some(reference.clone()),
-            format!("stored as {reference}; the key itself is now only in the vault"),
+            fill(
+                say(lang, Msg::SettingsStoredAs),
+                &[("reference", reference)],
+            ),
         ),
         Enrolment::Refused { reason } => (None, reason.clone()),
     }
@@ -273,13 +280,13 @@ pub enum SelectReadiness {
 
 impl SelectReadiness {
     #[must_use]
-    pub fn sentence(&self) -> &'static str {
+    pub fn sentence(&self) -> Msg {
         match self {
-            SelectReadiness::Ready => "use this model for that job",
-            SelectReadiness::NeedsEndpoint => "pick which provider serves it",
-            SelectReadiness::NeedsModel => "pick a model",
-            SelectReadiness::NeedsTag => "say what this model is for",
-            SelectReadiness::ModelNotServed => "that endpoint does not list this model",
+            SelectReadiness::Ready => Msg::SettingsUseThisModel,
+            SelectReadiness::NeedsEndpoint => Msg::SettingsPickProvider,
+            SelectReadiness::NeedsModel => Msg::SettingsPickModel,
+            SelectReadiness::NeedsTag => Msg::SettingsPickJob,
+            SelectReadiness::ModelNotServed => Msg::SettingsModelNotServed,
         }
     }
 }
@@ -352,6 +359,14 @@ pub fn select_command(form: &SelectForm, answer: &EndpointsAnswer) -> Option<Wir
     })
 }
 
+/// How many models an endpoint serves, said.
+fn model_count(lang: crate::lang::Lang, count: usize) -> String {
+    fill(
+        say(lang, Msg::SettingsModelCount),
+        &[("count", &count.to_string())],
+    )
+}
+
 /// The settings page.
 ///
 /// It renders what the server answered and hands every action back to
@@ -368,6 +383,7 @@ pub fn Settings(
     on_frame: EventHandler<ClientFrame>,
 ) -> Element {
     let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let mut form = use_signal(AttachForm::default);
     let mut choice = use_signal(SelectForm::default);
     let mut key = use_signal(String::new);
@@ -390,9 +406,8 @@ pub fn Settings(
         return rsx! {
             section { class: "settings",
                 crate::panel::Empty {
-                    status: "asking the server what is attached".to_owned(),
-                    what: "providers, the model chosen for each job, and what is missing before this city can be dispatched to"
-                        .to_owned(),
+                    status: word(Msg::SettingsAsking).to_owned(),
+                    what: word(Msg::SettingsAskingWhat).to_owned(),
                 }
             }
         };
@@ -404,21 +419,21 @@ pub fn Settings(
     rsx! {
         section { class: "settings",
             crate::panel::Panel {
-                title: if dispatchable { "this city can be dispatched to".to_owned() }
-                    else { "no model answers for main, so a dispatch is refused".to_owned() },
+                title: if dispatchable {
+                        word(Msg::SettingsDispatchable).to_owned()
+                    } else {
+                        word(Msg::SettingsNotDispatchable).to_owned()
+                    },
                 figure: (attached > 0).then(|| attached.to_string()),
-                scope: "every provider attached to this city, and which of its models answers for each job"
-                    .to_owned(),
-                source: "the city's own endpoint book, re-read whenever a provider is attached or a model is chosen"
-                    .to_owned(),
+                scope: word(Msg::SettingsScope).to_owned(),
+                source: word(Msg::SettingsSource).to_owned(),
             if attached == 0 {
                 crate::panel::Empty {
-                    status: "no provider is attached".to_owned(),
-                    what: "a run needs a model to answer for `main`. Attach one below with a base URL and a key, or sign in with a subscription. Nothing here is bundled and nothing is proxied - the endpoint is yours."
-                        .to_owned(),
+                    status: word(Msg::SettingsNoProvider).to_owned(),
+                    what: word(Msg::SettingsNoProviderWhat).to_owned(),
                 }
             }
-            h2 { "Attach a provider" }
+            h2 { "{word(Msg::SettingsAttachProvider)}" }
             // The credential is not in this form. It goes to the
             // enrolment route first and comes back as a reference,
             // which is the only shape of it a Command can carry.
@@ -435,17 +450,17 @@ pub fn Settings(
                     }
                 },
                 div { class: "field",
-                    label { r#for: "attach-name", "call it" }
+                    label { r#for: "attach-name", "{word(Msg::SettingsCallIt)}" }
                     input {
                         id: "attach-name",
                         name: "name",
-                        placeholder: "a name you will recognise",
+                        placeholder: "{word(Msg::SettingsNamePlaceholder)}",
                         value: "{form.read().name}",
                         oninput: move |event| form.write().name = event.value(),
                     }
                 }
                 div { class: "field",
-                    label { r#for: "attach-url", "base URL" }
+                    label { r#for: "attach-url", "{word(Msg::SettingsBaseUrl)}" }
                     input {
                         id: "attach-url",
                         name: "base_url",
@@ -453,10 +468,10 @@ pub fn Settings(
                         value: "{form.read().base_url}",
                         oninput: move |event| form.write().base_url = event.value(),
                     }
-                    span { class: "hint", "https anywhere; http only to this machine" }
+                    span { class: "hint", "{word(Msg::SettingsUrlHint)}" }
                 }
                 div { class: "field",
-                    label { r#for: "attach-dialect", "which wire does it speak" }
+                    label { r#for: "attach-dialect", "{word(Msg::SettingsWhichWire)}" }
                     select {
                         id: "attach-dialect",
                         name: "dialect",
@@ -467,7 +482,7 @@ pub fn Settings(
                                 _ => None,
                             };
                         },
-                        option { value: "", "which wire does it speak" }
+                        option { value: "", "{word(Msg::SettingsWhichWire)}" }
                         option { value: "anthropic", "anthropic messages" }
                         option { value: "openai", "openai chat completions" }
                     }
@@ -477,17 +492,17 @@ pub fn Settings(
                 // and the key itself is never held by this page, never
                 // put in a frame, and never shown again.
                 div { class: "field wide",
-                    label { r#for: "attach-key", "key" }
+                    label { r#for: "attach-key", "{word(Msg::SettingsKey)}" }
                     input {
                         id: "attach-key",
                         r#type: "password",
                         name: "key",
-                        placeholder: "the provider's key, or empty for a local server",
+                        placeholder: "{word(Msg::SettingsKeyPlaceholder)}",
                         value: "{key}",
                         oninput: move |event| key.set(event.value()),
                     }
                     span { class: "hint",
-                        "it leaves this page for the machine's own credential vault and comes back as a reference; it is never put in a frame and never shown again"
+                        "{word(Msg::SettingsKeyHint)}"
                     }
                 }
                 button {
@@ -498,15 +513,16 @@ pub fn Settings(
                         let realm = form.read().name.trim().to_owned();
                         let typed = key.read().clone();
                         key.set(String::new());
+                        let said_in = lang();
                         crate::socket::enrol(&realm, "key", &typed, move |answer| {
-                            let (reference, said) = enrolment_note(&answer);
+                            let (reference, said) = enrolment_note(said_in, &answer);
                             if let Some(reference) = reference {
                                 form.write().secret = Some(reference);
                             }
                             enrolment.set(Some(said));
                         });
                     },
-                    "put the key in the vault"
+                    "{word(Msg::SettingsPutKeyInVault)}"
                 }
                 if let Some(said) = enrolment.read().clone() {
                     p { class: "enrolment", "{said}" }
@@ -515,21 +531,21 @@ pub fn Settings(
                     button {
                         r#type: "submit",
                         disabled: ready(&form.read()) != AttachReadiness::Ready,
-                        "attach this provider"
+                        "{word(Msg::SettingsAttachThisProvider)}"
                     }
                     if ready(&form.read()) != AttachReadiness::Ready {
-                        span { class: "hint blocking", "{ready(&form.read()).sentence()}" }
+                        span { class: "hint blocking", "{word(ready(&form.read()).sentence())}" }
                     }
                 }
             }
-            h2 { "Sign in with a subscription" }
+            h2 { "{word(Msg::SettingsSignIn)}" }
             // Two steps with a person in the middle: the provider shows
             // them a code after they approve, and they bring it back.
             // Nothing here listens on a port, because the provider's own
             // page is where the code is shown.
             div { class: "subscription",
                 div { class: "field",
-                    label { r#for: "subscription-provider", "provider" }
+                    label { r#for: "subscription-provider", "{word(Msg::SettingsProvider)}" }
                     select {
                         id: "subscription-provider",
                         name: "subscription_provider",
@@ -546,23 +562,23 @@ pub fn Settings(
                             on_frame.call(ClientFrame::Command(Box::new(command)));
                         }
                     },
-                    "start the login"
+                    "{word(Msg::SettingsStartLogin)}"
                 }
                 match login_url.clone() {
                     None => rsx! {
-                        p { class: "unset", "no login is waiting" }
+                        p { class: "unset", "{word(Msg::SettingsNoLoginWaiting)}" }
                     },
                     Some(url) => rsx! {
                         p { class: "login-step",
-                            "open this, approve, and paste the code the provider shows you"
+                            "{word(Msg::SettingsOpenApproveePaste)}"
                         }
                         a { class: "login-url", href: "{url}", target: "_blank", "{url}" }
                         div { class: "field",
-                            label { r#for: "login-code", "the code the provider showed you" }
+                            label { r#for: "login-code", "{word(Msg::SettingsCodeLabel)}" }
                             input {
                                 id: "login-code",
                                 name: "code",
-                                placeholder: "paste it here",
+                                placeholder: "{word(Msg::SettingsPasteHere)}",
                                 value: "{code}",
                                 oninput: move |event| code.set(event.value()),
                             }
@@ -580,12 +596,12 @@ pub fn Settings(
                                     on_frame.call(ClientFrame::Command(Box::new(command)));
                                 }
                             },
-                            "finish the login"
+                            "{word(Msg::SettingsFinishLogin)}"
                         }
                     },
                 }
             }
-            h2 { "choose a model for a job" }
+            h2 { "{word(Msg::SettingsChooseModelHeading)}" }
             form {
                 class: "choose",
                 onsubmit: {
@@ -598,7 +614,7 @@ pub fn Settings(
                     }
                 },
                 div { class: "field",
-                    label { r#for: "choose-endpoint", "provider" }
+                    label { r#for: "choose-endpoint", "{word(Msg::SettingsProvider)}" }
                     select {
                         id: "choose-endpoint",
                         name: "endpoint",
@@ -610,26 +626,26 @@ pub fn Settings(
                             picked.endpoint = event.value();
                             picked.model = String::new();
                         },
-                        option { value: "", "which provider" }
+                        option { value: "", "{word(Msg::SettingsWhichProvider)}" }
                         for endpoint in answer.endpoints.clone() {
                             option { key: "{endpoint.name}", value: "{endpoint.name}", "{endpoint.name}" }
                         }
                     }
                 }
                 div { class: "field",
-                    label { r#for: "choose-model", "model" }
+                    label { r#for: "choose-model", "{word(Msg::SettingsPickModel)}" }
                     select {
                         id: "choose-model",
                         name: "model",
                         onchange: move |event| choice.write().model = event.value(),
-                        option { value: "", "which model" }
+                        option { value: "", "{word(Msg::SettingsWhichModel)}" }
                         for model in models_of(&answer, &choice.read().endpoint) {
                             option { key: "{model}", value: "{model}", "{model}" }
                         }
                     }
                 }
                 div { class: "field",
-                    label { r#for: "choose-tag", "for which job" }
+                    label { r#for: "choose-tag", "{word(Msg::SettingsForWhichJob)}" }
                     select {
                         id: "choose-tag",
                         name: "tag",
@@ -638,7 +654,7 @@ pub fn Settings(
                                 .into_iter()
                                 .find(|tag| tag.to_string() == event.value());
                         },
-                        option { value: "", "what for" }
+                        option { value: "", "{word(Msg::SettingsWhatFor)}" }
                         for tag in ModelTag::ALL {
                             option { key: "{tag}", value: "{tag}", "{tag}" }
                         }
@@ -651,16 +667,16 @@ pub fn Settings(
                     button {
                         r#type: "submit",
                         disabled: select_ready(&choice.read(), &answer) != SelectReadiness::Ready,
-                        "point this job at that model"
+                        "{word(Msg::SettingsPointJobAtModel)}"
                     }
                     if select_ready(&choice.read(), &answer) != SelectReadiness::Ready {
                         span { class: "hint blocking",
-                            "{select_ready(&choice.read(), &answer).sentence()}"
+                            "{word(select_ready(&choice.read(), &answer).sentence())}"
                         }
                     }
                 }
             }
-            h2 { "what each model is for" }
+            h2 { "{word(Msg::SettingsWhatEachModelIsFor)}" }
             table { class: "tags",
                 for row in tags {
                     tr { key: "{row.tag}",
@@ -668,26 +684,26 @@ pub fn Settings(
                         td {
                             match row.chosen {
                                 Some(choice) => rsx! { "{choice.endpoint} / {choice.model}" },
-                                None => rsx! { span { class: "unset", "{row.consequence}" } },
+                                None => rsx! { span { class: "unset", "{word(row.consequence)}" } },
                             }
                         }
                     }
                 }
             }
-            h2 { "what is attached now" }
+            h2 { "{word(Msg::SettingsWhatIsAttached)}" }
             table { class: "endpoints",
                 for row in rows {
                     tr { key: "{row.name}",
                         td { "{row.name}" }
                         td { "{row.base_url}" }
-                        td { "{row.note}" }
+                        td { "{word(row.reach)}, {word(row.credential)}" }
                         td {
                             // A provider that serves forty-six models is
                             // a fact; forty-six identifiers run together
                             // is not a reading of it. The count leads,
                             // the list is one disclosure away.
                             details { class: "models",
-                                summary { "{row.models.len()} model(s)" }
+                                summary { "{model_count(lang(), row.models.len())}" }
                                 for model in row.models {
                                     span { key: "{model}", class: "model", "{model}" }
                                 }
@@ -699,7 +715,7 @@ pub fn Settings(
             button {
                 class: "refresh quiet",
                 onclick: move |_| on_frame.call(ClientFrame::Query(Query::EndpointView)),
-                "read it again"
+                "{word(Msg::SettingsReadItAgain)}"
             }
             }
             // The language every word this client writes is said in.
@@ -856,16 +872,18 @@ mod tests {
             secret: Some("secret:house/key".to_owned()),
         };
         assert_eq!(ready(&form), AttachReadiness::UrlNotSafe);
-        assert!(ready(&form).sentence().contains("https"));
+        assert!(
+            crate::lang::phrase(ready(&form).sentence())
+                .en
+                .contains("https")
+        );
     }
 
     #[test]
     fn a_row_says_where_it_reaches_and_whether_it_has_a_credential() {
         let rows = endpoint_rows(&answer());
-        assert_eq!(
-            rows[0].note,
-            "off this machine, with an enrolled credential"
-        );
+        assert_eq!(rows[0].reach, Msg::SettingsOffThisMachine);
+        assert_eq!(rows[0].credential, Msg::SettingsWithCredential);
         assert_eq!(rows[0].models, vec!["m-large".to_owned()]);
     }
 
@@ -878,7 +896,9 @@ mod tests {
         let digest = rows.iter().find(|row| row.tag == ModelTag::Digest).unwrap();
         assert!(digest.chosen.is_none());
         assert!(
-            digest.consequence.contains("main model"),
+            crate::lang::phrase(digest.consequence)
+                .en
+                .contains("main model"),
             "an unset tag states what it costs, not that it is unset"
         );
     }
@@ -921,17 +941,23 @@ mod tests {
 
     #[test]
     fn an_enrolment_leaves_a_reference_and_a_sentence_that_says_where_the_key_went() {
-        let (reference, said) = enrolment_note(&Enrolment::Stored {
-            reference: "secret:house/key".to_owned(),
-        });
+        let (reference, said) = enrolment_note(
+            crate::lang::Lang::En,
+            &Enrolment::Stored {
+                reference: "secret:house/key".to_owned(),
+            },
+        );
         assert_eq!(reference.as_deref(), Some("secret:house/key"));
         assert!(said.contains("only in the vault"));
 
         // A refusal leaves no reference: a form that kept one would ask
         // the server to redeem a credential nobody stored.
-        let (reference, said) = enrolment_note(&Enrolment::Refused {
-            reason: "203.0.113.7 is not on this machine".to_owned(),
-        });
+        let (reference, said) = enrolment_note(
+            crate::lang::Lang::En,
+            &Enrolment::Refused {
+                reason: "203.0.113.7 is not on this machine".to_owned(),
+            },
+        );
         assert_eq!(reference, None);
         assert!(said.contains("not on this machine"));
     }
@@ -948,7 +974,7 @@ mod tests {
         assert!(
             rows.iter()
                 .find(|row| row.tag == ModelTag::Main)
-                .is_some_and(|row| row.consequence.contains("refused")),
+                .is_some_and(|row| crate::lang::phrase(row.consequence).en.contains("refused")),
             "the page states the consequence a person is about to hit"
         );
     }

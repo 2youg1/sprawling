@@ -38,7 +38,9 @@ use dioxus::prelude::*;
 /// One readout: what it counts, and the number.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sign {
-    pub what: &'static str,
+    /// What this readout counts, as a message the reader's own language
+    /// answers; the words live in `web::lang`.
+    pub what: crate::lang::Msg,
     pub count: u64,
 }
 
@@ -51,15 +53,15 @@ pub struct Sign {
 pub fn signs(answer: &MetricsAnswer) -> [Sign; 3] {
     [
         Sign {
-            what: "records in the Ledger",
+            what: crate::lang::Msg::VitalsRecords,
             count: answer.events,
         },
         Sign {
-            what: "signals waiting in rooms",
+            what: crate::lang::Msg::VitalsSignals,
             count: answer.signals_waiting,
         },
         Sign {
-            what: "discarded, not taken back",
+            what: crate::lang::Msg::VitalsDiscards,
             count: answer.discards_outstanding,
         },
     ]
@@ -73,6 +75,7 @@ pub fn Vitals(
     live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
     let asked = use_signal(|| false);
     use_effect(move || {
         let mut asked = asked;
@@ -83,15 +86,15 @@ pub fn Vitals(
     });
     let Some(answer) = answer else {
         return rsx! {
-            p { class: "vitals empty", "asking the city how large it is" }
+            p { class: "vitals empty", "{crate::lang::say(lang(), crate::lang::Msg::VitalsAsking)}" }
         };
     };
     rsx! {
         div { class: "vitals",
             for sign in signs(&answer) {
-                span { key: "{sign.what}", class: "sign",
+                span { key: "{sign.what:?}", class: "sign",
                     b { "{sign.count}" }
-                    " {sign.what}"
+                    " {crate::lang::say(lang(), sign.what)}"
                 }
             }
         }
@@ -143,14 +146,13 @@ mod tests {
     }
 
     #[test]
-    fn every_sign_says_what_it_counts() {
+    fn every_sign_says_what_it_counts_in_both_languages() {
         for sign in signs(&vital()) {
-            assert!(!sign.what.is_empty());
-            assert!(
-                !sign.what.contains('$'),
-                "money belongs to the cost page: {}",
-                sign.what
-            );
+            let said = crate::lang::phrase(sign.what);
+            for words in [said.en, said.zh] {
+                assert!(!words.is_empty());
+                assert!(!words.contains('$'), "money belongs to the cost page");
+            }
         }
     }
 }

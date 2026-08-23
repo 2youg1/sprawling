@@ -70,7 +70,7 @@ pub fn web::Alerts::raise(&mut self, &web::Alert) -> web::Raise
 pub fn web::App() -> dioxus_core::innerlude::Element
 pub fn web::ApprovalsView(web::approval::ApprovalsViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ArchiveView(web::archive_search::ArchiveViewProps) -> dioxus_core::innerlude::Element
-pub fn web::AttachReadiness::sentence(&self) -> &'static str
+pub fn web::AttachReadiness::sentence(&self) -> web::Msg
 pub fn web::BarState::as_str(self) -> &'static str
 pub fn web::BarState::desaturated_lightness(self) -> u16
 pub fn web::BarState::fill_token(self) -> &'static str
@@ -146,7 +146,8 @@ pub fn web::continuity_order(u16) -> u16
 pub fn web::cost_rows(alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros, kernel::budget::UsdMicros)>, kernel::budget::UsdMicros) -> alloc::vec::Vec<web::CostRow>
 pub fn web::custom_properties() -> alloc::string::String
 pub fn web::day_label(u64) -> alloc::string::String
-pub fn web::describe(&kernel::event::EventRecord) -> alloc::string::String
+pub fn web::describe(&kernel::event::EventRecord) -> (core::option::Option<web::Msg>, alloc::string::String)
+pub fn web::describe_in(web::Lang, &kernel::event::EventRecord) -> alloc::string::String
 pub fn web::destinations(&web::Snapshot) -> alloc::vec::Vec<web::NavGroup>
 pub fn web::dispatch_command(&str, &str, &str, &str, &str, core::option::Option<kernel::model::Effort>) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::distinguishable_without_colour() -> bool
@@ -166,7 +167,7 @@ pub fn web::fold_line(&web::CostRow) -> alloc::string::String
 pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::wire::ClientFrame
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
-pub fn web::headline(&web::Working) -> alloc::string::String
+pub fn web::headline(&web::Working) -> (web::Msg, alloc::vec::Vec<(&'static str, alloc::string::String)>)
 pub fn web::inbox(alloc::vec::Vec<kernel::approval::ApprovalItem>) -> alloc::vec::Vec<web::Cluster>
 pub fn web::invalidated_by(kernel::event::EventKind) -> core::option::Option<channels::wire::Query>
 pub fn web::kind_name(kernel::event::EventKind) -> alloc::string::String
@@ -277,8 +278,9 @@ pub web::AttachReadiness::NeedsUrl
 pub web::AttachReadiness::Ready
 pub web::AttachReadiness::UrlNotSafe
 pub web::Attention::count: u32
+pub web::Attention::slots: alloc::vec::Vec<(&'static str, alloc::string::String)>
 pub web::Attention::view: web::View
-pub web::Attention::what: alloc::string::String
+pub web::Attention::what: web::Msg
 pub web::Bar::filled: core::option::Option<u16>
 pub web::Bar::label: alloc::string::String
 pub web::Bar::state: web::BarState
@@ -312,10 +314,11 @@ pub web::DisplayList::ground: alloc::vec::Vec<web::Face>
 pub web::DisplayList::labels: alloc::vec::Vec<web::city_view::Label>
 pub web::DisplayList::outline: core::option::Option<[(i32, i32); 4]>
 pub web::EndpointRow::base_url: alloc::string::String
+pub web::EndpointRow::credential: web::Msg
 pub web::EndpointRow::dialect: kernel::model::DialectKind
 pub web::EndpointRow::models: alloc::vec::Vec<alloc::string::String>
 pub web::EndpointRow::name: alloc::string::String
-pub web::EndpointRow::note: alloc::string::String
+pub web::EndpointRow::reach: web::Msg
 pub web::Enrolment::Refused
 pub web::Enrolment::Refused::reason: alloc::string::String
 pub web::Enrolment::Stored
@@ -338,8 +341,9 @@ pub web::Leaf::Doc(alloc::string::String)
 pub web::Leaf::Room(alloc::string::String)
 pub web::Line::from_person: bool
 pub web::Line::kind: kernel::event::EventKind
+pub web::Line::msg: core::option::Option<web::Msg>
 pub web::Line::seq: kernel::event::Seq
-pub web::Line::text: alloc::string::String
+pub web::Line::who: alloc::string::String
 pub web::LinkAction::Answered(alloc::boxed::Box<channels::wire::Answer>)
 pub web::LinkAction::CloseSocket
 pub web::LinkAction::Deliver(alloc::boxed::Box<kernel::event::EventRecord>)
@@ -364,7 +368,102 @@ pub web::LinkState::Opening
 pub web::LinkState::Refused(alloc::boxed::Box<kernel::error::AxError>)
 pub web::LinkState::Suspended
 pub web::LinkState::Suspended::resume_from: core::option::Option<kernel::event::Seq>
+pub web::Msg::AlertAwaitingApproval
+pub web::Msg::AlertNoRecovery
+pub web::Msg::AlertProviderNotAnswering
+pub web::Msg::AlertProviderTrouble
+pub web::Msg::AlertRunFrozen
+pub web::Msg::AlertRunStopped
+pub web::Msg::AlertSomethingWaiting
+pub web::Msg::ApprovalAndStopAsking
+pub web::Msg::ApprovalNoneEscalated
+pub web::Msg::ApprovalNoneEscalatedWhat
+pub web::Msg::ApprovalNothingWaiting
+pub web::Msg::ApprovalScope
+pub web::Msg::ApprovalSource
+pub web::Msg::ApprovalTainted
+pub web::Msg::ApprovalTitle
+pub web::Msg::ArchiveAskingFiled
+pub web::Msg::ArchiveFiledLately
+pub web::Msg::ArchiveHitsIn
+pub web::Msg::ArchiveListWhenArrives
+pub web::Msg::ArchiveNoSearch
+pub web::Msg::ArchiveNoSearchWhat
+pub web::Msg::ArchiveNothingFiled
+pub web::Msg::ArchiveNothingFiledWhat
+pub web::Msg::ArchiveScope
+pub web::Msg::ArchiveSearchButton
+pub web::Msg::ArchiveSearchFor
+pub web::Msg::ArchiveSource
+pub web::Msg::ArchiveTitle
+pub web::Msg::ArchiveWordPlaceholder
+pub web::Msg::AskingWhatItHolds
+pub web::Msg::BinAlreadyRestored
+pub web::Msg::BinAsking
+pub web::Msg::BinAskingWhat
+pub web::Msg::BinBinnedBack
+pub web::Msg::BinNoDescription
+pub web::Msg::BinNoneYet
+pub web::Msg::BinNoneYetWhat
+pub web::Msg::BinNothingDiscarded
+pub web::Msg::BinRebuild
+pub web::Msg::BinRestoreCheckpoint
+pub web::Msg::BinRestoreStored
+pub web::Msg::BinRollback
+pub web::Msg::BinRollbackNote
+pub web::Msg::BinScope
+pub web::Msg::BinSource
+pub web::Msg::BinTitle
+pub web::Msg::BuildingArchiveTab
+pub web::Msg::BuildingAsking
+pub web::Msg::BuildingAskingRoom
+pub web::Msg::BuildingAskingRoomWhat
+pub web::Msg::BuildingAskingWhat
+pub web::Msg::BuildingNoDocument
+pub web::Msg::BuildingNoRooms
+pub web::Msg::BuildingNothingFiled
+pub web::Msg::BuildingNothingFiledWhat
+pub web::Msg::BuildingRoomEmpty
+pub web::Msg::BuildingRoomEmptyWhat
+pub web::Msg::BuildingScope
+pub web::Msg::BuildingSignalFrom
+pub web::Msg::BuildingSource
+pub web::Msg::BuildingStartHere
+pub web::Msg::BuildingTitle
+pub web::Msg::BuildingTruncated
+pub web::Msg::BuildingUnreadableRow
 pub web::Msg::CancelLastRun
+pub web::Msg::CityBuildingNamePlaceholder
+pub web::Msg::CityClearSelection
+pub web::Msg::CityFit
+pub web::Msg::CityMoveDown
+pub web::Msg::CityMoveLeft
+pub web::Msg::CityMoveRight
+pub web::Msg::CityMoveUp
+pub web::Msg::CityNoBuildingsWhat
+pub web::Msg::CityRaiseBuilding
+pub web::Msg::CityReadWhat
+pub web::Msg::CityScope
+pub web::Msg::CitySendWorkHere
+pub web::Msg::CitySource
+pub web::Msg::CityStageLabel
+pub web::Msg::CityTowerNote
+pub web::Msg::CityWhatCountsAsDone
+pub web::Msg::CityWhatShouldHappen
+pub web::Msg::ColumnPhase
+pub web::Msg::ColumnSteps
+pub web::Msg::ColumnWhere
+pub web::Msg::CostAskingSpent
+pub web::Msg::CostAskingSpentWhat
+pub web::Msg::CostCutEmpty
+pub web::Msg::CostNoneBilled
+pub web::Msg::CostNoneBilledWhat
+pub web::Msg::CostNothingSpent
+pub web::Msg::CostScope
+pub web::Msg::CostSource
+pub web::Msg::CostUnpricedScope
+pub web::Msg::CostUnpricedTitle
+pub web::Msg::CostWhereMoneyWent
 pub web::Msg::DispatchCallIt
 pub web::Msg::DispatchCallItHint
 pub web::Msg::DispatchDoneWhen
@@ -383,6 +482,48 @@ pub web::Msg::EffortMax
 pub web::Msg::EffortMedium
 pub web::Msg::EffortXHigh
 pub web::Msg::HaltCity
+pub web::Msg::LedgerAnyPartOfName
+pub web::Msg::LedgerEveryKind
+pub web::Msg::LedgerFilterNote
+pub web::Msg::LedgerFirstLineNote
+pub web::Msg::LedgerKindOfEvent
+pub web::Msg::LedgerNewestMatching
+pub web::Msg::LedgerNoMatch
+pub web::Msg::LedgerNothingArrived
+pub web::Msg::LedgerNothingSaid
+pub web::Msg::LedgerScope
+pub web::Msg::LedgerSource
+pub web::Msg::LedgerTakeThisPage
+pub web::Msg::LedgerTitle
+pub web::Msg::LedgerWhoActed
+pub web::Msg::LineApprovalRequested
+pub web::Msg::LineGateDenied
+pub web::Msg::LineModelCalled
+pub web::Msg::LineModelReturned
+pub web::Msg::LineRunFrozen
+pub web::Msg::LineSteered
+pub web::Msg::LineToolCalled
+pub web::Msg::LineToolResult
+pub web::Msg::LiveDropped
+pub web::Msg::LiveEveryRun
+pub web::Msg::LiveEverything
+pub web::Msg::LiveFollowEnd
+pub web::Msg::LiveForkFrom
+pub web::Msg::LiveInterventionNote
+pub web::Msg::LiveNoRunYet
+pub web::Msg::LiveNoRunYetWhat
+pub web::Msg::LiveNothingSince
+pub web::Msg::LiveNothingSinceConnected
+pub web::Msg::LiveNothingSinceWhat
+pub web::Msg::LiveNothingToBranch
+pub web::Msg::LiveOneSession
+pub web::Msg::LivePickASession
+pub web::Msg::LiveRunId
+pub web::Msg::LiveScope
+pub web::Msg::LiveSource
+pub web::Msg::LiveSteerPlaceholder
+pub web::Msg::LiveSteerSend
+pub web::Msg::LiveTakeover
 pub web::Msg::NavApprovals
 pub web::Msg::NavArchive
 pub web::Msg::NavCity
@@ -395,10 +536,110 @@ pub web::Msg::NavRecycleBin
 pub web::Msg::NavSettings
 pub web::Msg::NavSetup
 pub web::Msg::NavTheRecord
+pub web::Msg::OverviewBuildingsHeld
+pub web::Msg::OverviewBuildingsScope
+pub web::Msg::OverviewBuildingsSource
+pub web::Msg::OverviewEarlierRuns
+pub web::Msg::OverviewFrozenRuns
+pub web::Msg::OverviewGoToCity
+pub web::Msg::OverviewHalted
+pub web::Msg::OverviewInFlightScope
+pub web::Msg::OverviewInFlightSource
+pub web::Msg::OverviewItsBuildings
+pub web::Msg::OverviewManyRunning
+pub web::Msg::OverviewNeverStarted
+pub web::Msg::OverviewNoBuildingRaised
+pub web::Msg::OverviewNoBuildings
+pub web::Msg::OverviewNoWorkSent
+pub web::Msg::OverviewNoneWorkingNow
+pub web::Msg::OverviewNothingRunning
+pub web::Msg::OverviewNothingRunningFrozen
+pub web::Msg::OverviewNothingWaiting
+pub web::Msg::OverviewNothingWaitingWhat
+pub web::Msg::OverviewNothingWorkingNow
+pub web::Msg::OverviewOneRunning
+pub web::Msg::OverviewProviderIs
+pub web::Msg::OverviewRaiseOneOnCity
+pub web::Msg::OverviewScope
+pub web::Msg::OverviewSendSome
+pub web::Msg::OverviewSource
+pub web::Msg::OverviewStepsOf
+pub web::Msg::OverviewStepsSoFar
+pub web::Msg::OverviewUnreadable
+pub web::Msg::OverviewWaitingApprovals
+pub web::Msg::OverviewWorkedOn
+pub web::Msg::ProgressNoPlan
+pub web::Msg::ReadIt
 pub web::Msg::ReleaseCity
+pub web::Msg::RouteNoSuchPage
+pub web::Msg::RouteNoSuchPageRecovery
+pub web::Msg::SettingsAsking
+pub web::Msg::SettingsAskingWhat
+pub web::Msg::SettingsAttachIt
+pub web::Msg::SettingsAttachProvider
+pub web::Msg::SettingsAttachThisProvider
+pub web::Msg::SettingsBaseUrl
+pub web::Msg::SettingsCallIt
+pub web::Msg::SettingsChooseModelHeading
+pub web::Msg::SettingsCodeLabel
+pub web::Msg::SettingsDigestConsequence
+pub web::Msg::SettingsDispatchable
+pub web::Msg::SettingsFinishLogin
+pub web::Msg::SettingsForWhichJob
+pub web::Msg::SettingsKey
+pub web::Msg::SettingsKeyHint
+pub web::Msg::SettingsKeyPlaceholder
 pub web::Msg::SettingsLanguage
 pub web::Msg::SettingsLanguageScope
 pub web::Msg::SettingsLanguageSource
+pub web::Msg::SettingsMainConsequence
+pub web::Msg::SettingsModelCount
+pub web::Msg::SettingsModelNotServed
+pub web::Msg::SettingsNamePlaceholder
+pub web::Msg::SettingsNeedsDialect
+pub web::Msg::SettingsNeedsName
+pub web::Msg::SettingsNeedsUrl
+pub web::Msg::SettingsNoCredential
+pub web::Msg::SettingsNoLoginWaiting
+pub web::Msg::SettingsNoProvider
+pub web::Msg::SettingsNoProviderWhat
+pub web::Msg::SettingsNotDispatchable
+pub web::Msg::SettingsOffThisMachine
+pub web::Msg::SettingsOnThisMachine
+pub web::Msg::SettingsOpenApproveePaste
+pub web::Msg::SettingsPasteHere
+pub web::Msg::SettingsPickJob
+pub web::Msg::SettingsPickModel
+pub web::Msg::SettingsPickProvider
+pub web::Msg::SettingsPointJobAtModel
+pub web::Msg::SettingsProvider
+pub web::Msg::SettingsPutKeyInVault
+pub web::Msg::SettingsReadItAgain
+pub web::Msg::SettingsScope
+pub web::Msg::SettingsSignIn
+pub web::Msg::SettingsSource
+pub web::Msg::SettingsStartLogin
+pub web::Msg::SettingsStoredAs
+pub web::Msg::SettingsUnknownConsequence
+pub web::Msg::SettingsUrlHint
+pub web::Msg::SettingsUrlNotSafe
+pub web::Msg::SettingsUseThisModel
+pub web::Msg::SettingsWhatEachModelIsFor
+pub web::Msg::SettingsWhatFor
+pub web::Msg::SettingsWhatIsAttached
+pub web::Msg::SettingsWhichModel
+pub web::Msg::SettingsWhichProvider
+pub web::Msg::SettingsWhichWire
+pub web::Msg::SettingsWithCredential
+pub web::Msg::StateIdle
+pub web::Msg::StateWorking
+pub web::Msg::StatusNoCity
+pub web::Msg::StatusNothingSpent
+pub web::Msg::StatusProvider
+pub web::Msg::VitalsAsking
+pub web::Msg::VitalsDiscards
+pub web::Msg::VitalsRecords
+pub web::Msg::VitalsSignals
 pub web::NavGroup::label: web::Msg
 pub web::NavGroup::places: alloc::vec::Vec<web::Destination>
 pub web::Page::filtered_out: usize
@@ -450,11 +691,11 @@ pub web::SavingsRow::tokens_saved: u64
 pub web::Shelf::building: kernel::address::Address
 pub web::Shelf::hits: alloc::vec::Vec<channels::wire::ArchiveHit>
 pub web::Sign::count: u64
-pub web::Sign::what: &'static str
+pub web::Sign::what: web::Msg
 pub web::Subject::Plan
 pub web::Subject::Run
 pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>
-pub web::TagRow::consequence: &'static str
+pub web::TagRow::consequence: web::Msg
 pub web::TagRow::tag: kernel::model::ModelTag
 pub web::Trend::Falling
 pub web::Trend::Rising

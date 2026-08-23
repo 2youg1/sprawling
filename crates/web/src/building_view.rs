@@ -15,6 +15,7 @@
 //! to change a building - one that leaves no run, no ledger line and no
 //! checkpoint. What a person can do here is read, and then dispatch.
 
+use crate::lang::{Msg, fill, say};
 use channels::{Address, BuildingAnswer, ClientFrame, InboxAnswer, Query};
 use dioxus::prelude::*;
 
@@ -110,6 +111,8 @@ pub fn BuildingView(
     /// that starts work is the one form that starts work.
     on_select: EventHandler<Option<String>>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let asked = use_signal(|| None::<String>);
     let wanted = addr.as_str().to_owned();
     use_effect(use_reactive!(|(wanted, live)| {
@@ -152,25 +155,26 @@ pub fn BuildingView(
         return rsx! {
             section { class: "building",
                 crate::panel::Empty {
-                    status: format!("asking {} what it has written down", addr.as_str()),
-                    what: "its plan, its decisions, its handoff and its archive are files on disk, read when this page asks"
-                        .to_owned(),
+                    status: fill(word(Msg::BuildingAsking), &[("addr", addr.as_str())]),
+                    what: word(Msg::BuildingAskingWhat).to_owned(),
                 }
             }
         };
     };
     let showing = leaf().unwrap_or_else(|| opening_leaf(&answer));
+    let archive_tab = fill(
+        word(Msg::BuildingArchiveTab),
+        &[("count", &answer.archive.len().to_string())],
+    );
     let docs = answer.docs.clone();
     let rooms = answer.rooms.len();
     rsx! {
         section { class: "building",
             crate::panel::Panel {
-                title: format!("what {} has written down", answer.addr.as_str()),
+                title: fill(word(Msg::BuildingTitle), &[("addr", answer.addr.as_str())]),
                 figure: (rooms > 0).then(|| rooms.to_string()),
-                scope: "the documents this building keeps, its archive, and what waits in each of its rooms. The figure counts rooms; this page reads and never writes."
-                    .to_owned(),
-                source: "the building's own directory on disk, read when this page asked. A room's queue is folded from the Ledger, so looking at it is not taking from it."
-                    .to_owned(),
+                scope: word(Msg::BuildingScope).to_owned(),
+                source: word(Msg::BuildingSource).to_owned(),
             header { class: "building-head",
                 h2 { "{answer.addr.as_str()}" }
                 // Not a fourth dispatch form: this fills the bar at the
@@ -183,7 +187,7 @@ pub fn BuildingView(
                         let here = answer.addr.as_str().to_owned();
                         move |_| on_select.call(Some(here.clone()))
                     },
-                    "start a session here"
+                    "{word(Msg::BuildingStartHere)}"
                 }
                 crate::progress::ProgressBar {
                     bar: crate::progress::bar(
@@ -193,11 +197,13 @@ pub fn BuildingView(
                     ),
                 }
                 if answer.rooms.is_empty() {
-                    span { class: "rooms", "no rooms yet - work here has not been given one" }
+                    span { class: "rooms", "{word(Msg::BuildingNoRooms)}" }
                 }
             }
             for problem in answer.problems.clone() {
-                p { key: "{problem}", class: "problems", "this plan row could not be read - {problem}" }
+                p { key: "{problem}", class: "problems",
+                    "{fill(word(Msg::BuildingUnreadableRow), &[(\"problem\", &problem)])}"
+                }
             }
             div { class: "tabs",
                 for doc in docs.clone() {
@@ -216,7 +222,7 @@ pub fn BuildingView(
                     class: "tab",
                     "aria-current": if showing == Leaf::Archive { "true" } else { "false" },
                     onclick: move |_| leaf.set(Some(Leaf::Archive)),
-                    "archive ({answer.archive.len()})"
+                    "{archive_tab}"
                 }
                 // The rooms are listed here and nowhere else on this page:
                 // a second list of them would be a second answer to "what
@@ -240,14 +246,14 @@ pub fn BuildingView(
                         match waiting_in(inbox.as_ref(), &answer.addr, room) {
                             RoomQueue::Unasked => rsx! {
                                 crate::panel::Empty {
-                                    status: format!("asking what waits in {room}"),
+                                    status: fill(word(Msg::BuildingAskingRoom), &[("room", room.as_str())]),
                                     what: "until that answer arrives this page cannot say whether the room is empty, and will not guess"
                                         .to_owned(),
                                 }
                             },
                             RoomQueue::Empty => rsx! {
                                 crate::panel::Empty {
-                                    status: format!("nothing waits in {room}"),
+                                    status: fill(word(Msg::BuildingRoomEmpty), &[("room", room.as_str())]),
                                     what: "another resident can leave a signal here, and a run in this room pulls it at its next safe point. Looking is not taking."
                                         .to_owned(),
                                 }
@@ -259,7 +265,7 @@ pub fn BuildingView(
                                 for line in lines {
                                     div { key: "{line.id}", class: "waiting",
                                         span { class: "kind", "{line.kind}" }
-                                        span { class: "from", "from {line.from}" }
+                                        span { class: "from", "{fill(word(Msg::BuildingSignalFrom), &[(\"who\", &line.from)])}" }
                                         span { class: "id", "{line.id}" }
                                     }
                                 }
@@ -271,7 +277,7 @@ pub fn BuildingView(
                     div { class: "archive",
                         if answer.archive.is_empty() {
                             crate::panel::Empty {
-                                status: "nothing has been filed in this building".to_owned(),
+                                status: word(Msg::BuildingNothingFiled).to_owned(),
                                 what: "a resident files what it settled and does not want to work out twice. What is here is what the next run in this building is told before it starts."
                                     .to_owned(),
                             }
@@ -293,7 +299,7 @@ pub fn BuildingView(
                                 p { class: "doc-note",
                                     "{doc.name} - {doc.bytes} bytes"
                                     if doc.truncated {
-                                        " - shown up to the page's limit; the file on disk is longer"
+                                        "{word(Msg::BuildingTruncated)}"
                                     }
                                 }
                                 pre { class: "doc-text", "{doc.text}" }
@@ -302,7 +308,7 @@ pub fn BuildingView(
                         None => rsx! {
                             crate::panel::Empty {
                                 status: format!("{name} is not in this building"),
-                                what: "a building keeps five documents at most, and this one has not been written. The tabs above are the ones that exist."
+                                what: word(Msg::BuildingNoDocument)
                                     .to_owned(),
                             }
                         },

@@ -24,6 +24,7 @@
 //! and putting them in context would charge every turn for a report nobody
 //! reads.
 
+use crate::lang::{Msg, fill, say};
 use channels::UsdMicros;
 use dioxus::prelude::*;
 
@@ -170,6 +171,11 @@ pub fn fold_line(row: &CostRow) -> String {
     )
 }
 
+/// What an empty cut says, said.
+fn cut_empty(lang: crate::lang::Lang, dimension: &str) -> String {
+    fill(say(lang, Msg::CostCutEmpty), &[("dimension", dimension)])
+}
+
 /// The cost page: one total, five cuts of it, and what the city cannot
 /// price.
 ///
@@ -185,6 +191,8 @@ pub fn CostsView(
     live: Signal<bool>,
     on_frame: EventHandler<channels::ClientFrame>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let asked = use_signal(|| false);
     use_effect(move || {
         let mut asked = asked;
@@ -197,9 +205,8 @@ pub fn CostsView(
         return rsx! {
             section { class: "dashboard",
                 crate::panel::Empty {
-                    status: "asking the city what it has spent".to_owned(),
-                    what: "the five cuts appear when the answer arrives; nothing is missing yet"
-                        .to_owned(),
+                    status: word(Msg::CostAskingSpent).to_owned(),
+                    what: word(Msg::CostAskingSpentWhat).to_owned(),
                 }
             }
         };
@@ -227,22 +234,17 @@ pub fn CostsView(
         section { class: "dashboard",
             crate::panel::Panel {
                 title: match (nothing_yet, unpriced) {
-                    (true, _) => "nothing has been spent yet".to_owned(),
-                    (false, true) => {
-                        "work was done here, and no provider reported a price for it".to_owned()
-                    }
-                    (false, false) => "where the money went".to_owned(),
+                    (true, _) => word(Msg::CostNothingSpent).to_owned(),
+                    (false, true) => word(Msg::CostUnpricedTitle).to_owned(),
+                    (false, false) => word(Msg::CostWhereMoneyWent).to_owned(),
                 },
                 figure: (!unpriced).then(|| render_usd(total)),
                 scope: if unpriced {
-                    "every run in this city since it was raised, in five independent cuts. The rows are what was attributed; the amounts are missing because no call came back with one - a subscription or a local model reports what it used, not what it cost."
-                        .to_owned()
+                    word(Msg::CostUnpricedScope).to_owned()
                 } else {
-                    "every run in this city since it was raised, in five independent cuts of the same total"
-                        .to_owned()
+                    word(Msg::CostScope).to_owned()
                 },
-                source: "folded from the Ledger's model_returned records; each cut sums to that same total, and an unattributed remainder stays visible rather than being divided away"
-                    .to_owned(),
+                source: word(Msg::CostSource).to_owned(),
                 p { class: "consumed",
                     "{crate::app::render_tokens(usage.input)} in, {crate::app::render_tokens(usage.output)} out, {crate::app::render_tokens(usage.cache_read)} from cache"
                 }
@@ -253,9 +255,8 @@ pub fn CostsView(
                 }
                 if nothing_yet {
                     crate::panel::Empty {
-                        status: "no model call has been billed in this city".to_owned(),
-                        what: "a run that reaches a provider is priced from that provider's own figure, and lands in all five cuts at once. Send work from the bar below and the money appears here."
-                            .to_owned(),
+                        status: word(Msg::CostNoneBilled).to_owned(),
+                        what: word(Msg::CostNoneBilledWhat).to_owned(),
                     }
                 } else {
                     for (dimension, entries) in cuts {
@@ -263,7 +264,7 @@ pub fn CostsView(
                             h2 { "{dimension.as_str()}" }
                             if entries.is_empty() {
                                 p { class: "note",
-                                    "this cut has nothing in it: no call has been attributed to a {dimension.as_str()} yet"
+                                    "{cut_empty(lang(), dimension.as_str())}"
                                 }
                             }
                             for row in cost_rows(

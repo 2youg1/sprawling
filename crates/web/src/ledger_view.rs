@@ -15,6 +15,7 @@
 //! passed over, because a window onto a history that silently omits things
 //! is worse than no window.
 
+use crate::lang::{Msg, say};
 use channels::{EventKind, EventRecord, Seq, TimeMs};
 use dioxus::prelude::*;
 
@@ -123,6 +124,8 @@ pub fn LedgerView(
     records: Vec<EventRecord>,
     on_frame: EventHandler<channels::ClientFrame>,
 ) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let mut actor = use_signal(String::new);
     let mut kind = use_signal(String::new);
     // How many pages back from the newest record this page is. Counted in
@@ -153,31 +156,29 @@ pub fn LedgerView(
     rsx! {
         section { class: "ledger",
             crate::panel::Panel {
-                title: if held == 0 { "the city has not said anything since this page connected".to_owned() }
-                    else { "what this city has done, newest first".to_owned() },
+                title: if held == 0 { word(Msg::LedgerNothingSaid).to_owned() }
+                    else { word(Msg::LedgerTitle).to_owned() },
                 figure: (held > 0).then(|| held.to_string()),
-                scope: "every kind of event, unless the two filters below narrow it; fifty rows to a page"
-                    .to_owned(),
-                source: "the live event stream since this page connected. The Ledger on disk holds the rest, and `sprawling replay` verifies the chain over all of it - including the part this page never saw."
-                    .to_owned(),
+                scope: word(Msg::LedgerScope).to_owned(),
+                source: word(Msg::LedgerSource).to_owned(),
                 form { class: "filters", onsubmit: move |event| event.prevent_default(),
                     div { class: "field",
-                        label { r#for: "ledger-actor", "who acted" }
+                        label { r#for: "ledger-actor", "{word(Msg::LedgerWhoActed)}" }
                         input {
                             id: "ledger-actor",
                             name: "actor",
-                            placeholder: "any part of a name",
+                            placeholder: "{word(Msg::LedgerAnyPartOfName)}",
                             value: "{actor}",
                             oninput: move |event| actor.set(event.value()),
                         }
                     }
                     div { class: "field",
-                        label { r#for: "ledger-kind", "kind of event" }
+                        label { r#for: "ledger-kind", "{word(Msg::LedgerKindOfEvent)}" }
                         select {
                             id: "ledger-kind",
                             name: "kind",
                             onchange: move |event| kind.set(event.value()),
-                            option { value: "", "every kind" }
+                            option { value: "", "{word(Msg::LedgerEveryKind)}" }
                             for name in KINDS_OFFERED {
                                 option { key: "{name}", value: "{name}", "{name}" }
                             }
@@ -189,7 +190,7 @@ pub fn LedgerView(
                         onclick: move |_| on_frame.call(
                             channels::ClientFrame::Query(channels::Query::CityView),
                         ),
-                        "refresh the city with it"
+                        "{word(Msg::SettingsReadItAgain)}"
                     }
                 }
                 if page.filtered_out > 0 {
@@ -201,12 +202,15 @@ pub fn LedgerView(
                     // everything, or the page has simply not been sent
                     // anything yet.
                     crate::panel::Empty {
-                        status: if filtering { "no record here matches that filter".to_owned() }
-                            else { "nothing has arrived since this page connected".to_owned() },
+                        status: if filtering {
+                                word(Msg::LedgerNoMatch).to_owned()
+                            } else {
+                                word(Msg::LedgerNothingArrived).to_owned()
+                            },
                         what: if filtering {
-                            "the filter is a view over what this page holds, not over the Ledger. Widen it, or clear both fields to see everything that has arrived.".to_owned()
+                            word(Msg::LedgerFilterNote).to_owned()
                         } else {
-                            "every effect in this city becomes an event before it happens, so the first line appears the moment work is sent from the bar below.".to_owned()
+                            word(Msg::LedgerFirstLineNote).to_owned()
                         },
                     }
                 } else {
@@ -252,7 +256,7 @@ pub fn LedgerView(
                         }
                     }
                     details { class: "export",
-                        summary { "take this page" }
+                        summary { "{word(Msg::LedgerTakeThisPage)}" }
                         textarea { readonly: true, rows: "8", value: "{exported}" }
                     }
                 }

@@ -33,6 +33,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::lang::{Msg, fill, say};
 use channels::{Address, BuildingProgress, CityAnswer, ClientFrame, Progress, Query};
 use dioxus::prelude::*;
 
@@ -791,6 +792,11 @@ pub const PAN_STEP: i32 = 64;
 /// when someone creates one and not on every event; what moves with the
 /// event stream is which of them are lit, and that arrives through
 /// `busy` without another question.
+/// The link into one building's own pages, said.
+fn read_what(lang: crate::lang::Lang, id: &str) -> String {
+    fill(say(lang, Msg::CityReadWhat), &[("id", id)])
+}
+
 #[component]
 pub fn CityView(
     city: Option<CityAnswer>,
@@ -809,6 +815,8 @@ pub fn CityView(
     let mut template = use_signal(|| "minimal".to_owned());
     let mut stop = use_signal(|| 0usize);
     let mut pan = use_signal(|| (0i32, 0i32));
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
     let mut task = use_signal(String::new);
     let mut goal = use_signal(String::new);
     use_effect(move || {
@@ -822,9 +830,8 @@ pub fn CityView(
         return rsx! {
             section { class: "city-view",
                 crate::panel::Empty {
-                    status: "asking the city what it holds".to_owned(),
-                    what: "its buildings, how much work each has taken on, and which of them are busy right now"
-                        .to_owned(),
+                    status: word(Msg::AskingWhatItHolds).to_owned(),
+                    what: word(Msg::CityScope).to_owned(),
                 }
             }
         };
@@ -850,18 +857,16 @@ pub fn CityView(
     rsx! {
         section { class: "city-view",
             crate::panel::Panel {
-                title: if raised == 0 { "this city has no buildings yet".to_owned() }
+                title: if raised == 0 { word(Msg::OverviewNoBuildings).to_owned() }
                     else { format!("{raised} building(s), {busy_now} run(s) in flight") },
-                scope: "a tower is as tall as the work its plan took on and lit as far up as that work is done; a lit window is a run in flight right now"
-                    .to_owned(),
-                source: "where the buildings stand comes from one query, asked when this page opened; which of them are lit is folded from the event stream, record by record, and is never polled"
-                    .to_owned(),
+                scope: word(Msg::CityTowerNote).to_owned(),
+                source: word(Msg::CitySource).to_owned(),
             svg {
                 class: "stage",
                 view_box: "{frame.attr()}",
                 preserve_aspect_ratio: "xMidYMid meet",
                 role: "group",
-                "aria-label": "the buildings of this city",
+                "aria-label": "{word(Msg::CityStageLabel)}",
                 // A click that lands on no building clears the selection.
                 // The groups below stop their own clicks here, so this is
                 // the ground and only the ground.
@@ -973,7 +978,7 @@ pub fn CityView(
                 },
                 input {
                     name: "addr",
-                    placeholder: "a name for the building",
+                    placeholder: "{word(Msg::CityBuildingNamePlaceholder)}",
                     value: "{raising}",
                     oninput: move |event| raising.set(event.value()),
                 }
@@ -986,12 +991,12 @@ pub fn CityView(
                 button {
                     r#type: "submit",
                     disabled: create_command(&raising.read(), &template.read()).is_none(),
-                    "raise a building"
+                    "{word(Msg::CityRaiseBuilding)}"
                 }
             }
             if city.buildings.is_empty() {
                 crate::panel::Empty {
-                    status: "this city has no buildings yet".to_owned(),
+                    status: word(Msg::OverviewNoBuildings).to_owned(),
                     what: "a building is one line of business: its own rules, its own plan, its own archive, and the rooms work happens in. Raise one above and it appears here with the ground under it."
                         .to_owned(),
                 }
@@ -1019,7 +1024,7 @@ pub fn CityView(
                                 let name = row.0.clone();
                                 move |_| on_open.call(name.clone())
                             },
-                            "read it"
+                            "{word(Msg::ReadIt)}"
                         }
                     }
                 }
@@ -1040,22 +1045,22 @@ pub fn CityView(
                 button {
                     r#type: "button",
                     onclick: move |_| pan.set((dx.saturating_add(PAN_STEP), dy)),
-                    "move left"
+                    "{word(Msg::CityMoveLeft)}"
                 }
                 button {
                     r#type: "button",
                     onclick: move |_| pan.set((dx.saturating_sub(PAN_STEP), dy)),
-                    "move right"
+                    "{word(Msg::CityMoveRight)}"
                 }
                 button {
                     r#type: "button",
                     onclick: move |_| pan.set((dx, dy.saturating_add(PAN_STEP))),
-                    "move up"
+                    "{word(Msg::CityMoveUp)}"
                 }
                 button {
                     r#type: "button",
                     onclick: move |_| pan.set((dx, dy.saturating_sub(PAN_STEP))),
-                    "move down"
+                    "{word(Msg::CityMoveDown)}"
                 }
                 button {
                     r#type: "button",
@@ -1064,7 +1069,7 @@ pub fn CityView(
                         stop.set(0);
                         pan.set((0, 0));
                     },
-                    "fit"
+                    "{word(Msg::CityFit)}"
                 }
             }
             if let Some(id) = selected.clone() {
@@ -1076,7 +1081,7 @@ pub fn CityView(
                             let name = id.clone();
                             move |_| on_open.call(name.clone())
                         },
-                        "read what {id} has written down"
+                        "{read_what(lang(), &id)}"
                     }
                     form {
                         class: "send-work",
@@ -1091,26 +1096,26 @@ pub fn CityView(
                         },
                         input {
                             name: "task",
-                            placeholder: "what should happen here",
+                            placeholder: "{word(Msg::CityWhatShouldHappen)}",
                             value: "{task}",
                             oninput: move |event| task.set(event.value()),
                         }
                         input {
                             name: "goal",
-                            placeholder: "what counts as done",
+                            placeholder: "{word(Msg::CityWhatCountsAsDone)}",
                             value: "{goal}",
                             oninput: move |event| goal.set(event.value()),
                         }
                         button {
                             r#type: "submit",
                             disabled: dispatch_command(&checking, &task.read(), &goal.read()).is_none(),
-                            "send work here"
+                            "{word(Msg::CitySendWorkHere)}"
                         }
                     }
                     button {
                         r#type: "button",
                         onclick: move |_| on_select.call(None),
-                        "clear selection"
+                        "{word(Msg::CityClearSelection)}"
                     }
                 }
             }

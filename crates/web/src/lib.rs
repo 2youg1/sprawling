@@ -52,7 +52,7 @@ pub use lang::{Lang, Msg, Phrase, fill, phrase, say};
 pub use ledger_view::{Filter, LedgerView, PAGE_ROWS, Page, Row};
 pub use ledger_view::{export, kind_name, kind_named, page};
 pub use live::takeover_command;
-pub use live::{Feed, Line, LiveView, WINDOW, describe, fork_command, short_run};
+pub use live::{Feed, Line, LiveView, WINDOW, describe, describe_in, fork_command, short_run};
 pub use overview::{Attention, OverviewView, Working, headline, needs_you, working};
 pub use progress::distinguishable_without_colour;
 pub use progress::{Bar, BarState, ProgressBar, Subject, bar};
