@@ -2523,12 +2523,6 @@ impl RunWorker {
         // its whole life.
         let identity = city::Identity::load(&self.city_root, &addr)?;
         let who = identity.who();
-        let prefix = FrozenPrefix::assemble(
-            FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)),
-            FrozenSegment::new(SegmentSlot::Building, addr.as_str().as_bytes().to_vec()),
-            FrozenSegment::new(SegmentSlot::Resident, identity.segment_bytes()),
-            FrozenSegment::new(SegmentSlot::Run, job.to_string().into_bytes()),
-        )?;
 
         // The run's identity is fixed before the tools are built: three
         // of them mint ids from it, and an id minted from a run that did
@@ -2637,6 +2631,10 @@ impl RunWorker {
         // conversation's cache. Progressive disclosure is about what a
         // line says, not about when a tool appears.
         let mut catalog = runtime::Catalog::new();
+        // The mode a run sits in is a capability like any other: it says
+        // what this run admits, and until it was set here the mode's own
+        // catalog entry reached no model.
+        catalog.set_mode(mode);
         let edit = EditTool::new(&write_root, addr.clone(), rules.write_domain()?)?;
         let status = StatusTool::new(status_snapshot(&addr, &who, waiting))?;
         let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&signals))?;
@@ -2723,6 +2721,22 @@ impl RunWorker {
             );
         }
         let tools = catalog.tool_defs();
+        // The catalog is part of the resident segment, not a fifth slot:
+        // what a resident may reach is as much a standing fact about it
+        // as who it is, and both are frozen for the whole run so the
+        // prefix stays cacheable across the run's life. Assembled here
+        // rather than earlier because the catalog does not exist until
+        // the tools, the reading room and the mode are known.
+        const NEWLINE: u8 = 10;
+        let mut resident = identity.segment_bytes();
+        resident.push(NEWLINE);
+        resident.extend_from_slice(catalog.render().as_bytes());
+        let prefix = FrozenPrefix::assemble(
+            FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)),
+            FrozenSegment::new(SegmentSlot::Building, addr.as_str().as_bytes().to_vec()),
+            FrozenSegment::new(SegmentSlot::Resident, resident),
+            FrozenSegment::new(SegmentSlot::Run, job.to_string().into_bytes()),
+        )?;
 
         let plan = RunPlan {
             run: run_id,

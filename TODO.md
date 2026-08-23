@@ -60,14 +60,11 @@ Two things only running found. A hosted server behind a content delivery network
 
 A real dispatch against a real provider called `status`, then `edit`, wrote the file it was asked for, reported, and froze `done` with evidence. What had actually killed the earlier run was a provider answering HTTP 200 with `"choices": null` when `max_tokens` exceeds the chosen model's ceiling, and a refusal whose `recovery` was the empty string. Both are fixed (`gateway-SPEC.md` section 8-1).
 
-**What is left is the disclosure half.** `Catalog::render()` and `Catalog::expand()` have no production caller — only their own tests. So the reading room admits skills that reach no model, and the two-level disclosure `runtime::catalog` implements is not wired to anything. Today's level is "everything eagerly", via the provider's native tool array.
+**The disclosure half is now wired.** `Catalog::render()` joins the Resident segment and `set_mode` is called, so the reading room's skills and the run's own mode reach a model for the first time — `city::library`'s admission was a gate with nothing downstream of it. Measured on one real dispatch: Resident 106 B → 1,176 B, and a model asked what it can reach names all eight tools plus the mode.
 
-Then the ablation: hold the task fixed, vary how much the catalog says — bare name, one-line disclosure, disclosure plus an expansion fetched on demand, everything eagerly — and measure which tool gets called, how often the wrong one gets called, and what each level costs in prefix bytes. `runtime::catalog` already implements two-level disclosure, which is the arrangement the published work recommends; nobody has yet measured whether it works here.
+**What is left, and why.** Second-level disclosure is still unreachable: a skill's `expansion` is an address under the reserved prefix `.sprawling/`, and this build has no tool that reads a file — `edit` changes one, it does not read one. `render()` deliberately does not print that address, because telling a model to fetch something it cannot fetch is worse than not telling it.
 
-Per-building admission is the design: a building that does not handle mail is not given a mail server, and a general capability like search sits in the city layer that every building inherits. `city::config_layers` already resolves exactly those three layers, so the mechanism exists and only the reading of it is untested.
-
-- Needs P3 to drive it and P5 to have anything external to call
-- A catalog budget belongs in `xtask/budgets.toml` once there is a number
+So the remaining row is **a read tool**, which is a new capability rather than a defect in this one. Two of the ablation's four arms — "disclosure plus an expansion fetched on demand" and the comparison against it — need it before they can be run at all.
 
 ## P7 — Ship a Linux archive
 

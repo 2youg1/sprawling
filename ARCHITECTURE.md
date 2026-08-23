@@ -317,6 +317,7 @@ Sizes are gated because a byte count does not depend on how busy the machine was
 | Ledger append plus fsync | p50 ≤5 ms, p99 ≤20 ms | 0.97 ms / 1.61 ms on one NVMe machine | no |
 | Projection rebuild | ≥50,000 records/s | about 493,000 records/s on the same machine | no |
 | Prefix assembly | ≤1 ms | 0.022 ms for 16.5 KB over four slots | no |
+| Catalog, in the Resident segment | none stated | 1,070 B for eight tools and one mode, on one real dispatch | no: what a building admits is the building's, and a reading room with more in it is not a defect |
 | Kernel mutation score | ≥90% | by `just mutants` | by that command, not by `just check` |
 
 The two size rows are also rendered as the badges in `README.md`, from this same reading — `cargo xtask badge --write`, which `just dist` ends with. Nobody types a size into a document.
