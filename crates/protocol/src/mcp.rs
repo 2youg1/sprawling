@@ -14,9 +14,11 @@
 //! tools may not vary per connection, which is the same rule as freezing
 //! a run's tool table — the two arrived from opposite directions and
 //! agree, so the tool table is read once and frozen with the run. And
-//! there is no protocol-level session, so a server that needs state
-//! across calls mints its own handle and passes it as an ordinary
-//! argument, which means this module has no session to keep.
+//! every connection opens with the lifecycle the specification defines:
+//! `initialize`, then a `notifications/initialized` notification, before
+//! any other request. That is why the seam has two methods rather than
+//! one — a notification is a message with no answer, and pretending it
+//! has one is how a client ends up waiting for a 202 with no body.
 //!
 //! Everything a server returns is other people's text. It lands on the
 //! same tool seam as the local tools, so it enters the taint ring the
@@ -56,6 +58,81 @@ pub trait Outbound {
     /// Transport failures and the deadline. A server's own refusal comes
     /// back as a JSON-RPC error inside a successful exchange.
     fn call(&mut self, line: &str, patience: TimeoutMs) -> Result<String, AxError>;
+
+    /// Sends one JSON-RPC notification and does not wait for an answer,
+    /// because a notification has none.
+    ///
+    /// Separate from [`Outbound::call`] rather than folded into it: over
+    /// HTTP a notification is answered with 202 and an empty body, so a
+    /// caller that read it as a request would refuse a correct server
+    /// for having said nothing.
+    ///
+    /// # Errors
+    /// Transport failures and the deadline.
+    fn notify(&mut self, line: &str, patience: TimeoutMs) -> Result<(), AxError>;
+}
+
+/// The protocol revision this client speaks.
+///
+/// A constant that follows the outside world: the specification names
+/// the revision by date, and a server answering with a different one has
+/// negotiated it down, which [`handshake`] records rather than fights.
+pub const PROTOCOL_VERSION: &str = "2025-06-18";
+
+/// What a completed handshake learned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Handshake {
+    /// The revision the far end agreed to, which is not always the one
+    /// that was asked for.
+    pub protocol_version: String,
+    /// What the server calls itself. Recorded for diagnostics, never
+    /// branched on: a name is not a capability.
+    pub server: String,
+}
+
+/// Opens a connection: `initialize`, then `notifications/initialized`.
+///
+/// One authority for the lifecycle, above both transports. Before this
+/// existed, both of them opened with `server/discover` - a method the
+/// specification does not define - and a hosted server answered
+/// `-32601: Method not found` to the first thing this city ever said to
+/// it.
+///
+/// # Errors
+/// Refuses a far end that will not answer `initialize`, and one whose
+/// answer carries no protocol version.
+pub fn handshake(
+    out: &mut dyn Outbound,
+    rpc: &mut Rpc,
+    patience: TimeoutMs,
+) -> Result<Handshake, AxError> {
+    let answer = out.call(&rpc.initialize(), patience)?;
+    let result = Rpc::read(&answer)?;
+    let protocol_version = result
+        .get("protocolVersion")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            AxError::failure(
+                AxCode::WireMismatch,
+                "open an mcp connection",
+                "the server's initialize answer names no protocol version",
+            )
+            .with_recovery("the far end is not an MCP server, or speaks a revision without one")
+        })?
+        .to_owned();
+    let server = result
+        .get("serverInfo")
+        .and_then(|info| info.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("unnamed")
+        .to_owned();
+    // Required before any other request. A server that never receives it
+    // is entitled to refuse everything that follows.
+    out.notify(&Rpc::initialized(), patience)?;
+    Ok(Handshake {
+        protocol_version,
+        server,
+    })
 }
 
 /// Builds request lines and reads answer lines. Holds an id counter and
@@ -88,11 +165,33 @@ impl Rpc {
         )
     }
 
-    /// `server/discover`: which protocol versions and capabilities the
-    /// far end has. Asked first, so a version this city cannot speak is
-    /// a refusal before any tool is offered to a model.
-    pub fn discover(&mut self) -> String {
-        self.request("server/discover", json!({}))
+    /// `initialize`: the first message of every connection.
+    ///
+    /// Carries the three things the specification requires - a protocol
+    /// version, this client's capabilities, and who this client is. The
+    /// capability object is empty on purpose: roots, sampling and
+    /// elicitation are things a server may ask *us* for, and declaring a
+    /// capability this city does not implement would invite a request it
+    /// would then have to refuse.
+    pub fn initialize(&mut self) -> String {
+        self.request(
+            "initialize",
+            json!({
+                "protocolVersion": PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": { "name": "sprawling", "version": env!("CARGO_PKG_VERSION") },
+            }),
+        )
+    }
+
+    /// `notifications/initialized`: sent once the server has answered
+    /// `initialize`, and required before any other request.
+    ///
+    /// A notification has no `id`, which is what tells the far end not
+    /// to answer it.
+    #[must_use]
+    pub fn initialized() -> String {
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\",\"params\":{}}".to_owned()
     }
 
     /// `tools/list`.
@@ -358,7 +457,7 @@ impl Tool for McpTool {
         let arguments = Value::Object(call.args.as_map().clone());
         let line = self.rpc.call_tool(&self.remote, &arguments)?;
         let answer = self.outbound.call(&line, self.patience)?;
-        let result = Rpc::read(&answer)?;
+        let result = digits_for_floats(Rpc::read(&answer)?);
         let map = match result {
             Value::Object(map) => map,
             other => {
@@ -370,6 +469,35 @@ impl Tool for McpTool {
         Ok(ToolOutcome {
             result: Payload::new(map)?,
         })
+    }
+}
+
+/// Rewrites every fractional number in a server's answer as the string
+/// of its own digits, leaving everything else untouched.
+///
+/// A ledger payload holds integers (determinism rule 6), and a search
+/// server's results carry relevance scores. Refusing the answer would
+/// make every real search server unusable - the first hosted server
+/// this city ever reached failed four calls in a row on a score of
+/// `1249.4` - and dropping the field would hide data somebody asked for.
+///
+/// The asymmetry with [`Rpc::call_tool`], which refuses a *request*
+/// carrying a float, is deliberate: this city governs what it sends and
+/// adapts what it receives. Nothing is lost, because the digits are the
+/// ones the server wrote and no arithmetic is performed on them; what
+/// changes is the JSON type, which is visible in the ledger as a
+/// quoted number rather than a bare one.
+#[must_use]
+pub fn digits_for_floats(value: Value) -> Value {
+    match value {
+        Value::Number(n) if !n.is_i64() && !n.is_u64() => Value::String(n.to_string()),
+        Value::Array(items) => Value::Array(items.into_iter().map(digits_for_floats).collect()),
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, held)| (key, digits_for_floats(held)))
+                .collect(),
+        ),
+        other => other,
     }
 }
 
@@ -423,6 +551,12 @@ impl Outbound for ScriptedOutbound {
     // A recorded answer is instant, so the deadline has nothing to bound
     // here; it stays in the signature because the seam, not the adapter,
     // is what the tool's declared timeout travels through.
+    // A notification is recorded as having been sent and nothing more:
+    // there is no answer to script.
+    fn notify(&mut self, line: &str, _patience: TimeoutMs) -> Result<(), AxError> {
+        key_of(line).map(|_| ())
+    }
+
     fn call(&mut self, line: &str, _patience: TimeoutMs) -> Result<String, AxError> {
         let key = key_of(line)?;
         match self.answers.get(&key) {
@@ -467,7 +601,96 @@ mod tests {
         let line = rpc.list_tools();
         assert!(!line.contains('\n'));
         assert!(line.starts_with("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\""));
-        assert!(rpc.discover().contains("\"id\":2"), "ids are never reused");
+        assert!(
+            rpc.initialize().contains("\"id\":2"),
+            "ids are never reused"
+        );
+    }
+
+    /// The opening message is the one the specification names. Before
+    /// this, both transports opened with `server/discover`, which MCP
+    /// does not define, and a hosted server answered `-32601: Method
+    /// not found` to the first thing this city ever said to it.
+    #[test]
+    fn a_connection_opens_with_initialize_carrying_its_three_required_parts() {
+        let line = Rpc::new().initialize();
+        let sent: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(sent["method"], "initialize");
+        assert_eq!(sent["params"]["protocolVersion"], PROTOCOL_VERSION);
+        assert!(sent["params"]["capabilities"].is_object());
+        assert_eq!(sent["params"]["clientInfo"]["name"], "sprawling");
+    }
+
+    /// A notification has no `id`, which is what tells the far end not
+    /// to answer it. An id here would leave a client waiting for a
+    /// reply that a correct server will never send.
+    #[test]
+    fn the_initialized_notification_carries_no_id() {
+        let sent: Value = serde_json::from_str(&Rpc::initialized()).unwrap();
+        assert_eq!(sent["method"], "notifications/initialized");
+        assert!(sent.get("id").is_none());
+    }
+
+    /// The handshake reads what was negotiated rather than assuming its
+    /// own version was accepted, and it sends the notification the
+    /// specification requires before anything else may be asked.
+    #[test]
+    fn a_handshake_records_what_was_negotiated_and_says_it_is_ready() {
+        let mut server = ScriptedOutbound::new();
+        server
+            .answer(
+                &Rpc::new().initialize(),
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-03-26\",\
+                 \"capabilities\":{},\"serverInfo\":{\"name\":\"somebody\",\"version\":\"1\"}}}",
+            )
+            .unwrap();
+        let mut rpc = Rpc::new();
+        let opened = handshake(&mut server, &mut rpc, EXTERNAL_CALL_PATIENCE).unwrap();
+        assert_eq!(opened.protocol_version, "2025-03-26");
+        assert_eq!(opened.server, "somebody");
+        assert!(
+            server.missed().is_empty(),
+            "the handshake asked for nothing that was not scripted: {:?}",
+            server.missed()
+        );
+    }
+
+    /// The defect that made the first real hosted server unusable: its
+    /// results carry relevance scores, the ledger holds no floats, and
+    /// four searches in a row came back as `E_INVALID_ARGS` on a number
+    /// nobody in this city chose.
+    #[test]
+    fn a_servers_fractional_numbers_survive_as_their_own_digits() {
+        let answered = serde_json::json!({
+            "results": [{ "title": "a page", "score": 1249.4, "rank": 1 }],
+            "cost": { "total": 0.005 }
+        });
+        let recordable = digits_for_floats(answered);
+        assert_eq!(recordable["results"][0]["score"], "1249.4");
+        assert_eq!(recordable["cost"]["total"], "0.005");
+        // Integers are numbers still: this is not a blanket stringifier.
+        assert_eq!(recordable["results"][0]["rank"], 1);
+        assert_eq!(recordable["results"][0]["title"], "a page");
+        // And the whole thing is now something the ledger will take.
+        let Value::Object(map) = recordable else {
+            panic!("an object stays an object");
+        };
+        Payload::new(map).expect("a payload with no floats left in it");
+    }
+
+    /// A far end that answers `initialize` with no version is not
+    /// speaking this protocol, and is refused rather than assumed.
+    #[test]
+    fn a_server_that_names_no_protocol_version_is_refused() {
+        let mut server = ScriptedOutbound::new();
+        server
+            .answer(
+                &Rpc::new().initialize(),
+                "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}",
+            )
+            .unwrap();
+        let err = handshake(&mut server, &mut Rpc::new(), EXTERNAL_CALL_PATIENCE).unwrap_err();
+        assert_eq!(err.code(), &AxCode::WireMismatch);
     }
 
     #[test]

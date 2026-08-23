@@ -46,15 +46,13 @@ Ordered, because each step needs the one above it:
 - Lands in `crates/web/`; colour comes from `web::theme` and nowhere else, which the `color` gate holds
 - Decisions go into `crates/web/web-SPEC.md` first
 
-## P5 — Reach a real MCP server
+## P5 — done
 
-Configuring Exa's hosted endpoint and dispatching a run against it answered `-32601: Method not found`. The reason is recorded in our own source: `protocol/src/mcp.rs:17` says there is no protocol-level session, and `mcp_http.rs:24` says HTTP carries none. The MCP streamable-HTTP transport requires `initialize`, then `notifications/initialized`, then a session header on every later call.
+The lifecycle the specification defines (`initialize`, then `notifications/initialized`) is one authority in `protocol::handshake`, above both transports; the HTTP transport keeps the session and the negotiated version, and forgets a session the server ended. A configured header redeems a `secret:` reference at the wire and nowhere earlier. Every MCP diagnostic now names the transport that actually failed.
 
-So the stateless adapter can speak to a shrinking minority of servers. This is not an Exa special case and must not be built as one: the outcome is that any streamable-HTTP MCP server can be reached, which is what ARCHITECTURE.md §8 already promises about this whole class of integration.
+Verified against a real hosted server: `exa is exa-search-server speaking 2025-06-18, offering 2 tool(s)`, after which the model called its search tool unprompted, read real results, and answered in one turn.
 
-- Lands in `crates/protocol/` and `crates/sprawling/`; the "no session" decision is corrected in the SPEC first, with the specification as its reason
-- `McpTransport::Http`'s `header` does not redeem `secret:` references, so a paid key would sit in plaintext in a building's `CONFIG.toml`. That contradicts the credential rule and `xtask secret` cannot see it, because a city's config is not in this repository
-- Also here: `assembly.rs:1925` and `1936` label every MCP failure `bin::mcp_stdio`, including failures of the HTTP transport, which sends a reader to the wrong file
+Two things only running found. A hosted server behind a content delivery network answers 403 `browser_signature_banned` to a client that will not name itself, before any MCP message is read. And a search server's results carry relevance scores, which the ledger's no-floats rule refused — four calls in a row died on `1249.4`. Fractional numbers from a server are now recorded as their own digits: this city governs what it sends and adapts what it receives.
 
 ## P6 — partly done: the model does use what it is given
 

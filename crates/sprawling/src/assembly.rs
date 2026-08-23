@@ -855,23 +855,24 @@ const PYTHON_WASM_ENV: &str = "SPRAWLING_PYTHON_WASM";
 /// configuration allows the arm at all.
 /// Starts one server and turns what it offers into tools.
 ///
-/// The handshake is `server/discover` before `tools/list`: the answer is
-/// read but nothing branches on it, because proving the far end answers
-/// is what the call is for today and a version negotiation needs a
-/// second version before it can decide anything.
+/// The connection opens with the lifecycle the specification defines -
+/// `initialize`, then `notifications/initialized` - and only then asks
+/// what it offers. What the handshake learns is written to the
+/// diagnostics rather than branched on: negotiating a version needs a
+/// second version this build can speak before it can decide anything.
 fn connect_mcp(
     server: &kernel::McpServer,
     write_root: &std::path::Path,
     confidential: bool,
-) -> Result<Vec<protocol::McpTool>, AxError> {
+    resolve: &gateway::SecretResolver,
+) -> Result<(Vec<protocol::McpTool>, protocol::Handshake), AxError> {
     use protocol::Outbound as _;
 
     // The run's own root, which exists whether or not this building
     // lends its runs a worktree.
-    let mut handle = McpLink::open(&server.transport, write_root)?;
+    let mut handle = McpLink::open(&server.transport, write_root, resolve)?;
     let mut rpc = protocol::Rpc::new();
-    let greeting = handle.call(&rpc.discover(), protocol::EXTERNAL_CALL_PATIENCE)?;
-    protocol::Rpc::read(&greeting)?;
+    let opened = protocol::handshake(&mut handle, &mut rpc, protocol::EXTERNAL_CALL_PATIENCE)?;
     let listing = handle.call(&rpc.list_tools(), protocol::EXTERNAL_CALL_PATIENCE)?;
     let listed = protocol::tools_from(&server.label, &protocol::Rpc::read(&listing)?)?;
     let mut tools = Vec::new();
@@ -885,7 +886,16 @@ fn connect_mcp(
             confidential,
         )?);
     }
-    Ok(tools)
+    Ok((tools, opened))
+}
+
+/// Which module a reader should open when a server misbehaves.
+fn transport_site(transport: &kernel::McpTransport) -> &'static str {
+    match transport {
+        kernel::McpTransport::Stdio { .. } => "bin::mcp_stdio",
+        kernel::McpTransport::Http { .. } => "bin::mcp_http",
+        _ => "bin::assembly",
+    }
 }
 
 /// A URL-safe random string of `bytes` bytes of OS entropy.
@@ -985,6 +995,7 @@ impl McpLink {
     fn open(
         transport: &kernel::McpTransport,
         write_root: &std::path::Path,
+        resolve: &gateway::SecretResolver,
     ) -> Result<McpLink, AxError> {
         match transport {
             // The run's own root, which exists whether or not this
@@ -993,7 +1004,7 @@ impl McpLink {
                 crate::mcp_stdio::StdioServer::start(command, args, write_root)?,
             )),
             kernel::McpTransport::Http { url, header } => Ok(McpLink::Http(
-                crate::mcp_http::HttpServer::open(url, header.as_deref())?,
+                crate::mcp_http::HttpServer::open(url, header.as_deref(), resolve)?,
             )),
             other => Err(AxError::failure(
                 AxCode::ConfigInvalid,
@@ -1010,6 +1021,13 @@ impl protocol::Outbound for McpLink {
         match *self {
             McpLink::Stdio(ref mut held) => held.call(line, patience),
             McpLink::Http(ref mut held) => held.call(line, patience),
+        }
+    }
+
+    fn notify(&mut self, line: &str, patience: kernel::TimeoutMs) -> Result<(), AxError> {
+        match *self {
+            McpLink::Stdio(ref mut held) => held.notify(line, patience),
+            McpLink::Http(ref mut held) => held.notify(line, patience),
         }
     }
 }
@@ -1959,18 +1977,37 @@ impl RunWorker {
             // that rule, not a second copy of it.
             self.note(
                 runtime::diagnostics::Level::Refuse,
-                "bin::mcp_stdio",
+                "bin::assembly",
                 "this building is confidential; no external server is started for it",
             );
             return Vec::new();
         }
         let mut offered = Vec::new();
+        let resolve = self.resolver();
         for server in &config.mcp {
-            match connect_mcp(server, write_root, confidential) {
-                Ok(tools) => offered.extend(tools),
+            // The module a reader is sent to is the transport that
+            // failed, not whichever one was written first: every MCP
+            // failure used to be filed under `bin::mcp_stdio`, which
+            // sent the last reader who followed it to the wrong file.
+            let site = transport_site(&server.transport);
+            match connect_mcp(server, write_root, confidential, &resolve) {
+                Ok((tools, opened)) => {
+                    self.note(
+                        runtime::diagnostics::Level::Effect,
+                        site,
+                        &format!(
+                            "{} is {} speaking {}, offering {} tool(s)",
+                            server.label.as_str(),
+                            opened.server,
+                            opened.protocol_version,
+                            tools.len()
+                        ),
+                    );
+                    offered.extend(tools);
+                }
                 Err(err) => self.note(
                     runtime::diagnostics::Level::Refuse,
-                    "bin::mcp_stdio",
+                    site,
                     &format!("{}: {err}; {}", server.label.as_str(), err.recovery()),
                 ),
             }
@@ -4437,9 +4474,10 @@ mod tests {
         .unwrap();
     }
 
-    /// One line that serves as every answer this fake server gives: a
-    /// listing with one tool, and content for when that tool is called.
-    const SERVER_ANSWER: &str = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"tools\":[{\"name\":\"ping\",\"description\":\"answer with pong\",\"inputSchema\":{\"type\":\"object\"}}],\"content\":[{\"type\":\"text\",\"text\":\"pong\"}]}}";
+    /// One line that serves as every answer this fake server gives: the
+    /// negotiated version and who it is for the handshake, a listing
+    /// with one tool, and content for when that tool is called.
+    const SERVER_ANSWER: &str = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"serverInfo\":{\"name\":\"apps\",\"version\":\"1\"},\"tools\":[{\"name\":\"ping\",\"description\":\"answer with pong\",\"inputSchema\":{\"type\":\"object\"}}],\"content\":[{\"type\":\"text\",\"text\":\"pong\"}]}}";
 
     /// A provider that answers the two requests a finished login makes:
     /// the token POST, then the model list the attach probes for.

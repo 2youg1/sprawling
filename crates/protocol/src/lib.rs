@@ -14,5 +14,6 @@ mod acp;
 mod mcp;
 
 pub use acp::{Admitted, Incoming, Progress, admit};
-pub use mcp::{EXTERNAL_CALL_PATIENCE, Listed, McpTool, Outbound};
+pub use mcp::{EXTERNAL_CALL_PATIENCE, Handshake, Listed, McpTool, Outbound};
+pub use mcp::{PROTOCOL_VERSION, digits_for_floats, handshake};
 pub use mcp::{Rpc, ScriptedOutbound, tools_from};

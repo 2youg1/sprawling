@@ -16,7 +16,7 @@ use crate::walk;
 
 /// The only files allowed to say `.expose(` under crates/*/src: the
 /// defining module and the two redemption points (gateway lands S3).
-const EXPOSE_WHITELIST: [&str; 4] = [
+const EXPOSE_WHITELIST: [&str; 5] = [
     "crates/kernel/src/secret.rs",
     "crates/gateway/src/endpoint.rs",
     "crates/gateway/src/native.rs",
@@ -27,6 +27,13 @@ const EXPOSE_WHITELIST: [&str; 4] = [
     // because the alternative was the assembly holding plaintext, and
     // that is the thing this list exists to prevent.
     "crates/gateway/src/credential.rs",
+    // P5.01: an MCP server's configured header may name a credential
+    // instead of carrying one, and the header is set on the request
+    // being sent - the same last slot before the wire. Listed rather
+    // than redeemed one layer up, for the reason the entry above
+    // records: the alternative put plaintext in `bin::assembly`, which
+    // is what this list exists to prevent.
+    "crates/sprawling/src/mcp_http.rs",
 ];
 
 /// Exact literals the detector flags that are not credentials.

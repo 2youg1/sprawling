@@ -54,12 +54,23 @@ P4 之前 `crates/protocol/src/` 只有 `lib.rs`。`kernel::tool` 缝与 taint �
 // 8-1 mcp（形状 3 端口＋形状 4 适配器＋形状 1 判定）
 // R1.13 改：call 携期限。声明即承诺可协作取消（kernel-SPEC §8-23 的 TimeoutMs），
 // 而一个不回答的 server 是把整个 Run 挂死的最短路径。
-pub trait Outbound { fn call(&mut self, line: &str, patience: TimeoutMs) -> Result<String, AxError>; }
+// P5.01 增 `notify`：一条通知没有答案。HTTP 上它被 202 加空体应答，
+// 把它当请求读的客户端会因为对侧「什么都没说」而拒掉一台正确的 server。
+pub trait Outbound {
+    fn call(&mut self, line: &str, patience: TimeoutMs) -> Result<String, AxError>;
+    fn notify(&mut self, line: &str, patience: TimeoutMs) -> Result<(), AxError>;
+}
+pub const PROTOCOL_VERSION: &str = "2025-06-18";
+pub struct Handshake { pub protocol_version: String, pub server: String }
+pub fn handshake(out: &mut dyn Outbound, rpc: &mut Rpc, patience: TimeoutMs)
+    -> Result<Handshake, AxError>;
+pub fn digits_for_floats(value: Value) -> Value;
 // ServerLabel 住 kernel::tool（R1.13 迁出，见 §6）；本 crate 不再转导它，
 // 一个类型两条导入路径就是一个类型两个住址。
 pub struct Rpc { /* next: u64 私有 */ }
 impl Rpc {
-    pub fn discover(&mut self) -> String;
+    pub fn initialize(&mut self) -> String;      // P5.01：取代 discover
+    pub fn initialized() -> String;              // 通知，无 id
     pub fn list_tools(&mut self) -> String;
     pub fn call_tool(&mut self, name: &str, arguments: &Value) -> Result<String, AxError>;
     pub fn read(line: &str) -> Result<Value, AxError>;
@@ -79,6 +90,22 @@ pub enum Admitted { Dispatch { addr: Address, task: String, goal: String } }
 pub fn admit(request: &Incoming, authentic: bool) -> Result<Admitted, AxError>;
 pub struct Progress { pub run: String, pub turns: u32, pub finished: bool }
 ```
+
+## 8-3 生命周期与会话（P5.01）
+
+**病灶**：本 crate 开场发的是 `server/discover`——**MCP 根本没有这个方法**。一台托管 server 对这座城说的第一句话回的是 `-32601: Method not found`。旧注释里那句「there is no protocol-level session」也不成立。
+
+按规范改正（引 2025-06-18 Transports 与 Lifecycle 两篇的规范句）：
+
+- **开场必须是 `initialize`**，携 `protocolVersion`、`capabilities`、`clientInfo` 三项；随后必须发 `notifications/initialized`，之后才能问别的。故 `handshake()` 是这条生命周期的**唯一权威**，坐在两个传输之上——两个传输各写一遍就是两份会漂的生命周期。
+- **`capabilities` 故意为空**：roots／sampling／elicitation 是 server 反过来向**我们**要的能力；声明一项本城没实现的能力，等于招来一个随后只能拒的请求。
+- **会话住传输层，不住本 crate**，因为规范把它写在 Transports 而不是 Lifecycle：server **可选**在 `initialize` 应答的头里发 `Mcp-Session-Id`；一旦发了，客户端 **MUST** 在此后每一次请求带回。404 意味着 server 结束了会话，**MUST** 重开一个——故 `bin::mcp_http` 遇 404 丢掉 id 并标 `retriable`，而不是拿一个已死的 id 永远碰下去。
+- **已知的向前变化**：更新的修订正在把会话去掉（SEP-2575）。本客户端协商的是 `2025-06-18` 并按那一版行事；一台忽略该头的 server 不会因此变得不可用。
+- **实测红过又绿的一条**：一台在 CDN 后面的托管 server 对**不报名的客户端**回 403 `browser_signature_banned`，早于任何 MCP 消息。故 HTTP 传输带自己的 User-Agent。
+
+### 入向浮点：治我们发的，适应我们收的
+
+`digits_for_floats` 把对侧答案里的小数**原样写成字符串**。真机证据：第一台被接上的搜索 server 连续四次调用全部死在一个相关度分 `1249.4` 上，模型随后开始乱抓工具。三条理由：① 禁浮点是 **Ledger 的**规矩（确定性第 6 条），不得放松；② 拒掉整个答案等于声明本城接不了任何真实的搜索 server；③ 丢掉该字段是隐形地删别人的数据。写成字符串**不丢一位数字、不做任何算术**，且在 Ledger 里看得见（带引号的数）。与 `call_tool` 拒掉携浮点的**入参**并不矛盾：本城治自己发出去的，适应自己收回来的。
 
 ## 8.5 两个设计
 

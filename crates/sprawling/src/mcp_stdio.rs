@@ -137,13 +137,39 @@ impl protocol::Outbound for StdioServer {
         })?;
         connection.exchange(line, patience)
     }
+
+    /// A notification goes down the same pipe and nothing is read back,
+    /// because the far end will not answer it. Writing it is the whole
+    /// of the delivery this transport can promise.
+    fn notify(&mut self, line: &str, _patience: TimeoutMs) -> Result<(), AxError> {
+        let mut connection = self.inner.try_borrow_mut().map_err(|_| {
+            AxError::failure(
+                AxCode::ToolUnavailable,
+                "tell an mcp server",
+                "a call to this server is already in flight".to_owned(),
+            )
+            .with_recovery("one connection answers one question at a time")
+        })?;
+        connection.tell(line)
+    }
 }
 
 impl Connection {
-    fn exchange(&mut self, line: &str, patience: TimeoutMs) -> Result<String, AxError> {
-        // The transport is line delimited, so a newline inside a message
-        // would silently become two messages. The framing is this
-        // module's contract, so it is checked here rather than trusted.
+    /// Writes one message and does not wait. Shares the framing check
+    /// with `exchange`, because a newline splits a notification into two
+    /// messages exactly as it splits a request.
+    fn tell(&mut self, line: &str) -> Result<(), AxError> {
+        self.framed(line)?;
+        writeln!(self.requests, "{line}").map_err(|err| self.broken("write to", &err))?;
+        self.requests
+            .flush()
+            .map_err(|err| self.broken("flush", &err))
+    }
+
+    /// The transport is line delimited, so a newline inside a message
+    /// would silently become two messages. The framing is this module's
+    /// contract, so it is checked here rather than trusted.
+    fn framed(&self, line: &str) -> Result<(), AxError> {
         if line.contains('\n') {
             return Err(AxError::failure(
                 AxCode::WireMismatch,
@@ -152,6 +178,11 @@ impl Connection {
             )
             .with_recovery("send one message per line; the transport frames on newlines"));
         }
+        Ok(())
+    }
+
+    fn exchange(&mut self, line: &str, patience: TimeoutMs) -> Result<String, AxError> {
+        self.framed(line)?;
         writeln!(self.requests, "{line}").map_err(|err| self.broken("write to", &err))?;
         self.requests
             .flush()
@@ -226,13 +257,20 @@ fn pipes_missing(command: &str) -> AxError {
 /// tests can start the same child; it exists in no other build.
 #[cfg(test)]
 pub(crate) fn echoing(answer: &str) -> (String, Vec<String>) {
+    // A notification is passed over in silence, because a real server
+    // does not answer one. A fake that answered everything would leave
+    // one unread line in the pipe, and every later call would read the
+    // answer to the message before it.
     if cfg!(windows) {
         (
             "powershell".to_owned(),
             vec![
                 "-NoProfile".to_owned(),
                 "-Command".to_owned(),
-                format!("while($l=[Console]::In.ReadLine()){{Write-Output '{answer}'}}"),
+                format!(
+                    "while($l=[Console]::In.ReadLine()){{if($l -notmatch 'notifications/')\
+                     {{Write-Output '{answer}'}}}}"
+                ),
             ],
         )
     } else {
@@ -240,7 +278,10 @@ pub(crate) fn echoing(answer: &str) -> (String, Vec<String>) {
             "sh".to_owned(),
             vec![
                 "-c".to_owned(),
-                format!("while IFS= read -r l; do printf '%s\\n' '{answer}'; done"),
+                format!(
+                    "while IFS= read -r l; do case \"$l\" in *notifications/*) ;; \
+                     *) printf '%s\\n' '{answer}';; esac; done"
+                ),
             ],
         )
     }

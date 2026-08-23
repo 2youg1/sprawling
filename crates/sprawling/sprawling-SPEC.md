@@ -111,7 +111,17 @@ fn mcp_tools(&mut self, config: &FrozenConfig, addr: &Address, confidential: boo
 
 `bin::mcp_http` 是 `Outbound` 缝的第三个适配器（stdio 子进程、ScriptedOutbound、HTTP），也是这条缝第一次真正被两条生产路径共用。`McpServer.transport` 从两个裸字段改成穷尽枚举 `McpTransport { Stdio{command,args}, Http{url,header} }`：**一行既写 command 又写 url 就是一行要读者去猜的配置**，故配置层当场三段式拒。装配层把差异全部花在 `McpLink` 这一个枚举里，其上的接线仍是一条路。
 
-三条口径：①**HTTP 无会话**，故克隆只共享地址——这与当前修订版删掉协议级 session 同向；②**事件流只取第一条 `data:`**，读不出就拒，恒不把两条答案拼成一条工具结果；③**拒词不引用对侧正文**（服务端的错误页是别人写的字），只说状态码与该查什么。
+三条口径：①**事件流只取第一条 `data:`**，读不出就拒，恒不把两条答案拼成一条工具结果；②**拒词不引用对侧正文**（服务端的错误页是别人写的字），只说状态码与该查什么；③当时写的「**HTTP 无会话**，故克隆只共享地址」**已于 P5.01 推翻**，见下。
+
+## 8-4c 会话、凭据与报错地址（P5.01）
+
+三处修正，三处都是真机跑出来的。
+
+- **`HttpServer` 持会话，且克隆共享它**。旧口径「HTTP 无会话」读错了规范（详 `protocol-SPEC.md` §8-3）。一台 server 就是一个会话，不论一次 Run 拿了它几件工具；两个克隆各发一个 session id 就是与同一台 server 开两场对话，而它只开过一场。协商版本从**携 `result.protocolVersion` 的那一条答案**学得——按生命周期，那就是 `initialize` 的答案，因为它是一条连接的第一句话，没有更早的答案能持有该字段。
+- **`header` 兑付 `secret:` 引用**。`redeem_header` 把 `Name: secret:realm/name` 在最后一刻换成真值，与 endpoint 凭据同一条路。不这么做，一把付费档的 key 会明文躺在楼里的 `CONFIG.toml`，而 `xtask secret` 看不见它（城市配置不在仓库内）。不是引用的值原样通过：头里是个账号名或固定标记的 server 无物可兑。
+- **报错地址指向真正出事的传输**。`transport_site()` 按 `McpTransport` 分派；此前所有 MCP 失败都挂在 `bin::mcp_stdio` 名下，上一个跟着它去查的人被引到了错的文件。成功时同样留一行：对侧叫什么、说哪个版本、给了几件工具。
+
+**真机验收**：一座真城接一台托管 server，诊断行为 `exa is exa-search-server speaking 2025-06-18, offering 2 tool(s)`；模型自主调用其搜索工具、读回真实结果、一个回合内给出答案并 `run_frozen{completion: done}`。
 
 ## 8-5 订阅登录接线（整修卡 R1.14）
 
