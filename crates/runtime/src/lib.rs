@@ -24,6 +24,7 @@ pub mod tools;
 pub use tools::ChildStatus;
 pub use tools::EditTool;
 pub use tools::ExecTool;
+pub use tools::ReadTool;
 pub use tools::ProviderMode;
 pub use tools::StatusSnapshot;
 pub use tools::StatusTool;
@@ -51,7 +52,7 @@ pub use sandbox::assert_sandbox_conformance;
 
 mod watchdog;
 
-pub use catalog::{Catalog, CatalogEntry};
+pub use catalog::{Catalog, CatalogEntry, Expansion};
 pub use clock::{ClockStamp, StampGate, ZoneEntry, stamp};
 pub use digest::{Breaker, BreakerVerdict, Digest, DigestOutcome, StructureNode};
 pub use digest::{digest_once, structure_of};

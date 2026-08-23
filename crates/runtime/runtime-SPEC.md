@@ -253,6 +253,9 @@ pub fn build_prefix(plan: PrefixPlan) -> Result<PrefixBuild, AxError>;
 ```
 
 - **首轮不再指向任何东西（P6.03）**：`JOB.md` 的正文已是 Run 段，故 `FULL READ:` 那一行与它携的 `cas:b3-…` 一起取消——城里没有一个工具解析得了内容哈希，而溯源在 Ledger 里已记两遍。`Opening` 的两臂不是排版偏好：被派了一件活的会话与正在和人说话的会话要的第一句话不同，而把人那句话包成 `Task:`／`Goal:` 表单，换回来的也是一张表单。
+- **read 的两条路，差别在于谁选的（P6.04）**：**路径是模型选的，故受审**——`Address::parse` 杀穿越，`is_reserved` 杀保留子树（`E_GATE_DENIED`）；**catalog 里的名字是人选的**——楼的阅览室写下它时准入就已发生，故它解到的 skill 可以住在保留空间里。两条路共用一个参数，因为对模型而言它们是同一件事（把一份东西调到眼前）；**先问 catalog** ，一个同名文件不得遮蔽楼已经准入的 skill。
+- **`Catalog::expand` 改答 `Expansion` 而不是 `String`（P6.04）**：skill 展开成一个可打开的地址，mode 展开成一段**已在 prompt 里**的正文，两者压成一个字符串时，调用方只能拿它去试解析成地址——而一段恰好能解析成地址的 mode 正文就会被当成文件打开。这个错误真发生了，是一条红测试拿住的。
+- **它是 `Catalog::expand` 自 S3.10 以来的第一个调用者**：在它之前，一栋楼的阅览室能报出一个 skill 的名字而永远交不出它。
 - 跨段去重：同 addr 两段命中只装首次（段序 city→building→resident→run）；后段记 skipped{reason:"duplicate"}。
 - 截断：文件超段位余额即截到边界，原处留 ASCII 标记 `[truncated: N bytes]`（prefix 面向英文窗口），恒不静默丢尾；标记字节从段预算先扣。
 - 断点：`FrozenPrefix::system_blocks()` 产四块、逐块 cache=true＝断点恒 4＝`CACHE_BREAKPOINTS_MAX`，断点只落段界。
@@ -405,7 +408,7 @@ pub fn assert_sandbox_conformance<S: Sandbox>(sandbox: &mut S, job: &SandboxJob)
 
 **P4.02 增（sandbox）**：`AbsentSandbox` —— 未带执行引擎的构建在缝上的产品实现，逐次以 `E_TOOL_UNAVAILABLE` 拒并携替代臂。它存在的理由是**缺席要是一个判词而不是一个替身**：Echo 放在这个位置会对一个从未运行的 guest 回答「成功」，而第一个察觉的人是相信了那份输出的人。
 
-### 8-14 runtime::tools 三件（S3.13；形状 4；tools.rs 为纯索引）
+### 8-14 runtime::tools 四件（S3.13 三件＋P6.04 read；形状 4；tools.rs 为纯索引）
 
 ```rust
 // tools/exec.rs —— 三臂（ExecArm 住 kernel::tool）
@@ -426,6 +429,12 @@ impl Tool for EditTool { /* meta：name=edit、effect=Write{domain}、render=Dif
 // 模型选的 path 未经任何判定直接落盘——那是一个真漏洞，修在权威处而非 bench 里的第二份判定。
 // args：{path, base_version, old, new}；version＝内容 B3Hash 前 16 hex；check_base 拒即 E_VERSION_CONFLICT；
 // old 必唯一命中（零命中／多命中＝E_INVALID_ARGS 携计数）；回显＝unified diff＋new_version（逐次 diff 即回档粒度）
+
+// tools/read.rs —— 一个参数，两条路（P6.04）
+pub struct ReadTool { /* city_root、catalog: Rc<RefCell<Catalog>> —— 私有 */ }
+impl ReadTool { pub fn new(city_root: &Path, catalog: Rc<RefCell<Catalog>>) -> Result<ReadTool, AxError>; }
+impl Tool for ReadTool { /* meta：name=read、effect=Read、cost=Light、render=Generic、temporal=Timeless */ }
+// args：{path}。先问 catalog，再当作地址。
 // 创建臂：base_version=="new"（16 hex 永拼不出，无碰撞）→ 文件必不存在（存在＝E_VERSION_CONFLICT 报真实版本），
 // old 必 ""，new＝全文；父目录自动建（域内已证）。缺文件而非创建形的拒词指向创建形；
 // 缺参拒词报四字段契约。理由：没有创建能力的城里，Agent 在空房间里无法开始任何工作；

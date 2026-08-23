@@ -15,6 +15,8 @@ impl kernel::tool::Tool for runtime::EditTool
 impl kernel::tool::Tool for runtime::EditTool
 impl kernel::tool::Tool for runtime::ExecTool
 impl kernel::tool::Tool for runtime::ExecTool
+impl kernel::tool::Tool for runtime::ReadTool
+impl kernel::tool::Tool for runtime::ReadTool
 impl kernel::tool::Tool for runtime::StatusTool
 impl kernel::tool::Tool for runtime::StatusTool
 impl runtime::EchoSandbox
@@ -25,6 +27,8 @@ impl runtime::ExecTool
 impl runtime::FaultSandbox
 impl runtime::ProviderMode
 impl runtime::ProviderMode
+impl runtime::ReadTool
+impl runtime::ReadTool
 impl runtime::Sandbox for runtime::AbsentSandbox
 impl runtime::Sandbox for runtime::AbsentSandbox
 impl runtime::Sandbox for runtime::EchoSandbox
@@ -88,11 +92,13 @@ pub enum runtime::Advance
 pub enum runtime::BreakerVerdict
 pub enum runtime::DigestOutcome
 pub enum runtime::Disposal
+pub enum runtime::Expansion
 pub enum runtime::FreezeReason
 pub enum runtime::Opening
 pub enum runtime::PhaseOutcome<Next>
 pub enum runtime::SegmentSlot
 pub enum runtime::VerifiedLine
+pub enum runtime::catalog::Expansion
 pub enum runtime::compaction::Content
 pub enum runtime::compaction::Strategy
 pub enum runtime::digest::BreakerVerdict
@@ -126,6 +132,12 @@ pub fn runtime::FaultSandbox::run(&mut self, &runtime::SandboxJob) -> core::resu
 pub fn runtime::FaultSandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
 pub fn runtime::ProviderMode::as_str(self) -> &'static str
 pub fn runtime::ProviderMode::as_str(self) -> &'static str
+pub fn runtime::ReadTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn runtime::ReadTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn runtime::ReadTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn runtime::ReadTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn runtime::ReadTool::new(&std::path::Path, alloc::rc::Rc<core::cell::RefCell<runtime::catalog::Catalog>>) -> core::result::Result<runtime::ReadTool, kernel::error::AxError>
+pub fn runtime::ReadTool::new(&std::path::Path, alloc::rc::Rc<core::cell::RefCell<runtime::catalog::Catalog>>) -> core::result::Result<runtime::ReadTool, kernel::error::AxError>
 pub fn runtime::Sandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
 pub fn runtime::StatusSnapshot::render(&self) -> alloc::string::String
 pub fn runtime::StatusSnapshot::render(&self) -> alloc::string::String
@@ -147,8 +159,8 @@ pub fn runtime::catalog::Catalog::admit_skill(&mut self, runtime::catalog::Catal
 pub fn runtime::catalog::Catalog::admit_skill(&mut self, runtime::catalog::CatalogEntry) -> core::result::Result<(), kernel::error::AxError>
 pub fn runtime::catalog::Catalog::admit_tool(&mut self, &kernel::tool::ToolMeta) -> core::result::Result<(), kernel::error::AxError>
 pub fn runtime::catalog::Catalog::admit_tool(&mut self, &kernel::tool::ToolMeta) -> core::result::Result<(), kernel::error::AxError>
-pub fn runtime::catalog::Catalog::expand(&self, &str) -> core::option::Option<alloc::string::String>
-pub fn runtime::catalog::Catalog::expand(&self, &str) -> core::option::Option<alloc::string::String>
+pub fn runtime::catalog::Catalog::expand(&self, &str) -> core::option::Option<runtime::catalog::Expansion>
+pub fn runtime::catalog::Catalog::expand(&self, &str) -> core::option::Option<runtime::catalog::Expansion>
 pub fn runtime::catalog::Catalog::new() -> runtime::catalog::Catalog
 pub fn runtime::catalog::Catalog::new() -> runtime::catalog::Catalog
 pub fn runtime::catalog::Catalog::render(&self) -> alloc::string::String
@@ -374,6 +386,10 @@ pub runtime::Disposal::Freeze
 pub runtime::Disposal::Freeze::reason: runtime::FreezeReason
 pub runtime::Disposal::Proceed
 pub runtime::EchoSandbox::seen: alloc::vec::Vec<runtime::SandboxJob>
+pub runtime::Expansion::Mode
+pub runtime::Expansion::Mode::text: alloc::string::String
+pub runtime::Expansion::Skill
+pub runtime::Expansion::Skill::addr: alloc::string::String
 pub runtime::FreezeReason::ProviderExhausted
 pub runtime::FreezeReason::Stall
 pub runtime::Interrupt::Cancel
@@ -498,6 +514,10 @@ pub runtime::ZoneEntry::offset_min: i32
 pub runtime::catalog::CatalogEntry::disclosure: alloc::string::String
 pub runtime::catalog::CatalogEntry::expansion: alloc::string::String
 pub runtime::catalog::CatalogEntry::name: alloc::string::String
+pub runtime::catalog::Expansion::Mode
+pub runtime::catalog::Expansion::Mode::text: alloc::string::String
+pub runtime::catalog::Expansion::Skill
+pub runtime::catalog::Expansion::Skill::addr: alloc::string::String
 pub runtime::clock::ClockStamp::utc_ms: kernel::event::TimeMs
 pub runtime::clock::ClockStamp::zones: alloc::vec::Vec<runtime::clock::ZoneEntry>
 pub runtime::clock::ZoneEntry::id: alloc::string::String
@@ -672,6 +692,7 @@ pub struct runtime::PackContext<'a>
 pub struct runtime::Packaged
 pub struct runtime::PrefixPlan
 pub struct runtime::Produced
+pub struct runtime::ReadTool
 pub struct runtime::ResumeSeed
 pub struct runtime::Run<S>
 pub struct runtime::RunHooks<'a>
@@ -721,6 +742,7 @@ pub struct runtime::run::RunPlan
 pub struct runtime::tools::ChildStatus
 pub struct runtime::tools::EditTool
 pub struct runtime::tools::ExecTool
+pub struct runtime::tools::ReadTool
 pub struct runtime::tools::StatusSnapshot
 pub struct runtime::tools::StatusTool
 pub struct runtime::turn::Assembling(_)

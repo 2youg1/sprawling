@@ -27,6 +27,18 @@ pub struct CatalogEntry {
     pub expansion: String,
 }
 
+/// What a second-level disclosure turns out to be.
+///
+/// Exhaustive: a catalog entry either lives somewhere the run can open,
+/// or is text the run already has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Expansion {
+    /// A skill, and the address it is kept at.
+    Skill { addr: String },
+    /// The mode this run sits in, and what it asks of it.
+    Mode { text: String },
+}
+
 #[derive(Debug, Default)]
 pub struct Catalog {
     tools: BTreeMap<String, ToolRow>,
@@ -142,15 +154,25 @@ impl Catalog {
 
     /// Second-level disclosure. Tools expand to their schema via
     /// `tool_defs` (the wire always carries it); skills and the mode
-    /// expand to their stored text.
-    pub fn expand(&self, name: &str) -> Option<String> {
+    /// expand through here.
+    ///
+    /// The two answers are different kinds of thing — a place to open
+    /// and a text already in the prompt — so they are different
+    /// variants. Collapsing both into one string made the caller guess
+    /// which it had by trying to parse it as an address, and a mode
+    /// whose text happened to parse would have been opened as a file.
+    pub fn expand(&self, name: &str) -> Option<Expansion> {
         if let Some(entry) = self.skills.get(name) {
-            return Some(entry.expansion.clone());
+            return Some(Expansion::Skill {
+                addr: entry.expansion.clone(),
+            });
         }
         if let Some(mode) = self.mode {
             let entry = mode.catalog_entry();
             if entry.name == name {
-                return Some(entry.expansion);
+                return Some(Expansion::Mode {
+                    text: entry.expansion,
+                });
             }
         }
         None
@@ -222,7 +244,10 @@ mod tests {
         let defs = catalog.tool_defs();
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].name.as_str(), "probe");
-        assert!(catalog.expand("mode:experiment").is_some());
+        assert!(matches!(
+            catalog.expand("mode:experiment"),
+            Some(Expansion::Mode { .. })
+        ));
         assert!(catalog.expand("missing").is_none());
     }
 }

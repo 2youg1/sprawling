@@ -6,12 +6,14 @@
 
 mod edit;
 mod exec;
+mod read;
 mod status;
 
 pub use edit::EditTool;
 pub use edit::version_of;
 pub use exec::ExecTool;
 pub use exec::parse_arm;
+pub use read::ReadTool;
 pub use status::ChildStatus;
 pub use status::ProviderMode;
 pub use status::StatusSnapshot;

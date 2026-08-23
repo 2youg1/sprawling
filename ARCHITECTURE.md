@@ -400,7 +400,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | gateway::cost | crates/gateway/src/cost.rs | per-call settlement, with the provider's own figure preferred | decision | S3 | built |
 | gateway::credential | crates/gateway/src/credential.rs | custody: capture, replace with a reference, redeem at the wire, renew before expiry | adapter | S3 | built |
 
-### runtime (20) — one run, from dispatch to freeze
+### runtime (21) — one run, from dispatch to freeze
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -420,6 +420,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | runtime::mode | crates/runtime/src/mode.rs | the modes a run may sit in, and what each admits | decision | S3 | built |
 | runtime::clock | crates/runtime/src/clock.rs | formatting an injected instant; it never samples one | value | S3 | built |
 | runtime::tools::exec | crates/runtime/src/tools/exec.rs | the exec tool: three arms, each with its own failure story | adapter | S3 | built |
+| runtime::tools::read | crates/runtime/src/tools/read.rs | the read tool: a path the reserved subtree closes, or a name the reading room opens | adapter | P6 | built |
 | runtime::tools::edit | crates/runtime/src/tools/edit.rs | the edit tool: optimistic concurrency against the version the caller read | adapter | S3 | built |
 | runtime::tools::status | crates/runtime/src/tools/status.rs | the model's view of its own situation, in twelve fields | adapter | S3 | built |
 | runtime::run | crates/runtime/src/run.rs | the run driver: dispatch, turns, freeze — one authority for the loop | typestate | P1 | built |

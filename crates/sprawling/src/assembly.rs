@@ -291,6 +291,14 @@ fn run_segment(city_root: &Path, building: &Address, brief: &city::RunBrief) -> 
 /// else.
 const NEWLINE: u8 = 10;
 
+/// What this agent is called: the last segment of its address, which is
+/// the word a person typed into `call it` when they started the session
+/// (F2.11). Never the whole address — an agent addressed as its own
+/// name reads more like somebody than like a path.
+fn name_of(addr: &Address) -> &str {
+    addr.as_str().rsplit('/').next().unwrap_or(addr.as_str())
+}
+
 /// The derived views a query reads. They are rebuilt from the ledger at
 /// startup and folded forward by the write observer, so deleting them
 /// costs nothing but the rebuild — the ledger remains the only history.
@@ -2725,11 +2733,11 @@ impl RunWorker {
         // prompt, so a tool admitted mid-run would invalidate the whole
         // conversation's cache. Progressive disclosure is about what a
         // line says, not about when a tool appears.
-        let mut catalog = runtime::Catalog::new();
+        let catalog = std::rc::Rc::new(std::cell::RefCell::new(runtime::Catalog::new()));
         // The mode a run sits in is a capability like any other: it says
         // what this run admits, and until it was set here the mode's own
         // catalog entry reached no model.
-        catalog.set_mode(mode);
+        catalog.borrow_mut().set_mode(mode);
         let edit = EditTool::new(&write_root, addr.clone(), rules.write_domain()?)?;
         let status = StatusTool::new(status_snapshot(&addr, &who, waiting))?;
         let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&signals))?;
@@ -2737,7 +2745,7 @@ impl RunWorker {
         let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
         let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
         let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
-        catalog.admit_tool(kernel::Tool::meta(&archive_tool))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&archive_tool))?;
         // The execution boundary. What the run may reach is the frozen
         // config's answer; where the engine and the interpreter live is
         // the machine's, so a city carried elsewhere does not carry this
@@ -2757,13 +2765,20 @@ impl RunWorker {
             runtime::Fuel(config.sandbox.fuel),
             addr.clone(),
         )?;
-        catalog.admit_tool(kernel::Tool::meta(&exec))?;
-        catalog.admit_tool(kernel::Tool::meta(&claim_tool))?;
-        catalog.admit_tool(kernel::Tool::meta(&edit))?;
-        catalog.admit_tool(kernel::Tool::meta(&status))?;
-        catalog.admit_tool(kernel::Tool::meta(&signal_tool))?;
-        catalog.admit_tool(kernel::Tool::meta(&goal_tool))?;
-        catalog.admit_tool(kernel::Tool::meta(&pr_tool))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&exec))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&claim_tool))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&edit))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&status))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&signal_tool))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&goal_tool))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&pr_tool))?;
+        // The one tool that reads, and the only caller of the catalog's
+        // second-level disclosure: without it a building's reading room
+        // could name a skill and never hand it over. It holds the
+        // catalog rather than a copy of what is in it, so a skill
+        // admitted below this line is still reachable by name.
+        let read = runtime::ReadTool::new(&write_root, std::rc::Rc::clone(&catalog))?;
+        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&read))?;
         // The net, not the forecast, is the defence (semantic authority
         // 4.4). Two handles on one repository: the bench fences a
         // command its forecast suspects, and the driver fences every
@@ -2782,6 +2797,7 @@ impl RunWorker {
         bench.register(Box::new(claim_tool))?;
         bench.register(Box::new(archive_tool))?;
         bench.register(Box::new(exec))?;
+        bench.register(Box::new(read))?;
         for cluster in &self.granted {
             bench.grant(cluster.clone());
         }
@@ -2790,7 +2806,7 @@ impl RunWorker {
         // rendered, because the tool table is frozen with the run: what
         // the model is told exists is decided once.
         for tool in self.mcp_tools(&config, &write_root, rules.policy().confidential) {
-            catalog.admit_tool(kernel::Tool::meta(&tool))?;
+            catalog.borrow_mut().admit_tool(kernel::Tool::meta(&tool))?;
             bench.register(Box::new(tool))?;
         }
         // The reading room, and only it. The city's shelves may hold a
@@ -2799,7 +2815,7 @@ impl RunWorker {
         // not on the shelves is left out rather than promised.
         let shelves = city::Library::scan(&self.city_root, Some(building.addr()))?;
         for holding in shelves.reading_room(rules.reading_room()) {
-            catalog.admit_skill(runtime::CatalogEntry {
+            catalog.borrow_mut().admit_skill(runtime::CatalogEntry {
                 name: holding.name.clone(),
                 disclosure: holding.disclosure.clone(),
                 expansion: holding.addr.as_str().to_owned(),
@@ -2815,16 +2831,23 @@ impl RunWorker {
                 ),
             );
         }
-        let tools = catalog.tool_defs();
+        let tools = catalog.borrow().tool_defs();
         // The catalog is part of the resident segment, not a fifth slot:
         // what a resident may reach is as much a standing fact about it
         // as who it is, and both are frozen for the whole run so the
         // prefix stays cacheable across the run's life. Assembled here
         // rather than earlier because the catalog does not exist until
         // the tools, the reading room and the mode are known.
-        let mut resident = identity.segment_bytes();
+        // The name a person typed when they started this session, which
+        // is the last segment of the address they started it at. It
+        // opens the resident slot rather than the city one: the city
+        // segment is identical for every agent in the city and is
+        // cached as such, and a name in it would make one copy per
+        // agent of the largest stable block in the prompt.
+        let mut resident = format!("Your name: {}\n\n", name_of(&addr)).into_bytes();
+        resident.extend_from_slice(&identity.segment_bytes());
         resident.push(NEWLINE);
-        resident.extend_from_slice(catalog.render().as_bytes());
+        resident.extend_from_slice(catalog.borrow().render().as_bytes());
         let prefix = FrozenPrefix::assemble(
             FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)),
             FrozenSegment::new(
