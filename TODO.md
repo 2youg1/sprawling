@@ -8,14 +8,13 @@ Where a row says **needs a ruling**, it touches something in the `guard` row of 
 
 Rebuild the client's appearance from the ground up rather than adjusting it. The client is correct today and does not yet look like something a person wants to keep open all day. Everything else in this project is judged through it, so this is not cosmetic.
 
-Ordered, because each step needs the one above it:
+Step 1 (routing) landed as `web::route`; a page can now be linked to, bookmarked, and photographed. The five below are what is left, ordered because each needs the one above it:
 
-1. **Routing.** `View` becomes a URL. Without it there is no deep link, no browser back, no bookmark, and no way to photograph any page but the first — which is also why the front end cannot be regression-tested today.
 2. **The isometric city, in SVG rather than canvas.** `DisplayList` was designed as a shape table so a second renderer could consume it, and `Face { id, token, points }` is an SVG polygon already. Canvas is a fixed 1000×560 bitmap that is then CSS-scaled, so the picture and its text are resampled on every display that is not exactly that size; canvas also cannot read a CSS custom property, which is why the selection outline settles for `G10` where `city_view.rs:703` plainly wanted `--ACCENT`. SVG restores hover, focus, keyboard reach, transitions, and a city that fills whatever space it is given. **Contradicts a recorded decision** — web-SPEC §3's "canvas, not DOM" — whose stated reason is a thousand Residents; a city holds tens of Buildings, so the reason does not reach this case. The SPEC is corrected first, with that reasoning
 3. **Space, and a card grammar.** Roughly 45% of the window is empty while the canvas states three facts an adjacent list states better. Every centre panel gets a conclusion heading, a subtitle carrying scope and legend, the body, and a line saying where the numbers came from — the last of which is missing from a product whose whole claim is an auditable Ledger
 4. **`web::lang`, and a font.** An exhaustive `Msg` enum makes a missing translation fail to compile. No font file ships today: the stylesheet names Noto Sans SC and Zen Kaku Gothic New and relies on the reader's machine owning them. Embedding a subset is the only change in sight that could approach the 2 MB client budget, so it is measured before it is chosen. Making it stick needs a gate — **needs a ruling**
 5. **Settings, two levels.** Models / City / Interface / Security / About. The City pane needs Queries the wire does not have yet, so `WIRE_V` goes from 4 to 5
-6. **The repetitions.** `Root` takes twenty-one parameters, twelve of which are one concept; eight modules each hold their own copy of the "ask once the socket is live" dance; `city_view.rs:703` sets a stroke style that the next line overwrites
+6. **The repetitions.** `Root` takes twenty-two parameters, thirteen of which are one concept; eight modules each hold their own copy of the "ask once the socket is live" dance; `city_view.rs:703` sets a stroke style that the next line overwrites
 
 - Lands in `crates/web/`; colour comes from `web::theme` and nowhere else, which the `color` gate holds
 - Decisions go into `crates/web/web-SPEC.md` first
