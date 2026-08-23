@@ -63,18 +63,18 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("status") => status(&args),
-        Some("replay") => replay(args.get(1)),
-        Some("init") => init(args.get(1)),
+        Some("replay") => replay(named(&args, 1)),
+        Some("init") => init(named(&args, 1)),
         Some("up") => up(&args),
         Some("install") => install(&args),
         Some("call") => call(&args),
         Some("enrol" | "enroll") => enrol(&args),
-        Some("serve") => serve(args.get(1), args.get(2), &args),
-        Some("export") => export(args.get(1), args.get(2)),
-        Some("restore") => restore(args.get(1), args.get(2)),
-        Some("resume") => resume(args.get(1)),
+        Some("serve") => serve(named(&args, 1), named(&args, 2), &args),
+        Some("export") => export(named(&args, 1), named(&args, 2)),
+        Some("restore") => restore(named(&args, 1), named(&args, 2)),
+        Some("resume") => resume(named(&args, 1)),
         Some("fork") => fork(&args),
-        Some("adopt") => adopt(args.get(1), args.get(2)),
+        Some("adopt") => adopt(named(&args, 1), named(&args, 2)),
         Some("help" | "--help" | "-h") => {
             println!("{COMMANDS}");
             ExitCode::SUCCESS
@@ -86,6 +86,19 @@ fn main() -> ExitCode {
         }
         None => first_screen(),
     }
+}
+
+/// The nth positional argument: a word that is not a flag.
+///
+/// Without this, `sprawling init --help` raises a city in a directory
+/// called `--help` - which is what the repository root of this project
+/// held for a day. A flag is never a path, and the subcommands that take
+/// a path all read it through here.
+fn named(args: &[String], nth: usize) -> Option<&String> {
+    args.iter()
+        .skip(1)
+        .filter(|arg| !arg.starts_with("--"))
+        .nth(nth.saturating_sub(1))
 }
 
 /// What a launch with no command gets. Most of those come from a file
@@ -701,7 +714,28 @@ fn log_levels() -> String {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
-    use super::{CLIENT_COMPLETE, CLIENT_FILES};
+    use super::{CLIENT_COMPLETE, CLIENT_FILES, named};
+
+    /// A flag is not a path.
+    ///
+    /// `sprawling init --help` used to raise a city in a directory
+    /// called `--help`, because `init` read `args[1]` whatever it was.
+    /// This repository's own root held one of those for a day.
+    #[test]
+    fn a_flag_is_never_read_as_the_path_a_subcommand_wanted() {
+        let words =
+            |raw: &[&str]| -> Vec<String> { raw.iter().map(|word| (*word).to_owned()).collect() };
+        let asked = words(&["init", "--help"]);
+        assert_eq!(named(&asked, 1), None, "--help became a city directory");
+
+        let two = words(&["export", "--verbose", "city", "bundle"]);
+        assert_eq!(named(&two, 1).map(String::as_str), Some("city"));
+        assert_eq!(named(&two, 2).map(String::as_str), Some("bundle"));
+
+        let plain = words(&["serve", "city", "127.0.0.1:8787"]);
+        assert_eq!(named(&plain, 1).map(String::as_str), Some("city"));
+        assert_eq!(named(&plain, 2).map(String::as_str), Some("127.0.0.1:8787"));
+    }
 
     /// The embed chain delivers a file table with the page shell in it;
     /// when the wasm client was built, the table carries it too.
