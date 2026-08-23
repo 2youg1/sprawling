@@ -1655,6 +1655,13 @@ mod tests {
         fn has_class(&self, needle: &str) -> bool {
             self.classes.iter().any(|class| class.contains(needle))
         }
+
+        /// Where a piece of text sits in reading order, ignoring what is
+        /// only in an attribute. Order is what two of this card's
+        /// defects were about, and a placeholder is not a label.
+        fn wrote(&self, needle: &str) -> Option<usize> {
+            self.text.iter().position(|line| line.contains(needle))
+        }
     }
 
     impl dioxus::dioxus_core::WriteMutations for Painted {
@@ -2228,6 +2235,63 @@ mod tests {
     fn a_page_with_nothing_refused_carries_no_strip() {
         let painted = painted_with(View::City, Snapshot::new(), Vec::new(), None);
         assert!(!painted.classes.iter().any(|c| c == "refusal"));
+    }
+
+    /// The order of the settings page, which is the order a person can
+    /// perform its steps in.
+    ///
+    /// The city this card was cut from had a key in its vault, two
+    /// buildings, and no endpoint: the one section that makes the other
+    /// three non-empty sat last, below the fold, with its own submit
+    /// button off-screen.
+    #[test]
+    fn the_settings_page_leads_with_the_step_a_new_city_cannot_skip() {
+        let painted = paint(View::Settings, Snapshot::new(), Vec::new());
+        let attach = painted
+            .wrote("Attach a provider")
+            .expect("the page never offers to attach a provider");
+        let choose = painted
+            .wrote("choose a model for a job")
+            .expect("the page never offers to choose a model");
+        let tags = painted
+            .wrote("what each model is for")
+            .expect("the page never says what each tag is for");
+        assert!(
+            attach < choose && attach < tags,
+            "the first step is not first: attach {attach}, choose {choose}, tags {tags}"
+        );
+    }
+
+    /// The four controls of the dispatch bar carry labels, not only
+    /// placeholders - this repository's own stylesheet says why, and the
+    /// bar was the one form in the client that ignored it.
+    #[test]
+    fn the_dispatch_bar_names_its_fields_where_the_name_survives_typing() {
+        let painted = paint(View::Overview, Snapshot::new(), Vec::new());
+        for label in ["room", "task", "done when", "mode"] {
+            assert!(
+                painted.text.iter().any(|line| line == label),
+                "the dispatch bar has no label {label:?}: {:?}",
+                painted.text
+            );
+        }
+    }
+
+    /// A steer box with no session chosen sent nothing, said nothing,
+    /// and looked exactly like one that would work.
+    #[test]
+    fn a_session_nobody_chose_gets_a_sentence_rather_than_a_dead_input() {
+        let mut snapshot = Snapshot::new();
+        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
+        let painted = paint(View::Live(None), snapshot, Vec::new());
+        assert!(
+            painted.says("pick a session above to speak into it"),
+            "the page offers no way to learn what to do next"
+        );
+        assert!(
+            !painted.says("say something into this run"),
+            "a box that cannot send is still on the page"
+        );
     }
 
     #[test]

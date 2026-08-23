@@ -627,6 +627,23 @@ pub struct Working { pub runs, pub buildings, pub raised, pub frozen, pub known 
 
 **本卡的真机证据**（ModelScope，Qwen3-235B）：模型先用 shell 臂调 exec → 读到 `E_TOOL_UNAVAILABLE` 及其 recovery → 改用 program 臂 → 读到 `E_INVALID_ARGS` 及其 recovery → 第三次写对并成功。**三段式拒绝对模型也是有效的，不只对人。** `pwd` 的输出落在 Run 自己的房间里，写域成立；429 变成 `provider_degraded` 携 recovery；冻结时写了带三个 must-read locator 的 Handoff。
 
+### 8-33 一座新城与它的第一次派活之间的四道坎（F2.07；形状 1 判定 ＋ 既有组件重排）
+
+```rust
+pub(crate) fn models_of(answer: &EndpointsAnswer, endpoint: &str) -> Vec<String>;  // web::settings
+#[component] fn DispatchBar(addr, on_frame, on_view)                               // web::app
+```
+
+**真机取证**（用户自己跑的那座城，`city/.sprawling/ledger/`，四条记录）：`city_initialized` → `secret_captured`（`secret:1/key`）→ `building_created` ×2。**没有 `endpoint_attached`，也没有一次 `Dispatch`。** 一个人把密钥放进了保险库、盖了两栋楼，然后停在了那里；这四道坎每一道都在他停下的那条路上。
+
+- **页序即人能执行的次序**。设置页原本的顺序是：已接端点表 → 各标签派什么用 → 选一个模型 → 订阅登录 → **附一个 provider**。前三节在没有 provider 时全是空的，而唯一能让它们不空的那一节在第五位、在折线以下——连它自己的提交按钮都在窗口之外。改成：附 provider → 订阅登录 → 选模型 → 标签表 → 现在接着什么。同样的内容，倒过来的顺序，**本节不新增任何判定**。代价记明：一座已配好的城，回访者要多滚一屏才看见「现在接着什么」；面板抬头已经先答了「这座城派不派得出活」，故这一屏不是他要找的答案。
+- **模型下拉按选中的 provider 过滤**。原本 A 家的下拉里列着 B 家的模型，于是 `SelectReadiness::ModelNotServed` 纯靠界面误导就能达成。过滤**不是第二个权威**（延用 §8-12）：服务端同样拒，这一道只是把拒绝提前到人点得到之前。换 provider 即清空已选模型——留着上一家的名字，就是留着一个必然被拒的表单。
+- **派活条的四个控件带标签**。本仓库自己的样式表写着「A label above its field, never a placeholder standing in for one: a placeholder disappears the moment somebody types」，而派活条是全库唯一违反它的表单：四个控件全靠占位符说话，地址列 180px，在 1600 宽的窗口里把 `which room, as building/room` 截成 `which room, as building/ro`。地址列改宽并给出标签。
+- **送出即落到直播页**。按下 `send it` 之后页面不动，一个人无从知道那一帧出去了没有；`on_view` 把视图切到 `View::Live(None)`。**不替人选 Run**——§8-31「哪个 session 是选的，不是猜的」仍然有效——直播页仍要人点一个 Run 才说得进话，只是没选时说的是「先点上面一个 session」，而不是给一个永远按不动的输入框。
+- **城市页的画布封顶到 52vh**。§8-18 记的理由是「height: auto，让盒子取画本身的比例，不留空的信箱边」，那条理由在 1280×800 下的代价是：`raise a building` 表单与楼列表全部落到折线以下，最后一行被裁掉一半。**记录随现实更正**：比例仍由画自己定，只是高度封顶，短窗口下让出侧边的空白，好过让人滚一屏才找得到唯一能盖楼的地方。
+
+验收：`Painted` 渲 `View::Settings`，断言 `Attach a provider` 的文本序号小于 `choose a model for a job`；渲 `View::Live(None)`，断言页面说出要先选一个 session 且**不含**可提交的 steer 表单；`models_of` 只答选中 provider 的模型；派活条渲出四个 `label`。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。
