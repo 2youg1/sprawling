@@ -13,14 +13,20 @@
 //!   two different addresses on purpose.
 //! - symlink resolution is an effect-layer concern; this type only judges
 //!   already-canonical relative paths.
-//! - `is_reserved` answers C17: the `.sprawling` subtree can never enter a
-//!   WriteDomain, and every WriteDomain constructor must ask first.
+//! - `is_reserved` answers C17: a `.sprawling` subtree can never enter a
+//!   WriteDomain, at whatever depth it sits, and every WriteDomain
+//!   constructor must ask first.
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AxCode, AxError};
 
-/// City-root subtree that never enters any WriteDomain (C17).
+/// The directory name whose subtree never enters any WriteDomain (C17).
+///
+/// One of these belongs to each scope that has rules of its own: the
+/// city's holds the ledger and the city configuration, a building's
+/// holds the rules that govern it. What governs a scope is therefore
+/// never writable by what runs inside it.
 pub const RESERVED_PREFIX: &str = ".sprawling";
 
 /// Canonical relative path; invariants enforced at the sole constructor.
@@ -78,9 +84,15 @@ impl Address {
         }
     }
 
-    /// C17 primitive: true iff the first segment is [`RESERVED_PREFIX`].
+    /// C17 primitive: true iff any segment is [`RESERVED_PREFIX`].
+    ///
+    /// Any segment rather than the first: a building's own rules sit at
+    /// `<building>/.sprawling/`, and a run whose write domain is its
+    /// building must not reach them. Widening this predicate can only
+    /// refuse more, which is the direction a fail-closed check may move
+    /// in without a second authority to check it against.
     pub fn is_reserved(&self) -> bool {
-        self.0.split('/').next() == Some(RESERVED_PREFIX)
+        self.0.split('/').any(|segment| segment == RESERVED_PREFIX)
     }
 
     pub fn as_str(&self) -> &str {
