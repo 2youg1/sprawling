@@ -26,7 +26,7 @@ jobs:
   verify:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: install pinned toolchain
@@ -52,6 +52,12 @@ jobs:
         run: cargo deny check
       - name: xtask gates
         run: cargo xtask gates
+      # See ci.yml: the cache's save step cannot walk trybuild's scratch,
+      # and a job whose every gate was green reported failure because of
+      # it. This is the whole of release #5's `verify` failure.
+      - name: clear the trybuild scratch before the cache is saved
+        if: always()
+        run: rm -rf target/tests
 
   # The absence of Linux is written here rather than left to be noticed:
   # a platform missing from a release page is a decision, not an oversight.
@@ -64,25 +70,29 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: install pinned toolchain
         run: rustup show
       - name: the client target
         run: rustup target add wasm32-unknown-unknown
       # The CLI version must equal the crate version; a mismatch there is
-      # the quietest way to break a wasm build. The pin below is a copy,
-      # so the next step fails loudly when the copy falls behind.
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just,wasm-bindgen-cli@0.2.127
-      - name: the CLI and the crate agree on a version
+      # the quietest way to break a wasm build. It used to be held by a
+      # copy of the version plus an assertion that watched the copy - one
+      # version with three authorities, and the assertion is what failed
+      # the macOS job in release #5. The manifest is now read directly, so
+      # there is nothing left to fall behind and nothing left to assert.
+      - name: the version the workspace pins
+        id: pin
         shell: bash
         run: |
           set -euo pipefail
-          crate=$(sed -n 's/^wasm-bindgen = "\(.*\)"$/\1/p' Cargo.toml)
-          cli=$(wasm-bindgen --version | awk '{print $2}')
-          echo "crate pins $crate, CLI is $cli"
-          test "$crate" = "$cli"
+          version=$(sed -n 's/^wasm-bindgen = "\(.*\)"$/\1/p' Cargo.toml)
+          test -n "$version"
+          echo "the workspace pins wasm-bindgen $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,wasm-bindgen-cli@${{ steps.pin.outputs.version }}
       - name: build the client, the binary, and the archive
         shell: bash
         run: just package
@@ -98,7 +108,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           path: assets

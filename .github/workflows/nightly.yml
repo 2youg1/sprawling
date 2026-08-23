@@ -16,21 +16,28 @@ jobs:
   freeze-leak:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: install pinned toolchain
         run: rustup show
+      - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+      # --all-features, as everywhere else: without it these two commands
+      # resolve a feature set no other command in the repository ever
+      # builds, so they compile their own tree and can fail on their own.
       - name: thousand-session freeze leak
-        run: cargo nextest run -p citysim --locked -E 'binary(freeze_leak)'
+        run: cargo nextest run -p citysim --locked --all-features -E 'binary(freeze_leak)'
       - name: long-batch simulation
-        run: cargo nextest run -p citysim --locked
+        run: cargo nextest run -p citysim --locked --all-features
+      - name: clear the trybuild scratch before the cache is saved
+        if: always()
+        run: rm -rf target/tests
 
   fuzz-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: install pinned toolchain and nightly
         run: |
           rustup show
@@ -38,8 +45,11 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
+      # `+nightly` explicitly: rust-toolchain.toml pins 1.97.1, so without
+      # it cargo-fuzz runs under the pinned stable toolchain and refuses
+      # the nightly-only flags it needs. That is what this job did.
       - name: each target, sixty seconds
         run: |
-          for target in $(cargo fuzz list --fuzz-dir fuzz); do
-            cargo fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=60
+          for target in $(cargo +nightly fuzz list --fuzz-dir fuzz); do
+            cargo +nightly fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=60
           done

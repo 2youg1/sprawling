@@ -1,0 +1,64 @@
+# What ci.yml deliberately does not ask on every push.
+#
+# Two claims live here, and both are about machines rather than about a
+# change. A4/V8 assert byte identity across platforms, so a platform not
+# in this matrix is a promise rather than a fact. V5 proves eleven kernel
+# properties against real MIR, which is Linux-only upstream and minutes
+# long either way.
+#
+# They run on a schedule and on demand instead of on every push because a
+# gate nobody waits for is a gate nobody runs - and a twenty-minute wait
+# on every commit is how the fast gates stopped being read at all.
+name: platforms
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The same commands ci.yml runs on Linux, on the other two platforms.
+  matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-public-api
+      - name: nightly toolchain (rustdoc JSON for apisync)
+        run: rustup toolchain install nightly --profile minimal
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: xtask gates
+        run: cargo xtask gates
+      - name: tests
+        run: cargo nextest run --workspace --locked --all-features
+      # See ci.yml: the cache's save step cannot walk trybuild's scratch.
+      - name: clear the trybuild scratch before the cache is saved
+        if: always()
+        shell: bash
+        run: rm -rf target/tests
+
+  kani:
+    # V5: the kernel harnesses (cfg(kani)); Linux-only upstream.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: model-checking/kani-github-action@v1
+        with:
+          args: -p kernel
