@@ -217,14 +217,30 @@ pub fn CostsView(
     // page rather than an empty one. Before any money exists there is one
     // thing to say, so the page says it once.
     let nothing_yet = cuts.iter().all(|(_, entries)| entries.is_empty());
+    // Work was attributed and every figure is zero. That is not a free
+    // city: it is a provider that reported no price, and rendering it as
+    // $0.00 in every row is the interface answering a question nobody can
+    // answer. Zero and unknown are different, and only one is ever true
+    // here. Found on a real provider that bills a subscription.
+    let unpriced = !nothing_yet && total == UsdMicros::default();
     rsx! {
         section { class: "dashboard",
             crate::panel::Panel {
-                title: if nothing_yet { "nothing has been spent yet".to_owned() }
-                    else { "where the money went".to_owned() },
-                figure: render_usd(total),
-                scope: "every run in this city since it was raised, in five independent cuts of the same total"
-                    .to_owned(),
+                title: match (nothing_yet, unpriced) {
+                    (true, _) => "nothing has been spent yet".to_owned(),
+                    (false, true) => {
+                        "work was done here, and no provider reported a price for it".to_owned()
+                    }
+                    (false, false) => "where the money went".to_owned(),
+                },
+                figure: (!unpriced).then(|| render_usd(total)),
+                scope: if unpriced {
+                    "every run in this city since it was raised, in five independent cuts. The rows are what was attributed; the amounts are missing because no call came back with one - a subscription or a local model reports what it used, not what it cost."
+                        .to_owned()
+                } else {
+                    "every run in this city since it was raised, in five independent cuts of the same total"
+                        .to_owned()
+                },
                 source: "folded from the Ledger's model_returned records; each cut sums to that same total, and an unattributed remainder stays visible rather than being divided away"
                     .to_owned(),
                 p { class: "consumed",
@@ -263,7 +279,13 @@ pub fn CostsView(
                                             style: "width: {row.share.checked_div(10).unwrap_or_default()}%",
                                         }
                                     }
-                                    span { class: "amount", "{render_usd(row.spent)}" }
+                                    span { class: "amount",
+                                        if unpriced {
+                                            "unpriced"
+                                        } else {
+                                            "{render_usd(row.spent)}"
+                                        }
+                                    }
                                 }
                             }
                         }

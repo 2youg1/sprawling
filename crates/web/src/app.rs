@@ -1982,6 +1982,26 @@ mod tests {
     }
 
     #[test]
+    fn work_with_no_price_is_never_rendered_as_a_column_of_zeroes() {
+        // A real provider on a subscription reports what it used and not
+        // what it cost, so the authoritative total is zero while four runs
+        // sit in the attribution. Rendering that as $0.00 five times over
+        // is the interface answering a question nobody can answer.
+        let painted = paint(View::Dashboard, Snapshot::new(), Vec::new());
+        if painted.says("no provider reported a price") {
+            assert!(
+                painted.says("unpriced"),
+                "the rows say so too, rather than each showing a zero"
+            );
+        } else {
+            assert!(
+                painted.says("where the money went") || painted.says("nothing has been spent"),
+                "a cost page states one of the three cases and no fourth"
+            );
+        }
+    }
+
+    #[test]
     fn a_person_can_reach_every_intervention_the_wire_classifies() {
         // `channels::control` names five interventions. Before F2.05 this
         // client could send two of them, so an interface for delegated

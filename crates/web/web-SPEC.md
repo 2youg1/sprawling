@@ -610,6 +610,23 @@ impl GitOid { pub fn parse(raw: &str) -> Option<Self> }          // kernel::loca
 - **`GitOid::parse` 开在 kernel 而不是在客户端重写十六进制解码**：那份文件的 `Deserialize` 旁边就写着「形状权威留在这里，以免 wire 长出第二个定义」——客户端同理。长度不对即拒，恒不补零猜。
 - **尚未接出的三条，各自的阻塞写在 TODO**：`SetAutonomy`（需先定下 Owner／Deferred 在界面上各自意味着什么）、`BatchByBuilding`（`ApprovalItem` 不携 Address，从 `actor` 反推楼名是猜）、`Attach`（客户端根本没有上传面）。**写出来而不是假装它们不存在。**
 
+### 8-32 三个页面在替一座它们刚认识的城作答（F2.06；真机仿真抳出）
+
+```rust
+pub struct Working { pub runs, pub buildings, pub raised, pub frozen, pub known }
+#[cfg(wasm32)] pub fn route::unresolved() -> Option<String>;   // 地址栏说了什么而本构建认不得
+// route：View::Dashboard 的片段改为 `#/cost`，`#/dashboard` 仍可解析
+```
+
+**仿真现场**：一座真实跑过四次 Run 的城。总览页写「no run has started in this city」，直播页写「no run has been dispatched in this city」，右栏写「nothing spent yet」——**三句话全是对整座城的断言，而三个来源都只是一个从页面连上才开始的 fold**。账本页早就用「本页只看得见连上之后」避开了这个坑；另外三处没有。
+
+- **城的数在前，fold 只能抬高它**：`CityView` 答的是整部历史，fold 比上一次答案新，故**两者取大者**。不是两个权威：一个答「曾经有过什么」，一个答「刚刚又多了什么」。
+- **冻结自己一句话**：「nothing is running」与「4 个 Run 停在了半途」不是同一件事，把后者渲染成前者等于把一座卡住的城画成一座闲着的城。
+- **零与未知，在成本页上第二次被抳出**：ModelScope 按订阅计费，权威总额恒为 0，而归因里四个 Run 都在。页面原本把它们渲染成五列 `$0.00`。现在：标题说「做了活，没人报价」，每行写 `unpriced`，并不给 figure。
+- **导航说 cost，地址栏却写 `#/dashboard`**：人照着看见的字敲进去，落到一个本构建解析不了的片段，然后**默默落在首页**——这正是 §8-14 明拒的行为。片段改成 `#/cost`（旧拼法仍可解析，因为别人存下的链接是一个本构建来不及收回的承诺），而认不出的片段**抬一条拒绝**（`E_NO_SUCH_PAGE`）而不是默默换个地方落地。
+
+**本卡的真机证据**（ModelScope，Qwen3-235B）：模型先用 shell 臂调 exec → 读到 `E_TOOL_UNAVAILABLE` 及其 recovery → 改用 program 臂 → 读到 `E_INVALID_ARGS` 及其 recovery → 第三次写对并成功。**三段式拒绝对模型也是有效的，不只对人。** `pwd` 的输出落在 Run 自己的房间里，写域成立；429 变成 `provider_degraded` 携 recovery；冻结时写了带三个 must-read locator 的 Handoff。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。
