@@ -668,6 +668,33 @@ fn session_of(id: &RunId, row: &RunRow) -> String {
     named.unwrap_or_else(|| crate::live::short_run(*id))
 }
 
+/// The efforts this bar offers, in the order it offers them: what the
+/// city already resolves, plus the one that leaves the answer to the
+/// layer above.
+const EFFORTS: [(&str, Msg); 6] = [
+    ("", Msg::EffortInherited),
+    ("low", Msg::EffortLow),
+    ("medium", Msg::EffortMedium),
+    ("high", Msg::EffortHigh),
+    ("xhigh", Msg::EffortXHigh),
+    ("max", Msg::EffortMax),
+];
+
+/// The effort a control's value names. An empty value is no choice,
+/// which is not the same as `Effort::None` - that one asks a provider
+/// for no reasoning at all.
+#[must_use]
+pub fn effort_named(value: &str) -> Option<channels::Effort> {
+    match value {
+        "low" => Some(channels::Effort::Low),
+        "medium" => Some(channels::Effort::Medium),
+        "high" => Some(channels::Effort::High),
+        "xhigh" => Some(channels::Effort::XHigh),
+        "max" => Some(channels::Effort::Max),
+        _ => None,
+    }
+}
+
 /// The room a frame asks a run to be started in, as `building/name`.
 ///
 /// A dispatch that named a session is asking for a room the city has not
@@ -774,6 +801,7 @@ pub fn dispatch_command(
     goal: &str,
     mode: &str,
     session: &str,
+    effort: Option<channels::Effort>,
 ) -> Option<channels::ClientFrame> {
     let (task, goal) = (task.trim(), goal.trim());
     if task.is_empty() || goal.is_empty() {
@@ -797,6 +825,7 @@ pub fn dispatch_command(
             mode: channels::ModeTag::parse(mode).ok()?,
             budget: channels::BudgetCap::default(),
             session,
+            effort,
         },
     )))
 }
@@ -1073,6 +1102,11 @@ fn DispatchBar(
     let mut goal = use_signal(String::new);
     let mut mode = use_signal(|| "plan".to_owned());
     let mut session = use_signal(String::new);
+    // How hard this session thinks. Beside the send button because a
+    // person chooses it once for the session they are starting, and
+    // because the layers above answer when they do not (user verdict,
+    // 2026-08-24).
+    let mut effort = use_signal(|| None::<channels::Effort>);
     let lang = use_context::<Signal<crate::lang::Lang>>();
     let word = move |msg: Msg| crate::lang::say(lang(), msg);
     rsx! {
@@ -1086,6 +1120,7 @@ fn DispatchBar(
                     &goal.read(),
                     &mode.read(),
                     &session.read(),
+                    *effort.read(),
                 );
                 if let Some(frame) = frame {
                     on_frame.call(frame);
@@ -1153,6 +1188,21 @@ fn DispatchBar(
                     option { value: "review", "review" }
                 }
             }
+            div { class: "field",
+                label { r#for: "dispatch-effort", "{word(Msg::DispatchEffort)}" }
+                select {
+                    id: "dispatch-effort",
+                    name: "effort",
+                    onchange: move |event| effort.set(effort_named(&event.value())),
+                    for offered in EFFORTS {
+                        option {
+                            key: "{offered.0}",
+                            value: "{offered.0}",
+                            "{word(offered.1)}"
+                        }
+                    }
+                }
+            }
             button {
                 r#type: "submit",
                 disabled: dispatch_command(
@@ -1161,6 +1211,7 @@ fn DispatchBar(
                         &goal.read(),
                         &mode.read(),
                         &session.read(),
+                        *effort.read(),
                     )
                     .is_none(),
                 "{word(Msg::DispatchSend)}"

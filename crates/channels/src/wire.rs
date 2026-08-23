@@ -25,8 +25,8 @@
 
 use kernel::{
     Address, ApprovalId, ApprovalItem, Autonomy, AxCode, AxError, B3Hash, BudgetCap, DialectKind,
-    EventKind, EventRecord, GitOid, IdemKey, ModelTag, PolicyVerdict, Progress, Restoration, RunId,
-    Sealed, Seq, SessionName, TimeMs, UsdMicros,
+    Effort, EventKind, EventRecord, GitOid, IdemKey, ModelTag, PolicyVerdict, Progress,
+    Restoration, RunId, Sealed, Seq, SessionName, TimeMs, UsdMicros,
 };
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +34,8 @@ use serde::{Deserialize, Serialize};
 /// way the schema hash alone would not explain to a human reading a log.
 ///
 /// 5: `Dispatch` carries the name of the session it starts (F2.11).
-pub const WIRE_V: u32 = 5;
+/// 6: and how hard that session thinks (F2.16).
+pub const WIRE_V: u32 = 6;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
@@ -197,6 +198,14 @@ pub enum Command<Secret = Sealed<String>> {
         /// history, and that is a different thing from two sessions
         /// sharing a folder.
         session: Option<SessionName>,
+        /// How hard the model is asked to think in this session.
+        ///
+        /// `None` leaves the layer above to answer, which is the city's
+        /// own configuration and, failing that, the provider's default.
+        /// A value is written into the session's own configuration when
+        /// its room is opened, so it is chosen once and holds for every
+        /// run in that room (city-SPEC.md section 8-14).
+        effort: Option<Effort>,
     },
     /// One step of a subscription login. Which step is named rather
     /// than inferred: beginning and redeeming are different actions
@@ -408,6 +417,7 @@ impl From<WireCommand> for Command {
                 budget,
                 idem,
                 session,
+                effort,
             } => Self::Dispatch {
                 addr,
                 task,
@@ -416,6 +426,7 @@ impl From<WireCommand> for Command {
                 budget,
                 idem,
                 session,
+                effort,
             },
             Command::Login {
                 provider,

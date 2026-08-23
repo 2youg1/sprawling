@@ -113,6 +113,7 @@ pub channels::Command::CreatePolicy::idem: kernel::idem::IdemKey
 pub channels::Command::Dispatch
 pub channels::Command::Dispatch::addr: kernel::address::Address
 pub channels::Command::Dispatch::budget: kernel::budget::BudgetCap
+pub channels::Command::Dispatch::effort: core::option::Option<kernel::model::Effort>
 pub channels::Command::Dispatch::goal: alloc::string::String
 pub channels::Command::Dispatch::idem: kernel::idem::IdemKey
 pub channels::Command::Dispatch::mode: channels::ModeTag

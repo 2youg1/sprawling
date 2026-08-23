@@ -61,6 +61,51 @@ pub fn path(city_root: &Path, addr: &Address, layer: Layer) -> Result<PathBuf, A
     Ok(scope.join(RESERVED_PREFIX).join(CONFIG_FILE))
 }
 
+/// Writes the thinking effort into one scope's own configuration.
+///
+/// The layer is where the choice belongs rather than a second store: a
+/// session picks an effort once, it is written into that room's
+/// `CONFIG.toml`, and the ladder that already resolves city → building →
+/// room is what every later run in that room reads. Other keys in the
+/// file are preserved, because a person may have written them.
+///
+/// # Errors
+/// Propagates a file that exists and cannot be read or parsed - a
+/// configuration this build cannot understand is not one to overwrite -
+/// and a directory that cannot be written.
+pub fn write_effort(city_root: &Path, addr: &Address, effort: Effort) -> Result<(), AxError> {
+    let file = path(city_root, addr, Layer::Resident)?;
+    let mut document: toml::Table = match std::fs::read_to_string(&file) {
+        Ok(text) => toml::from_str(&text).map_err(|err| refuse_file(&file, &err.to_string()))?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => toml::Table::new(),
+        Err(err) => return Err(refuse_file(&file, &err.to_string())),
+    };
+    let model = document
+        .entry("model".to_owned())
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    let toml::Value::Table(model) = model else {
+        return Err(refuse_file(&file, "`[model]` is not a section"));
+    };
+    let spelled =
+        toml::Value::try_from(effort).map_err(|err| refuse_file(&file, &err.to_string()))?;
+    model.insert("effort".to_owned(), spelled);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir).map_err(|err| refuse_file(dir, &err.to_string()))?;
+    }
+    let rendered =
+        toml::to_string_pretty(&document).map_err(|err| refuse_file(&file, &err.to_string()))?;
+    std::fs::write(&file, rendered).map_err(|err| refuse_file(&file, &err.to_string()))
+}
+
+fn refuse_file(path: &Path, why: &str) -> AxError {
+    AxError::failure(
+        AxCode::ConfigInvalid,
+        "write a configuration layer",
+        format!("{}: {why}", path.display()),
+    )
+    .with_recovery("fix that file by hand, or delete it and choose again")
+}
+
 /// What one layer declares. An absent file declares nothing, which is
 /// how most layers stay: a value is stated where somebody meant to
 /// depart from the default.
@@ -383,6 +428,40 @@ mod tests {
             "[model]\neffort = \"medium\"\n",
         );
         assert_eq!(load(dir.path(), &lab).unwrap().effort, Some(Effort::Medium));
+    }
+
+    /// A session picks an effort once, and every run in that room reads
+    /// it afterwards through the ladder that was already there.
+    #[test]
+    fn a_chosen_effort_is_written_where_the_ladder_reads_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let room = addr("lab/refactor");
+        write_effort(dir.path(), &room, Effort::High).unwrap();
+        assert_eq!(load(dir.path(), &room).unwrap().effort, Some(Effort::High));
+
+        // Choosing again replaces the value and nothing else: a person
+        // may have written other keys into the same file.
+        let file = path(dir.path(), &room, Layer::Resident).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        std::fs::write(&file, format!("{text}\n[sandbox]\nshell = true\n")).unwrap();
+        write_effort(dir.path(), &room, Effort::Low).unwrap();
+        let after = load(dir.path(), &room).unwrap();
+        assert_eq!(after.effort, Some(Effort::Low));
+        assert!(
+            std::fs::read_to_string(&file).unwrap().contains("shell"),
+            "the rest of the file did not survive the choice"
+        );
+
+        // And it lands where a run in that room cannot rewrite it.
+        let relative = file
+            .strip_prefix(dir.path())
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        assert!(
+            Address::parse(&relative).unwrap().is_reserved(),
+            "{relative}"
+        );
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub use building::adopted_payload as building_adopted_payload;
 pub use building::created_payload as building_created_payload;
 pub use building::{Building, BuildingTemplate, create as create_building};
 pub use config_layers::path as config_path;
+pub use config_layers::write_effort;
 pub use config_layers::{CONFIG_FILE, ConfigLayer, Layer, load as load_config};
 pub use library::{BUILDING_SHELF, Holding, LIBRARY_DIR, Library};
 pub use policy::{BUILDING_FILE, BuildingRules, ModelPool, building_path, evaluate, load};

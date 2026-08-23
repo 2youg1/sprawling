@@ -368,6 +368,7 @@ fn dispatch(addr: &Address, task: &str) -> Result<channels::ClientFrame, kernel:
             // `/at` already chose the room; a line typed after it
             // continues what is working there.
             session: None,
+            effort: None,
         },
     )))
 }

@@ -755,7 +755,16 @@ pub fn dispatch_command(building: &str, task: &str, goal: &str) -> Option<Client
     // from the work rather than from a counter (city-SPEC.md 8-13).
     // What a Dispatch frame looks like is `app::dispatch_command`'s
     // answer and only its answer - this page decides the address.
-    crate::app::dispatch_command(building.trim(), task, goal, "plan", &session_name(task))
+    crate::app::dispatch_command(
+        building.trim(),
+        task,
+        goal,
+        "plan",
+        &session_name(task),
+        // This page asks for two lines and a building; how hard to think
+        // is chosen where the whole form is, at the bottom of the window.
+        None,
+    )
 }
 
 /// The name this page gives a session it starts: the first few words of

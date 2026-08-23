@@ -983,6 +983,9 @@ fn acp_dispatch(
             idem,
             // An editor drives an address it already chose.
             session: None,
+            // ...and says nothing about how hard to think, so the
+            // layers above answer.
+            effort: None,
         },
         channels::Reply::nowhere(),
     );
@@ -1900,9 +1903,19 @@ impl RunWorker {
                 goal,
                 mode,
                 session,
+                effort,
                 ..
             } => {
                 let addr = self.room_for(addr, session.as_ref())?;
+                // Written into the session's own layer rather than held
+                // beside the run: the ladder that resolves city ->
+                // building -> room is already the authority on how hard
+                // a run thinks, and a second store would be a second
+                // answer. Chosen once, it holds for every later run in
+                // that room.
+                if let Some(effort) = effort {
+                    city::write_effort(&self.city_root, &addr, effort)?;
+                }
                 self.dispatch_in(addr, task, goal, mode_of(&mode))
             }
             channels::Command::Wake {
@@ -3978,6 +3991,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -4211,6 +4225,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -4528,6 +4543,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         let events = seen
@@ -4574,6 +4590,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap_err();
         assert!(err.recovery().contains("confidential: false"));
@@ -4820,6 +4837,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -5203,6 +5221,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -5291,6 +5310,7 @@ mod tests {
                         b"dispatch",
                     ),
                     session: None,
+                    effort: None,
                 })
                 .unwrap();
         }
@@ -5334,6 +5354,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"first"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -5470,6 +5491,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"one"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -5518,6 +5540,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"two"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -5578,6 +5601,7 @@ mod tests {
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::new(0), b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         drop(provider);
@@ -5775,6 +5799,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::new(0), b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         drop(provider);
@@ -5863,6 +5888,7 @@ addr = \"gone/room1\"
                         b"dispatch",
                     ),
                     session: None,
+                    effort: None,
                 })
                 .unwrap();
         }
@@ -5924,6 +5950,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::new(0), b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         drop(provider);
@@ -5986,6 +6013,7 @@ addr = \"gone/room1\"
                         b"dispatch",
                     ),
                     session: None,
+                    effort: None,
                 })
                 .unwrap();
         }
@@ -6073,6 +6101,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -6129,6 +6158,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
 
@@ -6187,6 +6217,7 @@ addr = \"gone/room1\"
                         task.as_bytes(),
                     ),
                     session: None,
+                    effort: None,
                 })
                 .unwrap();
         }
@@ -6392,6 +6423,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap_err();
         assert!(
@@ -6448,6 +6480,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         let chat = provider
@@ -6527,6 +6560,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         let kinds = seen
@@ -6561,6 +6595,7 @@ addr = \"gone/room1\"
                 budget: kernel::BudgetCap::default(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
                 session: None,
+                effort: None,
             })
             .unwrap();
         // Find the mother's run_started node in the verified chain.

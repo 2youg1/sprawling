@@ -162,6 +162,13 @@ pub enum Msg {
     DispatchDoneWhen,
     DispatchDoneWhenHint,
     DispatchMode,
+    DispatchEffort,
+    EffortInherited,
+    EffortLow,
+    EffortMedium,
+    EffortHigh,
+    EffortXHigh,
+    EffortMax,
     DispatchSend,
     HaltCity,
     ReleaseCity,
@@ -260,6 +267,34 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::DispatchMode => Phrase {
             en: "mode",
             zh: "模式",
+        },
+        Msg::DispatchEffort => Phrase {
+            en: "thinking",
+            zh: "思考强度",
+        },
+        Msg::EffortInherited => Phrase {
+            en: "as the city says",
+            zh: "跟随全城设定",
+        },
+        Msg::EffortLow => Phrase {
+            en: "low",
+            zh: "低",
+        },
+        Msg::EffortMedium => Phrase {
+            en: "medium",
+            zh: "中",
+        },
+        Msg::EffortHigh => Phrase {
+            en: "high",
+            zh: "高",
+        },
+        Msg::EffortXHigh => Phrase {
+            en: "very high",
+            zh: "很高",
+        },
+        Msg::EffortMax => Phrase {
+            en: "as much as it has",
+            zh: "拉满",
         },
         Msg::DispatchSend => Phrase {
             en: "send it",
@@ -378,6 +413,13 @@ mod tests {
             Msg::DispatchDoneWhen,
             Msg::DispatchDoneWhenHint,
             Msg::DispatchMode,
+            Msg::DispatchEffort,
+            Msg::EffortInherited,
+            Msg::EffortLow,
+            Msg::EffortMedium,
+            Msg::EffortHigh,
+            Msg::EffortXHigh,
+            Msg::EffortMax,
             Msg::DispatchSend,
             Msg::HaltCity,
             Msg::ReleaseCity,
@@ -409,6 +451,13 @@ mod tests {
                 | Msg::DispatchDoneWhen
                 | Msg::DispatchDoneWhenHint
                 | Msg::DispatchMode
+                | Msg::DispatchEffort
+                | Msg::EffortInherited
+                | Msg::EffortLow
+                | Msg::EffortMedium
+                | Msg::EffortHigh
+                | Msg::EffortXHigh
+                | Msg::EffortMax
                 | Msg::DispatchSend
                 | Msg::HaltCity
                 | Msg::ReleaseCity

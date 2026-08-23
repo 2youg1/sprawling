@@ -81,14 +81,14 @@ fn the_schema_hash_is_stable_across_calls_and_covers_the_wire_version() {
         "schema hash changed - update channels-SPEC.md section 8-1 in the same commit"
     );
     assert_eq!(
-        WIRE_V, 5,
+        WIRE_V, 6,
         "the version rises when the grammar changes shape without a name changing"
     );
 }
 
 /// Pinned on the first green of S4.02. It is a function of WIRE_V and the two
 /// name tables, so any change to the protocol surface lands here first.
-const WIRE_SCHEMA_GOLDEN: &str = "d825e83a1022528809116e1eb9e8e023e31b97198413ae68b6cf0da6a8a754fa";
+const WIRE_SCHEMA_GOLDEN: &str = "c059c6e25bf42a0f54e1eabf74c44ed8df4c31fc579e5c64cd05012c195bcd09";
 
 // -------------------------------------------------------------- binding face
 
@@ -266,6 +266,7 @@ fn sample_of_every_command() -> Vec<Command> {
             },
             idem,
             session: Some(kernel::SessionName::parse("ship it").unwrap()),
+            effort: Some(kernel::Effort::High),
         },
         Command::Login {
             provider: ProviderName::parse("anthropic").unwrap(),
