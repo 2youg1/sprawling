@@ -2305,6 +2305,35 @@ mod tests {
     /// buildings, and no endpoint: the one section that makes the other
     /// three non-empty sat last, below the fold, with its own submit
     /// button off-screen.
+    /// A session is picked by the name its person gave it. The picker
+    /// offered `d41d8cd9 · running`, which identifies a run to a machine
+    /// and nothing at all to the person who started it.
+    #[test]
+    fn a_session_is_offered_by_its_name_and_not_by_its_hash() {
+        let mut snapshot = Snapshot::new();
+        let mut draft = kernel_draft(EventKind::RunStarted, [3u8; 16]);
+        draft.addr = Some(Address::parse("lab/refactor-the-ledger").unwrap());
+        snapshot.apply(&EventRecord::from_draft(
+            draft,
+            Seq::new(1),
+            B3Hash::digest(b"prev"),
+        ));
+        let run = latest_run(&snapshot).expect("one run started");
+
+        let offered = watchable(&snapshot);
+        let (_, label) = offered.first().expect("the run is offered");
+        assert!(
+            label.contains("refactor-the-ledger"),
+            "the picker does not name the session: {label}"
+        );
+
+        let painted = paint(View::Live(Some(run)), snapshot, Vec::new());
+        assert!(
+            painted.says("refactor-the-ledger"),
+            "the page being watched does not say which session it is"
+        );
+    }
+
     #[test]
     fn the_settings_page_leads_with_the_step_a_new_city_cannot_skip() {
         let painted = paint(View::Settings, Snapshot::new(), Vec::new());
