@@ -28,6 +28,8 @@ pub use server::{AssetReply, ClientAssets, EmbeddedFile};
 #[cfg(feature = "server")]
 pub use server::{BindFace, BindVerdict, HandshakeVerdict, ServeConfig};
 #[cfg(feature = "server")]
+pub use server::{Delivered, Reply};
+#[cfg(feature = "server")]
 pub use server::{SessionState, SessionStep, decide_frame};
 #[cfg(feature = "server")]
 pub use server::{decide_bind, decide_handshake, router, serve};

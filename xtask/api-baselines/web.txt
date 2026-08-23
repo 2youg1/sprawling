@@ -168,6 +168,7 @@ pub fn web::read_frame(&str) -> web::LinkEvent
 pub fn web::ready(&web::AttachForm) -> web::AttachReadiness
 pub fn web::rebuild<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> web::Snapshot
 pub fn web::recycle_bin(alloc::vec::Vec<web::BinRow>) -> alloc::vec::Vec<web::BinRow>
+pub fn web::refused(&kernel::error::AxError) -> web::Refused
 pub fn web::render_tokens(kernel::budget::Tokens) -> alloc::string::String
 pub fn web::render_usd(kernel::budget::UsdMicros) -> alloc::string::String
 pub fn web::resolved_chroma(u16, u16, u16) -> u16
@@ -207,6 +208,7 @@ pub struct web::Link
 pub struct web::NavGroup
 pub struct web::Page
 pub struct web::Prism
+pub struct web::Refused
 pub struct web::Row
 pub struct web::RunRow
 pub struct web::SavingsRow
@@ -344,6 +346,9 @@ pub web::ProviderHealth::Unknown
 pub web::Raise::Interrupt
 pub web::Raise::Mark
 pub web::Raise::Silent
+pub web::Refused::code: alloc::string::String
+pub web::Refused::recovery: alloc::string::String
+pub web::Refused::what: alloc::string::String
 pub web::ReturnPath::FromCheckpoint(alloc::string::String)
 pub web::ReturnPath::FromStore(alloc::string::String)
 pub web::ReturnPath::Rebuild(alloc::string::String)

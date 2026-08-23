@@ -739,6 +739,10 @@ pub fn Root(
     hits: Option<channels::ArchiveAnswer>,
     filed: Option<channels::RegistryAnswer>,
     vitals: Option<channels::MetricsAnswer>,
+    /// What the city last refused this person, if anything. Cleared by
+    /// the person, never by the passage of time: an answer that fades
+    /// before it is read is an answer nobody gave.
+    refused: Option<crate::alert::Refused>,
     records: Vec<EventRecord>,
     selected: Option<String>,
     following: bool,
@@ -756,6 +760,7 @@ pub fn Root(
     on_select: EventHandler<Option<String>>,
     on_view: EventHandler<View>,
     on_follow: EventHandler<bool>,
+    on_dismiss: EventHandler<()>,
 ) -> Element {
     let status = status_line(&snapshot);
     let busy = busy_buildings(&snapshot);
@@ -765,6 +770,19 @@ pub fn Root(
         main { class: "layout",
             header { class: "top-bar",
                 span { class: "address", "{status[0]}" }
+                if let Some(told) = refused.clone() {
+                    div { class: "refusal", role: "alert",
+                        span { class: "refusal-code", "{told.code}" }
+                        span { class: "refusal-what", "{told.what}" }
+                        span { class: "refusal-way", "{told.recovery}" }
+                        button {
+                            class: "refusal-close",
+                            "aria-label": "dismiss",
+                            onclick: move |_| on_dismiss.call(()),
+                            "×"
+                        }
+                    }
+                }
             }
             nav { class: "left-nav",
                 for group in spots {
@@ -1003,6 +1021,7 @@ pub fn App() -> Element {
     let filed = use_signal(|| None::<channels::RegistryAnswer>);
     let vitals = use_signal(|| None::<channels::MetricsAnswer>);
     let records = use_signal(Vec::<EventRecord>::new);
+    let mut refused = use_signal(|| None::<crate::alert::Refused>);
     let mut selected = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
@@ -1020,6 +1039,7 @@ pub fn App() -> Element {
         vitals,
         records,
         live,
+        refused,
     });
     #[cfg(not(target_arch = "wasm32"))]
     let outbound = Outbound;
@@ -1036,6 +1056,7 @@ pub fn App() -> Element {
             hits: hits(),
             filed: filed(),
             vitals: vitals(),
+            refused: refused(),
             records: records(),
             selected: selected(),
             following: following(),
@@ -1044,6 +1065,7 @@ pub fn App() -> Element {
             on_select: move |id| selected.set(id),
             on_view: move |next| view.set(next),
             on_follow: move |on| following.set(on),
+            on_dismiss: move |()| refused.set(None),
         }
     }
 }
@@ -1092,6 +1114,11 @@ struct Wiring {
     vitals: Signal<Option<channels::MetricsAnswer>>,
     records: Signal<Vec<EventRecord>>,
     live: Signal<bool>,
+    /// The last thing the city refused. Beside the snapshot rather than
+    /// inside it: a refusal is not something that happened to the city,
+    /// it is the answer to something one person asked, and the snapshot
+    /// holds only what the ledger says.
+    refused: Signal<Option<crate::alert::Refused>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1111,6 +1138,7 @@ fn connect(wiring: Wiring) -> Outbound {
         mut vitals,
         mut records,
         mut live,
+        mut refused,
     } = wiring;
     use_hook(move || {
         let outbound = std::rc::Rc::new(std::cell::RefCell::new(None));
@@ -1208,13 +1236,19 @@ fn connect(wiring: Wiring) -> Outbound {
                         // one that arrives as well.
                         channels::Answer::Run(_) | channels::Answer::Unavailable { .. } => {}
                     },
-                    // Refusals and the retry ladder are not history
-                    // either, and neither may move the snapshot.
-                    // Closing on the way out of view is the transport
-                    // layer's to carry out; here it is the same as any
-                    // other instruction that moves no snapshot.
-                    crate::socket::LinkAction::Report(_)
-                    | crate::socket::LinkAction::WaitMs(_)
+                    // A refusal is not history and must not move the
+                    // snapshot - but it is the answer to something a
+                    // person just did, so it goes where they can read
+                    // it. Before this, the client received the frame
+                    // and dropped it, and the page said nothing at all.
+                    crate::socket::LinkAction::Report(error) => {
+                        refused.set(Some(crate::alert::refused(&error)));
+                    }
+                    // The retry ladder is not history either, and
+                    // closing on the way out of view is the transport
+                    // layer's to carry out; here they are the same as
+                    // any other instruction that moves no snapshot.
+                    crate::socket::LinkAction::WaitMs(_)
                     | crate::socket::LinkAction::OpenSocket
                     | crate::socket::LinkAction::CloseSocket
                     | crate::socket::LinkAction::Nothing => {}
@@ -1565,7 +1599,12 @@ mod tests {
     /// is entered through a component rather than by building props by
     /// hand.
     #[component]
-    fn Harness(view: View, snapshot: Snapshot, records: Vec<EventRecord>) -> Element {
+    fn Harness(
+        view: View,
+        snapshot: Snapshot,
+        records: Vec<EventRecord>,
+        refused: Option<crate::alert::Refused>,
+    ) -> Element {
         // Live, because a test that rendered the disconnected client
         // would be asserting about the waiting room rather than the city.
         let live = use_signal(|| true);
@@ -1583,6 +1622,7 @@ mod tests {
                 hits: None,
                 filed: Some(registry_answer()),
                 vitals: Some(metrics_answer()),
+                refused,
                 records,
                 selected: None,
                 following: true,
@@ -1590,17 +1630,28 @@ mod tests {
                 on_select: move |_| {},
                 on_view: move |_| {},
                 on_follow: move |_| {},
+                on_dismiss: move |()| {},
             }
         }
     }
 
     fn paint(view: View, snapshot: Snapshot, records: Vec<EventRecord>) -> Painted {
+        painted_with(view, snapshot, records, None)
+    }
+
+    fn painted_with(
+        view: View,
+        snapshot: Snapshot,
+        records: Vec<EventRecord>,
+        refused: Option<crate::alert::Refused>,
+    ) -> Painted {
         let mut dom = VirtualDom::new_with_props(
             Harness,
             HarnessProps {
                 view,
                 snapshot,
                 records,
+                refused,
             },
         );
         let mut painted = Painted::default();
@@ -1907,6 +1958,45 @@ mod tests {
         assert!(line.contains("48.2k tokens"), "{line}");
         assert!(line.contains("no price reported"), "{line}");
         assert_eq!(snapshot.usage().unpriced_calls, 1);
+    }
+
+    /// The defect this card exists for, seen from the end that matters:
+    /// somebody presses attach, the city refuses, and the page has to
+    /// say so. Until this test existed the client received the refusal
+    /// frame and dropped it, and no page anywhere in this crate could
+    /// have shown one.
+    #[test]
+    fn a_refusal_is_on_the_page_with_the_way_out_beside_it() {
+        let told = crate::alert::refused(
+            &channels::AxError::failure(
+                channels::AxCode::ConfigInvalid,
+                "attach an endpoint",
+                "modelscope",
+            )
+            .with_recovery("the base url needs its /v1"),
+        );
+        let painted = painted_with(View::City, Snapshot::new(), Vec::new(), Some(told));
+        assert!(
+            painted.classes.iter().any(|c| c == "refusal"),
+            "the refusal has nowhere to appear: {:?}",
+            painted.classes
+        );
+        // A refusal a person can read is one they can act on, so the
+        // way out is on screen beside what was refused.
+        for part in ["refusal-what", "refusal-way"] {
+            assert!(
+                painted.classes.iter().any(|c| c == part),
+                "{part} is missing from the page"
+            );
+        }
+    }
+
+    /// A city that has refused nothing draws no strip at all: a banner
+    /// that is always there is a banner nobody reads.
+    #[test]
+    fn a_page_with_nothing_refused_carries_no_strip() {
+        let painted = painted_with(View::City, Snapshot::new(), Vec::new(), None);
+        assert!(!painted.classes.iter().any(|c| c == "refusal"));
     }
 
     #[test]

@@ -486,6 +486,24 @@ pub fn continuity_order(exponent: u16) -> u16;    // 阶 ＝ n−1
 - **可搬的是规则不是代码**：论据与档位思路取自 RefRain 的 `corners.zig`（用户的另一个项目），而那边是 Zig＋Native SDK 的 canvas 路径构造器，搬过来的只能是「哪种表面需要到哪一阶」这一条。
 - **产物读数**：461,921 B（gz），预算 2 MB，余量 4.5 倍；涨幅与理由入 `xtask/budgets.toml`。
 
+## 8-13 拒绝到得了屏幕（P2.01）
+
+**病灶**：`socket.rs` 收到 `ServerFrame::Refusal` 后产出 `LinkAction::Report(err)`，而 `app.rs` 把它与 `WaitMs`／`OpenSocket` 归入同一条「不动快照」的臂里——**一个人在设置页点 attach，失败时页面一个字都不说**。`alert.rs` 的 `AlertKind::Refused` 早就写着「拒绝在人干活的地方已经看得见」，那句话当时不成立。
+
+```rust
+// web::alert（形状 1 decision）
+pub struct Refused { pub code: String, pub what: String, pub recovery: String }
+pub fn refused(error: &AxError) -> Refused;
+```
+
+- **拒绝不是 `Alert`，故不进 `Alerts` 去重**。`Alert` 是一件持续的事实（有人在等批、一个 Run 冻住了），故「一件事只惊动一次」；而拒绝是**对一个动作的回答**。同一个错 URL 点两次，是两个问题要两个答案；把去重加在这里，第二次尝试就又回到了页面什么都不说。
+- **位置在 `refused: Signal<Option<Refused>>` 而非 `Snapshot`**。`Snapshot` 是「从事件折向前的、客户端相信的东西」；一条拒绝不在历史里，也不应当在里面。
+- **画在 top-bar 而非遮罩层**：它是答案，不是打断。不遮住任何东西，也不要求先关掉才能继续干活。ALERT 只上边框与错误码；整条条带染成暖色会盖过徒标，而徒标是唯一一个「必须有人动手」的标记。
+- **只能由人关掉，不会自己淡出**：一个在被读到之前就消失的答案，等于没人回答。
+- **`recovery` 为空时说出来**，而不是渲染成一段空白——空白被读成「没事」。
+
+**本章测试**：渲染断言页上真的出现 `refusal`／`refusal-what`／`refusal-way` 三个类（这正是本卡之前整个 crate 里没有任何一处能画出拒绝的证据）；无拒绝时不画条带；`recovery` 为空时仍给出一句话。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

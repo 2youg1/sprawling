@@ -30,7 +30,23 @@
             grid-template-rows: auto minmax(0, 1fr) auto;
             grid-template-areas: "top top top" "nav centre status" "foot foot foot"; }
   .left-nav, .right-status { overflow: auto; }
-  .top-bar { grid-area: top; color: var(--G9); display: flex; align-items: center; }
+  .top-bar { grid-area: top; color: var(--G9); display: flex; align-items: center; gap: 12px; }
+  /* What the city refused, where the person who asked for it is looking.
+     It sits in the top bar rather than over the page because a refusal is
+     an answer, not an interruption: nothing is covered and nothing has to
+     be dismissed before work continues. ALERT is on the border and the
+     code alone; a whole strip in the warm token would outshout the badge,
+     which is the one mark that means somebody has to act. */
+  .refusal { margin-left: auto; display: flex; align-items: baseline; gap: 8px;
+             max-width: 72ch; padding: 4px 8px; font-size: 12.5px;
+             background: var(--G2); border: 1px solid var(--ALERT);
+             border-radius: var(--corner-control); corner-shape: var(--corner-control-shape); }
+  .refusal-code { color: var(--ALERT); font-weight: 600; white-space: nowrap; }
+  .refusal-what { color: var(--G10); }
+  .refusal-way { color: var(--G6); }
+  .refusal-close { background: transparent; border: 0; color: var(--G6);
+                   padding: 0 2px; font-size: 14px; line-height: 1; }
+  .refusal-close:hover { color: var(--G10); }
   .left-nav { grid-area: nav; display: flex; flex-direction: column; gap: 14px; }
   /* Three headings rather than eight flat entries: the nav answers "where
      do I go for this", and a list that long is read as a menu to search.

@@ -6,9 +6,11 @@ impl channels::ModeTag
 impl channels::PairingToken
 impl channels::ProviderName
 impl channels::Query
+impl channels::Reply
 impl channels::TemplateName
 impl channels::UploadId
 impl core::convert::From<channels::Command<channels::NoSecret>> for channels::Command
+impl core::fmt::Debug for channels::Reply
 impl serde_core::ser::Serialize for channels::NoSecret
 impl<'de> serde_core::de::Deserialize<'de> for channels::NoSecret
 impl<Secret> channels::Command<Secret>
@@ -172,6 +174,9 @@ pub channels::CostAnswer::by_segment: alloc::vec::Vec<(alloc::string::String, ke
 pub channels::CostAnswer::by_skill: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
 pub channels::CostAnswer::by_tool: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
 pub channels::CostAnswer::total: kernel::budget::UsdMicros
+pub channels::Delivered::NobodyAsked
+pub channels::Delivered::PeerGone
+pub channels::Delivered::ToThePeer
 pub channels::DiscardAnswer::rows: alloc::vec::Vec<channels::DiscardLine>
 pub channels::DiscardLine::at: kernel::event::TimeMs
 pub channels::DiscardLine::path: alloc::string::String
@@ -244,7 +249,7 @@ pub channels::ServeConfig::acp: channels::AcpSink
 pub channels::ServeConfig::addr: core::net::socket_addr::SocketAddr
 pub channels::ServeConfig::city: core::option::Option<kernel::address::Address>
 pub channels::ServeConfig::client: alloc::sync::Arc<channels::ClientAssets>
-pub channels::ServeConfig::commands: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::WireCommand) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
+pub channels::ServeConfig::commands: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::WireCommand, channels::Reply) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServeConfig::events: tokio::sync::broadcast::Sender<kernel::event::EventRecord>
 pub channels::ServeConfig::queries: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Query) -> core::result::Result<channels::Answer, kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServeConfig::secrets: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Command<kernel::secret::Sealed<alloc::string::String>>) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
@@ -286,6 +291,7 @@ pub enum channels::ClientAssets
 pub enum channels::ClientFrame
 pub enum channels::Command<Secret>
 pub enum channels::ControlVerdict
+pub enum channels::Delivered
 pub enum channels::HaltScope
 pub enum channels::HandshakeVerdict
 pub enum channels::Intervention
@@ -318,6 +324,10 @@ pub fn channels::PairingToken::mint([u8; 32]) -> (Self, alloc::string::String)
 pub fn channels::ProviderName::as_str(&self) -> &str
 pub fn channels::ProviderName::parse(&str) -> core::result::Result<Self, kernel::error::AxError>
 pub fn channels::Query::name(&self) -> &'static str
+pub fn channels::Reply::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn channels::Reply::nowhere() -> channels::Reply
+pub fn channels::Reply::refuse(&self, kernel::error::AxError) -> channels::Delivered
+pub fn channels::Reply::to(impl core::ops::function::Fn(kernel::error::AxError) -> channels::Delivered + core::marker::Send + core::marker::Sync + 'static) -> channels::Reply
 pub fn channels::TemplateName::as_str(&self) -> &str
 pub fn channels::TemplateName::parse(&str) -> core::result::Result<Self, kernel::error::AxError>
 pub fn channels::UploadId::as_str(&self) -> &str
@@ -358,6 +368,7 @@ pub struct channels::PairingToken(_)
 pub struct channels::ProviderName(_)
 pub struct channels::RegistryAnswer
 pub struct channels::RegistryLine
+pub struct channels::Reply(_)
 pub struct channels::RunSummary
 pub struct channels::ServeConfig
 pub struct channels::Sighting

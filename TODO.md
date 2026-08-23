@@ -20,16 +20,11 @@ Serving a city enters a console instead. A line beginning `/` is a control verb;
 - Not a TTY, not interactive: fall back rather than hang
 - Refuses to grow tables or pictures. Those belong to the browser, and serving two masters is what the CLI literature warns against
 
-## P2 — A refusal has to reach whoever asked for it
+## P2 — done
 
-`assembly.rs:3471` is `let _ = worker.handle(command);`. A refused command is written to the diagnostic log and **nothing is sent to the client**, so both the WebUI and any future console are blind: a person presses "attach" and the page says nothing at all.
+The desk carries a reply address (`channels::Reply`), the worker hands every refusal to whoever asked, and the client draws it where that person is looking. Verified over a real socket against a real city: a `SelectModel` on an endpoint nobody attached came back as `E_CONFIG_INVALID` with its recovery line, in the same connection that sent it.
 
-This was found by driving a real city over its own wire. Two commands were refused — a base URL missing `/v1`, and the consequent failure to select a model — and the only place either appeared was the server's own log file.
-
-Bigger than it looks: commands travel socket → desk → worker thread, and the return path carries only `EventRecord`. There is no channel on which an `AxError` can travel back. A refusal belongs to the peer that caused it, so the desk has to carry a reply address rather than the refusal being broadcast to everyone watching.
-
-- Lands in `crates/sprawling/` and `crates/channels/`; `ServerFrame::Refusal` already exists and is already sent for socket-level refusals
-- The `let _ =` binding on a `Result` in production code is itself the defect the hardening rules exist to catch; whatever replaces it must not reintroduce one
+One instance of the same defect is left, recorded in `channels-SPEC.md` section 8: the `/enroll` route answers 201 before the worker has taken the credential, so a refusal there still reaches nobody. Bounding that wait belongs to P3.
 
 ## P3 — `sprawling call` and `sprawling enrol`
 

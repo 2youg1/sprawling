@@ -950,14 +950,20 @@ fn acp_dispatch(
         kernel::Seq::FIRST,
         format!("acp:{}:{task}", addr.as_str()).as_bytes(),
     );
-    desk.post(channels::Command::Dispatch {
-        addr,
-        task,
-        goal,
-        mode: channels::ModeTag::parse("plan")?,
-        budget: kernel::BudgetCap::default(),
-        idem,
-    });
+    // An editor gets its answer from this function and then stops
+    // listening, so there is no peer left for a later refusal to reach.
+    // Saying that in the type beats a silent third meaning of `Reply`.
+    desk.post(
+        channels::Command::Dispatch {
+            addr,
+            task,
+            goal,
+            mode: channels::ModeTag::parse("plan")?,
+            budget: kernel::BudgetCap::default(),
+            idem,
+        },
+        channels::Reply::nowhere(),
+    );
     Ok(channels::AcpProgress {
         run: idem.to_string(),
         turns: 0,
@@ -1823,6 +1829,37 @@ impl RunWorker {
             );
         }
         outcome
+    }
+
+    /// Runs one command from the desk, refusal included.
+    ///
+    /// The one authority for what becomes of a command a person sent:
+    /// it runs, and if it is refused the refusal goes both to the
+    /// diagnostic log and to whoever asked. Before this existed the
+    /// worker loop wrote `let _ = handle(command)`, so every refusal
+    /// died in the log and the page that caused it said nothing.
+    fn serve_one(&mut self, posted: Posted) {
+        let Posted { command, reply } = posted;
+        if let Err(err) = self.handle(command) {
+            self.hand_back(&reply, err);
+        }
+    }
+
+    /// Hands a refusal to whoever asked for the command.
+    ///
+    /// `handle` has already written it to the diagnostic log, so the
+    /// only case that earns a second line is the one a reader would
+    /// otherwise misread: somebody did ask, and the answer arrived at a
+    /// socket that had already closed.
+    fn hand_back(&mut self, reply: &channels::Reply, error: AxError) {
+        match reply.refuse(error) {
+            channels::Delivered::ToThePeer | channels::Delivered::NobodyAsked => {}
+            channels::Delivered::PeerGone => self.note(
+                runtime::diagnostics::Level::Refuse,
+                "bin::assembly",
+                "the refusal above reached nobody: the peer that asked had closed its socket",
+            ),
+        }
     }
 
     fn run_command(&mut self, command: channels::Command) -> Result<(), AxError> {
@@ -3216,15 +3253,25 @@ fn local_model_facts(model: &str) -> Result<gateway::ModelEntry, AxError> {
 /// cancels is not a Cancel. The desk keeps arrival order, and the run
 /// looks at it only at its own safe points.
 struct CommandDesk {
-    queue: std::sync::Mutex<std::collections::VecDeque<channels::Command>>,
+    queue: std::sync::Mutex<std::collections::VecDeque<Posted>>,
     arrived: std::sync::Condvar,
+}
+
+/// A command and the address its refusal goes back to.
+///
+/// The two travel together because they are separated by a thread and
+/// by minutes: by the time the worker refuses, the socket task that
+/// accepted the command has long returned.
+struct Posted {
+    command: channels::Command,
+    reply: channels::Reply,
 }
 
 /// What the worker found when it looked at the desk. Exhaustive, because
 /// "nothing arrived" and "nobody will ever arrive again" are different
 /// facts and the loop does different things about them.
 enum DeskWait {
-    Command(channels::Command),
+    Command(Posted),
     Idle,
     Gone,
 }
@@ -3242,9 +3289,9 @@ impl CommandDesk {
         }
     }
 
-    fn post(&self, command: channels::Command) {
+    fn post(&self, command: channels::Command, reply: channels::Reply) {
         if let Ok(mut queue) = self.queue.lock() {
-            queue.push_back(command);
+            queue.push_back(Posted { command, reply });
             self.arrived.notify_one();
         }
     }
@@ -3274,7 +3321,7 @@ impl CommandDesk {
     /// Used where a test drives the desk directly; the worker loop waits.
     #[cfg(test)]
     fn take(&self) -> Option<channels::Command> {
-        self.queue.lock().ok()?.pop_front()
+        self.queue.lock().ok()?.pop_front().map(|it| it.command)
     }
 
     /// What the run at `run` should do at this safe point, if anything.
@@ -3287,19 +3334,23 @@ impl CommandDesk {
             return Interrupt::None;
         };
         let cancel = queue.iter().position(
-            |command| matches!(command, channels::Command::Cancel { run: r, .. } if *r == run),
+            |posted| matches!(&posted.command, channels::Command::Cancel { run: r, .. } if *r == run),
         );
         if let Some(at) = cancel {
             queue.remove(at);
             return Interrupt::Cancel;
         }
         let steer = queue.iter().position(
-            |command| matches!(command, channels::Command::Steer { run: r, .. } if *r == run),
+            |posted| matches!(&posted.command, channels::Command::Steer { run: r, .. } if *r == run),
         );
         let Some(at) = steer else {
             return Interrupt::None;
         };
-        let Some(channels::Command::Steer { text, .. }) = queue.remove(at) else {
+        let Some(Posted {
+            command: channels::Command::Steer { text, .. },
+            ..
+        }) = queue.remove(at)
+        else {
             return Interrupt::None;
         };
         // The person's entrance is the only one that renders as `user`,
@@ -3456,9 +3507,6 @@ pub(crate) async fn serve(
                 // no browser open is a city doing its work.
                 let _ = to_clients.send(record.clone());
             }));
-            // The refusal is written inside `handle`; nothing is added
-            // here, because a second line about one refusal is how a log
-            // becomes noise nobody reads.
             // A run in progress asks the same desk what arrived, so a
             // Cancel does not have to wait for the run it cancels.
             let interrupt_desk = Arc::clone(&worker_desk);
@@ -3467,9 +3515,7 @@ pub(crate) async fn serve(
             }));
             loop {
                 match worker_desk.wait(SCHEDULE_TICK) {
-                    DeskWait::Command(command) => {
-                        let _ = worker.handle(command);
-                    }
+                    DeskWait::Command(posted) => worker.serve_one(posted),
                     // The refusal is written inside `tick`; a schedule
                     // that cannot be read must not stop the city from
                     // answering the person.
@@ -3508,14 +3554,20 @@ pub(crate) async fn serve(
         addr,
         token_digest,
         client: Arc::new(client),
-        commands: Arc::new(move |command: channels::WireCommand| {
-            commands_desk.post(command.into());
-            Ok(())
-        }),
+        commands: Arc::new(
+            move |command: channels::WireCommand, reply: channels::Reply| {
+                commands_desk.post(command.into(), reply);
+                Ok(())
+            },
+        ),
         events,
         city: city_name,
         secrets: Arc::new(move |command: channels::Command| {
-            secrets_desk.post(command);
+            // Known gap, recorded in channels-SPEC section 8: the
+            // enrolment route answers 201 before the worker has taken
+            // the credential, so a refusal here still reaches nobody.
+            // Bounding that wait is P3's, with `sprawling enrol`.
+            secrets_desk.post(command, channels::Reply::nowhere());
             Ok(())
         }),
         queries: Arc::new(move |query: channels::Query| {
@@ -4709,6 +4761,72 @@ mod tests {
         );
     }
 
+    /// The defect this card exists for: a person presses a button, the
+    /// city refuses, and the page says nothing at all. The refusal has
+    /// to arrive at whoever caused it - found by driving a real city
+    /// over its own wire, where two refused commands appeared in the
+    /// server's log file and nowhere else.
+    #[test]
+    fn a_refused_command_reaches_the_peer_that_sent_it() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+
+        let heard: Arc<std::sync::Mutex<Vec<AxError>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let peer = Arc::clone(&heard);
+        let reply = channels::Reply::to(move |error| {
+            let Ok(mut heard) = peer.lock() else {
+                return channels::Delivered::PeerGone;
+            };
+            heard.push(error);
+            channels::Delivered::ToThePeer
+        });
+
+        // A model chosen on an endpoint that was never attached: the
+        // same shape as the real failure, where a base URL missing its
+        // `/v1` made the attach fail and the model selection fail after
+        // it, and the page reported neither.
+        worker.serve_one(Posted {
+            command: channels::Command::SelectModel {
+                endpoint: channels::ProviderName::parse("nowhere").unwrap(),
+                model: "a-model".to_owned(),
+                tag: kernel::ModelTag::Main,
+                context_tokens: 200_000,
+                max_output_tokens: 8_192,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"select"),
+            },
+            reply,
+        });
+
+        let heard = heard.lock().unwrap();
+        assert_eq!(heard.len(), 1, "the peer is told once, and told at all");
+        let told = heard.first().unwrap();
+        assert!(
+            !told.recovery().is_empty(),
+            "a refusal that reaches a person carries the way out: {told}"
+        );
+    }
+
+    /// A command nobody sent - the schedule's own - is refused into a
+    /// reply address that names the absence, rather than into a peer
+    /// that would have to be invented for it.
+    #[test]
+    fn a_refusal_with_no_one_behind_it_says_so_rather_than_failing() {
+        let nobody = channels::Reply::nowhere();
+        let outcome = nobody.refuse(AxError::failure(
+            AxCode::ConfigInvalid,
+            "read the schedule",
+            "the file is not a schedule",
+        ));
+        assert_eq!(outcome, channels::Delivered::NobodyAsked);
+    }
+
     #[test]
     fn a_scheduled_job_starts_by_itself_and_only_once_per_firing() {
         let dir = tempfile::tempdir().unwrap();
@@ -4854,17 +4972,24 @@ mod tests {
         let other = kernel::RunId::from_bytes([7u8; 16]);
         let idem = kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"i");
 
-        desk.post(channels::Command::Steer {
-            run: other,
-            text: "not for me".to_owned(),
-            idem,
-        });
-        desk.post(channels::Command::Steer {
-            run: mine,
-            text: "  measure it in metres  ".to_owned(),
-            idem,
-        });
-        desk.post(channels::Command::Cancel { run: mine, idem });
+        let nobody = || channels::Reply::nowhere();
+        desk.post(
+            channels::Command::Steer {
+                run: other,
+                text: "not for me".to_owned(),
+                idem,
+            },
+            nobody(),
+        );
+        desk.post(
+            channels::Command::Steer {
+                run: mine,
+                text: "  measure it in metres  ".to_owned(),
+                idem,
+            },
+            nobody(),
+        );
+        desk.post(channels::Command::Cancel { run: mine, idem }, nobody());
 
         // Cancel outranks a steer that arrived first: stopping and
         // changing course are exclusive, and stopping cannot be undone.

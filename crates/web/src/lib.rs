@@ -24,7 +24,7 @@ mod socket;
 mod theme;
 mod vitals;
 
-pub use alert::{Alert, AlertKind, Alerts, Raise, absorb, alert_for, cleared_by};
+pub use alert::{Alert, AlertKind, Alerts, Raise, Refused, absorb, alert_for, cleared_by, refused};
 pub use app::watchable;
 pub use app::{App, Destination, HELD_RECORDS, NavGroup, Root, Usage};
 pub use app::{ProviderHealth, RunPhase, RunRow, Snapshot, View};

@@ -27,7 +27,45 @@
 
 use std::collections::BTreeSet;
 
-use channels::{EventKind, EventRecord};
+use channels::{AxError, EventKind, EventRecord};
+
+/// What the city said back to the person who asked for something.
+///
+/// Deliberately **not** an [`Alert`]: an `Alert` is a standing fact and
+/// is raised once however often it is seen, while a refusal answers one
+/// action. Pressing the same button twice with the same wrong URL is two
+/// questions and deserves two answers, so this never goes through
+/// [`Alerts`] and is never deduplicated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refused {
+    /// The stable code, which is what a person quotes when they ask.
+    pub code: String,
+    /// What the city would not do, in its own words.
+    pub what: String,
+    /// The way out. Never empty on screen: a refusal that leaves a
+    /// person with nothing to try is the failure this path exists to
+    /// remove, so the absence is stated rather than rendered as a gap.
+    pub recovery: String,
+}
+
+/// Turns a refusal into the three things a person needs from it.
+///
+/// Before this existed the client received `ServerFrame::Refusal` and
+/// did nothing with it, so a mistyped base URL produced a page that said
+/// nothing at all and a line in a log file nobody was reading.
+#[must_use]
+pub fn refused(error: &AxError) -> Refused {
+    let recovery = error.recovery();
+    Refused {
+        code: error.code().as_str().to_owned(),
+        what: format!("cannot {} on {}", error.action(), error.subject()),
+        recovery: if recovery.is_empty() {
+            "no way out was recorded with this refusal".to_owned()
+        } else {
+            recovery.to_owned()
+        },
+    }
+}
 
 /// Why a person is needed. Exhaustive: a new reason has to be added here,
 /// which is where somebody is forced to ask whether it really requires a
@@ -385,5 +423,41 @@ mod tests {
     fn clearing_something_never_raised_is_not_an_error() {
         let mut alerts = Alerts::new();
         assert!(!alerts.clear("nothing"));
+    }
+
+    #[test]
+    fn a_refusal_reaches_the_person_with_its_way_out_attached() {
+        let told = refused(
+            &AxError::failure(
+                channels::AxCode::ConfigInvalid,
+                "attach an endpoint",
+                "modelscope",
+            )
+            .with_recovery("the base url needs its /v1"),
+        );
+        assert_eq!(told.code, "E_CONFIG_INVALID");
+        assert_eq!(told.what, "cannot attach an endpoint on modelscope");
+        assert_eq!(told.recovery, "the base url needs its /v1");
+    }
+
+    /// A refusal with an empty recovery says so rather than rendering a
+    /// blank line, because a blank line reads as "nothing is wrong".
+    #[test]
+    fn a_refusal_with_no_way_out_says_that_much() {
+        let told = refused(&AxError::failure(
+            channels::AxCode::StorageFatal,
+            "append to the ledger",
+            "the disk is full",
+        ));
+        assert!(!told.recovery.is_empty());
+    }
+
+    /// Two identical refusals are two answers. The dedup that protects a
+    /// person from a run frozen for an hour would, applied here, swallow
+    /// the answer to their second attempt.
+    #[test]
+    fn the_same_refusal_twice_is_two_answers_not_one_fact() {
+        let err = AxError::failure(channels::AxCode::InvalidArgs, "select a model", "nowhere");
+        assert_eq!(refused(&err), refused(&err));
     }
 }

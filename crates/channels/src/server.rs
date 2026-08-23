@@ -330,7 +330,11 @@ pub struct ServeConfig {
     /// dispatch may take hours, and awaiting it inside the socket task
     /// would tie the work to the lifetime of one browser tab. The sink
     /// takes the command, returns, and the progress comes back as events.
-    pub commands: Arc<dyn Fn(WireCommand) -> Result<(), AxError> + Send + Sync>,
+    ///
+    /// The [`Reply`] travels with the command because the answer arrives
+    /// long after this call returned, and a refusal belongs to the peer
+    /// that caused it.
+    pub commands: Arc<dyn Fn(WireCommand, Reply) -> Result<(), AxError> + Send + Sync>,
     /// The event fan-out. This crate only subscribes; the writer is
     /// whoever owns the Ledger, because the ledger line is the event.
     pub events: broadcast::Sender<EventRecord>,
@@ -351,7 +355,7 @@ pub struct ServeConfig {
 struct ShellState {
     client: Arc<ClientAssets>,
     upload_sink: Arc<dyn Fn(Vec<u8>) -> Result<UploadId, AxError> + Send + Sync>,
-    commands: Arc<dyn Fn(WireCommand) -> Result<(), AxError> + Send + Sync>,
+    commands: Arc<dyn Fn(WireCommand, Reply) -> Result<(), AxError> + Send + Sync>,
     events: broadcast::Sender<EventRecord>,
     queries: Arc<dyn Fn(Query) -> Result<Answer, AxError> + Send + Sync>,
     secrets: SecretSink,
@@ -537,6 +541,67 @@ fn refusal_text(err: &AxError) -> String {
     format!("{}: {}", err.action(), err.recovery())
 }
 
+/// Where a refusal ended up.
+///
+/// Three states rather than a `Result`, because "nobody asked" and "the
+/// one who asked has gone" are different facts: the first is the
+/// schedule working normally, and the second is worth a diagnostic line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub enum Delivered {
+    ToThePeer,
+    NobodyAsked,
+    PeerGone,
+}
+
+/// Where a refusal goes back to.
+///
+/// A command travels socket to desk to worker thread, and only events
+/// come back, so a refusal made minutes later has no way home. Making
+/// it an event instead would tell everyone watching about one person's
+/// mistyped URL; the city's history is not anybody's error log. So the
+/// command carries the address of whoever sent it.
+///
+/// Holds a function rather than a channel so that this crate's public
+/// signature does not name a transport the assembly layer would then
+/// have to name too.
+#[derive(Clone)]
+pub struct Reply(Option<Arc<dyn Fn(AxError) -> Delivered + Send + Sync>>);
+
+impl Reply {
+    /// A reply address that reaches the peer that sent the command.
+    pub fn to(sink: impl Fn(AxError) -> Delivered + Send + Sync + 'static) -> Reply {
+        Reply(Some(Arc::new(sink)))
+    }
+
+    /// No peer asked. The schedule starts work by itself, and so does
+    /// the startup scan; a refusal there has nobody to be handed to.
+    pub fn nowhere() -> Reply {
+        Reply(None)
+    }
+
+    /// Hands the refusal back, and says where it ended up.
+    pub fn refuse(&self, error: AxError) -> Delivered {
+        match &self.0 {
+            Some(sink) => sink(error),
+            None => Delivered::NobodyAsked,
+        }
+    }
+}
+
+impl std::fmt::Debug for Reply {
+    /// Says whether there is somebody to answer, and never what was
+    /// said: the payload is an `AxError` on its way to one peer.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let face = if self.0.is_some() {
+            "Reply(a peer)"
+        } else {
+            "Reply(nowhere)"
+        };
+        f.write_str(face)
+    }
+}
+
 async fn upgrade(State(state): State<Arc<ShellState>>, ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(move |socket| session(socket, state))
 }
@@ -547,6 +612,11 @@ async fn upgrade(State(state): State<Arc<ShellState>>, ws: WebSocketUpgrade) -> 
 async fn session(mut socket: WebSocket, state: Arc<ShellState>) {
     let mut phase = SessionState::AwaitingHello;
     let mut events = state.events.subscribe();
+    // This session's own refusals, which the worker posts into long
+    // after the command was accepted. Unbounded because a refusal must
+    // not be dropped and because its rate is the rate at which one
+    // person makes mistakes, not the rate of the event stream.
+    let (refused, mut refusals) = tokio::sync::mpsc::unbounded_channel::<AxError>();
     loop {
         tokio::select! {
             incoming = socket.recv() => {
@@ -570,7 +640,12 @@ async fn session(mut socket: WebSocket, state: Arc<ShellState>) {
                         }
                     }
                     SessionStep::Deliver(command) => {
-                        if let Err(error) = (state.commands)(*command)
+                        let back = refused.clone();
+                        let reply = Reply::to(move |error| match back.send(error) {
+                            Ok(()) => Delivered::ToThePeer,
+                            Err(_) => Delivered::PeerGone,
+                        });
+                        if let Err(error) = (state.commands)(*command, reply)
                             && send(&mut socket, &ServerFrame::Refusal(Box::new(error))).await.is_err() {
                             return;
                         }
@@ -590,6 +665,15 @@ async fn session(mut socket: WebSocket, state: Arc<ShellState>) {
                             return;
                         }
                     }
+                }
+            }
+            // A refusal the worker made after this socket had already
+            // answered. It reaches the peer that caused it and nobody
+            // else, which is why it travels here and not as an event.
+            late = refusals.recv() => {
+                let Some(error) = late else { return };
+                if send(&mut socket, &ServerFrame::Refusal(Box::new(error))).await.is_err() {
+                    return;
                 }
             }
             event = events.recv() => {
