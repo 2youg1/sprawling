@@ -251,29 +251,40 @@ pub fn LiveView(
                     },
                 }
             }
-            form {
-                class: "steer",
-                onsubmit: move |event| {
-                    event.prevent_default();
-                    let Some(id) = run else { return };
-                    let said = steer.read().trim().to_owned();
-                    if said.is_empty() {
-                        return;
+            // Speaking into a run needs a run. With none chosen this was
+            // an input box beside a button that could never fire, which
+            // reads as a broken control rather than as a missing choice.
+            match run {
+                None => rsx! {
+                    p { class: "note",
+                        "pick a session above to speak into it; what you send arrives at its next safe point"
                     }
-                    on_frame.call(steer_command(id, &said));
-                    steer.set(String::new());
                 },
-                input {
-                    name: "steer",
-                    placeholder: "say something into this run",
-                    value: "{steer}",
-                    oninput: move |event| steer.set(event.value()),
-                }
-                button {
-                    r#type: "submit",
-                    disabled: run.is_none() || steer.read().trim().is_empty(),
-                    "send at the next safe point"
-                }
+                Some(id) => rsx! {
+                    form {
+                        class: "steer",
+                        onsubmit: move |event| {
+                            event.prevent_default();
+                            let said = steer.read().trim().to_owned();
+                            if said.is_empty() {
+                                return;
+                            }
+                            on_frame.call(steer_command(id, &said));
+                            steer.set(String::new());
+                        },
+                        input {
+                            name: "steer",
+                            placeholder: "say something into this run",
+                            value: "{steer}",
+                            oninput: move |event| steer.set(event.value()),
+                        }
+                        button {
+                            r#type: "submit",
+                            disabled: steer.read().trim().is_empty(),
+                            "send at the next safe point"
+                        }
+                    }
+                },
             }
             // The rest of what a person may do to a run. Each says what it
             // makes rather than how it feels, and none of them acts on a

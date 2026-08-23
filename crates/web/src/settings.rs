@@ -311,6 +311,22 @@ pub fn select_ready(form: &SelectForm, answer: &EndpointsAnswer) -> SelectReadin
     SelectReadiness::Ready
 }
 
+/// What one endpoint serves, and nothing another endpoint serves.
+///
+/// The model list used to be every model of every attached provider,
+/// so a person could pick a name their chosen provider had never heard
+/// of and read `that endpoint does not list this model` back. This is
+/// not a second authority over what is servable — the server refuses
+/// the same pair — it is the same refusal moved to before the click.
+pub(crate) fn models_of(answer: &EndpointsAnswer, endpoint: &str) -> Vec<String> {
+    answer
+        .endpoints
+        .iter()
+        .filter(|attached| attached.name == endpoint)
+        .flat_map(|attached| attached.models.clone())
+        .collect()
+}
+
 /// The command a filled model form asks for, or `None` while it is not
 /// ready.
 #[must_use]
@@ -401,108 +417,107 @@ pub fn Settings(
                         .to_owned(),
                 }
             }
-            table { class: "endpoints",
-                for row in rows {
-                    tr { key: "{row.name}",
-                        td { "{row.name}" }
-                        td { "{row.base_url}" }
-                        td { "{row.note}" }
-                        td {
-                            // A provider that serves forty-six models is
-                            // a fact; forty-six identifiers run together
-                            // is not a reading of it. The count leads,
-                            // the list is one disclosure away.
-                            details { class: "models",
-                                summary { "{row.models.len()} model(s)" }
-                                for model in row.models {
-                                    span { key: "{model}", class: "model", "{model}" }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            h2 { "what each model is for" }
-            table { class: "tags",
-                for row in tags {
-                    tr { key: "{row.tag}",
-                        td { "{row.tag}" }
-                        td {
-                            match row.chosen {
-                                Some(choice) => rsx! { "{choice.endpoint} / {choice.model}" },
-                                None => rsx! { span { class: "unset", "{row.consequence}" } },
-                            }
-                        }
-                    }
-                }
-            }
-            h2 { "choose a model for a job" }
+            h2 { "Attach a provider" }
+            // The credential is not in this form. It goes to the
+            // enrolment route first and comes back as a reference,
+            // which is the only shape of it a Command can carry.
             form {
-                class: "choose",
-                onsubmit: {
-                    let served = answer.clone();
-                    move |event: FormEvent| {
-                        event.prevent_default();
-                        if let Some(command) = select_command(&choice.read(), &served) {
-                            on_frame.call(ClientFrame::Command(Box::new(command)));
-                        }
+                class: "attach",
+                // Dioxus 0.7 submits by default; this page never wants a
+                // page navigation, so the default is refused explicitly.
+                // <https://dioxuslabs.com/learn/0.7/migration/to_07/>
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    let filled = form.read().clone();
+                    if let Some(command) = attach_command(&filled) {
+                        on_frame.call(ClientFrame::Command(Box::new(command)));
                     }
                 },
                 div { class: "field",
-                    label { r#for: "choose-endpoint", "provider" }
-                    select {
-                        id: "choose-endpoint",
-                        name: "endpoint",
-                        onchange: move |event| choice.write().endpoint = event.value(),
-                        option { value: "", "which provider" }
-                        for endpoint in answer.endpoints.clone() {
-                            option { key: "{endpoint.name}", value: "{endpoint.name}", "{endpoint.name}" }
-                        }
+                    label { r#for: "attach-name", "call it" }
+                    input {
+                        id: "attach-name",
+                        name: "name",
+                        placeholder: "a name you will recognise",
+                        value: "{form.read().name}",
+                        oninput: move |event| form.write().name = event.value(),
                     }
                 }
                 div { class: "field",
-                    label { r#for: "choose-model", "model" }
-                    select {
-                        id: "choose-model",
-                        name: "model",
-                        onchange: move |event| choice.write().model = event.value(),
-                        option { value: "", "which model" }
-                        for endpoint in answer.endpoints.clone() {
-                            for model in endpoint.models.clone() {
-                                option { key: "{endpoint.name}/{model}", value: "{model}", "{model}" }
-                            }
-                        }
+                    label { r#for: "attach-url", "base URL" }
+                    input {
+                        id: "attach-url",
+                        name: "base_url",
+                        placeholder: "https://api.provider.example/v1",
+                        value: "{form.read().base_url}",
+                        oninput: move |event| form.write().base_url = event.value(),
                     }
+                    span { class: "hint", "https anywhere; http only to this machine" }
                 }
                 div { class: "field",
-                    label { r#for: "choose-tag", "for which job" }
+                    label { r#for: "attach-dialect", "which wire does it speak" }
                     select {
-                        id: "choose-tag",
-                        name: "tag",
+                        id: "attach-dialect",
+                        name: "dialect",
                         onchange: move |event| {
-                            choice.write().tag = ModelTag::ALL
-                                .into_iter()
-                                .find(|tag| tag.to_string() == event.value());
+                            form.write().dialect = match event.value().as_str() {
+                                "anthropic" => Some(DialectKind::Anthropic),
+                                "openai" => Some(DialectKind::OpenAi),
+                                _ => None,
+                            };
                         },
-                        option { value: "", "what for" }
-                        for tag in ModelTag::ALL {
-                            option { key: "{tag}", value: "{tag}", "{tag}" }
-                        }
+                        option { value: "", "which wire does it speak" }
+                        option { value: "anthropic", "anthropic messages" }
+                        option { value: "openai", "openai chat completions" }
                     }
                 }
-                // What is missing is said beside the form, not written on
-                // the button. A disabled control whose label is an error
-                // message is two things at once and reads as neither.
-                div { class: "field",
+                // The key. It is typed here and leaves immediately for
+                // the enrolment route; what comes back is the reference,
+                // and the key itself is never held by this page, never
+                // put in a frame, and never shown again.
+                div { class: "field wide",
+                    label { r#for: "attach-key", "key" }
+                    input {
+                        id: "attach-key",
+                        r#type: "password",
+                        name: "key",
+                        placeholder: "the provider's key, or empty for a local server",
+                        value: "{key}",
+                        oninput: move |event| key.set(event.value()),
+                    }
+                    span { class: "hint",
+                        "it leaves this page for the machine's own credential vault and comes back as a reference; it is never put in a frame and never shown again"
+                    }
+                }
+                button {
+                    r#type: "button",
+                    disabled: key.read().trim().is_empty()
+                        || form.read().name.trim().is_empty(),
+                    onclick: move |_| {
+                        let realm = form.read().name.trim().to_owned();
+                        let typed = key.read().clone();
+                        key.set(String::new());
+                        crate::socket::enrol(&realm, "key", &typed, move |answer| {
+                            let (reference, said) = enrolment_note(&answer);
+                            if let Some(reference) = reference {
+                                form.write().secret = Some(reference);
+                            }
+                            enrolment.set(Some(said));
+                        });
+                    },
+                    "put the key in the vault"
+                }
+                if let Some(said) = enrolment.read().clone() {
+                    p { class: "enrolment", "{said}" }
+                }
+                div { class: "field wide submit",
                     button {
                         r#type: "submit",
-                        disabled: select_ready(&choice.read(), &answer) != SelectReadiness::Ready,
-                        "point this job at that model"
+                        disabled: ready(&form.read()) != AttachReadiness::Ready,
+                        "attach this provider"
                     }
-                    if select_ready(&choice.read(), &answer) != SelectReadiness::Ready {
-                        span { class: "hint blocking",
-                            "{select_ready(&choice.read(), &answer).sentence()}"
-                        }
+                    if ready(&form.read()) != AttachReadiness::Ready {
+                        span { class: "hint blocking", "{ready(&form.read()).sentence()}" }
                     }
                 }
             }
@@ -569,107 +584,114 @@ pub fn Settings(
                     },
                 }
             }
-            h2 { "Attach a provider" }
-            // The credential is not in this form. It goes to the
-            // enrolment route first and comes back as a reference,
-            // which is the only shape of it a Command can carry.
+            h2 { "choose a model for a job" }
             form {
-                class: "attach",
-                // Dioxus 0.7 submits by default; this page never wants a
-                // page navigation, so the default is refused explicitly.
-                // <https://dioxuslabs.com/learn/0.7/migration/to_07/>
-                onsubmit: move |event| {
-                    event.prevent_default();
-                    let filled = form.read().clone();
-                    if let Some(command) = attach_command(&filled) {
-                        on_frame.call(ClientFrame::Command(Box::new(command)));
+                class: "choose",
+                onsubmit: {
+                    let served = answer.clone();
+                    move |event: FormEvent| {
+                        event.prevent_default();
+                        if let Some(command) = select_command(&choice.read(), &served) {
+                            on_frame.call(ClientFrame::Command(Box::new(command)));
+                        }
                     }
                 },
                 div { class: "field",
-                    label { r#for: "attach-name", "call it" }
-                    input {
-                        id: "attach-name",
-                        name: "name",
-                        placeholder: "a name you will recognise",
-                        value: "{form.read().name}",
-                        oninput: move |event| form.write().name = event.value(),
-                    }
-                }
-                div { class: "field",
-                    label { r#for: "attach-url", "base URL" }
-                    input {
-                        id: "attach-url",
-                        name: "base_url",
-                        placeholder: "https://api.provider.example/v1",
-                        value: "{form.read().base_url}",
-                        oninput: move |event| form.write().base_url = event.value(),
-                    }
-                    span { class: "hint", "https anywhere; http only to this machine" }
-                }
-                div { class: "field",
-                    label { r#for: "attach-dialect", "which wire does it speak" }
+                    label { r#for: "choose-endpoint", "provider" }
                     select {
-                        id: "attach-dialect",
-                        name: "dialect",
+                        id: "choose-endpoint",
+                        name: "endpoint",
                         onchange: move |event| {
-                            form.write().dialect = match event.value().as_str() {
-                                "anthropic" => Some(DialectKind::Anthropic),
-                                "openai" => Some(DialectKind::OpenAi),
-                                _ => None,
-                            };
+                            // The model goes with the provider it came
+                            // from: keeping the old name here is keeping
+                            // a form that is already refused.
+                            let mut picked = choice.write();
+                            picked.endpoint = event.value();
+                            picked.model = String::new();
                         },
-                        option { value: "", "which wire does it speak" }
-                        option { value: "anthropic", "anthropic messages" }
-                        option { value: "openai", "openai chat completions" }
+                        option { value: "", "which provider" }
+                        for endpoint in answer.endpoints.clone() {
+                            option { key: "{endpoint.name}", value: "{endpoint.name}", "{endpoint.name}" }
+                        }
                     }
                 }
-                // The key. It is typed here and leaves immediately for
-                // the enrolment route; what comes back is the reference,
-                // and the key itself is never held by this page, never
-                // put in a frame, and never shown again.
                 div { class: "field",
-                    label { r#for: "attach-key", "key" }
-                    input {
-                        id: "attach-key",
-                        r#type: "password",
-                        name: "key",
-                        placeholder: "the provider's key, or empty for a local server",
-                        value: "{key}",
-                        oninput: move |event| key.set(event.value()),
-                    }
-                    span { class: "hint",
-                        "it leaves this page for the machine's own credential vault and comes back as a reference; it is never put in a frame and never shown again"
+                    label { r#for: "choose-model", "model" }
+                    select {
+                        id: "choose-model",
+                        name: "model",
+                        onchange: move |event| choice.write().model = event.value(),
+                        option { value: "", "which model" }
+                        for model in models_of(&answer, &choice.read().endpoint) {
+                            option { key: "{model}", value: "{model}", "{model}" }
+                        }
                     }
                 }
-                button {
-                    r#type: "button",
-                    disabled: key.read().trim().is_empty()
-                        || form.read().name.trim().is_empty(),
-                    onclick: move |_| {
-                        let realm = form.read().name.trim().to_owned();
-                        let typed = key.read().clone();
-                        key.set(String::new());
-                        crate::socket::enrol(&realm, "key", &typed, move |answer| {
-                            let (reference, said) = enrolment_note(&answer);
-                            if let Some(reference) = reference {
-                                form.write().secret = Some(reference);
-                            }
-                            enrolment.set(Some(said));
-                        });
-                    },
-                    "put the key in the vault"
+                div { class: "field",
+                    label { r#for: "choose-tag", "for which job" }
+                    select {
+                        id: "choose-tag",
+                        name: "tag",
+                        onchange: move |event| {
+                            choice.write().tag = ModelTag::ALL
+                                .into_iter()
+                                .find(|tag| tag.to_string() == event.value());
+                        },
+                        option { value: "", "what for" }
+                        for tag in ModelTag::ALL {
+                            option { key: "{tag}", value: "{tag}", "{tag}" }
+                        }
+                    }
                 }
-                if let Some(said) = enrolment.read().clone() {
-                    p { class: "enrolment", "{said}" }
-                }
+                // What is missing is said beside the form, not written on
+                // the button. A disabled control whose label is an error
+                // message is two things at once and reads as neither.
                 div { class: "field",
                     button {
                         r#type: "submit",
-                        disabled: ready(&form.read()) != AttachReadiness::Ready,
-                        "attach this provider"
+                        disabled: select_ready(&choice.read(), &answer) != SelectReadiness::Ready,
+                        "point this job at that model"
                     }
-                    if ready(&form.read()) != AttachReadiness::Ready {
-                        span { class: "hint blocking", "{ready(&form.read()).sentence()}" }
+                    if select_ready(&choice.read(), &answer) != SelectReadiness::Ready {
+                        span { class: "hint blocking",
+                            "{select_ready(&choice.read(), &answer).sentence()}"
+                        }
+                    }
+                }
+            }
+            h2 { "what each model is for" }
+            table { class: "tags",
+                for row in tags {
+                    tr { key: "{row.tag}",
+                        td { "{row.tag}" }
+                        td {
+                            match row.chosen {
+                                Some(choice) => rsx! { "{choice.endpoint} / {choice.model}" },
+                                None => rsx! { span { class: "unset", "{row.consequence}" } },
+                            }
+                        }
+                    }
+                }
+            }
+            h2 { "what is attached now" }
+            table { class: "endpoints",
+                for row in rows {
+                    tr { key: "{row.name}",
+                        td { "{row.name}" }
+                        td { "{row.base_url}" }
+                        td { "{row.note}" }
+                        td {
+                            // A provider that serves forty-six models is
+                            // a fact; forty-six identifiers run together
+                            // is not a reading of it. The count leads,
+                            // the list is one disclosure away.
+                            details { class: "models",
+                                summary { "{row.models.len()} model(s)" }
+                                for model in row.models {
+                                    span { key: "{model}", class: "model", "{model}" }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -760,6 +782,25 @@ mod tests {
             }
             other => panic!("a model choice is a SelectModel, not {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_model_list_holds_what_the_chosen_provider_serves_and_nothing_else() {
+        let mut served = answer();
+        served.endpoints.push(EndpointSummary {
+            name: "neighbour".to_owned(),
+            base_url: "https://other.example.test/v1".to_owned(),
+            dialect: DialectKind::Anthropic,
+            models: vec!["n-small".to_owned()],
+            local: false,
+            has_credential: true,
+        });
+        assert_eq!(models_of(&served, "house"), vec!["m-large".to_owned()]);
+        assert_eq!(models_of(&served, "neighbour"), vec!["n-small".to_owned()]);
+        assert!(
+            models_of(&served, "").is_empty(),
+            "with no provider chosen there is nothing to choose from, and the page says so"
+        );
     }
 
     #[test]

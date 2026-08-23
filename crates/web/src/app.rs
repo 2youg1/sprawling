@@ -929,7 +929,7 @@ pub fn Root(
                 crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
             }
             footer { class: "control-surface",
-                DispatchBar { addr: selected.clone(), on_frame }
+                DispatchBar { addr: selected.clone(), on_frame, on_view }
                 button {
                     class: "halt",
                     onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
@@ -955,7 +955,14 @@ pub fn Root(
 /// has no way to know the number and, on a subscription, neither has
 /// anybody else.
 #[component]
-fn DispatchBar(addr: Option<String>, on_frame: EventHandler<channels::ClientFrame>) -> Element {
+fn DispatchBar(
+    addr: Option<String>,
+    on_frame: EventHandler<channels::ClientFrame>,
+    /// Where the person is taken once the frame is away. A control that
+    /// leaves the page exactly as it found it cannot be told apart from
+    /// one that did nothing.
+    on_view: EventHandler<View>,
+) -> Element {
     let mut at = use_signal(|| addr.clone().unwrap_or_default());
     let mut task = use_signal(String::new);
     let mut goal = use_signal(String::new);
@@ -975,32 +982,53 @@ fn DispatchBar(addr: Option<String>, on_frame: EventHandler<channels::ClientFram
                     on_frame.call(frame);
                     task.set(String::new());
                     goal.set(String::new());
+                    // The run this frame starts reports itself on the
+                    // live page, so that is where the person who sent it
+                    // belongs. Which session they then watch stays their
+                    // choice (web-SPEC.md section 8-31).
+                    on_view.call(View::Live(None));
                 }
             },
-            input {
-                name: "addr",
-                placeholder: "which room, as building/room",
-                value: "{at}",
-                oninput: move |event| at.set(event.value()),
+            div { class: "field",
+                label { r#for: "dispatch-addr", "room" }
+                input {
+                    id: "dispatch-addr",
+                    name: "addr",
+                    placeholder: "building/room",
+                    value: "{at}",
+                    oninput: move |event| at.set(event.value()),
+                }
             }
-            input {
-                name: "task",
-                placeholder: "what to produce, in one line",
-                value: "{task}",
-                oninput: move |event| task.set(event.value()),
+            div { class: "field",
+                label { r#for: "dispatch-task", "task" }
+                input {
+                    id: "dispatch-task",
+                    name: "task",
+                    placeholder: "what to produce, in one line",
+                    value: "{task}",
+                    oninput: move |event| task.set(event.value()),
+                }
             }
-            input {
-                name: "goal",
-                placeholder: "what counts as done, and when to stop",
-                value: "{goal}",
-                oninput: move |event| goal.set(event.value()),
+            div { class: "field",
+                label { r#for: "dispatch-goal", "done when" }
+                input {
+                    id: "dispatch-goal",
+                    name: "goal",
+                    placeholder: "what counts as done, and when to stop",
+                    value: "{goal}",
+                    oninput: move |event| goal.set(event.value()),
+                }
             }
-            select {
-                name: "mode",
-                onchange: move |event| mode.set(event.value()),
-                option { value: "plan", "plan" }
-                option { value: "build", "build" }
-                option { value: "review", "review" }
+            div { class: "field",
+                label { r#for: "dispatch-mode", "mode" }
+                select {
+                    id: "dispatch-mode",
+                    name: "mode",
+                    onchange: move |event| mode.set(event.value()),
+                    option { value: "plan", "plan" }
+                    option { value: "build", "build" }
+                    option { value: "review", "review" }
+                }
             }
             button {
                 r#type: "submit",

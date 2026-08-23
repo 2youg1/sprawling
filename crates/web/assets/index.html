@@ -334,10 +334,16 @@
   .dashboard .amount { text-align: right; }
   .consumed { color: var(--G7); }
 
-  /* The dispatch bar takes the width it needs and no more. */
+  /* The dispatch bar takes the width it needs and no more. The address
+     column is measured in characters because that is what it holds: at
+     180px the one field nobody can guess the format of showed
+     `which room, as building/ro`, and a placeholder cut in half is a
+     placeholder that teaches the wrong format. */
   .dispatch { flex: 1; display: grid; gap: var(--space-snug); margin: 0;
-              grid-template-columns: 180px 1fr 1fr 116px auto; align-items: end; }
+              grid-template-columns: minmax(22ch, 26ch) minmax(0, 1fr) minmax(0, 1fr) 116px auto;
+              align-items: end; }
   .dispatch input, .dispatch select { width: 100%; }
+  .dispatch .field { gap: 3px; min-width: 0; }
   .steer input { min-width: 320px; }
   /* What a person may do to a run, beside what they may say to it. Quiet
      buttons: these are available rather than suggested, and a page that
@@ -354,10 +360,16 @@
   /* The isometric city is drawn as shapes in the document, so it reads the
      tokens every other surface reads, scales without resampling, and is
      reachable by hover, focus and a keyboard. */
-  /* height: auto, so the box takes the drawing's own proportions and there
-     is no letterbox to leave empty. A fixed height would put the picture
-     back inside a field it does not fill, which is what the canvas did. */
-  .city-view .stage { display: block; width: 100%; height: auto; background: var(--G0);
+  /* height: auto, so the box takes the drawing's own proportions rather
+     than sitting inside a field it does not fill, which is what the canvas
+     did. The ceiling is the correction to that reasoning: on a 1280x800
+     window the drawing alone was 650px, so `raise a building` and the list
+     of buildings both fell below the fold and the last row was cut in
+     half. Under the ceiling the picture keeps its proportions and gives
+     back the margin at its sides - the only place in this client where a
+     building can be raised is worth more than that margin. */
+  .city-view .stage { display: block; width: 100%; height: auto; max-height: 52vh;
+                      background: var(--G0);
                       border: 1px solid var(--G3); border-radius: var(--corner-panel);
                       corner-shape: var(--corner-panel-shape); }
   /* A building is one group, and the group is what a pointer, a focus ring
@@ -380,6 +392,15 @@
                        margin-top: var(--space-snug); }
   .city-view .camera button { padding: 4px 9px; font-size: var(--text-small); }
 
+  /* The registration form is read as four steps in one column: name the
+     provider and its wire, hand the key over, then attach. Three fields
+     whose hints are different heights were sharing one baseline, so the
+     eye had no line to follow and the two buttons read as alternatives
+     rather than as the order they must be pressed in. */
+  .settings .attach { align-items: start; }
+  .settings .attach .field { flex: 1 1 20ch; }
+  .settings .attach .field.wide, .settings .attach .enrolment { flex-basis: 100%; }
+  .settings .attach .field.submit { align-items: flex-start; }
   .settings .models summary { cursor: pointer; color: var(--G7); }
   .settings .model { display: inline-block; margin: 2px 6px 0 0; color: var(--G7);
                      font-size: var(--text-small); border: 1px solid var(--G3);
