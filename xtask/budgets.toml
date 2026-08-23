@@ -35,10 +35,19 @@
 # the grouped nav. 45.8 KB for the half of the product that was reachable
 # only by reading the source. Headroom 4.5x, and the ratchet holds from
 # the new number rather than being widened.
+# F2.02-F2.05 records 490,594. The isometric city moved from a canvas to
+# shapes in the document, which was close to weight-neutral - the canvas
+# drawing code it deleted paid for the markup it added. The 28.7 KB is the
+# rest of the front-end rebuild: a four-part panel grammar on nine pages, a
+# three-part empty state wherever a container can be empty, the overview
+# page, and the interventions that had no way to be sent. Microcopy is most
+# of it, and it is the product's voice rather than padding: a page that
+# states a figure now says what produced it. Headroom is still 4.3x against
+# a budget of 2 MB, and the ratchet holds from the new number.
 [frontend_artifact]
 what = "the client the browser downloads, gzipped, fonts excluded"
 budget_bytes = 2097152
-best_bytes = 461921
+best_bytes = 490594
 slack_bytes = 20480
 measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
 status = "gated"

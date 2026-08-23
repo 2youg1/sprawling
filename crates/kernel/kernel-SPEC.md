@@ -246,11 +246,15 @@ impl Address {
 ```rust
 pub struct B3Hash([u8; 32]);            // 全库唯一哈希值类型；hex64 小写呈现
 pub struct GitOid([u8; 20]);            // 40 位十六进制小写；serde 与 B3Hash 同形（S4.02 增）
+impl GitOid { pub fn parse(raw: &str) -> Option<Self> }   // F2.05 增；长度不对即拒，恒不补零
 pub enum Range { Lines { from: u64, to: u64 },   // 1 起、闭区间
                  Bytes { from: u64, to: u64 } }  // 0 起、闭区间（HTTP Range 先例）
 pub enum Locator {
     Cas  { hash: B3Hash, range: Option<Range> },
     File { address: Address, oid: GitOid, range: Option<Range> },
+// F2.05：`GitOid::parse` 转公开。checkpoint 身份向两个方向旅行——wire 反序列化一个，
+// 而一个被展示了 checkpoint 句子的客户端要把它变回 oid 才能对它动作。不开这个门，
+// 调用方就自己解十六进制，而那正是 `Deserialize` 旁边那句「形状权威留在这里」要防的事。
 }
 impl Locator {
     /// Fail-closed: anything not exactly the grammar is E_LOCATOR_INVALID.
