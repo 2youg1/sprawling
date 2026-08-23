@@ -4,15 +4,9 @@ Future work, highest priority first. A row names an outcome; its design lands in
 
 Where a row says **needs a ruling**, it touches something in the `guard` row of AGENTS.md and cannot start without the person's word, recorded as a `Verdict:` trailer.
 
-## P0 — Make `sprawling` a word you can type
+## P0 — done
 
-Unpacking the archive leaves a binary that is not on any search path, so the only way in is to find the folder and double-click `start.cmd`. Finding a script is worse than typing a command, and a desktop entry is worse than both.
-
-`sprawling install` copies the running binary into the per-user program directory and puts that directory on the user's `PATH`; `--uninstall` reverses exactly what it did. No administrator rights, because nothing outside the user's own profile is touched. Package manifests (scoop, winget, brew) come after, not instead.
-
-- Lands in `crates/sprawling/`, one new module registered in the module map before it is written
-- Verified by installing on this machine, opening a **new** shell, and running `sprawling` with no arguments
-- When it lands, `dist/start.cmd` and `dist/start.sh` lose their reason to exist; removing them changes `xtask package`'s entry table — **needs a ruling**
+`sprawling install` landed and was verified in both directions on this machine. What is left of the row: `dist/start.cmd` and `dist/start.sh` have lost their reason to exist, and removing them changes `xtask package`'s entry table — **needs a ruling**.
 
 ## P1 — A console, so the terminal stops being a dead end
 

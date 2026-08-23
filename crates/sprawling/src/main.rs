@@ -9,6 +9,7 @@
 
 mod assembly;
 mod firstrun;
+mod install;
 mod mcp_http;
 mod mcp_stdio;
 
@@ -42,6 +43,7 @@ fn client_summary() -> String {
 const COMMANDS: &str = "\
 commands:
   up [dir] [addr]              raise a city here if needed, serve it, open the WebUI
+  install [--uninstall]        put this binary on your PATH, or take it back off
   init <dir>                   raise a city: writes the genesis record
   serve <dir> [addr] [--open]  serve a city that already exists
   resume <dir>                 after a restart: verify, close what was lost, report
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
         Some("replay") => replay(args.get(1)),
         Some("init") => init(args.get(1)),
         Some("up") => up(&args),
+        Some("install") => install(&args),
         Some("serve") => serve(args.get(1), args.get(2), &args),
         Some("export") => export(args.get(1), args.get(2)),
         Some("restore") => restore(args.get(1), args.get(2)),
@@ -179,6 +182,41 @@ fn init(dir: Option<&String>) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Makes `sprawling` a word this machine's shells resolve, or unmakes
+/// it. Nothing here needs administrator rights, because nothing outside
+/// the person's own profile is touched.
+fn install(args: &[String]) -> ExitCode {
+    let uninstall = args.iter().any(|a| a == "--uninstall");
+    let done = match install::install(uninstall) {
+        Ok(done) => done,
+        Err(err) => return report(err),
+    };
+    println!();
+    if uninstall {
+        println!("  removed {}", done.binary.display());
+    } else {
+        println!("  installed {}", done.binary.display());
+    }
+    match done.path {
+        install::PathOutcome::Unchanged => println!("  PATH already said what it needed to say"),
+        install::PathOutcome::Rewritten => {
+            println!("  PATH rewritten for this user account");
+            println!();
+            println!("  Open a NEW shell window - a running one keeps the PATH it started with.");
+        }
+        install::PathOutcome::SelfService(line) => {
+            println!("  that directory is not on PATH; add this line where you keep such lines:");
+            println!();
+            println!("      {line}");
+        }
+    }
+    if let Some(notice) = done.notice {
+        println!("  note: {notice}");
+    }
+    println!();
+    ExitCode::SUCCESS
 }
 
 /// Writes a bundle: the history, the objects it points at, and the work.
