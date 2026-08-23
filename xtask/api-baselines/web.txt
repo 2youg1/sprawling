@@ -96,6 +96,7 @@ pub fn web::Link::is_live(&self) -> bool
 pub fn web::Link::new(core::option::Option<alloc::string::String>) -> Self
 pub fn web::Link::state(&self) -> &web::LinkState
 pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Element
+pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::as_str(self) -> &'static str
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
@@ -151,11 +152,13 @@ pub fn web::filed_line(&channels::wire::RegistryAnswer, usize) -> alloc::string:
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
+pub fn web::headline(&web::Working) -> alloc::string::String
 pub fn web::inbox(alloc::vec::Vec<kernel::approval::ApprovalItem>) -> alloc::vec::Vec<web::Cluster>
 pub fn web::invalidated_by(kernel::event::EventKind) -> core::option::Option<channels::wire::Query>
 pub fn web::kind_name(kernel::event::EventKind) -> alloc::string::String
 pub fn web::kind_named(&str) -> core::option::Option<kernel::event::EventKind>
 pub fn web::latest_run(&web::Snapshot) -> core::option::Option<kernel::event::RunId>
+pub fn web::needs_you(&web::Snapshot) -> alloc::vec::Vec<web::Attention>
 pub fn web::opened_building(core::option::Option<&str>) -> core::option::Option<kernel::address::Address>
 pub fn web::opening_leaf(&channels::wire::BuildingAnswer) -> web::Leaf
 pub fn web::page<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>, &web::Filter, usize) -> web::Page
@@ -190,10 +193,12 @@ pub fn web::url_is_safe(&str) -> bool
 pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
 pub fn web::waiting_line(&web::Snapshot) -> alloc::string::String
 pub fn web::watchable(&web::Snapshot) -> alloc::vec::Vec<(kernel::event::RunId, alloc::string::String)>
+pub fn web::working(&web::Snapshot, core::option::Option<&channels::wire::CityAnswer>) -> web::Working
 pub mod web
 pub struct web::Alert
 pub struct web::Alerts
 pub struct web::AttachForm
+pub struct web::Attention
 pub struct web::Bar
 pub struct web::BinRow
 pub struct web::Camera
@@ -219,6 +224,7 @@ pub struct web::Sign
 pub struct web::Snapshot
 pub struct web::TagRow
 pub struct web::Usage
+pub struct web::Working
 pub use web::App
 pub use web::ApprovalsView
 pub use web::ArchiveView
@@ -226,6 +232,7 @@ pub use web::BuildingView
 pub use web::CostsView
 pub use web::LedgerView
 pub use web::LiveView
+pub use web::OverviewView
 pub use web::ProgressBar
 pub use web::RecycleBinView
 pub use web::Root
@@ -246,6 +253,9 @@ pub web::AttachReadiness::NeedsName
 pub web::AttachReadiness::NeedsUrl
 pub web::AttachReadiness::Ready
 pub web::AttachReadiness::UrlNotSafe
+pub web::Attention::count: u32
+pub web::Attention::view: web::View
+pub web::Attention::what: alloc::string::String
 pub web::Bar::filled: core::option::Option<u16>
 pub web::Bar::label: alloc::string::String
 pub web::Bar::state: web::BarState
@@ -399,5 +409,9 @@ pub web::View::City
 pub web::View::Dashboard
 pub web::View::Ledger
 pub web::View::Live(core::option::Option<kernel::event::RunId>)
+pub web::View::Overview
 pub web::View::RecycleBin
 pub web::View::Settings
+pub web::Working::buildings: usize
+pub web::Working::raised: usize
+pub web::Working::runs: usize

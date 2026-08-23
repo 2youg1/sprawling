@@ -222,6 +222,23 @@
 
   /* ------------------------------------------------------------- pages */
 
+  /* The first screen. What waits on a person is a row that is itself the
+     button: a sentence with a link inside it asks somebody to aim, and the
+     thing being aimed at is the whole row. ALERT is on the count alone,
+     because the count is what makes it urgent - a row that is merely
+     informative would be shouting in the same voice. */
+  .attention { display: flex; flex-direction: column; gap: var(--space-tight); }
+  .attention-row { display: flex; align-items: baseline; gap: var(--space-base);
+                   text-align: left; width: 100%; background: var(--G2);
+                   border: 1px solid var(--G3); padding: var(--space-base) var(--space-pane); }
+  .attention-row:hover { background: var(--G3); }
+  .attention-row .count { font-family: var(--font-mono); font-size: var(--text-title);
+                          font-weight: var(--weight-title); color: var(--ALERT);
+                          min-width: 2ch; }
+  .attention-row .what { color: var(--G9); }
+  .overview .in-flight td.addr { color: var(--G10); }
+  .overview .index-row { grid-template-columns: 1fr 160px 90px; }
+
   /* Approvals: a group is a card, and a tainted one is bordered in the
      colour that means a person is needed and cannot be waived. */
   .cluster { border: 1px solid var(--G3); background: var(--G2);

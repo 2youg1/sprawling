@@ -18,6 +18,7 @@ mod city_view;
 mod dashboard;
 mod ledger_view;
 mod live;
+mod overview;
 mod panel;
 mod progress;
 mod route;
@@ -47,6 +48,7 @@ pub use dashboard::{SERIES_DASHES, SERIES_PER_CHART_MAX, SERIES_WIDTHS, share_pe
 pub use ledger_view::{Filter, LedgerView, PAGE_ROWS, Page, Row};
 pub use ledger_view::{export, kind_name, kind_named, page};
 pub use live::{Feed, Line, LiveView, WINDOW, describe, short_run};
+pub use overview::{Attention, OverviewView, Working, headline, needs_you, working};
 pub use progress::distinguishable_without_colour;
 pub use progress::{Bar, BarState, ProgressBar, Subject, bar};
 pub use progress::{per_mille_of, track_token};

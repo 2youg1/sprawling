@@ -34,8 +34,12 @@ use dioxus::prelude::*;
 /// surface are always present and are not routes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum View {
-    /// The isometric city, or its degenerate single-Building form at P0.
+    /// The first screen: how much of this city is working, on what, and
+    /// what is waiting on a person. It is the default because it is the
+    /// only page that answers the question somebody arrives with.
     #[default]
+    Overview,
+    /// The isometric city, or its degenerate single-Building form at P0.
     City,
     /// One session, live. `None` is the page before a run is picked:
     /// the destination exists whether or not anything is running, and a
@@ -537,6 +541,11 @@ pub fn destinations(snapshot: &Snapshot) -> Vec<NavGroup> {
             label: "happening now",
             places: vec![
                 Destination {
+                    view: View::Overview,
+                    label: "overview",
+                    waiting: None,
+                },
+                Destination {
                     view: View::City,
                     label: "city",
                     waiting: None,
@@ -808,6 +817,20 @@ pub fn Root(
             }
             section { class: "centre",
                 match view {
+                    View::Overview => rsx! {
+                        crate::overview::OverviewView {
+                            snapshot: snapshot.clone(),
+                            city: city.clone(),
+                            live,
+                            on_frame,
+                            on_view,
+                            on_open: move |name: String| {
+                                if let Some(addr) = opened_building(Some(name.as_str())) {
+                                    on_view.call(View::Building(addr));
+                                }
+                            },
+                        }
+                    },
                     View::City => rsx! {
                         crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
                         crate::city_view::CityView {
@@ -1500,8 +1523,17 @@ mod tests {
     }
 
     #[test]
-    fn the_default_view_is_the_city_because_that_is_the_question_on_arrival() {
-        assert_eq!(View::default(), View::City);
+    fn the_default_view_answers_the_question_somebody_arrives_with() {
+        // The city page answers "where is everything"; a person opening
+        // this product is asking "is anything happening, and does any of
+        // it need me". Those are different questions, and only the
+        // second one is asked on arrival.
+        assert_eq!(View::default(), View::Overview);
+        assert_eq!(
+            crate::route::from_fragment("#/"),
+            Some(View::Overview),
+            "the bare fragment and the default view are the same page"
+        );
     }
 
     #[test]
@@ -1842,6 +1874,10 @@ mod tests {
     /// compile until a new variant states what it draws.
     fn evidence_of(view: &View) -> Vec<(&'static str, &'static str)> {
         match *view {
+            // The two counts, and the list a person walks into. The
+            // headline is the page: if it renders nothing, the first
+            // screen is a blank one.
+            View::Overview => vec![("overview", "in flight"), ("in-flight", "phase")],
             View::City => vec![
                 ("city-view", "raise a building"),
                 ("index", "read it"),
@@ -1887,6 +1923,7 @@ mod tests {
         let run = latest_run(&snapshot);
 
         let every_view = [
+            View::Overview,
             View::City,
             View::Live(run),
             View::Approvals,
@@ -1927,6 +1964,7 @@ mod tests {
         snapshot.adopt_approvals(vec![waiting_item()]);
         let run = latest_run(&snapshot);
         for view in [
+            View::Overview,
             View::City,
             View::Live(run),
             View::Approvals,

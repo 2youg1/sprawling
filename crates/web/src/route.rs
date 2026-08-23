@@ -28,7 +28,8 @@ use crate::app::View;
 #[must_use]
 pub fn to_fragment(view: &View) -> String {
     match view {
-        View::City => "#/".to_owned(),
+        View::Overview => "#/".to_owned(),
+        View::City => "#/city".to_owned(),
         View::Live(None) => "#/live".to_owned(),
         View::Live(Some(run)) => format!("#/live/{run}"),
         View::Approvals => "#/approvals".to_owned(),
@@ -52,7 +53,8 @@ pub fn from_fragment(raw: &str) -> Option<View> {
     let path = raw.trim_start_matches('#').trim_start_matches('/');
     let (head, tail) = path.split_once('/').unwrap_or((path, ""));
     match (head, tail) {
-        ("", "") => Some(View::City),
+        ("", "") => Some(View::Overview),
+        ("overview", "") => Some(View::Overview),
         ("city", "") => Some(View::City),
         ("live", "") => Some(View::Live(None)),
         ("live", run) => RunId::parse(run).ok().map(Some).map(View::Live),
@@ -107,6 +109,7 @@ mod tests {
     /// here rather than shipping as a page nobody can link to.
     fn every_view() -> Vec<View> {
         let all = [
+            View::Overview,
             View::City,
             View::Live(None),
             View::Live(Some(RunId::from_bytes([7u8; 16]))),
@@ -122,7 +125,8 @@ mod tests {
         // stops this compiling until the list names it.
         for view in &all {
             match view {
-                View::City
+                View::Overview
+                | View::City
                 | View::Live(_)
                 | View::Approvals
                 | View::RecycleBin
@@ -160,8 +164,11 @@ mod tests {
     #[test]
     fn nothing_in_the_address_bar_is_the_first_page() {
         for empty in ["", "#", "#/"] {
-            assert_eq!(from_fragment(empty), Some(View::City));
+            assert_eq!(from_fragment(empty), Some(View::Overview));
         }
+        // The city keeps a fragment of its own, so a link to it made
+        // before the overview existed still lands on the city.
+        assert_eq!(from_fragment("#/city"), Some(View::City));
     }
 
     /// A link that does not resolve says so rather than landing

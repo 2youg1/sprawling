@@ -546,6 +546,28 @@ pub const SPACE_SCALE: [(&str, u16); 6];       // 名，px，恒为 4 的倍数
 - **`Panel` 四段是中栏的唯一版面**：标题（**结论，不是名词**）／副题（数的范围与图例）／主体／**数字从哪来**。第四段是这个产品不能省的那一段：一个把数字摆出来却说不出出处的面板，与「整座城的历史在一条可验证的 Ledger 里」这句话直接矛盾。一页是若干 `Panel` 的堆叠，别无其他，于是两页不可能对「一个标题是什么意思」产生两种说法。
 - **`Empty` 三段**（取自 Nielsen Norman 的空态规则）：说清系统状态／说清这里本该有什么／给出把它填上的那条路。**恒不允许纯空**，也恒不允许把「还没有」写成与「加载中」同一句话——那正是 `RoomQueue { Unasked, Empty, Waiting }` 早已在一处做对、而其余十四处没有做的区分。
 
+### 8-30 首屏：人抵达时带着的那个问题（F2.04；形状 1 判定 ＋ 新模块 `web::overview`）
+
+```rust
+pub struct Working { pub runs: usize, pub buildings: usize, pub raised: usize }
+pub fn working(snapshot: &Snapshot, city: Option<&CityAnswer>) -> Working;
+pub fn headline(working: &Working) -> String;          // 首屏存在的理由，一句话
+pub struct Attention { pub what: String, pub count: u32, pub view: View }
+pub fn needs_you(snapshot: &Snapshot) -> Vec<Attention>;
+#[component] pub fn OverviewView(…) -> Element;
+pub enum View { Overview, … }                           // 新的 `#[default]`，片段为 `#/`
+```
+
+**为什么城市图不该是首页**：它答的是「东西都在哪里」，而一个人打开这个产品时问的是「**有事在发生吗，其中有需要我的吗**」。两个不同的问题，只有后一个是抵达时问的。城市图保留 `#/city`，旧链接仍然落得下。
+
+- **两个数，不能再多**：报七个数的首屏一个都没报——眼睛只会落在最大的那个上。故标题是一句带两个数的话，其余全是人可以走进去的清单。
+- **句子按情形分峐，不是模板填数**：「0 runs in 0 buildings」与「这座城还没有楼」是同一个事实，而只有后者是一句话。三条断言钉住三种形状（空城／有楼无活／有活）。
+- **数的是地方不是路径**：一栋楼两个房间各一个 Run，算**一栋楼在干活**。读这行的人在数地方。
+- **只数飞行中的**：冻结与 halted 的 Run 列在下方但不计入首行——**一座停下来的城绝不得读起来像忙着**，这是首屏唯一不可犯的错。
+- **「等你」的排序是变贵的顺序**：待批停的是当下一个 Run；冻结的已经停了且会一直停；provider 断了则停住一切尚未开始的。按类别排会把最便宜的那一行放到前面。
+- **整行即按钮**：一句话里埋一个链接是让人去瞄准；被瞄准的就是那一整行。
+- **不新增任何查询**：全靠事件流的 fold 加上别的页本就要问的一条 `CityView`。一个会轮询的总览页会是全库最贵的一页，而它能告诉人的东西 fold 都已经知道。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。
