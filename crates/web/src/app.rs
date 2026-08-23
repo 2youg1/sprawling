@@ -664,6 +664,50 @@ fn session_of(id: &RunId, row: &RunRow) -> String {
     named.unwrap_or_else(|| crate::live::short_run(*id))
 }
 
+/// The room a frame asks a run to be started in, as `building/name`.
+///
+/// A dispatch that named a session is asking for a room the city has not
+/// opened yet; one that did not is asking for the room in the address.
+/// Anything else is not a request for a run at all.
+#[must_use]
+pub fn room_asked_for(frame: &channels::ClientFrame) -> Option<String> {
+    let channels::ClientFrame::Command(command) = frame else {
+        return None;
+    };
+    let channels::WireCommand::Dispatch { addr, session, .. } = command.as_ref() else {
+        return None;
+    };
+    Some(match session {
+        Some(named) => format!("{}/{}", addr.as_str(), named.as_str()),
+        None => addr.as_str().to_owned(),
+    })
+}
+
+/// The run this record starts, when it is the run the person just asked
+/// for and no other.
+///
+/// `expecting` is `building/name` as the client sent it. The city opens
+/// exactly that room or suffixes it (`-2`), so those two spellings are
+/// the whole answer; a room whose name merely begins the same way is
+/// somebody else's work. Only `run_started` counts, because a later
+/// event in that room would move a page the person may since have
+/// navigated away from.
+#[must_use]
+pub fn started_here(record: &EventRecord, expecting: &str) -> Option<RunId> {
+    if record.kind() != EventKind::RunStarted {
+        return None;
+    }
+    let addr = record.addr()?.as_str();
+    let mine = addr == expecting
+        || addr
+            .strip_prefix(expecting)
+            .and_then(|rest| rest.strip_prefix('-'))
+            .is_some_and(|suffix| {
+                !suffix.is_empty() && suffix.chars().all(|digit| digit.is_ascii_digit())
+            });
+    mine.then(|| record.run())
+}
+
 /// The run a person most likely means: the one that started last, and a
 /// running one ahead of a finished one.
 #[must_use]
@@ -939,6 +983,7 @@ pub fn Root(
                             signals: snapshot.signals_seen(),
                             live,
                             on_frame,
+                            on_select,
                         }
                     },
                     View::Settings => rsx! {
@@ -997,6 +1042,20 @@ fn DispatchBar(
     on_view: EventHandler<View>,
 ) -> Element {
     let mut at = use_signal(|| addr.clone().unwrap_or_default());
+    // The bar follows what the person selected on the page above it: a
+    // building chosen in the city or opened on its own page arrives
+    // here. Reactive, because a `use_effect` that only closed over the
+    // first render's prop would leave the field showing whatever was
+    // selected when the window opened (web-SPEC.md section 8-17).
+    let chosen = addr.clone();
+    use_effect(use_reactive!(|chosen| {
+        let mut at = at;
+        if let Some(ref selected) = chosen
+            && !selected.is_empty()
+        {
+            at.set(selected.clone());
+        }
+    }));
     let mut task = use_signal(String::new);
     let mut goal = use_signal(String::new);
     let mut mode = use_signal(|| "plan".to_owned());
@@ -1157,6 +1216,10 @@ pub fn App() -> Element {
     let mut selected = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
+    // The room the last dispatch asked for, so its run can be opened
+    // when it starts rather than left for the person to find among the
+    // others.
+    let mut expecting = use_signal(|| None::<String>);
     #[cfg(target_arch = "wasm32")]
     let outbound = connect(Wiring {
         snapshot,
@@ -1171,6 +1234,8 @@ pub fn App() -> Element {
         vitals,
         records,
         live,
+        view,
+        expecting,
         refused,
     });
     #[cfg(not(target_arch = "wasm32"))]
@@ -1193,7 +1258,12 @@ pub fn App() -> Element {
             selected: selected(),
             following: following(),
             live,
-            on_frame: move |frame| outbound.call(frame),
+            on_frame: move |frame: channels::ClientFrame| {
+                if let Some(room) = room_asked_for(&frame) {
+                    expecting.set(Some(room));
+                }
+                outbound.call(frame);
+            },
             on_select: move |id| selected.set(id),
             on_view: move |next: View| {
                 #[cfg(target_arch = "wasm32")]
@@ -1251,6 +1321,12 @@ struct Wiring {
     vitals: Signal<Option<channels::MetricsAnswer>>,
     records: Signal<Vec<EventRecord>>,
     live: Signal<bool>,
+    /// Which page is showing, so the run a person just asked for can be
+    /// opened when it starts.
+    view: Signal<View>,
+    /// The room this client last dispatched to, as `building/name`.
+    /// Cleared by the run it was waiting for; see [`started_here`].
+    expecting: Signal<Option<String>>,
     /// The last thing the city refused. Beside the snapshot rather than
     /// inside it: a refusal is not something that happened to the city,
     /// it is the answer to something one person asked, and the snapshot
@@ -1333,6 +1409,8 @@ fn connect(wiring: Wiring) -> Outbound {
         mut vitals,
         mut records,
         mut live,
+        mut view,
+        mut expecting,
         mut refused,
     } = wiring;
     use_hook(move || {
@@ -1390,6 +1468,20 @@ fn connect(wiring: Wiring) -> Outbound {
                         if let Some(query) = invalidated_by(event.kind()) {
                             let _ =
                                 crate::socket::send(socket, &channels::ClientFrame::Query(query));
+                        }
+                        // The session this person asked for, opening.
+                        // Knowledge rather than a guess: this client sent
+                        // that dispatch and knows the room it named.
+                        // Read and released before the write below: a
+                        // signal held open across its own set is a panic
+                        // in a browser and nothing at all in a host test.
+                        let waiting = expecting.read().clone();
+                        if let Some(waiting) = waiting
+                            && let Some(run) = started_here(&event, &waiting)
+                        {
+                            expecting.set(None);
+                            view.set(View::Live(Some(run)));
+                            crate::route::go(&View::Live(Some(run)));
                         }
                         if snapshot.write().apply(&event) {
                             // Kept once, read by every page that reads
@@ -2353,7 +2445,10 @@ mod tests {
         );
         // Somebody else's work, and a name that merely begins the same
         // way, are not this person's session.
-        assert_eq!(started_here(&started("lab/other", [6u8; 16]), "lab/refactor"), None);
+        assert_eq!(
+            started_here(&started("lab/other", [6u8; 16]), "lab/refactor"),
+            None
+        );
         assert_eq!(
             started_here(&started("lab/refactoring", [7u8; 16]), "lab/refactor"),
             None

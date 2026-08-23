@@ -655,6 +655,19 @@ fn city_view::session_name(task: &str) -> String;   // 任务的前四个词
 - **城市页不再把每一件活都扔进 `room1`**：原先 `city_view::dispatch_command` 写死 `{building}/room1`，于是同一栋楼上发出的第二件活盖掉第一件的文件。现在地址给楼，名字取自任务的前四个词——人刚写完的词，一小时后在文件夹列表里认得出来。
 - **名字不合法就拒整条命令**（`SessionName::parse` 答 `None`），而不是自作主张改拼写：一个没人敲过的名字不应该出现在别人的目录里。
 
+### 8-36 从一栋楼到它里面的活（F2.13）
+
+```rust
+pub fn room_asked_for(frame: &ClientFrame) -> Option<String>;      // building/name
+pub fn started_here(record: &EventRecord, expecting: &str) -> Option<RunId>;
+#[component] fn BuildingView(..., on_select: EventHandler<Option<String>>)
+```
+
+- **楼页不多一个派活表单**，而是把底栏指向这栋楼：开工只有一个地方，下一次人也往那里找。底栏的地址格因此需要 `use_reactive`（§8-17 那个坑），否则它永远停在页面打开那一刻的选中项。
+- **送出后自动打开刚开的那个 session**：客户端记住自己要的房间（`room_asked_for`），在 `run_started` 到达时认出它（`started_here`）。**这不违反 §8-31**：那条裁定禁的是在几个 Run 之间猜，而本客户端发出了那一帧、知道它要的是哪个房间——知道不是猜。
+- **后缀也算**：城可能把 `lab/refactor` 开成 `lab/refactor-2`，所以匹配允许 `-数字` 后缀；`lab/refactoring` 不算。
+- **只认 `run_started`**：同一房间里的后续事件不得再把页面拽回去——人可能已经走开了。
+
 ### 8-35 选一个 session 而不是选一个哈希（F2.12）
 
 ```rust

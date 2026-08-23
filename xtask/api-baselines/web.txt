@@ -180,12 +180,14 @@ pub fn web::render_usd(kernel::budget::UsdMicros) -> alloc::string::String
 pub fn web::resolved_chroma(u16, u16, u16) -> u16
 pub fn web::rollback_command(&str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::room_addr(&kernel::address::Address, &str) -> core::option::Option<kernel::address::Address>
+pub fn web::room_asked_for(&channels::wire::ClientFrame) -> core::option::Option<alloc::string::String>
 pub fn web::searchable(&str) -> core::option::Option<alloc::string::String>
 pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> u16
 pub fn web::shelves(&channels::wire::ArchiveAnswer) -> alloc::vec::Vec<web::Shelf>
 pub fn web::short_run(kernel::event::RunId) -> alloc::string::String
 pub fn web::signs(&channels::wire::MetricsAnswer) -> [web::Sign; 3]
 pub fn web::spend_line(&web::Snapshot) -> alloc::string::String
+pub fn web::started_here(&kernel::event::EventRecord, &str) -> core::option::Option<kernel::event::RunId>
 pub fn web::status_line(&web::Snapshot) -> [alloc::string::String; 4]
 pub fn web::storeys(u64) -> u32
 pub fn web::superellipse_tenths(u16) -> u16

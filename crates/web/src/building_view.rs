@@ -106,6 +106,9 @@ pub fn BuildingView(
     /// Whether the socket is live; see `app::Root`.
     live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
+    /// Points the control surface at this building, so the one form
+    /// that starts work is the one form that starts work.
+    on_select: EventHandler<Option<String>>,
 ) -> Element {
     let asked = use_signal(|| None::<String>);
     let wanted = addr.as_str().to_owned();
@@ -170,6 +173,18 @@ pub fn BuildingView(
                     .to_owned(),
             header { class: "building-head",
                 h2 { "{answer.addr.as_str()}" }
+                // Not a fourth dispatch form: this fills the bar at the
+                // bottom of the window, which is where work is started
+                // from every page and where a person looks for it next
+                // time.
+                button {
+                    class: "start-here",
+                    onclick: {
+                        let here = answer.addr.as_str().to_owned();
+                        move |_| on_select.call(Some(here.clone()))
+                    },
+                    "start a session here"
+                }
                 crate::progress::ProgressBar {
                     bar: crate::progress::bar(
                         &answer.progress,

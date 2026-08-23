@@ -34,6 +34,7 @@ pub use app::{ProviderHealth, RunPhase, RunRow, Snapshot, View};
 pub use app::{destinations, dispatch_command, invalidated_by};
 pub use app::{latest_run, opened_building, rebuild};
 pub use app::{render_tokens, render_usd, spend_line, status_line, waiting_line};
+pub use app::{room_asked_for, started_here};
 pub use approval::{ApprovalsView, BinRow, Cluster, RecycleBinView, ReturnPath};
 pub use approval::{bin_rows, inbox, policy_admits, recycle_bin, rollback_command};
 pub use archive_search::{ArchiveView, FILED_LATELY_MAX, Shelf};
