@@ -53,3 +53,18 @@ jobs:
           for target in $(cargo +nightly fuzz list --fuzz-dir fuzz); do
             cargo +nightly fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=60
           done
+
+  # Security advisories, on a schedule rather than on every push. An
+  # advisory is published by somebody else at a time of their choosing;
+  # a pull request that goes red because of one is red for a reason its
+  # author cannot act on, and a red build nobody can act on is a red
+  # build people learn to ignore. Here, red means "go and look today".
+  advisories:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: what has been published against what we depend on
+        run: cargo deny check advisories

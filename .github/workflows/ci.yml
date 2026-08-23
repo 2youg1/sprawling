@@ -20,6 +20,13 @@ on:
 permissions:
   contents: read
 
+env:
+  # Incremental compilation caches work for the *next* build in the same
+  # tree, and CI throws the tree away. It buys nothing here and it makes
+  # the artifact the cache has to carry substantially larger.
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+
 # A second push supersedes the first: nobody reads the verdict on a commit
 # that has already been replaced.
 concurrency:
@@ -40,10 +47,15 @@ jobs:
       # Without this every run compiles 494 packages from zero - including
       # aws-lc-sys and libgit2, which are C. It is the single largest
       # difference between a five-minute run and a twenty-minute one.
+      # Only the branch everyone builds on writes a cache. A pull request
+      # that saved its own would evict the shared one it was restored
+      # from, so the next unrelated push pays for a cold build.
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-deny,cargo-public-api
+          tool: cargo-nextest,cargo-public-api
       # The apisync gate reads rustdoc JSON, which is nightly-only. It
       # fails closed when the toolchain is missing rather than skipping,
       # so a job without this line stops here instead of passing.
@@ -65,8 +77,6 @@ jobs:
         run: cargo xtask gates
       - name: tests
         run: cargo nextest run --workspace --locked --all-features
-      - name: deny
-        run: cargo deny check
 
       # trybuild keeps its scratch tree under `target/tests`, including an
       # entry that does not survive the cache's own pruning pass. The save
@@ -90,5 +100,25 @@ jobs:
       - name: the client target
         run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: clippy on the target that has a browser
         run: cargo clippy -p web --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
+
+  # Licences, banned crates and where they came from. Split out because it
+  # compiles nothing - it reads `Cargo.lock` - so it answers in seconds on
+  # its own runner instead of waiting behind the test suite.
+  #
+  # `advisories` is deliberately **not** here. An advisory published today
+  # against a dependency nobody touched would turn a pull request red for
+  # a reason that has nothing to do with it, which is how people learn to
+  # ignore a red build. It runs nightly, where red means "go and look".
+  supply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: licences, bans and sources
+        run: cargo deny check bans licenses sources

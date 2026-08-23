@@ -66,8 +66,16 @@ A real dispatch against a real provider called `status`, then `edit`, wrote the 
 
 So the remaining row is **a read tool**, which is a new capability rather than a defect in this one. Two of the ablation's four arms — "disclosure plus an expansion fetched on demand" and the comparison against it — need it before they can be run at all.
 
-## P7 — Ship a Linux archive
+## P7 — done
 
-`release.yml` verifies on Windows and builds archives for Windows and macOS. Linux is on hold by the person's ruling; bringing it back means adding `ubuntu-latest` to both the `verify` and `archive` matrices, once somebody has run the result on a Linux desktop and seen `start.sh` open a browser there.
+`release.yml`'s archive matrix carries `ubuntu-latest`. Verification is
+divided rather than duplicated: `ci.yml` runs the whole of `just check`
+on Linux for every push, `platforms.yml` runs it on all three every
+night, and the tag-time `verify` job covers Windows, which nothing else
+reaches. `xtask package` needed no change — `platform()` is
+`std::env::consts`, and the launcher already ships `start.sh` with its
+exec bit set.
 
-The first CI run on Linux found `xtask/src/mem.rs` importing `std::process::Command` where nothing used it — the class of defect a host-only build never sees. Expect a few more of those before Linux is shippable.
+Nobody has yet opened the resulting archive on a Linux desktop and
+watched `start.sh` open a browser. That is the one claim here made by
+construction rather than by observation.

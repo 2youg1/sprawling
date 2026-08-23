@@ -20,9 +20,12 @@ permissions:
 
 jobs:
   # Nothing is built for release out of a tree that has not passed.
-  # The host is the shipped platform, by the person's ruling: Linux is
-  # neither verified nor shipped for now, and its fitness is tracked in
-  # TODO.md rather than blocking a release that does not carry it.
+  #
+  # Windows, and only Windows, because the three platforms are already
+  # covered between them and paying twice for one of them buys nothing:
+  # `ci.yml` runs the whole of `just check` on Linux for every push, and
+  # `platforms.yml` runs it on all three every night. Windows is the one
+  # a tag would otherwise reach without a run of its own.
   verify:
     runs-on: windows-latest
     steps:
@@ -59,15 +62,17 @@ jobs:
         if: always()
         run: rm -rf target/tests
 
-  # The absence of Linux is written here rather than left to be noticed:
-  # a platform missing from a release page is a decision, not an oversight.
+  # Three platforms. Linux was on hold while nobody could run the result;
+  # it comes back on the ruling that CI is where it gets exercised, and
+  # the ubuntu `check` job has been building and testing this workspace
+  # on every push since C1 - so the archive is the only untested step.
   # Archive does not wait for verify: the two are independent, publish
   # waits for both, and the wall clock is the slower one instead of the sum.
   archive:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
