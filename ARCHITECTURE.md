@@ -255,6 +255,8 @@ Every module instantiates exactly one of these. The classification earns its pla
 
 Each of these is a type, not a slogan, and each has a compile-failure counterexample in the test suite — because "unrepresentable" is itself a claim that needs testing.
 
+**These expectations are byte comparisons against a compiler's output, so the machine is part of them.** Installing the `rust-src` component makes rustc render a source snippet inside a `note:` that the committed `.stderr` files do not carry, and every counterexample using one goes red without a line of this repository changing. `cargo public-api` pulls that component in, so `just api-baseline` can turn `just check` red on the next run; remove it (`rustup component remove rust-src`) rather than blessing the longer output, which would only move the failure to CI.
+
 - `EventRef` has no public constructor and no serde ⇒ **a forged event reference cannot be spelled**.
 - `Completion::Done` always carries `Evidence`, and `Completion` has no serde ⇒ **a deserialised "finished" cannot be spelled**.
 - A `Delegate` value has no `delegate` method ⇒ **a grand-delegate cannot be spelled**; delegation is one level deep.
