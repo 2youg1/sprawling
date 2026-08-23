@@ -504,6 +504,25 @@ pub fn refused(error: &AxError) -> Refused;
 
 **本章测试**：渲染断言页上真的出现 `refusal`／`refusal-what`／`refusal-way` 三个类（这正是本卡之前整个 crate 里没有任何一处能画出拒绝的证据）；无拒绝时不画条带；`recovery` 为空时仍给出一句话。
 
+## 8-14 View 与地址栏（F2.01）
+
+**病灶**：`View` 只活在一个 signal 里。没有深链、没有浏览器后退、没有书签，**除首页外任何一页都拍不到照**——前端因此也无法做回归测试。
+
+```rust
+// web::route（形状 1 decision）
+pub fn to_fragment(view: &View) -> String;         // 恒以 `#/` 开头
+pub fn from_fragment(raw: &str) -> Option<View>;   // 认不出就是 None
+#[cfg(target_arch = "wasm32")] pub fn current() -> Option<View>;
+#[cfg(target_arch = "wasm32")] pub fn go(view: &View);
+```
+
+- **取 fragment，不取 path**。path 路由要求资产路由对认不出的路径回 `index.html`，而那一句拒绝是一条安全判定（`ClientAssets::lookup` 闭合于一张固定表并拒路径穿越）。fragment **根本不发给服务端**，故书签、历史、深链全都成立，且不动那道站在 URL 与本机磁盘之间的判定。
+- **地址栏是唯一权威**。点击写 fragment，`hashchange` 监听器再移动 signal——点击与浏览器后退因此走同一条路，不可能对「人在哪一页」产生两种说法。监听器住 `use_hook`，只挂一次；挂两次就是同一次变更被应用两遍。
+- **认不出的 fragment 答 `None`，不悄悄回首页**。一条落不了地的链接是调用方也许想说点什么的事实；悄悄换个地方落地，是在不承认的前提下教人不要相信自己的书签。
+- **往返是穷尽的**：测试里那张 `View` 列表被一个无 catch-all 的 match 咬住，故新增一个 variant 不给它 fragment 就编译不过——而不是作为一个没人能链接到的页面发布出去。
+
+**真机验收**：`http://127.0.0.1:<port>/#/settings` 直接打开设置页并截图成功；本卡之前该页无法被拍到。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

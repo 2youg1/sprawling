@@ -149,6 +149,7 @@ pub fn web::filed_at(kernel::event::TimeMs) -> alloc::string::String
 pub fn web::filed_lately(&channels::wire::RegistryAnswer, usize) -> alloc::vec::Vec<channels::wire::RegistryLine>
 pub fn web::filed_line(&channels::wire::RegistryAnswer, usize) -> alloc::string::String
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
+pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
 pub fn web::inbox(alloc::vec::Vec<kernel::approval::ApprovalItem>) -> alloc::vec::Vec<web::Cluster>
 pub fn web::invalidated_by(kernel::event::EventKind) -> core::option::Option<channels::wire::Query>
@@ -183,6 +184,7 @@ pub fn web::status_line(&web::Snapshot) -> [alloc::string::String; 4]
 pub fn web::storeys(u64) -> u32
 pub fn web::superellipse_tenths(u16) -> u16
 pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
+pub fn web::to_fragment(&web::View) -> alloc::string::String
 pub fn web::track_token() -> &'static str
 pub fn web::url_is_safe(&str) -> bool
 pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue

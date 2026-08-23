@@ -1010,7 +1010,20 @@ fn cancel_command(run: RunId) -> channels::ClientFrame {
 #[component]
 pub fn App() -> Element {
     let snapshot = use_signal(Snapshot::new);
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(
+            unused_mut,
+            reason = "in a browser the address bar moves the signal, not this handle"
+        )
+    )]
     let mut view = use_signal(View::default);
+    // The address bar is the authority for which page is showing, and
+    // the listener below is the only thing that moves the signal. A
+    // click writes the fragment and hears its own change back, so a
+    // click and the browser's back button travel the same path and
+    // cannot disagree about where the person is.
+    follow_the_address_bar(view);
     let endpoints = use_signal(|| None::<channels::EndpointsAnswer>);
     let city = use_signal(|| None::<channels::CityAnswer>);
     let cost = use_signal(|| None::<channels::CostAnswer>);
@@ -1063,7 +1076,12 @@ pub fn App() -> Element {
             live,
             on_frame: move |frame| outbound.call(frame),
             on_select: move |id| selected.set(id),
-            on_view: move |next| view.set(next),
+            on_view: move |next: View| {
+                #[cfg(target_arch = "wasm32")]
+                crate::route::go(&next);
+                #[cfg(not(target_arch = "wasm32"))]
+                view.set(next);
+            },
             on_follow: move |on| following.set(on),
             on_dismiss: move |()| refused.set(None),
         }
@@ -1120,6 +1138,47 @@ struct Wiring {
     /// holds only what the ledger says.
     refused: Signal<Option<crate::alert::Refused>>,
 }
+
+/// Mounts the one reader of the address bar.
+///
+/// Registered once for the life of the page: `use_hook` runs on the
+/// first render only, so the listener is not rebuilt on every state
+/// change - a second listener would apply the same change twice.
+#[cfg(target_arch = "wasm32")]
+fn follow_the_address_bar(mut view: Signal<View>) {
+    use dioxus::prelude::use_hook;
+    use wasm_bindgen::JsCast as _;
+    use_hook(move || {
+        // What the person arrived at, before any event has happened.
+        if let Some(arrived) = crate::route::current() {
+            view.set(arrived);
+        }
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let moved = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+            // A fragment that names nothing leaves the page where it is
+            // rather than landing somewhere the person did not ask for.
+            if let Some(next) = crate::route::current() {
+                view.set(next);
+            }
+        });
+        if window
+            .add_event_listener_with_callback("hashchange", moved.as_ref().unchecked_ref())
+            .is_ok()
+        {
+            // The listener outlives this scope, and the page outlives
+            // the listener: dropping the closure here would unregister
+            // the only thing that reads the address bar.
+            moved.forget();
+        }
+    });
+}
+
+/// Off the browser there is no address bar, so the signal is the only
+/// authority and nothing has to follow anything.
+#[cfg(not(target_arch = "wasm32"))]
+fn follow_the_address_bar(_view: Signal<View>) {}
 
 #[cfg(target_arch = "wasm32")]
 fn connect(wiring: Wiring) -> Outbound {

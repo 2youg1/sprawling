@@ -488,6 +488,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::vitals | crates/web/src/vitals.rs | the few numbers no other surface states, and the four it refuses to state | decision | F1 | built |
 | web::archive_search | crates/web/src/archive_search.rs | what this city wrote down: the shelves and the record, never merged | decision | F1 | built |
 | web::settings | crates/web/src/settings.rs | turning a URL and a key into a model a run can be given | decision | P1 | built |
+| web::route | crates/web/src/route.rs | the one translation between a View and the address bar, both ways | decision | F2 | built |
 
 ### browser (6), protocol (2), bin (5)
 
