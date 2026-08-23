@@ -271,6 +271,22 @@ pub fn index(city_root, building) -> Result<Vec<Entry>, AxError>;   // 算出来
 - **召回是结构化的**：按类与日期归档，循索引读**原文**。不做向量记忆；翻案条件写死——真实召回率 <90% 才重议。
 - **日期取整天**：给人浏览用，精度高过问题所需只会招来没人打算做的比较。
 
+### 8-12 一个 skill 只有一个家：楼自己的书架（F2.10）
+
+```rust
+pub struct Holding { pub name, pub section, pub disclosure, pub path, pub addr: Address }
+impl Library {
+    pub fn scan(city_root: &Path, building: Option<&Address>) -> Result<Library, AxError>;
+}
+// 删除：pub fn holding_address(&Holding) -> Result<Address, AxError>
+```
+
+用户要的是「一栋楼就是一个可以 cd 过去的工作区」；已记录的理由是「住户只读得到存货，不得给自己进货」。F2.08 之后两者不再冲突：楼自己的书架放在 `<building>/.sprawling/skills/<section>/<name>.md`，在楼目录里、在写域之外。
+
+- **近的书架盖远的**：同名同 section 时楼的那本胜出。这不是新规则，而是 `config_layers` 已有的那一条（低层胜，高层是回落）在书架上的同一个实例。
+- **城的书架只放两栋以上共用的**：一个 skill 只有一个家。代价是找一本 skill 要看两处，换到的是一栋楼拷走就带着它自己的本事。
+- **`holding_address` 删掉**：它从 section＋name 拼回一个城级路径，而 `Holding` 本来就握着 `path`——两个权威，且在两层书架下其中一个必然答错。地址改为扫盘时算一次、存在 `Holding::addr` 里。
+
 ### 8-11 楼的治理字节搬进它自己的保留子树（F2.09；沉淀一处路径权威）
 
 ```rust

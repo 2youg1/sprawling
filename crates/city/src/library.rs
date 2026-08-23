@@ -275,12 +275,57 @@ mod tests {
     fn a_holding_lives_where_no_run_may_write() {
         let dir = tempfile::tempdir().unwrap();
         stocked(dir.path());
-        let library = Library::scan(dir.path()).unwrap();
+        let library = Library::scan(dir.path(), None).unwrap();
         let holding = library.all()[0];
-        let addr = holding_address(holding).unwrap();
         assert!(
-            addr.is_reserved(),
+            holding.addr.is_reserved(),
             "a resident may read the stock and may not restock it"
         );
+    }
+
+    /// A building keeps the skills only it uses on its own shelf, inside
+    /// its own directory, and still cannot restock them.
+    #[test]
+    fn a_building_keeps_its_own_shelf_and_the_nearer_shelf_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        stocked(dir.path());
+        let lab = Address::parse("lab").unwrap();
+        let own = dir
+            .path()
+            .join("lab")
+            .join(kernel::RESERVED_PREFIX)
+            .join(BUILDING_SHELF)
+            .join("utilities");
+        std::fs::create_dir_all(&own).unwrap();
+        std::fs::write(own.join("kiln.md"), "Firing a kiln in this lab\n").unwrap();
+        std::fs::write(
+            own.join("unit-tests.md"),
+            "This lab's own rule for tests\n",
+        )
+        .unwrap();
+
+        let library = Library::scan(dir.path(), Some(&lab)).unwrap();
+        let names: Vec<&str> = library.all().iter().map(|h| h.name.as_str()).collect();
+        assert!(names.contains(&"kiln"), "{names:?}");
+        assert!(names.contains(&"diffing"), "the city's shelf is still read");
+
+        let mine = library
+            .all()
+            .into_iter()
+            .find(|h| h.name == "unit-tests")
+            .unwrap();
+        assert_eq!(
+            mine.disclosure, "This lab's own rule for tests",
+            "the nearer shelf wins, as the configuration ladder already does"
+        );
+        assert!(
+            mine.addr.is_reserved(),
+            "a building's own shelf is still outside its write domain: {}",
+            mine.addr.as_str()
+        );
+
+        // Another building sees only the city's shelf.
+        let other = Library::scan(dir.path(), Some(&Address::parse("vault").unwrap())).unwrap();
+        assert!(!other.all().iter().any(|h| h.name == "kiln"));
     }
 }
