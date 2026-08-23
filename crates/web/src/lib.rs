@@ -18,6 +18,7 @@ mod city_view;
 mod dashboard;
 mod ledger_view;
 mod live;
+mod panel;
 mod progress;
 mod route;
 mod settings;

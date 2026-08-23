@@ -172,8 +172,21 @@ pub fn LiveView(
     let mut steer = use_signal(String::new);
     let lines = feed.lines().to_vec();
     let dropped = feed.dropped();
+    let held = lines.len();
+    let known = runs.len();
     rsx! {
         section { class: "live",
+            crate::panel::Panel {
+                title: match (known, run) {
+                    (0, _) => "no run has been dispatched in this city".to_owned(),
+                    (_, Some(_)) => "one session, as it happens".to_owned(),
+                    (_, None) => "every run in this city, as it happens".to_owned(),
+                },
+                figure: "{held}",
+                scope: "a bounded window: the figure counts the lines held here, and a line that leaves the window has not left the Ledger"
+                    .to_owned(),
+                source: "the live event stream, folded one record at a time. Nothing here is re-asked or polled - the same fold the server does, running in this page."
+                    .to_owned(),
             // Which session is being watched is a choice, not a guess.
             // With two runs in flight, "the latest one" is a coin toss,
             // and the page was showing one of them without saying so.
@@ -223,7 +236,15 @@ pub fn LiveView(
                 }
             }
             if feed.lines().is_empty() {
-                p { class: "empty", "nothing has happened here since this page connected" }
+                crate::panel::Empty {
+                    status: if known == 0 { "no run has started yet".to_owned() }
+                        else { "nothing has happened here since this page connected".to_owned() },
+                    what: if known == 0 {
+                        "send work from the bar at the bottom of the window, or from a building on the city page. Every turn it takes appears here as it happens.".to_owned()
+                    } else {
+                        "this window holds what arrived after the page connected. Earlier lines are in the Ledger, which the record page reads.".to_owned()
+                    },
+                }
             }
             form {
                 class: "steer",
@@ -248,6 +269,7 @@ pub fn LiveView(
                     disabled: run.is_none() || steer.read().trim().is_empty(),
                     "send at the next safe point"
                 }
+            }
             }
         }
     }

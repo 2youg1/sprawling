@@ -372,21 +372,33 @@ pub fn Settings(
     let Some(answer) = answer else {
         return rsx! {
             section { class: "settings",
-                p { "asking the server what is attached" }
+                crate::panel::Empty {
+                    status: "asking the server what is attached".to_owned(),
+                    what: "providers, the model chosen for each job, and what is missing before this city can be dispatched to"
+                        .to_owned(),
+                }
             }
         };
     };
     let rows = endpoint_rows(&answer);
     let tags = tag_rows(&answer);
     let dispatchable = can_dispatch(&answer);
+    let attached = answer.endpoints.len();
     rsx! {
         section { class: "settings",
-            h2 { "Providers" }
-            p { class: "settings-state",
-                if dispatchable {
-                    "this city can be dispatched to"
-                } else {
-                    "no model answers for main, so a dispatch is refused"
+            crate::panel::Panel {
+                title: if dispatchable { "this city can be dispatched to".to_owned() }
+                    else { "no model answers for main, so a dispatch is refused".to_owned() },
+                figure: "{attached}",
+                scope: "every provider attached to this city, and which of its models answers for each job"
+                    .to_owned(),
+                source: "the city's own endpoint book, re-read whenever a provider is attached or a model is chosen"
+                    .to_owned(),
+            if attached == 0 {
+                crate::panel::Empty {
+                    status: "no provider is attached".to_owned(),
+                    what: "a run needs a model to answer for `main`. Attach one below with a base URL and a key, or sign in with a subscription. Nothing here is bundled and nothing is proxied - the endpoint is yours."
+                        .to_owned(),
                 }
             }
             table { class: "endpoints",
@@ -410,7 +422,7 @@ pub fn Settings(
                     }
                 }
             }
-            h2 { "What each model is for" }
+            h2 { "what each model is for" }
             table { class: "tags",
                 for row in tags {
                     tr { key: "{row.tag}",
@@ -424,7 +436,7 @@ pub fn Settings(
                     }
                 }
             }
-            h2 { "Choose a model for a job" }
+            h2 { "choose a model for a job" }
             form {
                 class: "choose",
                 onsubmit: {
@@ -436,40 +448,62 @@ pub fn Settings(
                         }
                     }
                 },
-                select {
-                    name: "endpoint",
-                    onchange: move |event| choice.write().endpoint = event.value(),
-                    option { value: "", "which provider" }
-                    for endpoint in answer.endpoints.clone() {
-                        option { key: "{endpoint.name}", value: "{endpoint.name}", "{endpoint.name}" }
-                    }
-                }
-                select {
-                    name: "model",
-                    onchange: move |event| choice.write().model = event.value(),
-                    option { value: "", "which model" }
-                    for endpoint in answer.endpoints.clone() {
-                        for model in endpoint.models.clone() {
-                            option { key: "{endpoint.name}/{model}", value: "{model}", "{model}" }
+                div { class: "field",
+                    label { r#for: "choose-endpoint", "provider" }
+                    select {
+                        id: "choose-endpoint",
+                        name: "endpoint",
+                        onchange: move |event| choice.write().endpoint = event.value(),
+                        option { value: "", "which provider" }
+                        for endpoint in answer.endpoints.clone() {
+                            option { key: "{endpoint.name}", value: "{endpoint.name}", "{endpoint.name}" }
                         }
                     }
                 }
-                select {
-                    name: "tag",
-                    onchange: move |event| {
-                        choice.write().tag = ModelTag::ALL
-                            .into_iter()
-                            .find(|tag| tag.to_string() == event.value());
-                    },
-                    option { value: "", "what for" }
-                    for tag in ModelTag::ALL {
-                        option { key: "{tag}", value: "{tag}", "{tag}" }
+                div { class: "field",
+                    label { r#for: "choose-model", "model" }
+                    select {
+                        id: "choose-model",
+                        name: "model",
+                        onchange: move |event| choice.write().model = event.value(),
+                        option { value: "", "which model" }
+                        for endpoint in answer.endpoints.clone() {
+                            for model in endpoint.models.clone() {
+                                option { key: "{endpoint.name}/{model}", value: "{model}", "{model}" }
+                            }
+                        }
                     }
                 }
-                button {
-                    r#type: "submit",
-                    disabled: select_ready(&choice.read(), &answer) != SelectReadiness::Ready,
-                    "{select_ready(&choice.read(), &answer).sentence()}"
+                div { class: "field",
+                    label { r#for: "choose-tag", "for which job" }
+                    select {
+                        id: "choose-tag",
+                        name: "tag",
+                        onchange: move |event| {
+                            choice.write().tag = ModelTag::ALL
+                                .into_iter()
+                                .find(|tag| tag.to_string() == event.value());
+                        },
+                        option { value: "", "what for" }
+                        for tag in ModelTag::ALL {
+                            option { key: "{tag}", value: "{tag}", "{tag}" }
+                        }
+                    }
+                }
+                // What is missing is said beside the form, not written on
+                // the button. A disabled control whose label is an error
+                // message is two things at once and reads as neither.
+                div { class: "field",
+                    button {
+                        r#type: "submit",
+                        disabled: select_ready(&choice.read(), &answer) != SelectReadiness::Ready,
+                        "point this job at that model"
+                    }
+                    if select_ready(&choice.read(), &answer) != SelectReadiness::Ready {
+                        span { class: "hint blocking",
+                            "{select_ready(&choice.read(), &answer).sentence()}"
+                        }
+                    }
                 }
             }
             h2 { "Sign in with a subscription" }
@@ -478,11 +512,15 @@ pub fn Settings(
             // Nothing here listens on a port, because the provider's own
             // page is where the code is shown.
             div { class: "subscription",
-                select {
-                    name: "subscription_provider",
-                    onchange: move |event| subscription.set(event.value()),
-                    option { value: "anthropic", "anthropic" }
-                    option { value: "openai", "openai" }
+                div { class: "field",
+                    label { r#for: "subscription-provider", "provider" }
+                    select {
+                        id: "subscription-provider",
+                        name: "subscription_provider",
+                        onchange: move |event| subscription.set(event.value()),
+                        option { value: "anthropic", "anthropic" }
+                        option { value: "openai", "openai" }
+                    }
                 }
                 button {
                     r#type: "button",
@@ -503,11 +541,15 @@ pub fn Settings(
                             "open this, approve, and paste the code the provider shows you"
                         }
                         a { class: "login-url", href: "{url}", target: "_blank", "{url}" }
-                        input {
-                            name: "code",
-                            placeholder: "the code from the provider",
-                            value: "{code}",
-                            oninput: move |event| code.set(event.value()),
+                        div { class: "field",
+                            label { r#for: "login-code", "the code the provider showed you" }
+                            input {
+                                id: "login-code",
+                                name: "code",
+                                placeholder: "paste it here",
+                                value: "{code}",
+                                oninput: move |event| code.set(event.value()),
+                            }
                         }
                         button {
                             r#type: "button",
@@ -543,41 +585,61 @@ pub fn Settings(
                         on_frame.call(ClientFrame::Command(Box::new(command)));
                     }
                 },
-                input {
-                    name: "name",
-                    placeholder: "a name you will recognise",
-                    value: "{form.read().name}",
-                    oninput: move |event| form.write().name = event.value(),
+                div { class: "field",
+                    label { r#for: "attach-name", "call it" }
+                    input {
+                        id: "attach-name",
+                        name: "name",
+                        placeholder: "a name you will recognise",
+                        value: "{form.read().name}",
+                        oninput: move |event| form.write().name = event.value(),
+                    }
                 }
-                input {
-                    name: "base_url",
-                    placeholder: "https://api.provider.example/v1",
-                    value: "{form.read().base_url}",
-                    oninput: move |event| form.write().base_url = event.value(),
+                div { class: "field",
+                    label { r#for: "attach-url", "base URL" }
+                    input {
+                        id: "attach-url",
+                        name: "base_url",
+                        placeholder: "https://api.provider.example/v1",
+                        value: "{form.read().base_url}",
+                        oninput: move |event| form.write().base_url = event.value(),
+                    }
+                    span { class: "hint", "https anywhere; http only to this machine" }
                 }
-                select {
-                    name: "dialect",
-                    onchange: move |event| {
-                        form.write().dialect = match event.value().as_str() {
-                            "anthropic" => Some(DialectKind::Anthropic),
-                            "openai" => Some(DialectKind::OpenAi),
-                            _ => None,
-                        };
-                    },
-                    option { value: "", "which wire does it speak" }
-                    option { value: "anthropic", "anthropic messages" }
-                    option { value: "openai", "openai chat completions" }
+                div { class: "field",
+                    label { r#for: "attach-dialect", "which wire does it speak" }
+                    select {
+                        id: "attach-dialect",
+                        name: "dialect",
+                        onchange: move |event| {
+                            form.write().dialect = match event.value().as_str() {
+                                "anthropic" => Some(DialectKind::Anthropic),
+                                "openai" => Some(DialectKind::OpenAi),
+                                _ => None,
+                            };
+                        },
+                        option { value: "", "which wire does it speak" }
+                        option { value: "anthropic", "anthropic messages" }
+                        option { value: "openai", "openai chat completions" }
+                    }
                 }
                 // The key. It is typed here and leaves immediately for
                 // the enrolment route; what comes back is the reference,
                 // and the key itself is never held by this page, never
                 // put in a frame, and never shown again.
-                input {
-                    r#type: "password",
-                    name: "key",
-                    placeholder: "the provider's key, or empty for a local server",
-                    value: "{key}",
-                    oninput: move |event| key.set(event.value()),
+                div { class: "field",
+                    label { r#for: "attach-key", "key" }
+                    input {
+                        id: "attach-key",
+                        r#type: "password",
+                        name: "key",
+                        placeholder: "the provider's key, or empty for a local server",
+                        value: "{key}",
+                        oninput: move |event| key.set(event.value()),
+                    }
+                    span { class: "hint",
+                        "it leaves this page for the machine's own credential vault and comes back as a reference; it is never put in a frame and never shown again"
+                    }
                 }
                 button {
                     r#type: "button",
@@ -600,18 +662,36 @@ pub fn Settings(
                 if let Some(said) = enrolment.read().clone() {
                     p { class: "enrolment", "{said}" }
                 }
-                // The button always says what is missing rather than
-                // going grey with no explanation beside it.
-                button {
-                    r#type: "submit",
-                    disabled: ready(&form.read()) != AttachReadiness::Ready,
-                    "{ready(&form.read()).sentence()}"
+                div { class: "field",
+                    button {
+                        r#type: "submit",
+                        disabled: ready(&form.read()) != AttachReadiness::Ready,
+                        "attach this provider"
+                    }
+                    if ready(&form.read()) != AttachReadiness::Ready {
+                        span { class: "hint blocking", "{ready(&form.read()).sentence()}" }
+                    }
                 }
             }
             button {
-                class: "refresh",
+                class: "refresh quiet",
                 onclick: move |_| on_frame.call(ClientFrame::Query(Query::EndpointView)),
                 "read it again"
+            }
+            }
+            // Interface. One setting, and it is not ours to hold.
+            crate::panel::Panel {
+                title: "the interface takes its type from your browser".to_owned(),
+                scope: "font family and base size only; everything else on this page is the city's"
+                    .to_owned(),
+                source: "no font file ships with this binary and none is fetched from anywhere"
+                    .to_owned(),
+                p { class: "note",
+                    "Text here is drawn with the two families your browser is set to use - the standard one for prose, the fixed-width one for numbers, addresses and hashes. To change either, open your browser's own font settings; in Chrome and Edge that is Appearance, then Customise fonts. Nothing needs to be set here, and nothing here overrides what you set there."
+                }
+                p { class: "note",
+                    "A city's own content - a building's name, a document, a ledger payload - can be in any language. Your system already holds a face for it, and this interface does not replace that choice with a guess of its own."
+                }
             }
         }
     }

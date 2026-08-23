@@ -149,82 +149,113 @@ pub fn LedgerView(
     );
     let older = page.next_from.is_some();
     let exported = export(&page);
+    let filtering = !filter.actor.is_empty() || !filter.kinds.is_empty();
     rsx! {
         section { class: "ledger",
-            form { class: "filters", onsubmit: move |event| event.prevent_default(),
-                input {
-                    name: "actor",
-                    placeholder: "whose lines",
-                    value: "{actor}",
-                    oninput: move |event| actor.set(event.value()),
-                }
-                select {
-                    name: "kind",
-                    onchange: move |event| kind.set(event.value()),
-                    option { value: "", "every kind" }
-                    for name in KINDS_OFFERED {
-                        option { key: "{name}", value: "{name}", "{name}" }
-                    }
-                }
-                button {
-                    r#type: "button",
-                    onclick: move |_| on_frame.call(
-                        channels::ClientFrame::Query(channels::Query::CityView),
-                    ),
-                    "refresh the city with it"
-                }
-            }
-            p { class: "window",
-                "{held} record(s) held here, the newest first. This page sees what arrived after it connected; the ledger on disk holds the rest, and `sprawling replay` verifies the chain over all of it."
-            }
-            if page.filtered_out > 0 {
-                p { class: "filtered", "{page.filtered_out} record(s) hidden by this filter" }
-            }
-            table { class: "records",
-                thead {
-                    tr {
-                        th { "seq" }
-                        th { "at" }
-                        th { "kind" }
-                        th { "who" }
-                    }
-                }
-                tbody {
-                    for row in page.rows.clone() {
-                        tr { key: "{row.seq.value()}",
-                            td { class: "seq", "{row.seq.value()}" }
-                            td { class: "at", "{row.at.value()}" }
-                            td { class: "kind", "{kind_name(row.kind)}" }
-                            td { class: "who", "{row.who}" }
+            crate::panel::Panel {
+                title: if held == 0 { "the city has not said anything since this page connected".to_owned() }
+                    else { "what this city has done, newest first".to_owned() },
+                figure: "{held}",
+                scope: "every kind of event, unless the two filters below narrow it; fifty rows to a page"
+                    .to_owned(),
+                source: "the live event stream since this page connected. The Ledger on disk holds the rest, and `sprawling replay` verifies the chain over all of it - including the part this page never saw."
+                    .to_owned(),
+                form { class: "filters", onsubmit: move |event| event.prevent_default(),
+                    div { class: "field",
+                        label { r#for: "ledger-actor", "who acted" }
+                        input {
+                            id: "ledger-actor",
+                            name: "actor",
+                            placeholder: "any part of a name",
+                            value: "{actor}",
+                            oninput: move |event| actor.set(event.value()),
                         }
                     }
-                }
-            }
-            if page.rows.is_empty() {
-                p { class: "empty", "no record here matches that" }
-            }
-            div { class: "paging",
-                button {
-                    disabled: back() == 0,
-                    onclick: move |_| back.set(back().saturating_sub(1)),
-                    "newer"
-                }
-                span { class: "where",
-                    if back() == 0 {
-                        "the newest {PAGE_ROWS} that match"
-                    } else {
-                        "{skipped} newer record(s) skipped"
+                    div { class: "field",
+                        label { r#for: "ledger-kind", "kind of event" }
+                        select {
+                            id: "ledger-kind",
+                            name: "kind",
+                            onchange: move |event| kind.set(event.value()),
+                            option { value: "", "every kind" }
+                            for name in KINDS_OFFERED {
+                                option { key: "{name}", value: "{name}", "{name}" }
+                            }
+                        }
+                    }
+                    button {
+                        r#type: "button",
+                        class: "quiet",
+                        onclick: move |_| on_frame.call(
+                            channels::ClientFrame::Query(channels::Query::CityView),
+                        ),
+                        "refresh the city with it"
                     }
                 }
-                button {
-                    disabled: !older,
-                    onclick: move |_| back.set(back().saturating_add(1)),
-                    "older"
+                if page.filtered_out > 0 {
+                    p { class: "filtered", "{page.filtered_out} record(s) hidden by this filter" }
                 }
-            }
-            details { class: "export",
-                summary { "take this page" }
-                textarea { readonly: true, rows: "8", value: "{exported}" }
+                if page.rows.is_empty() {
+                    // Three states a reader cannot otherwise tell apart:
+                    // the city has done nothing, the filter excluded
+                    // everything, or the page has simply not been sent
+                    // anything yet.
+                    crate::panel::Empty {
+                        status: if filtering { "no record here matches that filter".to_owned() }
+                            else { "nothing has arrived since this page connected".to_owned() },
+                        what: if filtering {
+                            "the filter is a view over what this page holds, not over the Ledger. Widen it, or clear both fields to see everything that has arrived.".to_owned()
+                        } else {
+                            "every effect in this city becomes an event before it happens, so the first line appears the moment work is sent from the bar below.".to_owned()
+                        },
+                    }
+                } else {
+                    table { class: "records",
+                        thead {
+                            tr {
+                                th { "seq" }
+                                th { "at" }
+                                th { "kind" }
+                                th { "who" }
+                            }
+                        }
+                        tbody {
+                            for row in page.rows.clone() {
+                                tr { key: "{row.seq.value()}",
+                                    td { class: "seq", "{row.seq.value()}" }
+                                    td { class: "at", "{row.at.value()}" }
+                                    td { class: "kind", "{kind_name(row.kind)}" }
+                                    td { class: "who", "{row.who}" }
+                                }
+                            }
+                        }
+                    }
+                    div { class: "paging",
+                        button {
+                            class: "quiet",
+                            disabled: back() == 0,
+                            onclick: move |_| back.set(back().saturating_sub(1)),
+                            "newer"
+                        }
+                        span { class: "where",
+                            if back() == 0 {
+                                "the newest {PAGE_ROWS} that match"
+                            } else {
+                                "{skipped} newer record(s) skipped"
+                            }
+                        }
+                        button {
+                            class: "quiet",
+                            disabled: !older,
+                            onclick: move |_| back.set(back().saturating_add(1)),
+                            "older"
+                        }
+                    }
+                    details { class: "export",
+                        summary { "take this page" }
+                        textarea { readonly: true, rows: "8", value: "{exported}" }
+                    }
+                }
             }
         }
     }

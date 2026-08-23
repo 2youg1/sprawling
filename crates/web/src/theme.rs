@@ -137,6 +137,78 @@ pub const CORNER_SCALES: [(&str, u16, u16); 4] = [
     ("pill", 999, 2),
 ];
 
+/// The reader's own face, and the reader's own fixed-width face. Two
+/// generic families and not one named font anywhere in the library.
+///
+/// **No font file is embedded, none is fetched, and none is named.** Three
+/// reasons, in the order they decide it:
+///
+/// 1. Only the chrome of this interface is ours. Everything else on screen
+///    is content a person wrote - a Building's name, `Memo.md`, a Ledger
+///    payload - whose character set cannot be predicted, so no subset
+///    could cover it and a whole CJK face costs several megabytes against
+///    a two-megabyte budget.
+/// 2. A generic family is exactly the setting a browser exposes as
+///    *Customise fonts*. Writing `sans-serif` hands the choice to the
+///    reader; writing `system-ui`, or any face by name, takes it back.
+/// 3. The order used to be wrong in a way worth recording: a CJK family
+///    listed first renders *Latin* text with that family's Latin glyphs,
+///    so English chrome was drawn by a Chinese face on every machine that
+///    happened to have one installed.
+///
+/// The interface pane of the settings page says where the setting lives,
+/// because a preference the product obeys and never mentions is a
+/// preference the reader cannot find.
+pub const FONT_SANS: &str = "sans-serif";
+
+/// Numbers, identifiers, hashes and addresses take the reader's
+/// fixed-width face. A second family rather than `tabular-nums` alone: a
+/// column of digits should line up *and* read as a different kind of thing
+/// from the prose beside it, which is how a terminal separates a value
+/// from its label without emphasising either.
+pub const FONT_MONO: &str = "monospace";
+
+/// The type scale: name, size in px, weight.
+///
+/// A table for the same reason the greys are a table. Before this existed
+/// the stylesheet held eleven sizes between 11px and 28px, four of them
+/// within half a pixel of each other (12, 12.5, 13), and no rule said
+/// which one a new line should take. Six steps, each with a job in its
+/// name, answer that question once.
+///
+/// **The name says what a step is for, not how large it is**, so a step
+/// can be retuned without every reader of it becoming wrong. `figure` is
+/// the one number a page exists to state; `title` names the page's
+/// conclusion; `heading` divides a page; `body` is prose; `small` is
+/// everything that qualifies something else - scope, provenance, an empty
+/// state; `micro` is a label that has been shouted into uppercase and
+/// must not compete with what it labels.
+pub const TYPE_SCALE: [(&str, u16, u16); 6] = [
+    ("figure", 28, 600),
+    ("title", 20, 600),
+    ("heading", 15, 600),
+    ("body", 14, 400),
+    ("small", 12, 400),
+    ("micro", 11, 600),
+];
+
+/// The spacing scale: name, size in px. Every step is a multiple of four,
+/// which was already the rule and is now the only place it is written
+/// down.
+///
+/// Six steps rather than a continuous choice, for the reason three zoom
+/// stops beat a slider: a value picked freely is a value picked again
+/// slightly differently on the next page, and the difference is visible
+/// long before anybody can name it.
+pub const SPACE_SCALE: [(&str, u16); 6] = [
+    ("tight", 4),
+    ("snug", 8),
+    ("base", 12),
+    ("pane", 16),
+    ("wide", 24),
+    ("section", 32),
+];
+
 /// The CSS parameter for a superellipse exponent, in tenths.
 ///
 /// `corner-shape: superellipse(K)` raises the ellipse equation to `2K`
@@ -188,6 +260,16 @@ pub fn custom_properties() -> String {
     css.push_str(&format!(
         "--PROGRESS_DONE:linear-gradient(90deg,var(--{from}),var(--{to}));"
     ));
+    // Type and space travel with colour for the same reason shape does:
+    // they are presentation constants, and a stylesheet that named its own
+    // sizes would be the second place a size is decided.
+    for (name, size, weight) in TYPE_SCALE {
+        css.push_str(&format!("--text-{name}:{size}px;--weight-{name}:{weight};"));
+    }
+    for (name, size) in SPACE_SCALE {
+        css.push_str(&format!("--space-{name}:{size}px;"));
+    }
+    css.push_str(&format!("--font-sans:{FONT_SANS};--font-mono:{FONT_MONO};"));
     // Shape travels with colour because both are presentation constants
     // with one production point. A stylesheet that had
     // to name its own radii would be the second place shape is decided.
@@ -477,6 +559,79 @@ mod tests {
             css.contains("--corner-pill-shape:superellipse(1.0)"),
             "a badge must still read as a circle"
         );
+    }
+
+    /// The stylesheet the browser actually receives. Read here rather than
+    /// described, for the same reason `xtask color` parses this file: a
+    /// rule about every line of a document has to be checked against that
+    /// document.
+    const SHIPPED: &str = include_str!("../assets/index.html");
+
+    #[test]
+    fn the_stylesheet_never_has_to_name_a_size_or_a_family() {
+        let css = custom_properties();
+        for (name, size, weight) in TYPE_SCALE {
+            assert!(css.contains(&format!("--text-{name}:{size}px;")), "{name}");
+            assert!(
+                css.contains(&format!("--weight-{name}:{weight};")),
+                "{name}"
+            );
+        }
+        for (name, size) in SPACE_SCALE {
+            assert!(css.contains(&format!("--space-{name}:{size}px;")), "{name}");
+        }
+        assert!(css.contains("--font-sans:sans-serif;"));
+        assert!(css.contains("--font-mono:monospace;"));
+        // And the shipped page reads them rather than repeating them. A
+        // `font-family` in the stylesheet is a second production point for
+        // presentation, which is the thing the token tables exist to stop.
+        assert!(
+            !SHIPPED.contains("font-family: \"") && !SHIPPED.contains("font-family: '"),
+            "the stylesheet names a font family; it should read var(--font-sans) or var(--font-mono)"
+        );
+    }
+
+    #[test]
+    fn no_font_file_ships_and_no_family_outranks_the_system_face() {
+        // The chrome is English and the system stack renders it; everything
+        // else on screen is content whose character set nobody can predict,
+        // so no subset could cover it. A CJK family listed ahead of the
+        // system face renders *Latin* text with that family's Latin glyphs,
+        // which is what this interface was doing on every machine that had
+        // one installed.
+        for named in [
+            "Noto Sans SC",
+            "Zen Kaku Gothic New",
+            "Source Han",
+            "PingFang",
+            "Segoe UI",
+            "Helvetica",
+            "Consolas",
+            "Menlo",
+            "system-ui",
+        ] {
+            assert!(
+                !FONT_SANS.contains(named)
+                    && !FONT_MONO.contains(named)
+                    && !SHIPPED.contains(named),
+                "{named} is named; a generic family is the browser setting the reader controls, \
+                 and naming a face takes that choice back"
+            );
+        }
+        assert_eq!(FONT_SANS, "sans-serif", "the reader's own choice, not ours");
+        assert_eq!(FONT_MONO, "monospace", "the reader's own choice, not ours");
+        for embedded in [
+            "@font-face",
+            ".woff",
+            ".ttf",
+            "fonts.googleapis",
+            "fonts.gstatic",
+        ] {
+            assert!(
+                !SHIPPED.contains(embedded),
+                "no font file ships and none is fetched: {embedded}"
+            );
+        }
     }
 
     #[test]

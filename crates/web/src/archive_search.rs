@@ -136,8 +136,16 @@ pub fn ArchiveView(
         }
     });
     let mut needle = use_signal(String::new);
+    let held = filed.as_ref().map_or(0, |record| record.assets.len());
     rsx! {
         section { class: "archive-search",
+            crate::panel::Panel {
+                title: "what this city has written down".to_owned(),
+                figure: "{held}",
+                scope: "two sources, never merged: a search reads the shelves on disk at the moment you ask, and the list below it is folded from history. The same item can appear in both."
+                    .to_owned(),
+                source: "the search reads each building's Archive directory; `filed lately` is folded from the Ledger's asset_archived records, which is why it can say when something was filed and by whom"
+                    .to_owned(),
             form {
                 class: "search",
                 onsubmit: move |event| {
@@ -146,18 +154,26 @@ pub fn ArchiveView(
                         on_frame.call(ClientFrame::Query(Query::ArchiveSearch { needle: term }));
                     }
                 },
-                input {
-                    r#type: "search",
-                    value: "{needle}",
-                    placeholder: "a word the archives may hold",
-                    oninput: move |event| needle.set(event.value()),
+                div { class: "field",
+                    label { r#for: "archive-needle", "search the shelves for" }
+                    input {
+                        id: "archive-needle",
+                        r#type: "search",
+                        value: "{needle}",
+                        placeholder: "a word the archives may hold",
+                        oninput: move |event| needle.set(event.value()),
+                    }
                 }
                 button { r#type: "submit", disabled: searchable(&needle()).is_none(), "search the shelves" }
             }
 
             match hits.as_ref() {
                 None => rsx! {
-                    p { class: "empty", "no search yet. The shelves are read when you ask, not before." }
+                    crate::panel::Empty {
+                        status: "no search has been run".to_owned(),
+                        what: "the shelves are read when you ask and not before, so an empty word searches nothing rather than everything. Type a word above."
+                            .to_owned(),
+                    }
                 },
                 Some(found) => {
                     let shelves = shelves(found);
@@ -184,10 +200,17 @@ pub fn ArchiveView(
 
             match filed.as_ref() {
                 None => rsx! {
-                    p { class: "empty", "asking the record what was filed lately" }
+                    crate::panel::Empty {
+                        status: "asking the record what was filed lately".to_owned(),
+                        what: "the list appears when the answer arrives".to_owned(),
+                    }
                 },
                 Some(record) if record.assets.is_empty() => rsx! {
-                    p { class: "empty", "nothing has been filed yet" }
+                    crate::panel::Empty {
+                        status: "nothing has been filed yet".to_owned(),
+                        what: "a run files an asset when it settles something worth not doing twice. The archive is what the next run is told before it starts, so it fills as work completes rather than as work begins."
+                            .to_owned(),
+                    }
                 },
                 Some(record) => {
                     let rows = filed_lately(record, FILED_LATELY_MAX);
@@ -204,6 +227,7 @@ pub fn ArchiveView(
                         }
                     }
                 }
+            }
             }
         }
     }

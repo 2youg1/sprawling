@@ -148,14 +148,26 @@ pub fn BuildingView(
     let Some(answer) = answer else {
         return rsx! {
             section { class: "building",
-                p { class: "empty", "asking {addr.as_str()} what it has written down" }
+                crate::panel::Empty {
+                    status: format!("asking {} what it has written down", addr.as_str()),
+                    what: "its plan, its decisions, its handoff and its archive are files on disk, read when this page asks"
+                        .to_owned(),
+                }
             }
         };
     };
     let showing = leaf().unwrap_or_else(|| opening_leaf(&answer));
     let docs = answer.docs.clone();
+    let rooms = answer.rooms.len();
     rsx! {
         section { class: "building",
+            crate::panel::Panel {
+                title: format!("what {} has written down", answer.addr.as_str()),
+                figure: "{rooms}",
+                scope: "the documents this building keeps, its archive, and what waits in each of its rooms. The figure counts rooms; this page reads and never writes."
+                    .to_owned(),
+                source: "the building's own directory on disk, read when this page asked. A room's queue is folded from the Ledger, so looking at it is not taking from it."
+                    .to_owned(),
             header { class: "building-head",
                 h2 { "{answer.addr.as_str()}" }
                 crate::progress::ProgressBar {
@@ -212,10 +224,18 @@ pub fn BuildingView(
                     div { class: "mailbox",
                         match waiting_in(inbox.as_ref(), &answer.addr, room) {
                             RoomQueue::Unasked => rsx! {
-                                p { class: "empty", "asking what waits in {room}" }
+                                crate::panel::Empty {
+                                    status: format!("asking what waits in {room}"),
+                                    what: "until that answer arrives this page cannot say whether the room is empty, and will not guess"
+                                        .to_owned(),
+                                }
                             },
                             RoomQueue::Empty => rsx! {
-                                p { class: "empty", "nothing waits in {room}" }
+                                crate::panel::Empty {
+                                    status: format!("nothing waits in {room}"),
+                                    what: "another resident can leave a signal here, and a run in this room pulls it at its next safe point. Looking is not taking."
+                                        .to_owned(),
+                                }
                             },
                             RoomQueue::Waiting(lines) => rsx! {
                                 p { class: "note",
@@ -235,8 +255,10 @@ pub fn BuildingView(
                 Leaf::Archive => rsx! {
                     div { class: "archive",
                         if answer.archive.is_empty() {
-                            p { class: "empty",
-                                "nothing filed yet. An agent files what it decided was worth keeping."
+                            crate::panel::Empty {
+                                status: "nothing has been filed in this building".to_owned(),
+                                what: "a resident files what it settled and does not want to work out twice. What is here is what the next run in this building is told before it starts."
+                                    .to_owned(),
                             }
                         }
                         for line in answer.archive.clone() {
@@ -263,10 +285,15 @@ pub fn BuildingView(
                             }
                         },
                         None => rsx! {
-                            p { class: "empty", "{name} is not in this building" }
+                            crate::panel::Empty {
+                                status: format!("{name} is not in this building"),
+                                what: "a building keeps five documents at most, and this one has not been written. The tabs above are the ones that exist."
+                                    .to_owned(),
+                            }
                         },
                     }
                 }
+            }
             }
         }
     }

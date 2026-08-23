@@ -29,7 +29,7 @@
 ## 3 假设与歧义
 
 - **前端只收 HTML，不带 Markdown 解析器**（B.7 `pulldown-cmark` 行）：服务端渲染完 HTML 下发，故本 crate 必须有一条「注入受信 HTML」的通路。该通路的信任来源是服务端渲染，不是模型输出——taint 的封锁在服务端完成，本 crate 不做第二道判定（两个权威即错）。
-- **city_view 画在画布上，不画成 DOM**：一千个 Resident 不做一千个节点。故框架选型只需服务九个 DOM 模块，第十个模块要的只是一块画布与 2D 上下文。
+- ~~**city_view 画在画布上，不画成 DOM**：一千个 Resident 不做一千个节点。故框架选型只需服务九个 DOM 模块，第十个模块要的只是一块画布与 2D 上下文。~~ **F2.02 推翻了这一条**：这幅图从来不画 Resident，只画 Building，而一座城是几十栋楼；节点数论据够不到本场景，代价却是四件确定的损失（见 §8-28）。框架选型不受影响——被否的 egui 一档是因为画布 UI 没有 CSS 这一层（§8.5-6 第 6 条），而 SVG 恰好在 CSS 里。
 - **字体不整份加载**：按字符区间分片，浏览器只取用到的那几片；字体文件作为静态资源嵌在二进制里。分片切割属 S4.08 之后的资源工程，不属框架选型。
 - **`web` 的公开面对 `cargo public-api` 的口径**：本 crate 无下游消费者（拓扑末端），`apisync` 基线集是否纳入 `web` 待 S4.05 定；倾向纳入，理由是「公开项只降不升」对末端 crate 同样是有效的复杂度刹车。
 
@@ -54,7 +54,7 @@ socket（唯一通信处）──▶ 快照＋事件流 ──▶ app（视图�
                                           ├─ dashboard ─┼─ 均消费 progress
                                           ├─ live ──────┘
                                           ├─ ledger_view
-                                          ├─ city_view（画布，非 DOM）
+                                          ├─ city_view（SVG，F2.02 前为画布）
                                           └─ alert（唯一 ALERT 与浏览器通知产出处）
 theme（OKLCH 源头常量 → CSS 自定义属性）── 全 crate 唯一颜色产地
 ```
@@ -523,6 +523,29 @@ pub fn from_fragment(raw: &str) -> Option<View>;   // 认不出就是 None
 
 **真机验收**：`http://127.0.0.1:<port>/#/settings` 直接打开设置页并截图成功；本卡之前该页无法被拍到。
 
+### 8-29 呈现常量收口，与两条覆盖全部页面的语法（F2.03；形状 6 数据面 ＋ 新模块 `web::panel`）
+
+```rust
+// web::theme —— 呈现常量的产地，从颜色与圆角扩到字与间距
+pub const FONT_SANS: &str = "sans-serif";      // 读者在浏览器里选的那一个
+pub const FONT_MONO: &str = "monospace";       // 同上，等宽那一项
+pub const TYPE_SCALE: [(&str, u16, u16); 6];   // 名，px，字重
+pub const SPACE_SCALE: [(&str, u16); 6];       // 名，px，恒为 4 的倍数
+
+// web::panel —— 中栏的唯一版面语法
+#[component] pub fn Panel(title: String, scope: Option<String>, figure: Option<String>,
+                          source: String, children: Element) -> Element;
+#[component] pub fn Empty(status: String, what: String, children: Element) -> Element;
+```
+
+**病灶**：组件挂上之后（§8-16）样式表只解决了「有没有样式」，没解决「谁比谁重要」。实测：全页字号在 11px 到 28px 之间有十一档，其中 12／12.5／13 三档彼此相差不到一像素而无任何规则说明新的一行该取哪档；`.centre` 是一个大方框，里面全部元素同处一个平面；十五处 `.empty` 各写一句话，读者分不清「还没有」「加载中」「被过滤掉了」。
+
+- **字与间距进 `web::theme`，理由与颜色、圆角同条**：呈现常量只有一个产地。字阶六档、间距六档，**档名说的是用途不是尺寸**（`figure`／`title`／`heading`／`body`／`small`／`micro`），于是一档可以被重新调音而不会让它的每一个读者当场变错。一条断言回读 `assets/index.html`：样式表里再出现一个 `font-family` 或一个字号字面量即红。
+- **不发字体，也不取字体，更不点名字体**（用户裁定 2026-08-24）。只写通用族 `sans-serif` 与 `monospace`——那正是浏览器「自定义字体」面板里的两项，于是**字体是读者的选择而不是我们的**。三条理由按决定次序：屏幕上只有 chrome 是我们的，其余是人写的内容（楼名、`Memo.md`、账本载荷），字符集不可预测因而子集覆盖不了，而整份 CJK 字族是几 MB 对两 MB 的预算；写 `system-ui` 或任何具名字族都会把选择权收回来；**旧样式表把 `Noto Sans SC` 排在 `system-ui` 前面，于是英文 chrome 一直由一个中文字族的拉丁字形绘制**——这是本卡红转绿抳出的真缺陷。设置页的 Interface 一节说出这个设置住在哪里：一个产品遵守却从不提及的偏好，是读者找不到的偏好。
+- **暗色界面的深度靠明度阶梯，不靠投影**——投影不可能比近黑更暗。四级：G0 页面 → G1 工作面 → G2 卡片 → G3 抬起，交界处补一道 1px 的 G3 边。此前只用了两级，于是每块面板糊在一起。
+- **`Panel` 四段是中栏的唯一版面**：标题（**结论，不是名词**）／副题（数的范围与图例）／主体／**数字从哪来**。第四段是这个产品不能省的那一段：一个把数字摆出来却说不出出处的面板，与「整座城的历史在一条可验证的 Ledger 里」这句话直接矛盾。一页是若干 `Panel` 的堆叠，别无其他，于是两页不可能对「一个标题是什么意思」产生两种说法。
+- **`Empty` 三段**（取自 Nielsen Norman 的空态规则）：说清系统状态／说清这里本该有什么／给出把它填上的那条路。**恒不允许纯空**，也恒不允许把「还没有」写成与「加载中」同一句话——那正是 `RoomQueue { Unasked, Empty, Waiting }` 早已在一处做对、而其余十四处没有做的区分。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。
@@ -649,7 +672,7 @@ Trunk 的 npm 接触面是**可关闭的可选配置**，不构成 C1 的当场�
 | 依赖 | 用途 | 判据 |
 |---|---|---|
 | `dioxus` 0.7.10，`default-features = false`，`features = ["minimal", "web"]` | 九个 DOM 模块的组件与更新 | 见 §8.5 结论书（已裁决）。关 `asset` 与 `devtools` 两 feature 是硬规则，不是调优 |
-| `wasm-bindgen`／`web-sys`／`js-sys` | 浏览器 API 绑定；画布 2D 上下文、WebSocket、通知 | 工作区已钉；全部候选的共同地基 |
+| `wasm-bindgen`／`web-sys`／`js-sys` | 浏览器 API 绑定；WebSocket、通知、文档 | 工作区已钉；全部候选的共同地基。F2.02 退掉 `CanvasRenderingContext2d` 与 `HtmlCanvasElement` 两个 feature：等距城市改由 SVG 承担，绑定面随之收窄 |
 | `channels`（本仓库） | Command／Query／Event 类型与编码 | 拓扑唯一上游（ARCHITECTURE §2） |
 
 **不引**：任何 Markdown 解析器（服务端已渲染 HTML）；任何颜色空间转换库（浏览器做色域映射）；任何 UI 组件库（组件即样式，样式的权威是 `theme`）。

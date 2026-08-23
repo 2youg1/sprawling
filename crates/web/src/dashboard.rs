@@ -195,7 +195,13 @@ pub fn CostsView(
     });
     let Some(answer) = answer else {
         return rsx! {
-            section { class: "dashboard", p { "asking the city what it has spent" } }
+            section { class: "dashboard",
+                crate::panel::Empty {
+                    status: "asking the city what it has spent".to_owned(),
+                    what: "the five cuts appear when the answer arrives; nothing is missing yet"
+                        .to_owned(),
+                }
+            }
         };
     };
     let cuts = [
@@ -206,11 +212,22 @@ pub fn CostsView(
         (CostDimension::Occupant, answer.by_actor.clone()),
     ];
     let total = answer.total;
+    // Five cuts each saying "nothing attributed here yet" is one fact
+    // repeated five times, and repetition of an absence reads as a broken
+    // page rather than an empty one. Before any money exists there is one
+    // thing to say, so the page says it once.
+    let nothing_yet = cuts.iter().all(|(_, entries)| entries.is_empty());
     rsx! {
         section { class: "dashboard",
-            header { class: "total",
-                span { class: "amount", "{render_usd(total)}" }
-                span { class: "consumed",
+            crate::panel::Panel {
+                title: if nothing_yet { "nothing has been spent yet".to_owned() }
+                    else { "where the money went".to_owned() },
+                figure: render_usd(total),
+                scope: "every run in this city since it was raised, in five independent cuts of the same total"
+                    .to_owned(),
+                source: "folded from the Ledger's model_returned records; each cut sums to that same total, and an unattributed remainder stays visible rather than being divided away"
+                    .to_owned(),
+                p { class: "consumed",
                     "{crate::app::render_tokens(usage.input)} in, {crate::app::render_tokens(usage.output)} out, {crate::app::render_tokens(usage.cache_read)} from cache"
                 }
                 if usage.unpriced_calls > 0 {
@@ -218,35 +235,44 @@ pub fn CostsView(
                         "{usage.unpriced_calls} call(s) came back with no price: a subscription or a local model reports what it used, not what it cost. Those calls are counted in tokens above and in no dollar figure anywhere."
                     }
                 }
-            }
-            for (dimension, entries) in cuts {
-                article { key: "{dimension.as_str()}", class: "dimension",
-                    h2 { "{dimension.as_str()}" }
-                    if entries.is_empty() {
-                        p { class: "empty", "nothing attributed here yet" }
+                if nothing_yet {
+                    crate::panel::Empty {
+                        status: "no model call has been billed in this city".to_owned(),
+                        what: "a run that reaches a provider is priced from that provider's own figure, and lands in all five cuts at once. Send work from the bar below and the money appears here."
+                            .to_owned(),
                     }
-                    for row in cost_rows(
-                        entries.into_iter().map(|(label, spent)| (label, spent, spent)).collect(),
-                        total,
-                    ) {
-                        div { key: "{row.label}", class: "row",
-                            span { class: "label", "{row.label}" }
-                            span {
-                                class: "track",
-                                span {
-                                    class: "fill",
-                                    style: "width: {row.share.checked_div(10).unwrap_or_default()}%",
+                } else {
+                    for (dimension, entries) in cuts {
+                        article { key: "{dimension.as_str()}", class: "dimension",
+                            h2 { "{dimension.as_str()}" }
+                            if entries.is_empty() {
+                                p { class: "note",
+                                    "this cut has nothing in it: no call has been attributed to a {dimension.as_str()} yet"
                                 }
                             }
-                            span { class: "amount", "{render_usd(row.spent)}" }
+                            for row in cost_rows(
+                                entries.into_iter().map(|(label, spent)| (label, spent, spent)).collect(),
+                                total,
+                            ) {
+                                div { key: "{row.label}", class: "row",
+                                    span { class: "label", "{row.label}" }
+                                    span {
+                                        class: "track",
+                                        span {
+                                            class: "fill",
+                                            style: "width: {row.share.checked_div(10).unwrap_or_default()}%",
+                                        }
+                                    }
+                                    span { class: "amount", "{render_usd(row.spent)}" }
+                                }
+                            }
                         }
                     }
                 }
+                p { class: "spent-line",
+                    "{render_usd(spent)} of that arrived through this page's own stream"
+                }
             }
-            p { class: "reconciled",
-                "each cut sums to the same total; an unattributed remainder stays visible rather than being divided away"
-            }
-            p { class: "spent-line", "{render_usd(spent)} of that arrived through this page's own stream" }
         }
     }
 }

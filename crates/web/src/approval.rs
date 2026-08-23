@@ -124,10 +124,23 @@ pub fn ApprovalsView(
         }
     });
     let clusters = inbox(items);
+    let waiting: usize = clusters.iter().map(Cluster::count).sum();
     rsx! {
         section { class: "approvals",
+            crate::panel::Panel {
+                title: if clusters.is_empty() { "nothing is waiting for you".to_owned() }
+                    else { "what the city stopped to ask you".to_owned() },
+                figure: "{waiting}",
+                scope: "one row per action a gate escalated rather than decided; grouped where one answer can settle several"
+                    .to_owned(),
+                source: "the approval queue as the city holds it, plus every approval_requested that has arrived since this page connected"
+                    .to_owned(),
             if clusters.is_empty() {
-                p { class: "empty", "nothing is waiting for you" }
+                crate::panel::Empty {
+                    status: "no gate has escalated anything".to_owned(),
+                    what: "a run reaches a person only when a door refuses to decide by itself - a write outside its domain, a discard with no way back, an action a policy has not yet settled. Until then work runs without asking."
+                        .to_owned(),
+                }
             }
             for cluster in clusters {
                 article {
@@ -175,6 +188,7 @@ pub fn ApprovalsView(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -328,15 +342,32 @@ pub fn RecycleBinView(
     let Some(answer) = answer else {
         return rsx! {
             section { class: "recycle-bin",
-                p { class: "empty", "asking the city what it discarded" }
+                crate::panel::Empty {
+                    status: "asking the city what it discarded".to_owned(),
+                    what: "the list appears when the answer arrives".to_owned(),
+                }
             }
         };
     };
     let rows = bin_rows(&answer);
+    let count = rows.len();
+    let outstanding = rows.iter().filter(|row| !row.restored).count();
     rsx! {
         section { class: "recycle-bin",
+            crate::panel::Panel {
+                title: if rows.is_empty() { "nothing has been discarded".to_owned() }
+                    else { "what was deleted, and the way back to each of it".to_owned() },
+                figure: "{outstanding}",
+                scope: "the newest first; the figure counts what has not been taken back yet, and rows that already came back stay listed as evidence that a return path works"
+                    .to_owned(),
+                source: "folded from the Ledger's file_discarded and discard_restored records; the way back is the Restoration the discard was constructed with"
+                    .to_owned(),
             if rows.is_empty() {
-                p { class: "empty", "nothing has been discarded" }
+                crate::panel::Empty {
+                    status: "no run has discarded anything".to_owned(),
+                    what: "a deletion in this city cannot be constructed without a way back, so anything that disappears from a worktree lands here carrying the checkpoint or the content address it can be fetched from."
+                        .to_owned(),
+                }
             }
             for row in rows {
                 article {
@@ -348,6 +379,12 @@ pub fn RecycleBinView(
                         span { class: "note", "already restored" }
                     }
                 }
+            }
+            if count > 0 {
+                p { class: "note",
+                    "There is no restore button here because the wire has no command that puts one file back. What each row gives is the sentence a person can act on - which checkpoint, or which content address."
+                }
+            }
             }
         }
     }

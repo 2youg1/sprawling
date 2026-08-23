@@ -1862,7 +1862,7 @@ mod tests {
                 ("filed", "filed lately"),
             ],
             View::Dashboard => vec![("dashboard", "exec")],
-            View::Ledger => vec![("ledger", "record(s) held here"), ("paging", "older")],
+            View::Ledger => vec![("ledger", "sprawling replay"), ("paging", "older")],
             // The room tab, because a room is a face of a building and
             // the page lists them in exactly one place.
             View::Building(_) => vec![("building", "Roadmap.md"), ("room", "room1/")],
@@ -1910,6 +1910,41 @@ mod tests {
             assert!(
                 painted.says(sentence),
                 "{view:?} rendered nothing a reader could read: wanted {sentence:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_page_says_where_its_numbers_came_from() {
+        // The rule this holds is the product's own claim turned into a
+        // property of the interface: a city whose whole promise is an
+        // auditable Ledger may not put a figure on screen without saying
+        // what produced it. It is asserted here, over every view at once,
+        // rather than in `panel` - what matters is not that the markup
+        // renders but that no page escapes it.
+        let mut snapshot = Snapshot::new();
+        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
+        snapshot.adopt_approvals(vec![waiting_item()]);
+        let run = latest_run(&snapshot);
+        for view in [
+            View::City,
+            View::Live(run),
+            View::Approvals,
+            View::RecycleBin,
+            View::Archive,
+            View::Dashboard,
+            View::Ledger,
+            View::Building(Address::parse("lab").unwrap()),
+            View::Settings,
+        ] {
+            let painted = paint(view.clone(), snapshot.clone(), Vec::new());
+            assert!(
+                painted.has_class("panel-source"),
+                "{view:?} states something without saying where it came from"
+            );
+            assert!(
+                painted.has_class("panel-title"),
+                "{view:?} has no heading, so a reader cannot tell which page they are on"
             );
         }
     }

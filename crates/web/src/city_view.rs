@@ -816,7 +816,11 @@ pub fn CityView(
     let Some(city) = city else {
         return rsx! {
             section { class: "city-view",
-                p { "asking the city what it holds" }
+                crate::panel::Empty {
+                    status: "asking the city what it holds".to_owned(),
+                    what: "its buildings, how much work each has taken on, and which of them are busy right now"
+                        .to_owned(),
+                }
             }
         };
     };
@@ -847,8 +851,18 @@ pub fn CityView(
         // never again.
         use_effect(use_reactive!(|(list,)| paint_mounted(&list)));
     }
+    let raised = city.buildings.len();
+    let busy_now = city.active;
     rsx! {
         section { class: "city-view",
+            crate::panel::Panel {
+                title: if raised == 0 { "this city has no buildings yet".to_owned() }
+                    else { format!("{raised} building(s), {busy_now} run(s) in flight") },
+                figure: "{raised}",
+                scope: "a tower's height is the work its plan has taken on, not the work it has finished; a lit window is a run in flight right now"
+                    .to_owned(),
+                source: "where the buildings stand comes from one query, asked when this page opened; which of them are lit is folded from the event stream, record by record, and is never polled"
+                    .to_owned(),
             canvas {
                 id: CANVAS_ID,
                 width: "{CANVAS_WIDTH}",
@@ -896,11 +910,11 @@ pub fn CityView(
                     "raise a building"
                 }
             }
-            p { class: "city-state",
-                if city.buildings.is_empty() {
-                    "no building has published a plan yet"
-                } else {
-                    "{city.buildings.len()} buildings, {city.active} runs in flight"
+            if city.buildings.is_empty() {
+                crate::panel::Empty {
+                    status: "this city has no buildings yet".to_owned(),
+                    what: "a building is one line of business: its own rules, its own plan, its own archive, and the rooms work happens in. Raise one above and it appears here with the ground under it."
+                        .to_owned(),
                 }
             }
             // The index beside the picture. The canvas answers "where",
@@ -1027,6 +1041,7 @@ pub fn CityView(
                         li { key: "{row}", "{row}" }
                     }
                 }
+            }
             }
         }
     }

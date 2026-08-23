@@ -470,7 +470,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | channels::auth | crates/channels/src/auth.rs | pairing tokens: minting, the one readable form, constant-time comparison | value | S4 | built |
 | channels::aggregate | crates/channels/src/aggregate.rs | watching several cities from one interface, queries and events only | decision | S4 | built |
 
-### web (14) — the only client, compiled to WebAssembly
+### web (16) — the only client, compiled to WebAssembly
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -489,6 +489,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::archive_search | crates/web/src/archive_search.rs | what this city wrote down: the shelves and the record, never merged | decision | F1 | built |
 | web::settings | crates/web/src/settings.rs | turning a URL and a key into a model a run can be given | decision | P1 | built |
 | web::route | crates/web/src/route.rs | the one translation between a View and the address bar, both ways | decision | F2 | built |
+| web::panel | crates/web/src/panel.rs | the one version of a centre panel: conclusion, scope, body, and where the numbers came from | decision | F2 | built |
 
 ### browser (6), protocol (2), bin (5)
 

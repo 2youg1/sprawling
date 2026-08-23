@@ -5,197 +5,310 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sprawling</title>
 <!--
-  No colour is named here. web::theme writes the :root custom properties as
-  its first act, and every rule below reads a token. That is what makes
-  "one production point for colour" true of the shipped page and not only
-  of the Rust source.
+  Nothing here is named: not a colour, not a font family, not a size, not a
+  corner. web::theme writes the :root custom properties as its first act and
+  every rule below reads one. That is what makes "one production point for
+  presentation" true of the page the browser receives, and not only of the
+  Rust source. A unit test in that module reads this file back and fails if a
+  family or a size reappears here.
 -->
 <style>
-  /* Five regions, one rhythm. Every size below is a multiple of 4px and
-     every colour is a token: meaning is carried by lightness, and the one
-     coloured token that means anything is ALERT - a person is needed. */
+  /* ---------------------------------------------------------------- base */
+
+  /* Depth in a dark interface comes from stepped surface lightness, not
+     from shadow: a shadow cannot render darker than a near-black page. So
+     the ladder is G0 page -> G1 working surface -> G2 card -> G3 raised,
+     and a 1px G3 border sharpens an edge where two steps meet. */
   body { background: var(--G0); color: var(--G8);
-         font-family: "Noto Sans SC", "Zen Kaku Gothic New", system-ui, sans-serif;
-         font-size: 14px; line-height: 1.55; font-variant-numeric: tabular-nums;
-         margin: 0; min-height: 100vh; }
-  h2 { font-size: 15px; font-weight: 600; color: var(--G9); margin: 0 0 4px; }
+         font-family: var(--font-sans); font-size: var(--text-body);
+         font-weight: var(--weight-body); line-height: 1.55;
+         margin: 0; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+  /* Numbers, identifiers, addresses and hashes take the reader's own
+     fixed-width face. A second family rather than tabular figures alone: a
+     value should line up *and* read as a different kind of thing from the
+     prose beside it. `font-size: 1em` is not decoration - a browser applies
+     a smaller default size to the generic monospace family, and without it
+     every number on the page would shrink beside its own label. */
+  .num, .seq, .at, .id, .amount, .day, .count, .address, .addr, .room,
+  .tab.room, .binned .what, .login-url, .doc-text, td.num, .sign b, .vitals b
+      { font-family: var(--font-mono); font-size: 1em;
+        font-variant-numeric: tabular-nums; }
+
+  h1, h2, h3 { margin: 0; font-weight: var(--weight-heading); }
+  h2 { font-size: var(--text-heading); color: var(--G9); }
   p { margin: 0; }
-  /* The five regions fill the window exactly once: the rows are declared,
-     so the middle one takes what is left and scrolls inside itself. With
-     `min-height` and no rows, the whole document scrolled instead - the
-     control surface slid off the bottom edge and the top bar went with it,
-     which is the opposite of what a standing region is for. */
-  .layout { display: grid; height: 100vh; box-sizing: border-box; gap: 8px; padding: 16px;
-            grid-template-columns: 200px 1fr 240px;
+  a { color: var(--ACCENT); }
+
+  /* ---------------------------------------------------------- the regions */
+
+  /* Five regions fill the window exactly once: the rows are declared, so
+     the middle one takes what is left and scrolls inside itself. With
+     min-height and no rows the whole document scrolled instead, and the
+     control surface slid off the bottom edge. */
+  .layout { display: grid; height: 100vh; box-sizing: border-box;
+            gap: var(--space-base); padding: var(--space-base) var(--space-pane);
+            grid-template-columns: 208px minmax(0, 1fr) 264px;
             grid-template-rows: auto minmax(0, 1fr) auto;
             grid-template-areas: "top top top" "nav centre status" "foot foot foot"; }
   .left-nav, .right-status { overflow: auto; }
-  .top-bar { grid-area: top; color: var(--G9); display: flex; align-items: center; gap: 12px; }
-  /* What the city refused, where the person who asked for it is looking.
-     It sits in the top bar rather than over the page because a refusal is
-     an answer, not an interruption: nothing is covered and nothing has to
-     be dismissed before work continues. ALERT is on the border and the
-     code alone; a whole strip in the warm token would outshout the badge,
-     which is the one mark that means somebody has to act. */
-  .refusal { margin-left: auto; display: flex; align-items: baseline; gap: 8px;
-             max-width: 72ch; padding: 4px 8px; font-size: 12.5px;
+  .top-bar { grid-area: top; color: var(--G9); display: flex; align-items: center;
+             gap: var(--space-base); padding-bottom: var(--space-tight); }
+  .top-bar .address { font-size: var(--text-heading); font-weight: var(--weight-heading);
+                      color: var(--G10); letter-spacing: 0.02em; }
+  .left-nav { grid-area: nav; display: flex; flex-direction: column;
+              gap: var(--space-pane); }
+  .centre { grid-area: centre; background: var(--G1); overflow: auto;
+            padding: var(--space-wide); border: 1px solid var(--G3);
+            border-radius: var(--corner-panel); corner-shape: var(--corner-panel-shape); }
+  .right-status { grid-area: status; display: flex; flex-direction: column;
+                  gap: var(--space-base); }
+  .control-surface { grid-area: foot; border-top: 1px solid var(--G3);
+                     padding-top: var(--space-base); display: flex;
+                     gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap; }
+
+  /* What the city refused, where the person who asked for it is looking. In
+     the top bar rather than over the page because a refusal is an answer,
+     not an interruption: nothing is covered and nothing has to be dismissed
+     before work continues. ALERT is on the border and the code alone; a
+     whole strip in the warm token would outshout the badge, which is the one
+     mark meaning somebody has to act. */
+  .refusal { margin-left: auto; display: flex; align-items: baseline;
+             gap: var(--space-snug); max-width: 72ch;
+             padding: var(--space-tight) var(--space-snug); font-size: var(--text-small);
              background: var(--G2); border: 1px solid var(--ALERT);
              border-radius: var(--corner-control); corner-shape: var(--corner-control-shape); }
-  .refusal-code { color: var(--ALERT); font-weight: 600; white-space: nowrap; }
+  .refusal-code { color: var(--ALERT); font-weight: var(--weight-heading); white-space: nowrap;
+                  font-family: var(--font-mono); }
   .refusal-what { color: var(--G10); }
   .refusal-way { color: var(--G6); }
   .refusal-close { background: transparent; border: 0; color: var(--G6);
-                   padding: 0 2px; font-size: 14px; line-height: 1; }
+                   padding: 0 2px; line-height: 1; }
   .refusal-close:hover { color: var(--G10); }
-  .left-nav { grid-area: nav; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ------------------------------------------------------------- the nav */
+
   /* Three headings rather than eight flat entries: the nav answers "where
      do I go for this", and a list that long is read as a menu to search.
      Nothing collapses - a hidden page is not a shorter nav, it is a page
      nobody finds. */
-  .nav-group { display: flex; flex-direction: column; gap: 2px; }
-  .nav-heading { font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
-                 text-transform: uppercase; color: var(--G5); margin: 0 0 2px 9px; }
-  .nav-group .nav-item { padding-left: 16px; }
-  .centre { grid-area: centre; background: var(--G1); overflow: auto; padding: 16px 18px;
-            border: 1px solid var(--G3); border-radius: var(--corner-panel);
-            corner-shape: var(--corner-panel-shape); }
-  .right-status { grid-area: status; color: var(--G7); display: flex;
-                  flex-direction: column; gap: 8px; }
-  .control-surface { grid-area: foot; border-top: 1px solid var(--G3); padding-top: 10px;
-                     display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
-  .address { letter-spacing: 0.04em; font-weight: 600; }
-
-  /* Controls. One shape for every button, one focus ring, and a disabled
-     state that dims rather than hides - a control a person cannot use is
-     still a control they can read. */
-  button { background: var(--G3); color: var(--G9); border: 1px solid var(--G4);
-           border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
-           padding: 6px 12px; font: inherit; cursor: pointer; }
-  button:hover:not(:disabled) { background: var(--G4); color: var(--G10); }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button[type="submit"]:not(:disabled) { background: var(--ACCENT); border-color: var(--ACCENT);
-                                         color: var(--G0); font-weight: 600; }
-  button[type="submit"]:hover:not(:disabled) { background: var(--ACCENT_HOVER);
-                                               border-color: var(--ACCENT_HOVER); }
-  :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 1px; }
-  input, select, textarea { background: var(--G1); color: var(--G9); font: inherit;
-                            border: 1px solid var(--G4); border-radius: var(--corner-control);
-                            corner-shape: var(--corner-control-shape); padding: 6px 9px; }
-  input::placeholder { color: var(--G5); }
-  form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
-
-  /* Left nav: the current page is marked by an inset bar, not by colour
-     alone; the badge is the one place ALERT appears unasked. */
-  .nav-item { text-align: left; background: transparent; border: 0;
+  .nav-group { display: flex; flex-direction: column; gap: 1px; }
+  .nav-heading { font-size: var(--text-micro); font-weight: var(--weight-micro);
+                 letter-spacing: 0.09em; text-transform: uppercase; color: var(--G5);
+                 margin: 0 0 var(--space-tight) 10px; }
+  .nav-item { text-align: left; background: transparent; border: 0; color: var(--G8);
               border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
-              padding: 7px 9px; display: flex; align-items: center; gap: 8px; }
-  .nav-item:hover { background: var(--G2); }
+              padding: 7px 10px; display: flex; align-items: center; gap: var(--space-snug);
+              font-size: var(--text-body); }
+  .nav-item:hover { background: var(--G2); color: var(--G10); }
   .nav-item[aria-current="page"] { background: var(--G2); color: var(--G10);
+                                   font-weight: var(--weight-heading);
                                    box-shadow: inset 2px 0 0 var(--ACCENT); }
   .badge { margin-left: auto; background: var(--ALERT); color: var(--G0);
            border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
-           padding: 0 6px; font-size: 11px; font-weight: 700; }
+           padding: 0 6px; font-size: var(--text-micro); font-weight: 700;
+           font-family: var(--font-mono); }
 
-  /* Tables and lists share one grammar across every page. */
-  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-  th { text-align: left; color: var(--G6); font-weight: 500; font-size: 12px;
-       padding: 6px 8px; border-bottom: 1px solid var(--G3); }
-  td { padding: 7px 8px; border-bottom: 1px solid var(--G2); vertical-align: top; }
-  tr:hover td { background: var(--G2); }
-  ol.lines { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
-  .line { display: grid; grid-template-columns: 72px 148px 1fr; gap: 10px;
-          padding: 4px 0; border-bottom: 1px solid var(--G2); }
+  /* --------------------------------------------------------- the panel */
+
+  /* One grammar for every centre panel, in four parts, because a panel that
+     states a number without saying where the number came from is the one
+     thing a product built on an auditable Ledger may not ship:
+
+       title   the conclusion, not the noun     G10, text-title
+       scope   what is counted and what is not  G6,  text-small
+       body    the thing itself
+       source  where these numbers came from    G6,  text-small, ruled off
+
+     A page is a stack of these and nothing else, so two pages cannot
+     disagree about what a heading means. */
+  .panel { margin: 0 0 var(--space-section); }
+  .panel:last-child { margin-bottom: 0; }
+  .panel-head { display: flex; align-items: baseline; gap: var(--space-base);
+                flex-wrap: wrap; margin-bottom: var(--space-tight); }
+  .panel-title { font-size: var(--text-title); font-weight: var(--weight-title);
+                 color: var(--G10); letter-spacing: -0.01em; }
+  .panel-figure { font-size: var(--text-figure); font-weight: var(--weight-figure);
+                  color: var(--G10); font-family: var(--font-mono);
+                  font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .panel-scope { color: var(--G6); font-size: var(--text-small);
+                 margin-bottom: var(--space-base); max-width: 88ch; }
+  .panel-body { display: block; }
+  .panel-source { color: var(--G6); font-size: var(--text-small);
+                  margin-top: var(--space-base); padding-top: var(--space-snug);
+                  border-top: 1px solid var(--G2); }
+
+  /* A card is a panel's contents raised one step off the working surface. */
+  .card { background: var(--G2); border: 1px solid var(--G3);
+          border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+          padding: var(--space-pane); }
+
+  /* ----------------------------------------------------- the empty state */
+
+  /* Never a bare sentence in an empty pane. Three parts, after Nielsen
+     Norman's rule: say what the system's state is, say what would be here,
+     and give the way to put something here. A pane that says nothing is
+     read as a pane that is broken, and a reader cannot tell "nothing yet"
+     from "still loading" from "the filter excluded everything". */
+  .empty { display: block; color: var(--G7); font-size: var(--text-small);
+           background: var(--G1); border: 1px dashed var(--G3);
+           border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+           padding: var(--space-pane) var(--space-pane); }
+  .empty-status { color: var(--G8); font-size: var(--text-body);
+                  display: block; margin-bottom: var(--space-tight); }
+  .empty-what { color: var(--G6); display: block; max-width: 72ch; }
+  .empty-way { margin-top: var(--space-base); display: flex; gap: var(--space-snug);
+               flex-wrap: wrap; }
+
+  /* Everything that qualifies something else: scope, provenance, a count
+     that was left out, a note under a row. One size, one step of grey. */
+  .note, .window, .dropped, .settings-state, .city-state, .reconciled,
+  .spent-line, .enrolment, .doc-note, .desc-note
+      { color: var(--G6); font-size: var(--text-small); }
+  /* ALERT means one thing everywhere: a person is needed, and nothing else
+     may borrow it. A filter that hid rows and a total nobody priced are
+     both cases where the interface would otherwise quietly answer for the
+     person. */
+  .filtered, .unpriced, .problems { color: var(--ALERT); font-size: var(--text-small); }
+
+  /* ---------------------------------------------------------- controls */
+
+  button { background: var(--G3); color: var(--G9); border: 1px solid var(--G4);
+           border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
+           padding: 6px 12px; font: inherit; font-size: var(--text-body); cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--G4); color: var(--G10); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button[type="submit"]:not(:disabled) { background: var(--ACCENT); border-color: var(--ACCENT);
+                                         color: var(--G0); font-weight: var(--weight-heading); }
+  button[type="submit"]:hover:not(:disabled) { background: var(--ACCENT_HOVER);
+                                               border-color: var(--ACCENT_HOVER); }
+  button.quiet { background: transparent; border-color: var(--G3); color: var(--G7); }
+  button.quiet:hover:not(:disabled) { background: var(--G2); color: var(--G10); }
+  :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 1px; }
+  input, select, textarea { background: var(--G1); color: var(--G9); font: inherit;
+                            font-size: var(--text-body);
+                            border: 1px solid var(--G4); border-radius: var(--corner-control);
+                            corner-shape: var(--corner-control-shape); padding: 6px 9px; }
+  input:hover, select:hover, textarea:hover { border-color: var(--G5); }
+  input::placeholder { color: var(--G5); }
+  form { display: flex; gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap;
+         margin: var(--space-base) 0; }
+
+  /* A label above its field, never a placeholder standing in for one: a
+     placeholder disappears the moment somebody types, taking the only
+     statement of what the field wanted with it. */
+  .field { display: flex; flex-direction: column; gap: var(--space-tight); }
+  .field > label { font-size: var(--text-micro); font-weight: var(--weight-micro);
+                   letter-spacing: 0.07em; text-transform: uppercase; color: var(--G6); }
+  .field .hint { font-size: var(--text-small); color: var(--G6); }
+  .field .hint.blocking { color: var(--ALERT); }
+
+  /* ------------------------------------------------------ tables, lists */
+
+  table { width: 100%; border-collapse: collapse; margin: var(--space-snug) 0; }
+  th { text-align: left; color: var(--G6); font-weight: var(--weight-body);
+       font-size: var(--text-micro); letter-spacing: 0.07em; text-transform: uppercase;
+       padding: var(--space-snug); border-bottom: 1px solid var(--G3); }
+  td { padding: 7px var(--space-snug); border-bottom: 1px solid var(--G2);
+       vertical-align: top; }
+  tbody tr:hover td { background: var(--G2); }
+  ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; }
+  .line { display: grid; grid-template-columns: 76px 152px 1fr; gap: var(--space-base);
+          padding: var(--space-tight) 0; border-bottom: 1px solid var(--G2); }
   .line .seq { color: var(--G5); }
   .line .kind { color: var(--G7); }
   .line .text { color: var(--G9); }
-  .line.person .text { color: var(--G10); font-weight: 600; }
-  .empty, .window, .dropped, .settings-state, .city-state, .reconciled, .spent-line,
-  .note, .enrolment { color: var(--G6); font-size: 12.5px; }
-  .filtered, .unpriced, .problems { color: var(--ALERT); font-size: 12.5px; }
+  .line.person .text { color: var(--G10); font-weight: var(--weight-heading); }
+
+  /* ------------------------------------------------------------- pages */
 
   /* Approvals: a group is a card, and a tainted one is bordered in the
      colour that means a person is needed and cannot be waived. */
-  .cluster { border: 1px solid var(--G3); border-radius: var(--corner-card);
-             corner-shape: var(--corner-card-shape); margin-bottom: 12px; }
-  .cluster > header { background: var(--G3); padding: 8px 12px; display: flex;
-                      gap: 10px; align-items: center; flex-wrap: wrap; }
+  .cluster { border: 1px solid var(--G3); background: var(--G2);
+             border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+             margin-bottom: var(--space-base); overflow: hidden; }
+  .cluster > header { background: var(--G3); padding: var(--space-snug) var(--space-base);
+                      display: flex; gap: var(--space-base); align-items: center;
+                      flex-wrap: wrap; }
   .cluster.tainted { border-color: var(--ALERT); }
-  .cluster .item { padding: 9px 12px; border-top: 1px solid var(--G2); display: flex;
-                   gap: 10px; align-items: center; flex-wrap: wrap; }
+  .cluster .item { padding: 9px var(--space-base); border-top: 1px solid var(--G3);
+                   display: flex; gap: var(--space-base); align-items: center;
+                   flex-wrap: wrap; }
   .cluster .desc { flex: 1; color: var(--G9); }
-  .cluster .actor, .cluster .count { color: var(--G6); font-size: 12.5px; }
+  .cluster .actor, .cluster .count { color: var(--G6); font-size: var(--text-small); }
 
   /* The progress bar: one shape, three states, and the blocked one carries
      a rule so it survives both the loss of hue and a lightness collision.
      No animation - a moving stripe manufactures attention. */
-  .bar { display: flex; align-items: center; gap: 8px; }
-  .bar .track { display: block; width: 160px; height: 8px; background: var(--G4);
+  .bar { display: flex; align-items: center; gap: var(--space-snug); }
+  .bar .track { display: block; width: 168px; height: 8px; background: var(--G4);
                 border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
                 overflow: hidden; }
   .bar .fill { display: block; height: 100%; }
   .bar.running .fill { background: var(--ACCENT); }
   .bar.done .fill { background: var(--PROGRESS_DONE); }
   .bar.blocked .fill { background: var(--ALERT); box-shadow: inset -2px 0 0 var(--G10); }
-  /* Nothing filled and still blocked: the rule sits where the fill would
-     have started, so the shape is present either way. */
   .bar.blocked .track { box-shadow: inset 2px 0 0 var(--G10); }
-  .bar .bar-label { color: var(--G7); font-size: 12.5px; }
+  .bar .bar-label { color: var(--G7); font-size: var(--text-small); }
 
-  /* The city's vital signs: three counts, above the picture. Plain text
-     rather than tiles - a number that needs a box around it to be noticed
-     is a number nobody needed. */
-  .vitals { display: flex; gap: 20px; flex-wrap: wrap; color: var(--G6);
-            font-size: 12.5px; margin-bottom: 10px; }
-  .vitals b { color: var(--G9); font-weight: 600; }
+  /* The city's vital signs: three counts. Plain text rather than tiles - a
+     number that needs a box around it to be noticed is a number nobody
+     needed. */
+  .vitals { display: flex; gap: var(--space-wide); flex-wrap: wrap; color: var(--G6);
+            font-size: var(--text-small); margin-bottom: var(--space-base); }
+  .vitals b { color: var(--G9); font-weight: var(--weight-heading); }
 
   /* The archive: a search over the shelves, and what the record says went
-     in lately. The two halves are separated by a heading, never merged -
-     one reads the disk, the other reads history. */
-  .archive-search .search { margin: 0 0 12px; }
+     in lately. The two halves are separated, never merged - one reads the
+     disk, the other reads history. */
+  .archive-search .search { margin: 0 0 var(--space-base); }
   .archive-search .search input { min-width: 280px; }
-  .shelf { margin: 10px 0 16px; }
-  .shelf h2 { color: var(--G9); border-bottom: 1px solid var(--G3); padding-bottom: 4px; }
-  .lately { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--G3); }
-  /* Four columns here rather than the building page's three: a city-wide
-     list has to say which building a line came from. */
+  .shelf { margin: var(--space-base) 0 var(--space-pane); }
+  .shelf h2 { color: var(--G9); border-bottom: 1px solid var(--G3);
+              padding-bottom: var(--space-tight); }
+  .lately { margin-top: var(--space-wide); padding-top: var(--space-base);
+            border-top: 1px solid var(--G3); }
   .archive-search .filed { grid-template-columns: 90px 110px 1fr 160px; }
-  .filed .where { color: var(--G6); font-size: 12.5px; }
+  .filed .where { color: var(--G6); font-size: var(--text-small); }
+  .filed { display: grid; grid-template-columns: 90px 110px 1fr; gap: var(--space-base);
+           padding: 7px 0; border-bottom: 1px solid var(--G2); }
+  .filed .day, .filed .kind { color: var(--G6); }
 
-  /* A room's mailbox: what waits, and who sent it. Same row grammar as
-     the archive index, because both are lists of things the city filed. */
-  .waiting { display: grid; grid-template-columns: 110px 180px 1fr; gap: 12px;
-             padding: 6px 0; border-bottom: 1px solid var(--G2); }
+  /* A room's mailbox: what waits, and who sent it. */
+  .waiting { display: grid; grid-template-columns: 110px 180px 1fr; gap: var(--space-base);
+             padding: var(--space-snug) 0; border-bottom: 1px solid var(--G2); }
   .waiting .kind { color: var(--G9); }
   .waiting .from, .waiting .id { color: var(--G6); }
-  .tab.room { font-family: ui-monospace, monospace; font-size: 12.5px; }
+  .tab.room { font-size: var(--text-small); }
 
-  /* The Recycle Bin: one row per discarded thing, and the way back is the
-     widest column because it is the only part a person acts on. A row that
-     already came back dims - it is evidence, not work. */
-  .binned { display: grid; grid-template-columns: 280px 1fr auto; gap: 12px;
+  /* The Recycle Bin: the way back is the widest column because it is the
+     only part a person acts on. A row that already came back dims - it is
+     evidence, not work. */
+  .binned { display: grid; grid-template-columns: 280px 1fr auto; gap: var(--space-base);
             padding: 7px 0; border-bottom: 1px solid var(--G2); align-items: baseline; }
-  .binned .what { color: var(--G9); }
+  .binned .what { color: var(--G9); font-size: var(--text-small); }
   .binned .way-back { color: var(--G7); }
   .binned.back { color: var(--G6); }
   .binned.back .what, .binned.back .way-back { color: var(--G6); }
 
   /* Cost: one bar grammar, share by width, amount right-aligned. */
-  .dimension { margin-bottom: 14px; }
-  .dashboard .row { display: grid; grid-template-columns: 220px 1fr 96px; gap: 10px;
-                    align-items: center; padding: 3px 0; }
+  .dimension { margin-bottom: var(--space-pane); }
+  .dashboard .row { display: grid; grid-template-columns: 232px 1fr 104px;
+                    gap: var(--space-base); align-items: center; padding: 3px 0; }
   .track { display: block; height: 10px; background: var(--G3);
            border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
            overflow: hidden; }
   .fill { display: block; height: 100%; background: var(--PROGRESS_DONE); }
-  .total { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
-           margin-bottom: 12px; }
-  .total .amount { font-size: 28px; font-weight: 600; color: var(--G10); }
+  .total { display: flex; gap: var(--space-base); align-items: baseline; flex-wrap: wrap;
+           margin-bottom: var(--space-base); }
+  .total .amount { font-size: var(--text-figure); font-weight: var(--weight-figure);
+                   color: var(--G10); letter-spacing: -0.02em; }
   .dashboard .amount { text-align: right; }
   .consumed { color: var(--G7); }
 
   /* The dispatch bar takes the width it needs and no more. */
-  .dispatch { flex: 1; display: grid; gap: 8px; margin: 0;
-              grid-template-columns: 170px 1fr 1fr 110px auto; }
+  .dispatch { flex: 1; display: grid; gap: var(--space-snug); margin: 0;
+              grid-template-columns: 180px 1fr 1fr 116px auto; align-items: end; }
   .dispatch input, .dispatch select { width: 100%; }
   .steer input { min-width: 320px; }
   .filters input, .filters select { min-width: 160px; }
@@ -203,48 +316,54 @@
                      border: 1px solid var(--G3); border-radius: var(--corner-card);
                      corner-shape: var(--corner-card-shape); }
 
-  /* The city is painted at a fixed pixel size and shown at whatever size
-     the pane has; the picture is one canvas, so it scales as one thing. */
-  .city-view canvas { max-width: 100%; height: auto; display: block;
+  /* The isometric city is drawn as shapes in the document, so it reads the
+     tokens every other surface reads, scales without resampling, and is
+     reachable by hover, focus and a keyboard. */
+  .city-view .stage { display: block; width: 100%; background: var(--G0);
                       border: 1px solid var(--G3); border-radius: var(--corner-panel);
                       corner-shape: var(--corner-panel-shape); }
-  .city-view .camera { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .city-view .camera button { padding: 4px 9px; font-size: 12.5px; }
+  .city-view .camera { display: flex; gap: var(--space-tight); flex-wrap: wrap;
+                       margin-top: var(--space-snug); }
+  .city-view .camera button { padding: 4px 9px; font-size: var(--text-small); }
+
   .settings .models summary { cursor: pointer; color: var(--G7); }
   .settings .model { display: inline-block; margin: 2px 6px 0 0; color: var(--G7);
-                     font-size: 12px; border: 1px solid var(--G3);
+                     font-size: var(--text-small); border: 1px solid var(--G3);
                      border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
-                     padding: 0 5px; }
-  .runs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+                     padding: 0 6px; font-family: var(--font-mono); }
+  .runs { display: flex; gap: var(--space-tight); flex-wrap: wrap;
+          margin-bottom: var(--space-base); }
   .runs button[aria-current="true"] { border-color: var(--ACCENT); color: var(--G10); }
-  .paging { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .paging { display: flex; gap: var(--space-snug); align-items: center;
+            margin-top: var(--space-base); }
 
   /* A building's own pages: tabs across the top, one document below. */
-  .building-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
-                   margin-bottom: 10px; }
-  .building-head .progress, .building-head .rooms { color: var(--G6); font-size: 12.5px; }
-  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--G3); margin-bottom: 12px;
-          flex-wrap: wrap; }
+  .building-head { display: flex; gap: var(--space-pane); align-items: baseline;
+                   flex-wrap: wrap; margin-bottom: var(--space-base); }
+  .building-head .progress, .building-head .rooms { color: var(--G6);
+                                                    font-size: var(--text-small); }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--G3);
+          margin-bottom: var(--space-base); flex-wrap: wrap; }
   .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--G7);
-         padding: 7px 12px; }
+         padding: 7px var(--space-base); }
+  .tab:hover { color: var(--G10); }
   .tab[aria-current="true"] { color: var(--G10); border-bottom-color: var(--ACCENT); }
-  .doc-note { color: var(--G6); font-size: 12.5px; margin-bottom: 8px; }
   .doc-text { background: var(--G1); border: 1px solid var(--G3);
               border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
-              padding: 14px 16px; white-space: pre-wrap; color: var(--G8);
-              max-height: 56vh; overflow: auto; margin: 0; font-size: 13px; }
-  .filed { display: grid; grid-template-columns: 90px 110px 1fr; gap: 12px; padding: 7px 0;
-           border-bottom: 1px solid var(--G2); }
-  .filed .day, .filed .kind { color: var(--G6); }
-  .open-building { margin: 6px 0; }
-  .index { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
-  .index-row { display: grid; grid-template-columns: 1fr 90px auto; gap: 10px;
+              padding: var(--space-pane); white-space: pre-wrap; color: var(--G8);
+              max-height: 56vh; overflow: auto; margin: 0; font-size: var(--text-small);
+              line-height: 1.6; }
+  .open-building { margin: var(--space-snug) 0; }
+  .index { margin-top: var(--space-base); display: flex; flex-direction: column; gap: 1px; }
+  .index-row { display: grid; grid-template-columns: 1fr 110px auto; gap: var(--space-base);
                align-items: center; padding: 3px 0; }
+  .index-row:hover { background: var(--G2); }
   .index-row .pick { text-align: left; background: transparent; border: 0; color: var(--G9); }
-  .index-row .pick[aria-current="true"] { color: var(--G10); font-weight: 600;
+  .index-row .pick[aria-current="true"] { color: var(--G10);
+                                          font-weight: var(--weight-heading);
                                           box-shadow: inset 2px 0 0 var(--ACCENT); }
-  .index-row .note { color: var(--G6); font-size: 12.5px; }
-  .index-row .read { padding: 3px 9px; font-size: 12.5px; }
+  .index-row .note { color: var(--G6); font-size: var(--text-small); }
+  .index-row .read { padding: 3px 9px; font-size: var(--text-small); }
 </style>
 </head>
 <body>
