@@ -48,7 +48,7 @@ pub use city_view::{draw, face_tokens, faces_of, painter_order, place, storeys};
 pub use dashboard::CostsView;
 pub use dashboard::{CostDimension, CostRow, SavingsRow, Trend, cost_rows, drawable, fold_line};
 pub use dashboard::{SERIES_DASHES, SERIES_PER_CHART_MAX, SERIES_WIDTHS, share_per_mille};
-pub use lang::{Lang, Msg, Phrase, phrase, say};
+pub use lang::{Lang, Msg, Phrase, fill, phrase, say};
 pub use ledger_view::{Filter, LedgerView, PAGE_ROWS, Page, Row};
 pub use ledger_view::{export, kind_name, kind_named, page};
 pub use live::takeover_command;

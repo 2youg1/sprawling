@@ -298,6 +298,27 @@ pub fn say(lang: Lang, msg: Msg) -> &'static str {
     phrase(msg).in_lang(lang)
 }
 
+/// Fills the `{named}` slots of a phrase.
+///
+/// A sentence with a number in it cannot be a `&'static str`, and it
+/// cannot be a `format!` either: the pattern is chosen at runtime by the
+/// language, and `format!` takes a literal. So the slots are named and
+/// filled here - named rather than positional, because the two languages
+/// put them in different orders and a positional slot would silently
+/// swap two numbers.
+///
+/// A slot the caller did not fill is left as it is written, which shows
+/// on screen. That is deliberate: a visible `{runs}` is a defect
+/// somebody reports, and a silently emptied sentence is one nobody does.
+#[must_use]
+pub fn fill(pattern: &str, slots: &[(&str, &str)]) -> String {
+    let mut out = pattern.to_owned();
+    for (name, value) in slots {
+        out = out.replace(&format!("{{{name}}}"), value);
+    }
+    out
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -308,6 +329,28 @@ pub fn say(lang: Lang, msg: Msg) -> &'static str {
 )]
 mod tests {
     use super::{Lang, Msg, phrase, say};
+
+    /// The slot names a pattern uses, in the order they appear.
+    fn slots_of(pattern: &str) -> Vec<&str> {
+        let mut found = Vec::new();
+        let mut rest = pattern;
+        while let Some(open) = rest.find('{') {
+            let Some(after) = rest.get(open.saturating_add(1)..) else {
+                break;
+            };
+            match after.find('}') {
+                None => break,
+                Some(close) => {
+                    if let Some(name) = after.get(..close) {
+                        found.push(name);
+                    }
+                    rest = after.get(close.saturating_add(1)..).unwrap_or_default();
+                }
+            }
+        }
+        found.sort_unstable();
+        found
+    }
 
     /// Every message this build knows, so the assertions below are
     /// exhaustive by construction rather than by a list somebody keeps
@@ -402,6 +445,30 @@ mod tests {
         for tag in ["en", "en-GB", "de", "", "zzh"] {
             assert_eq!(Lang::of(tag), Lang::En, "{tag}");
         }
+    }
+
+    /// Two languages of one sentence must take the same values. A slot
+    /// present in one and absent in the other is a number that appears
+    /// for one reader and vanishes for the other.
+    #[test]
+    fn both_languages_of_a_sentence_ask_for_the_same_values() {
+        for msg in every_message() {
+            let said = phrase(msg);
+            assert_eq!(
+                slots_of(said.en),
+                slots_of(said.zh),
+                "{msg:?} fills different slots in each language"
+            );
+        }
+    }
+
+    #[test]
+    fn a_slot_nobody_filled_stays_visible_rather_than_disappearing() {
+        assert_eq!(super::fill("{a} of {b}", &[("a", "3")]), "3 of {b}");
+        assert_eq!(
+            super::fill("{a} of {b}", &[("a", "3"), ("b", "4")]),
+            "3 of 4"
+        );
     }
 
     #[test]

@@ -161,6 +161,7 @@ pub fn web::faces_of(&web::Camera, &web::Prism, bool) -> [web::Face; 3]
 pub fn web::filed_at(kernel::event::TimeMs) -> alloc::string::String
 pub fn web::filed_lately(&channels::wire::RegistryAnswer, usize) -> alloc::vec::Vec<channels::wire::RegistryLine>
 pub fn web::filed_line(&channels::wire::RegistryAnswer, usize) -> alloc::string::String
+pub fn web::fill(&str, &[(&str, &str)]) -> alloc::string::String
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
 pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::wire::ClientFrame
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
