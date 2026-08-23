@@ -76,7 +76,7 @@ Go to **city**. The form under the drawing takes a name and a template.
 
 A building name is a top-level address: `lab`, not `lab/room1`. Rooms come later and they are just directories.
 
-The new building gets its own documents immediately — `Roadmap.md`, `Memo.md`, `Handoff.md`, `BUILDING.md`. These are the building's memory, and agents both read and write them. You can read them in the browser by selecting the building and pressing **read it**; the same files are on disk if you would rather use an editor.
+The new building gets its own documents immediately — `Roadmap.md`, `Memo.md` and `Handoff.md` at its root, which are the building's memory and which agents both read and write, plus `.sprawling/BUILDING.md`, which is its rules: you write that one and the agents working there can only read it. You can read them in the browser by selecting the building and pressing **read it**; the same files are on disk if you would rather use an editor.
 
 ## 5 Dispatch one piece of work
 

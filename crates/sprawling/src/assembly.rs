@@ -156,6 +156,14 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
     };
     let mut rooms = Vec::new();
     let mut docs = Vec::new();
+    // The rules, read by their own path. The walk below skips every dot
+    // directory - which is what keeps `.sprawling` from being listed as
+    // a room - and a building's rules now live inside one, so a page
+    // that only walked would have quietly lost the tab that shows what
+    // this building is allowed to do.
+    if let Ok(bytes) = std::fs::read(city::building_path(city_root, addr)) {
+        docs.push(doc_from(city::BUILDING_FILE.to_owned(), &bytes));
+    }
     if let Ok(entries) = std::fs::read_dir(&root) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -174,16 +182,7 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
             let Ok(bytes) = std::fs::read(entry.path()) else {
                 continue;
             };
-            let truncated = bytes.len() > DOC_BYTES_MAX;
-            let head = bytes
-                .get(..bytes.len().min(DOC_BYTES_MAX))
-                .unwrap_or(&bytes);
-            docs.push(channels::BuildingDoc {
-                name,
-                text: String::from_utf8_lossy(head).into_owned(),
-                bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
-                truncated,
-            });
+            docs.push(doc_from(name, &bytes));
         }
     }
     rooms.sort();
@@ -205,6 +204,17 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
         docs,
         archive,
     })
+}
+
+/// One document as a page receives it, cut to what travels.
+fn doc_from(name: String, bytes: &[u8]) -> channels::BuildingDoc {
+    let head = bytes.get(..bytes.len().min(DOC_BYTES_MAX)).unwrap_or(bytes);
+    channels::BuildingDoc {
+        name,
+        text: String::from_utf8_lossy(head).into_owned(),
+        bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+        truncated: bytes.len() > DOC_BYTES_MAX,
+    }
 }
 
 /// Reading order for a building's documents: the plan, then the record of
@@ -3702,6 +3712,47 @@ pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
 mod tests {
     use super::*;
 
+    /// The rules a person may read on the building page are the rules
+    /// the city obeys, and the page reads them from a directory the
+    /// walk deliberately skips.
+    #[test]
+    fn a_building_page_still_shows_the_rules_that_govern_it() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        city::create_building(
+            dir.path(),
+            &Address::parse("lab").unwrap(),
+            city::BuildingTemplate::Minimal,
+        )
+        .unwrap();
+        let answer = read_building(dir.path(), &Address::parse("lab").unwrap())
+            .expect("a created building has a page");
+        let rules = answer
+            .docs
+            .iter()
+            .find(|doc| doc.name == city::BUILDING_FILE)
+            .expect("the page lost the tab that says what this building may do");
+        assert!(rules.text.contains("confidential"), "{}", rules.text);
+        assert!(
+            !answer.rooms.iter().any(|room| room.starts_with('.')),
+            "a reserved subtree is not a room: {:?}",
+            answer.rooms
+        );
+    }
+
+    /// Lays a building's rules where the city reads them.
+    ///
+    /// Through `city::building_path` rather than by joining a file name:
+    /// a fixture that spells the path itself is a second authority for
+    /// where the rules live, and it goes on passing after the real one
+    /// has moved.
+    fn lay_rules(city_root: &Path, building: &str, text: &str) {
+        let addr = Address::parse(building).unwrap();
+        let file = city::building_path(city_root, &addr);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, text).unwrap();
+    }
+
     /// A loopback provider that answers a model list and then a fixed
     /// number of chat completions. These tests register it the way a
     /// person would, so nothing here reaches the worker by a door the
@@ -4396,12 +4447,11 @@ mod tests {
     fn a_confidential_building_stops_the_run_before_a_remote_call() {
         let dir = tempfile::tempdir().unwrap();
         init_city(dir.path()).unwrap();
-        std::fs::create_dir_all(dir.path().join("vault")).unwrap();
-        std::fs::write(
-            dir.path().join("vault").join("BUILDING.md"),
+        lay_rules(
+            dir.path(),
+            "vault",
             "# BUILDING.md\n\n## confidential\n\n`confidential: true`\n",
-        )
-        .unwrap();
+        );
 
         // A remote endpoint, wired as the provider for a confidential
         // building: the refusal must come from the adapter that could
@@ -4476,12 +4526,7 @@ mod tests {
     fn a_building_whose_rules_do_not_parse_stops_the_run_rather_than_guessing() {
         let dir = tempfile::tempdir().unwrap();
         init_city(dir.path()).unwrap();
-        std::fs::create_dir_all(dir.path().join("lab")).unwrap();
-        std::fs::write(
-            dir.path().join("lab").join("BUILDING.md"),
-            "# BUILDING.md\n\nnothing declared\n",
-        )
-        .unwrap();
+        lay_rules(dir.path(), "lab", "# BUILDING.md\n\nnothing declared\n");
         let (base_url, _provider) = fake_openai(
             &["m-local"],
             vec![
@@ -5347,11 +5392,11 @@ mod tests {
         let building = dir.path().join("lab");
         std::fs::create_dir_all(building.join("room1")).unwrap();
         std::fs::create_dir_all(building.join("room2")).unwrap();
-        std::fs::write(
-            building.join("BUILDING.md"),
-            b"# BUILDING.md\n\n`confidential: false`\n\n`review: true`\n",
-        )
-        .unwrap();
+        lay_rules(
+            dir.path(),
+            "lab",
+            "# BUILDING.md\n\n`confidential: false`\n\n`review: true`\n",
+        );
         let note = building.join("room1").join("notes.md");
         std::fs::create_dir_all(note.parent().unwrap()).unwrap();
         std::fs::write(&note, b"before\n").unwrap();
@@ -5461,11 +5506,11 @@ mod tests {
         let report = init_city(dir.path()).unwrap();
         let note = dir.path().join("lab").join("room1").join("note.md");
         std::fs::create_dir_all(note.parent().unwrap()).unwrap();
-        std::fs::write(
-            dir.path().join("lab").join(city::BUILDING_FILE),
+        lay_rules(
+            dir.path(),
+            "lab",
             "# BUILDING.md\n\n`confidential: false`\n\n`review: true`\n",
-        )
-        .unwrap();
+        );
         std::fs::write(&note, "before\n").unwrap();
         let (base_url, provider) = fake_openai(
             &["m-local"],

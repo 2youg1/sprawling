@@ -43,8 +43,12 @@ pub enum Layer {
 /// Propagates the reserved-subtree refusal from [`Building::of`]: an
 /// address with no building has no building layer to read.
 pub fn path(city_root: &Path, addr: &Address, layer: Layer) -> Result<PathBuf, AxError> {
-    let dir = match layer {
-        Layer::City => city_root.join(RESERVED_PREFIX),
+    // The scope this layer speaks for, then that scope's own reserved
+    // subtree. One expression for three layers: the city's file is this
+    // rule at the root scope rather than a case of its own, and a layer
+    // added later cannot land somewhere its own runs may write.
+    let scope = match layer {
+        Layer::City => city_root.to_path_buf(),
         Layer::Building => Building::of(addr)?.root(city_root),
         Layer::Resident => {
             let mut path = city_root.to_path_buf();
@@ -54,7 +58,7 @@ pub fn path(city_root: &Path, addr: &Address, layer: Layer) -> Result<PathBuf, A
             path
         }
     };
-    Ok(dir.join(CONFIG_FILE))
+    Ok(scope.join(RESERVED_PREFIX).join(CONFIG_FILE))
 }
 
 /// What one layer declares. An absent file declares nothing, which is

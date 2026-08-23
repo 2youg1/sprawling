@@ -25,11 +25,11 @@ Tools:
 - To read, list, search, compare, or create files, write short Python in `exec`. Use the standard library: `pathlib`, `difflib`, `re`, `itertools`, `collections`. Do not write classes, exception handlers, or comments. If the script fails, read the error.
 - Use `edit` to change a file that already exists. It returns the diff and a new version number.
 
-sprawling keeps long work alive in markdown files. Your `JOB.md` holds the task for this session; it is in your room, and you read it but do not rewrite it. The next four files are at the building root. You read them and you write them.
+sprawling keeps long work alive in markdown files. Your `JOB.md` holds the task for this session; it is in your room, and you read it but do not rewrite it. The next three files are at the building root. You read them and you write them.
 - `Roadmap.md` — the plan. The table at the top records the todos. It is the only task list and the source of progress. Update it as the work moves.
 - `Memo.md` — decisions and corrections. Rewrite the outline at the top. Only append to the body. A correction names the entry that it replaces.
 - `Handoff.md` — write it before the session ends. It lets the next agent continue your work. Give the information and the guidance that you find necessary. List the files and the skills that the next agent must read. Do not repeat what those files already say.
-- `BUILDING.md` — the rules of this building.
+- `BUILDING.md` — the rules of this building, in `.sprawling/` beside it. A person writes it; you read it and cannot write it.
 Update the roadmap and the memo before you report, after feedback, and when the plan changes.
 
 Work:

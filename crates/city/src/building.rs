@@ -178,8 +178,12 @@ pub fn create(
         )));
     }
     let root = building.root(city_root);
-    std::fs::create_dir_all(&root).map_err(|err| storage(&root, &err))?;
-    let file = root.join(BUILDING_FILE);
+    // The building's own reserved subtree, made before the file that
+    // lives in it: what governs a building is not writable by what runs
+    // inside it (kernel-SPEC.md section 8-28).
+    let governed = root.join(kernel::RESERVED_PREFIX);
+    std::fs::create_dir_all(&governed).map_err(|err| storage(&governed, &err))?;
+    let file = governed.join(BUILDING_FILE);
     let rules = template.rules(addr)?;
     // `create_new` rather than exists-then-write: the refusal and the
     // write are one operation, so no second caller lands in between.
@@ -313,7 +317,8 @@ mod tests {
         // With nothing declared, a new building may write itself and no more.
         assert_eq!(rules.write_domain().unwrap().prefixes().count(), 1);
 
-        let text = std::fs::read_to_string(building.root(dir.path()).join(BUILDING_FILE)).unwrap();
+        let text = std::fs::read_to_string(crate::policy::building_path(dir.path(), &addr("lab")))
+            .unwrap();
         assert!(
             text.contains("lab"),
             "a building's own rules name the building"
@@ -435,7 +440,13 @@ mod tests {
             "# my own roadmap\n",
             "an adopted roadmap is the owner's, not the template's"
         );
-        assert!(repo.join("BUILDING.md").is_file());
+        // The rules land in the building's reserved subtree; the spine
+        // files a person reads and writes stay where they were.
+        assert!(
+            crate::policy::building_path(city.path(), &addr("imported")).is_file(),
+            "an adopted directory has no rules of its own"
+        );
+        assert!(!repo.join("BUILDING.md").exists());
         assert!(repo.join("Memo.md").is_file());
         // Adopting twice refuses: it is already a building.
         assert!(adopt(city.path(), &addr("imported")).is_err());

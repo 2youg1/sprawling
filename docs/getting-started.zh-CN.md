@@ -68,7 +68,7 @@ SPRAWLING_PAIRING_TOKEN=<你自己定的令牌> sprawling serve ~/cities/first 0
 
 楼名是一个顶层地址：`lab`，不是 `lab/room1`。房间随后再有，它们就是子目录。
 
-新楼立刻拿到自己的几份文档——`Roadmap.md`、`Memo.md`、`Handoff.md`、`BUILDING.md`。它们是这栋楼的记忆，Agent 既读也写。你可以在浏览器里选中这栋楼、按 **read it** 来读；同样这几个文件就在盘上，你更想用编辑器也行。
+新楼立刻拿到自己的几份文档——楼根下的 `Roadmap.md`、`Memo.md`、`Handoff.md` 是这栋楼的记忆，Agent 既读也写；`.sprawling/BUILDING.md` 是它的规则，你写、在这栋楼里干活的 Agent 只读得到。你可以在浏览器里选中这栋楼、按 **read it** 来读；同样这几个文件就在盘上，你更想用编辑器也行。
 
 ## 5 派一件活
 

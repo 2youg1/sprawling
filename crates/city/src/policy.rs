@@ -135,14 +135,30 @@ impl BuildingRules {
     }
 }
 
-/// Where a building's rules live.
+/// Where a building's rules live: in the building's own reserved
+/// subtree, which no write domain reaches.
+///
+/// A person writes this file and the runs it governs only read it. That
+/// was the first line of the file and nothing held it until the path
+/// moved (ARCHITECTURE.md section 6).
 #[must_use]
 pub fn building_path(city_root: &Path, addr: &Address) -> PathBuf {
+    scope_path(city_root, addr)
+        .join(kernel::RESERVED_PREFIX)
+        .join(BUILDING_FILE)
+}
+
+/// Where a building's rules used to live, for the one refusal that says
+/// so. Nothing reads the file at this path.
+fn legacy_building_path(city_root: &Path, addr: &Address) -> PathBuf {
+    scope_path(city_root, addr).join(BUILDING_FILE)
+}
+
+fn scope_path(city_root: &Path, addr: &Address) -> PathBuf {
     let mut path = city_root.to_path_buf();
     for segment in addr.as_str().split('/') {
         path.push(segment);
     }
-    path.push(BUILDING_FILE);
     path
 }
 
@@ -155,6 +171,27 @@ pub fn load(city_root: &Path, addr: &Address) -> Result<BuildingRules, AxError> 
     let path = building_path(city_root, addr);
     match std::fs::read_to_string(&path) {
         Ok(text) => evaluate(addr, &text),
+        // An absent file is an ordinary building - unless the rules are
+        // sitting at the address this layout moved away from, in which
+        // case reading "absent" would turn a confidential building into
+        // an ordinary one without anybody being told.
+        Err(err)
+            if err.kind() == std::io::ErrorKind::NotFound
+                && legacy_building_path(city_root, addr).is_file() =>
+        {
+            Err(AxError::failure(
+                AxCode::ConfigInvalid,
+                "read a building's rules",
+                addr.as_str().to_owned(),
+            )
+            .with_recovery(format!(
+                "move {}/{BUILDING_FILE} to {}/{}/{BUILDING_FILE}; a building's rules live where \
+                 its own runs cannot write them",
+                addr.as_str(),
+                addr.as_str(),
+                kernel::RESERVED_PREFIX,
+            )))
+        }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(BuildingRules {
             addr: addr.clone(),
             policy: BuildingPolicy::default(),
