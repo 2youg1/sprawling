@@ -20,6 +20,7 @@ mod signal_tool;
 mod steer;
 mod triage;
 mod workshop;
+mod workshop_tool;
 
 pub use arbiter::{Circumstance, Escalation, Level, arbitrate, conflict_payload};
 pub use archive_tool::{ARCHIVE_KINDS, ArchiveDesk, ArchiveEffect, ArchiveTool, Held};
@@ -36,3 +37,4 @@ pub use signal_tool::{SignalDesk, SignalEffect, SignalTool};
 pub use steer::{AgentSteer, Steer};
 pub use triage::{Arrival, Landing, Reflex, Rule, Triage};
 pub use workshop::{NodeContract, NodeId, Workshop};
+pub use workshop_tool::{WorkshopDesk, WorkshopTool};

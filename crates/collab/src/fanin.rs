@@ -177,6 +177,15 @@ impl FanIn {
         self.artifacts.insert(artifact.node().clone(), artifact);
     }
 
+    /// Everything that has joined, in node order.
+    ///
+    /// A join belongs to a room rather than to a run, and a room outlives
+    /// its runs, so whoever keeps it has to be able to hand a copy to the
+    /// next one.
+    pub fn artifacts(&self) -> impl Iterator<Item = &Artifact> {
+        self.artifacts.values()
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.artifacts.len()

@@ -148,6 +148,29 @@ impl Workshop {
 - **契约即 JOB.md**：被派入节点的 Agent 的任务权威就是这份契约本身，机制在 prefix 零常驻。
 - **四个字段不许空**（goal／owner／done_check／stop）：空的停止条件是一个不会停的 Run。
 - **图的权威是 `Roadmap.md`**，本模块不为节点图另设存储；从路线图行生成契约的那一步未建（四列表不携 `depends_on`）。
+- **生产者是 8-4b `workshop_tool`（P1.05）**：在此之前 `NodeContract` 与 `Workshop` 除自身文件外零调用者。
+
+### 8-4b collab::workshop_tool（P1.05；形状 4 适配器）
+
+```rust
+pub struct WorkshopDesk { /* who、laid_out: Option<Workshop>、joined: FanIn —— 私有 */ }
+impl WorkshopDesk {
+    pub fn new(who: String, joined: FanIn) -> WorkshopDesk;
+    pub fn lay_out(&mut self, contracts: Vec<NodeContract>, delegates: &mut DelegateDesk)
+        -> Result<Vec<NodeId>, AxError>;         // 按 schedule 序逐个走派生台
+    pub fn question(&self) -> Result<PrivateQuestion, AxError>;
+    pub fn judge(&self, answer: &str) -> Result<Joined, AxError>;
+    pub fn accept(&mut self, artifact: Artifact);
+}
+pub struct WorkshopTool { /* 模型那一面：op ∈ {lay_out, question, judge} */ }
+```
+
+- **workshop 是派生的扇出，不是第二条派生通路**：每个节点都过 `DelegateDesk::ask`，故一层深与人的准入两道门是同一段代码。工具的 `Effect` 也是 `Spawn`——摆一张图与派一个人，对人来说是同一个问题。
+- **节点的 `JOB.md` 就是契约本身**（`NodeContract::job_text`），不写摘要：摘要即第二个权威。
+- **节点 id 就是它的房间地址**，与 `Handback::node()` 同一取法；于是一个节点的身份只有一处。
+- **图先自证可跑，再交出去**：`Workshop::new` 在构造点拒重名／悬空依赖／环，故「半张图已派出去、剩下的没人起」这种状态拼不出来。
+- **一个 Run 一张图**：第二次 `lay_out` 即拒，因为一个 session 里两张图是「这次在造什么」的两个答案。
+- **join 属房间而不属 Run**：子在父冻结之后才开，故 `FanIn` 由装配层按房间保存（`RunWorker.joins`），并与 inbox 折自同一批 `signal_enqueued` 行。`judge` 的围栏一字未改：答不出 digest 前八位即拒，且拒词恒不回显答案。
 
 ### 8-5 collab::fanin（P2.06；形状 2 值类型）
 

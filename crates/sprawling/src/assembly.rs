@@ -834,17 +834,25 @@ struct BlockedJob {
 /// The three registers a run's collaboration tools read from.
 struct Collaboration {
     inboxes: std::collections::BTreeMap<Address, collab::Inbox>,
+    /// What each room's earlier runs got back from work they handed
+    /// down, verified. Folded from the same handback signals the inboxes
+    /// are folded from, because a join outlives one run: a child starts
+    /// after its parent froze.
+    joins: std::collections::BTreeMap<Address, collab::FanIn>,
     goals: Vec<kernel::GoalEntry>,
     requests: Vec<collab::OpenRequest>,
 }
 
 fn rebuild_collaboration(ledger_dir: &Path) -> Result<Collaboration, AxError> {
     let mut inboxes = std::collections::BTreeMap::new();
+    let mut joins: std::collections::BTreeMap<Address, collab::FanIn> =
+        std::collections::BTreeMap::new();
     let mut goals = Vec::new();
     let mut requests: Vec<collab::OpenRequest> = Vec::new();
     if !ledger_dir.exists() {
         return Ok(Collaboration {
             inboxes,
+            joins,
             goals,
             requests,
         });
@@ -888,6 +896,15 @@ fn rebuild_collaboration(ledger_dir: &Path) -> Result<Collaboration, AxError> {
         }
     }
     for signal in enqueued {
+        // A join is folded from every handback the room ever received,
+        // whether or not the signal announcing it has been read: reading
+        // a notice and holding a result are different facts.
+        if let Some(artifact) = artifact_of(&signal) {
+            joins
+                .entry(signal.room().clone())
+                .or_default()
+                .accept(artifact);
+        }
         if consumed.contains(signal.id().as_str()) {
             continue;
         }
@@ -898,9 +915,36 @@ fn rebuild_collaboration(ledger_dir: &Path) -> Result<Collaboration, AxError> {
     }
     Ok(Collaboration {
         inboxes,
+        joins,
         goals,
         requests,
     })
+}
+
+/// The verified result a handback signal reports, when it reports one.
+///
+/// Reads back what `collab::Handback::signal` wrote, and nothing else -
+/// an ordinary signal between residents is not a result and returns
+/// `None`. The digest is taken from the locator rather than carried
+/// beside it: two fields holding one hash are two places for it to
+/// disagree.
+fn artifact_of(signal: &collab::Signal) -> Option<collab::Artifact> {
+    let body = signal.payload().as_map();
+    if body.get("handback").and_then(serde_json::Value::as_str)? != "finished" {
+        return None;
+    }
+    let node = collab::NodeId::parse(body.get("room").and_then(serde_json::Value::as_str)?).ok()?;
+    let at = Locator::parse(body.get("at").and_then(serde_json::Value::as_str)?).ok()?;
+    let Locator::Cas { hash, .. } = at else {
+        return None;
+    };
+    let verified_by = body
+        .get("verified_by")
+        .and_then(serde_json::Value::as_str)?
+        .to_owned();
+    collab::Claim::new(node, at.clone(), hash, signal.from().to_owned())
+        .verified(true, &verified_by)
+        .ok()
 }
 
 /// Where a CPython-WASI component lives on this machine, if one does.
@@ -1334,6 +1378,10 @@ pub(crate) struct RunWorker {
     /// A dispatch lends its room's queue to the signal tool and takes it
     /// back when the drive ends, so exactly one queue exists per room.
     inboxes: std::collections::BTreeMap<Address, collab::Inbox>,
+    /// What each room already got back from work it handed down. Kept
+    /// beside the inboxes because it is folded from the same lines and
+    /// belongs to the same room.
+    joins: std::collections::BTreeMap<Address, collab::FanIn>,
     /// The requests waiting for someone to check them, folded from the
     /// pull request records.
     requests: Vec<collab::OpenRequest>,
@@ -1395,6 +1443,7 @@ impl RunWorker {
             granted: governance.granted,
             halted: governance.halted,
             inboxes: collaboration.inboxes,
+            joins: collaboration.joins,
             goals: collaboration.goals,
             requests: collaboration.requests,
             last_tick: now,
@@ -2904,6 +2953,24 @@ impl RunWorker {
         let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
         let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
         let delegate_tool = collab::DelegateTool::new(std::rc::Rc::clone(&delegates))?;
+        // What this room already got back. Copied rather than lent: the
+        // authority is `self.joins`, which is folded from the ledger's
+        // handback lines, and a desk that took it away would leave the
+        // worker unable to answer the same question after the run.
+        let mut held = collab::FanIn::new();
+        if let Some(existing) = self.joins.get(&addr) {
+            for artifact in existing.artifacts() {
+                held.accept(artifact.clone());
+            }
+        }
+        let workshop = std::rc::Rc::new(std::cell::RefCell::new(collab::WorkshopDesk::new(
+            who.clone(),
+            held,
+        )));
+        let workshop_tool = collab::WorkshopTool::new(
+            std::rc::Rc::clone(&workshop),
+            std::rc::Rc::clone(&delegates),
+        )?;
         let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
         catalog
             .borrow_mut()
@@ -2947,6 +3014,9 @@ impl RunWorker {
         catalog
             .borrow_mut()
             .admit_tool(kernel::Tool::meta(&delegate_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&workshop_tool))?;
         // The one tool that reads, and the only caller of the catalog's
         // second-level disclosure: without it a building's reading room
         // could name a skill and never hand it over. It holds the
@@ -2973,6 +3043,7 @@ impl RunWorker {
         bench.register(Box::new(pr_tool))?;
         bench.register(Box::new(claim_tool))?;
         bench.register(Box::new(delegate_tool))?;
+        bench.register(Box::new(workshop_tool))?;
         bench.register(Box::new(archive_tool))?;
         bench.register(Box::new(exec))?;
         bench.register(Box::new(read))?;
@@ -3655,6 +3726,14 @@ impl RunWorker {
             .entry(parent.clone())
             .or_insert_with(new_inbox)
             .deliver(&signal)?;
+        // And into the room's join, by the same reading a restart would
+        // do: one function decides what a handback signal means.
+        if let Some(artifact) = artifact_of(&signal) {
+            self.joins
+                .entry(parent.clone())
+                .or_default()
+                .accept(artifact);
+        }
         Ok(())
     }
 }
@@ -6825,6 +6904,110 @@ addr = \"gone/room1\"
         assert!(
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
+        );
+    }
+
+    /// A graph of nodes runs in dependency order, each in its own room
+    /// with its contract as its `JOB.md`, and what comes back verified
+    /// joins - so the next run in that room can be asked a question only
+    /// somebody who opened the results can answer.
+    ///
+    /// `collab::workshop` and `collab::fanin` had no callers outside
+    /// their own files before this; the whole layer was a set of types
+    /// nobody had run.
+    #[test]
+    fn a_workshop_runs_its_nodes_in_order_and_what_comes_back_joins() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let graph = serde_json::json!({
+            "op": "lay_out",
+            "nodes": [
+                {
+                    "room": "lab/writer",
+                    "goal": "write it up",
+                    "done_check": "the page exists",
+                    "stop": "when the page exists",
+                    "depends_on": ["lab/reader"],
+                },
+                {
+                    "room": "lab/reader",
+                    "goal": "read the meter",
+                    "done_check": "a number is written down",
+                    "stop": "when the number is written down",
+                },
+            ],
+        });
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                completion_with("splitting it up", "workshop", "tu_1", graph.clone()),
+                completion("waiting on a person", None),
+                completion_with("splitting it up", "workshop", "tu_2", graph),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        let room = Address::parse("lab/room1").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: room.clone(),
+                task: "get it measured and written up".to_owned(),
+                goal: "a page with a number in it, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+        // Laying out a graph is a spawn like any other: the person is
+        // asked once, and their answer carries the whole graph.
+        let cluster = allow_the_one_pending_item(&mut worker);
+        assert_eq!(cluster.class, kernel::ApprovalClass::Delegation);
+
+        for node in ["lab/reader", "lab/writer"] {
+            assert!(
+                city::job_path(dir.path(), &Address::parse(node).unwrap()).exists(),
+                "{node} was never given a job file"
+            );
+        }
+        let contract = std::fs::read_to_string(city::job_path(
+            dir.path(),
+            &Address::parse("lab/reader").unwrap(),
+        ))
+        .unwrap();
+        assert!(
+            contract.contains("## Done check") && contract.contains("## Stop"),
+            "a node's job file is its contract: {contract}"
+        );
+
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let history: String = verified
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect::<Vec<String>>()
+            .join("\n");
+        let reader = history.find("lab/reader").expect("the first node ran");
+        let writer = history.find("lab/writer").expect("the second node ran");
+        assert!(
+            reader < writer,
+            "the node everything waits on has to go first"
+        );
+        assert_eq!(
+            worker
+                .joins
+                .get(&room)
+                .map_or(0, |join| join.artifacts().count()),
+            2,
+            "both results joined, verified by the city rather than by their own producers"
         );
     }
 

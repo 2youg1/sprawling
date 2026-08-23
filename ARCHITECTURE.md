@@ -426,7 +426,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | runtime::run | crates/runtime/src/run.rs | the run driver: dispatch, turns, freeze — one authority for the loop | typestate | P1 | built |
 | runtime::diagnostics | crates/runtime/src/diagnostics.rs | the diagnostic log: write-only, five levels, anchored to a Ledger position | adapter | P1 | built |
 
-### collab (15) — several residents in one building, without stepping on each other
+### collab (16) — several residents in one building, without stepping on each other
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -444,6 +444,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | collab::pr_tool | crates/collab/src/pr_tool.rs | the face pull requests show a model: open, list, check | adapter | P3 | built |
 | collab::archive_tool | crates/collab/src/archive_tool.rs | writing something down so the next run need not be told twice | adapter | P4 | built |
 | collab::claim_tool | crates/collab/src/claim_tool.rs | the face `Roadmap.md` shows a model: one claimed row at a time | adapter | P4 | built |
+| collab::workshop_tool | crates/collab/src/workshop_tool.rs | the face a workshop shows a model: lay out, ask the join, judge it | adapter | P1 | built |
 | collab::triage | crates/collab/src/triage.rs | where something from outside lands, and whether it starts work | decision | P3 | built |
 
 ### city (11) — space, identity, and the documents a building keeps

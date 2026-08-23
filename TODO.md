@@ -6,14 +6,6 @@ Where a row says **needs a ruling**, it touches something in the `guard` row of 
 
 Where a row says **evidence**, the claim was checked by running something or by a search whose empty result is the finding. Rows without it are judgements, and are marked as such.
 
-## P1 — The sub-agent system: what is left above one level
-
-**evidence**: a real dispatch whose model called `delegate` opened `lab/helper`, wrote its JOB.md, ran it, and left what came back waiting in the asking room's queue (`what_came_back_from_a_delegate_waits_in_the_room_that_asked_for_it`). `collab::workshop`'s `NodeContract` still has no caller outside its own file.
-
-The tool, the desk and the run-starting path landed in `card-P1.01`; the way back and the fourth cancellation point in `card-P1.02`; `status.children`, `run_started.parent` and the tree in the session list in `card-P1.03`; the approval in front of the first spawn in `card-P1.04`. What is left:
-
-1. **Workshop orchestration and fan-in.** `NodeContract` already states what a node reaches, reads at which version, may write, and when it stops — and says its disk form is that node's `JOB.md`. It is the layer above one-level delegation, not on its critical path.
-
 ## P2 — A building's rules are drafted by an agent, not typed by a person
 
 `BUILDING.md` is a governance document with six sections, and asking a person to write one by hand is the wrong door. The reserved-subtree rule is not in the way: it says **no write domain** reaches `.sprawling/`, and `city::write_effort` (F2.16) already writes there through a validated path that no write domain touches. Give `BUILDING.md` the same kind of door — draft, `evaluate` into `BuildingRules`, refuse what does not evaluate — **and put an approval in front of it**, because a building rewriting its own rules mid-run is what the reserved subtree exists to prevent. Judgement, not evidence: the approval is my reading of the rule, not something the rule states.

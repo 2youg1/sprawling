@@ -40,6 +40,8 @@ impl collab::SignalTool
 impl collab::Steer
 impl collab::Triage
 impl collab::Workshop
+impl collab::WorkshopDesk
+impl collab::WorkshopTool
 impl core::fmt::Debug for collab::Inbox
 impl core::fmt::Debug for collab::SignalDesk
 impl kernel::tool::Tool for collab::ArchiveTool
@@ -48,6 +50,7 @@ impl kernel::tool::Tool for collab::DelegateTool
 impl kernel::tool::Tool for collab::GoalTool
 impl kernel::tool::Tool for collab::PrTool
 impl kernel::tool::Tool for collab::SignalTool
+impl kernel::tool::Tool for collab::WorkshopTool
 impl<S> collab::Pr<S>
 pub collab::ArchiveEffect::Recorded
 pub collab::ArchiveEffect::Recorded::kind: alloc::string::String
@@ -203,6 +206,7 @@ pub fn collab::Drafts::resolved_payload(&self, &collab::Draft, collab::Return) -
 pub fn collab::Drafts::submit(&mut self, &collab::Draft, kernel::version::Version, u32) -> collab::Submission
 pub fn collab::Escalation::as_str(self) -> &'static str
 pub fn collab::FanIn::accept(&mut self, collab::Artifact)
+pub fn collab::FanIn::artifacts(&self) -> impl core::iter::traits::iterator::Iterator<Item = &collab::Artifact>
 pub fn collab::FanIn::decide(&self, &str) -> core::result::Result<collab::Joined, kernel::error::AxError>
 pub fn collab::FanIn::is_empty(&self) -> bool
 pub fn collab::FanIn::len(&self) -> usize
@@ -296,6 +300,15 @@ pub fn collab::Workshop::len(&self) -> usize
 pub fn collab::Workshop::new(alloc::vec::Vec<collab::NodeContract>) -> core::result::Result<collab::Workshop, kernel::error::AxError>
 pub fn collab::Workshop::ready(&self, &alloc::collections::btree::set::BTreeSet<collab::NodeId>) -> alloc::vec::Vec<collab::NodeId>
 pub fn collab::Workshop::schedule(&self) -> alloc::vec::Vec<collab::NodeId>
+pub fn collab::WorkshopDesk::accept(&mut self, collab::Artifact)
+pub fn collab::WorkshopDesk::judge(&self, &str) -> core::result::Result<collab::Joined, kernel::error::AxError>
+pub fn collab::WorkshopDesk::lay_out(&mut self, alloc::vec::Vec<collab::NodeContract>, &mut collab::DelegateDesk) -> core::result::Result<alloc::vec::Vec<collab::NodeId>, kernel::error::AxError>
+pub fn collab::WorkshopDesk::new(alloc::string::String, collab::FanIn) -> collab::WorkshopDesk
+pub fn collab::WorkshopDesk::question(&self) -> core::result::Result<collab::PrivateQuestion, kernel::error::AxError>
+pub fn collab::WorkshopDesk::who(&self) -> &str
+pub fn collab::WorkshopTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn collab::WorkshopTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn collab::WorkshopTool::new(alloc::rc::Rc<core::cell::RefCell<collab::WorkshopDesk>>, alloc::rc::Rc<core::cell::RefCell<collab::DelegateDesk>>) -> core::result::Result<collab::WorkshopTool, kernel::error::AxError>
 pub fn collab::arbitrate(&[kernel::goal::GoalEntry], &kernel::goal::GoalEntry, collab::Circumstance) -> core::option::Option<collab::Level>
 pub fn collab::conflict_payload(&kernel::goal::GoalEntry, &collab::Level) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
 pub fn collab::evidence_of(&str, u64) -> core::option::Option<kernel::locator::Locator>
@@ -341,3 +354,5 @@ pub struct collab::Steer
 pub struct collab::Triage
 pub struct collab::Verified
 pub struct collab::Workshop
+pub struct collab::WorkshopDesk
+pub struct collab::WorkshopTool
