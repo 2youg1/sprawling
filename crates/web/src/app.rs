@@ -636,10 +636,32 @@ pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
             );
             (
                 id,
-                format!("{} \u{b7} {}", row.phase.as_str(), walked.label),
+                format!(
+                    "{} \u{b7} {} \u{b7} {}",
+                    session_of(&id, row),
+                    row.phase.as_str(),
+                    walked.label
+                ),
             )
         })
         .collect()
+}
+
+/// What to call one run on screen: the session it belongs to.
+///
+/// The room is the session's own folder, so its last segment is the word
+/// the person typed into `call it`. A run whose address this client has
+/// not seen falls back to the short hash, which is worse to read and
+/// still better than an empty button.
+fn session_of(id: &RunId, row: &RunRow) -> String {
+    let named = row.addr.as_ref().and_then(|addr| {
+        addr.as_str()
+            .rsplit('/')
+            .next()
+            .filter(|segment| !segment.is_empty())
+            .map(str::to_owned)
+    });
+    named.unwrap_or_else(|| crate::live::short_run(*id))
 }
 
 /// The run a person most likely means: the one that started last, and a

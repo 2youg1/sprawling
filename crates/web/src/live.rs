@@ -201,18 +201,25 @@ pub fn LiveView(
                     onclick: move |_| on_watch.call(None),
                     "everything"
                 }
-                for (id, phase) in runs {
+                for (id, said) in runs.clone() {
                     button {
                         key: "{id}",
                         "aria-current": if run == Some(id) { "true" } else { "false" },
                         onclick: move |_| on_watch.call(Some(id)),
-                        "{short_run(id)} · {phase}"
+                        "{said}"
                     }
                 }
             }
             header { class: "live-head",
                 match run {
-                    Some(id) => rsx! { span { class: "run", "run {id}" } },
+                    // The session first, because that is what the person
+                    // called it; the run identifier stays on the page
+                    // because it is what the Ledger and `sprawling fork`
+                    // are addressed by.
+                    Some(id) => rsx! {
+                        span { class: "run", "{named(&runs, id)}" }
+                        span { class: "run-id", "run {id}" }
+                    },
                     None => rsx! { span { class: "run", "every run in this city" } },
                 }
                 label { class: "follow",
@@ -317,6 +324,14 @@ pub fn LiveView(
             }
         }
     }
+}
+
+/// What this page calls the session being watched, taken from the same
+/// list the picker renders so the heading and the button cannot disagree.
+fn named(runs: &[(RunId, String)], run: RunId) -> String {
+    runs.iter()
+        .find(|(id, _)| *id == run)
+        .map_or_else(|| short_run(run), |(_, said)| said.clone())
 }
 
 /// A run's identifier, shortened for a button. The full one is in the

@@ -407,6 +407,14 @@
                      font-size: var(--text-small); border: 1px solid var(--G3);
                      border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
                      padding: 0 6px; font-family: var(--font-mono); }
+  /* The heading of a watched session: the name its person gave it, then
+     the identifier the Ledger knows it by. The second one is quiet: a
+     person reads the name and addresses `sprawling fork` with the id. */
+  .live-head { display: flex; gap: var(--space-base); align-items: baseline;
+               flex-wrap: wrap; margin-bottom: var(--space-snug); }
+  .live-head .run { color: var(--G10); font-weight: var(--weight-heading); }
+  .live-head .run-id { color: var(--G5); font-family: var(--font-mono);
+                       font-size: var(--text-small); }
   .runs { display: flex; gap: var(--space-tight); flex-wrap: wrap;
           margin-bottom: var(--space-base); }
   .runs button[aria-current="true"] { border-color: var(--ACCENT); color: var(--G10); }

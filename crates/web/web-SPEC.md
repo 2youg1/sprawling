@@ -655,6 +655,19 @@ fn city_view::session_name(task: &str) -> String;   // 任务的前四个词
 - **城市页不再把每一件活都扔进 `room1`**：原先 `city_view::dispatch_command` 写死 `{building}/room1`，于是同一栋楼上发出的第二件活盖掉第一件的文件。现在地址给楼，名字取自任务的前四个词——人刚写完的词，一小时后在文件夹列表里认得出来。
 - **名字不合法就拒整条命令**（`SessionName::parse` 答 `None`），而不是自作主张改拼写：一个没人敲过的名字不应该出现在别人的目录里。
 
+### 8-35 选一个 session 而不是选一个哈希（F2.12）
+
+```rust
+fn app::session_of(id: &RunId, row: &RunRow) -> String;   // 房间名，否则短哈希
+fn live::named(runs: &[(RunId, String)], run: RunId) -> String;
+// watchable 的标签从「{phase} · {bar}」变为「{session} · {phase} · {bar}」
+```
+
+- **名字取自地址的最后一段**，也就是房间名，也就是人在「call it」里敲的那个词（F2.11）。客户端不另存一份名字表：`RunRow.addr` 已经是那个事实，再存一份就是第二个权威。
+- **没有地址时回落短哈希**：一个本页没见过地址的 Run 仍然要有一个按得下去的按钮，难读好过空白。
+- **Run 标识符不从页面上拿掉**，只是变安静：人读名字，而 `sprawling fork` 与账本寻址用的是它。
+- **标题与按钮同源**：`named()` 从 picker 的同一份列表里取字，于是两处不会对不上。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

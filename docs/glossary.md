@@ -29,6 +29,7 @@ Two more relations are worth stating because they are easy to invert. A **Gate**
 | **City** | One city on one machine: one Ledger, one complete history. Two cities never reference each other. |
 | **Building** | A building within a city. The scope unit for configuration, Archive, and Policy. |
 | **Floor** / **Room** | Floors and rooms inside a building. The directory tree is the space. |
+| **Session** | One line of work a person named, kept in a room of that name. Dispatching to a building with a name opens the room; dispatching to the room again continues the session, and its `Handoff.md` is what carries it across. |
 | **Build Floor** / **Workshop** | A floor given to one piece of collaborative work, and the node graph that routes work across it. |
 | **Utilities** | The shared services of a city, in the reserved subtree: nothing a resident writes to. |
 | **Resident** | A standing identity with an `URBANITE.md` and a dossier, surviving across runs. |
