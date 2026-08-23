@@ -426,7 +426,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | runtime::run | crates/runtime/src/run.rs | the run driver: dispatch, turns, freeze — one authority for the loop | typestate | P1 | built |
 | runtime::diagnostics | crates/runtime/src/diagnostics.rs | the diagnostic log: write-only, five levels, anchored to a Ledger position | adapter | P1 | built |
 
-### collab (14) — several residents in one building, without stepping on each other
+### collab (15) — several residents in one building, without stepping on each other
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -439,6 +439,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | collab::arbiter | crates/collab/src/arbiter.rs | who decides when two goals collide, and how far up it goes | decision | P2 | built |
 | collab::signal_tool | crates/collab/src/signal_tool.rs | the face the inbox shows a model: send and pull | adapter | P3 | built |
 | collab::delegate_tool | crates/collab/src/delegate_tool.rs | the face delegation shows a model: one level down, and the desk that remembers what was asked | adapter | P1 | built |
+| collab::handback | crates/collab/src/handback.rs | what a run is told about work it handed down, and who is allowed to say it finished | decision | P1 | built |
 | collab::goal_tool | crates/collab/src/goal_tool.rs | the face goal detection and arbitration show a model | adapter | P3 | built |
 | collab::pr_tool | crates/collab/src/pr_tool.rs | the face pull requests show a model: open, list, check | adapter | P3 | built |
 | collab::archive_tool | crates/collab/src/archive_tool.rs | writing something down so the next run need not be told twice | adapter | P4 | built |

@@ -500,17 +500,28 @@ impl Turn<ToolWave> {
 
 impl Turn<Recording> {
     /// Closes the turn. Recording is the accounting boundary: nothing
-    /// extra is appended here (every effect is already on the ledger);
-    /// the phase exists so cancellation and the future spawn point have
-    /// their fourth boundary.
-    pub fn record(self, _ledger: &mut dyn Ledger) -> Result<TurnReport, AxError> {
-        Ok(TurnReport {
+    /// extra is appended here, because every effect is already on the
+    /// ledger. What the phase exists for is the fourth boundary — the
+    /// last moment before the run acts on what this turn decided,
+    /// including the work it handed down.
+    ///
+    /// # Errors
+    /// Propagates the ledger's refusal to record the boundary event.
+    pub fn record(
+        mut self,
+        interrupt: Interrupt,
+        ledger: &mut dyn Ledger,
+    ) -> Result<PhaseOutcome<TurnReport>, AxError> {
+        if let Some(cancelled) = self.consume_boundary(interrupt, ledger)? {
+            return Ok(PhaseOutcome::Cancelled(cancelled));
+        }
+        Ok(PhaseOutcome::Advanced(TurnReport {
             refs: self.refs,
             model_returned: self.state.model_returned,
             calls_made: self.state.calls_made,
             assistant: self.state.assistant,
             wave_results: self.state.wave_results,
-        })
+        }))
     }
 }
 
@@ -702,7 +713,10 @@ mod tests {
             })
             .unwrap(),
         );
-        let report = turn.record(&mut ledger).unwrap();
+        let PhaseOutcome::Advanced(report) = turn.record(Interrupt::None, &mut ledger).unwrap()
+        else {
+            panic!("the boundary was not interrupted");
+        };
         assert_eq!(invoked, 1);
         assert_eq!(report.calls_made(), 1);
         assert_eq!(
@@ -928,7 +942,10 @@ mod tests {
             })
             .unwrap(),
         );
-        let report = turn.record(&mut ledger).unwrap();
+        let PhaseOutcome::Advanced(report) = turn.record(Interrupt::None, &mut ledger).unwrap()
+        else {
+            panic!("the boundary was not interrupted");
+        };
         assert_eq!(report.calls_made(), 1);
         let last = ledger.lines.last().unwrap();
         let value: serde_json::Value = serde_json::from_slice(last).unwrap();
@@ -971,7 +988,7 @@ mod tests {
             })
             .unwrap(),
         );
-        let _report = turn.record(&mut ledger).unwrap();
+        let _report = turn.record(Interrupt::None, &mut ledger).unwrap();
         crate::replay::verify_lines(ledger.lines.clone()).unwrap();
     }
 }

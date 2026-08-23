@@ -115,6 +115,14 @@ impl Artifact {
         self.claim.at()
     }
 
+    /// Who produced it. A parent reading what came back needs the name
+    /// of the agent that did the work, not only of the one that checked
+    /// it.
+    #[must_use]
+    pub fn by(&self) -> &str {
+        self.claim.by()
+    }
+
     #[must_use]
     pub fn verified_by(&self) -> &str {
         &self.verified_by

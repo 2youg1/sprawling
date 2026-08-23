@@ -155,6 +155,7 @@ impl Workshop {
 pub struct Claim { /* node、at、digest、by —— 私有 */ }
 impl Claim { pub fn verified(self, done_check_passed: bool, verifier: &str) -> Result<Artifact, AxError>; }
 pub struct Artifact { /* 只能由 Claim::verified 造出 */ }
+impl Artifact { pub fn by(&self) -> &str; }   // 生产者；父要知道活是谁干的
 pub struct FanIn { /* BTreeMap<NodeId, Artifact> —— 私有 */ }
 impl FanIn {
     pub fn accept(&mut self, artifact: Artifact);
@@ -219,7 +220,28 @@ pub struct DelegateTool { /* 模型的那一面：{room, task, goal, kind?} */ }
 - **一次请求不是一个 Run**。工具答的是「在哪个房间开」，不是结果：在工具调用里驱一个 Run，等于在另一个 Run 的 tool bench 里驱 Run。装配层在父回合落定后取走并派活，子 Run 自己的 `run_started` 携着那个房间。
 - **不新增 EventKind**：父的 `tool_called{name:"delegate"}` 与子的 `run_started{addr}` 已经把这件事记了两遍，再加一个事件种类就是第三遍。
 - **代理不出楼**：房间必须 `is_within` 父的楼，否则 `E_CROSS_BUILDING_DENIED`，并告知跨楼的正路是 `signal`。
-- **未做，已知**：父拿不到子的结果（同步汇流属 `fanin`），`status.children` 仍为空，前端没有父子视图。三条都在 TODO P1。
+- **回程归 `handback`**（见 8-8c）：本模块只管去程。
+
+### 8-8c collab::handback（P1.02；形状 1 判定）
+
+```rust
+pub enum Handback {
+    Finished(Artifact),                              // 子自己的 done check 过了，且由非生产者说过
+    Stopped { claim: Claim, because: String },       // 停了，或验不过；because 携拒词原文
+}
+impl Handback {
+    pub fn of(claim: Claim, done_check_passed: bool, verifier: &str) -> Handback;
+    pub fn by(&self) -> &str;                        // 生产者
+    pub fn node(&self) -> &NodeId;                   // 即子房间的地址
+    pub fn signal(&self, id: SignalId, to: Address, at: TimeMs) -> Result<Signal, AxError>;
+}
+```
+
+- **父拿得到子的结果，而那不是下一回合**。子 Run 在父 Run 冻结之后才开（`bin::assembly` 是唯一能造 Run 的地方，而它在驱完父才拿得回控制权），所以「父的下一回合」实际上是**父房间的下一个 Run**。跨 Run 递事实的门已经存在，就是房间的 `Inbox`；再造一扇就是两个权威。故回程走 `Signal`，`status.signals_pending` 自动报数，`signal` 工具自动取得。
+- **城市做验证者，不是子自己**：`Claim::verified` 拒绝生产者自验，而 `Completion::Done(Evidence)` 是城市观察到的事实、不是子声明的事实。两者合起来才使 `Artifact` 在这条路上造得出来。
+- **一个拒不是一个错误**：验不过也要告诉父，否则父只能靠超时判断。`of` 把 `verified` 的 `Err` 收成 `Unverified` 而不往上抛，是因为在这条路上它是一个**结果**而不是一个故障。
+- **不新增 EventKind**：回程落在 `signal_enqueued` 里，与一切其他住房间信号同一形状。
+- **为什么不叫 `Verified`**：本 crate 已有 `pr::Verified`（PR 的一个相）。两个同名项一出现，rustc 就不再把路径剪短，`tests/ui/merge_without_verification.stderr` 的预期输出当场变红——**编译器拿一个反例把「一个概念一个名字」执行了一次**。
 
 ### 8-8 collab::signal_tool（P3.01；形状 4 适配器）
 

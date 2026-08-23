@@ -319,8 +319,8 @@ pub fn runtime::turn::Turn<runtime::turn::Assembling>::begin(kernel::event::RunI
 pub fn runtime::turn::Turn<runtime::turn::Assembling>::begin(kernel::event::RunId, alloc::string::String, kernel::event::TimeMs) -> runtime::turn::Turn<runtime::turn::Assembling>
 pub fn runtime::turn::Turn<runtime::turn::Calling>::call(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::Calling>::call(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
-pub fn runtime::turn::Turn<runtime::turn::Recording>::record(self, &mut dyn kernel::ledger::Ledger) -> core::result::Result<runtime::turn::TurnReport, kernel::error::AxError>
-pub fn runtime::turn::Turn<runtime::turn::Recording>::record(self, &mut dyn kernel::ledger::Ledger) -> core::result::Result<runtime::turn::TurnReport, kernel::error::AxError>
+pub fn runtime::turn::Turn<runtime::turn::Recording>::record(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::TurnReport>, kernel::error::AxError>
+pub fn runtime::turn::Turn<runtime::turn::Recording>::record(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::TurnReport>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::ToolWave>::execute(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Recording>>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::ToolWave>::execute(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Recording>>, kernel::error::AxError>
 pub fn runtime::turn::TurnCancelled::refs(&self) -> &[kernel::event::EventRef]
@@ -458,6 +458,8 @@ pub runtime::SafePoint::BeforeAssemble
 pub runtime::SafePoint::BeforeAssemble::turn: u32
 pub runtime::SafePoint::BeforeCall
 pub runtime::SafePoint::BeforeCall::turn: u32
+pub runtime::SafePoint::BeforeSpawn
+pub runtime::SafePoint::BeforeSpawn::turn: u32
 pub runtime::SafePoint::BeforeWave
 pub runtime::SafePoint::BeforeWave::turn: u32
 pub runtime::SandboxExit::Failure
@@ -627,6 +629,8 @@ pub runtime::run::SafePoint::BeforeAssemble
 pub runtime::run::SafePoint::BeforeAssemble::turn: u32
 pub runtime::run::SafePoint::BeforeCall
 pub runtime::run::SafePoint::BeforeCall::turn: u32
+pub runtime::run::SafePoint::BeforeSpawn
+pub runtime::run::SafePoint::BeforeSpawn::turn: u32
 pub runtime::run::SafePoint::BeforeWave
 pub runtime::run::SafePoint::BeforeWave::turn: u32
 pub runtime::tools::ChildStatus::ctx_lock: kernel::budget::Tokens

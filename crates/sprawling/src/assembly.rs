@@ -2001,6 +2001,7 @@ impl RunWorker {
                     budget,
                     kernel::Depth::Root,
                 )
+                .map(drop)
             }
             channels::Command::Wake {
                 source,
@@ -2629,6 +2630,7 @@ impl RunWorker {
             kernel::BudgetCap::default(),
             kernel::Depth::Root,
         )
+        .map(drop)
     }
 
     /// Where a dispatch works: the room a named session opens, or the
@@ -2663,7 +2665,7 @@ impl RunWorker {
         mode: runtime::Mode,
         budget: kernel::BudgetCap,
         depth: kernel::Depth,
-    ) -> Result<(), AxError> {
+    ) -> Result<Dispatched, AxError> {
         // Nothing is written before the city agrees to take the work:
         // a halted city that laid a job file down would leave a task in
         // a room no run ever opened.
@@ -3528,7 +3530,8 @@ impl RunWorker {
                 Payload::new(map)?,
             )?;
         }
-        driven?;
+        let frozen = driven?;
+        let ending = frozen.completion().clone();
         // What it actually did, for the person reading afterwards. The
         // ledger holds the detail; this line is the pointer into it.
         self.note(
@@ -3542,13 +3545,22 @@ impl RunWorker {
         // run's tool bench. Each child is dispatched at `Delegated`, so
         // the gate refuses the grand-delegate without anybody having to
         // work out their own depth.
-        for work in delegates.borrow_mut().take() {
+        //
+        // A cancelled run hands nothing down. The fourth safe point is
+        // what makes that reachable: a cancel arriving after the last
+        // wave used to have no boundary left to land on, so work asked
+        // for by a turn nobody wanted started anyway.
+        let handed = match ending {
+            kernel::Completion::Cancelled => Vec::new(),
+            _ => delegates.borrow_mut().take(),
+        };
+        for work in handed {
             self.note(
                 runtime::diagnostics::Level::Effect,
                 "collab::delegate",
                 &format!("{} handed work to {}", addr.as_str(), work.room.as_str()),
             );
-            self.dispatch_in(
+            let child = self.dispatch_in(
                 work.room,
                 work.task,
                 work.goal,
@@ -3556,10 +3568,82 @@ impl RunWorker {
                 kernel::BudgetCap::default(),
                 kernel::Depth::Delegated,
             )?;
+            self.deliver_handback(&addr, &child)?;
         }
+        Ok(Dispatched {
+            run: run_id,
+            addr,
+            who,
+            completion: ending,
+        })
+    }
+
+    /// Tells the run that asked for the work how it came back.
+    ///
+    /// The child's account is pinned in the store before it is judged,
+    /// so the locator the parent is handed resolves to bytes rather than
+    /// to a sentence this process happened to build. The city verifies:
+    /// `Completion::Done` is something the city observed, and a producer
+    /// verifying itself is what `Claim::verified` refuses.
+    fn deliver_handback(&mut self, parent: &Address, child: &Dispatched) -> Result<(), AxError> {
+        let account = format!(
+            "room: {}\nby: {}\nending: {}\n",
+            child.addr.as_str(),
+            child.who,
+            child.completion.name()
+        );
+        let digest = self
+            .cas
+            .put(account.as_bytes())
+            .map_err(memory::MemoryError::into_ax)?;
+        let claim = collab::Claim::new(
+            collab::NodeId::parse(child.addr.as_str())?,
+            Locator::parse(&format!("cas:b3-{digest}"))?,
+            digest,
+            child.who.clone(),
+        );
+        let back = collab::Handback::of(
+            claim,
+            matches!(child.completion, kernel::Completion::Done(_)),
+            CITY_VERIFIER,
+        );
+        let signal = back.signal(
+            collab::SignalId::parse(&format!("handback-{}", child.run))?,
+            parent.clone(),
+            now_ms()?,
+        )?;
+        // Recorded, then delivered - the same order every other signal
+        // takes, so the queue only ever changes as a consequence of a
+        // line the history already has.
+        self.record_for(
+            child.run,
+            &child.who,
+            parent.clone(),
+            EventKind::SignalEnqueued,
+            signal.enqueued_payload()?,
+        )?;
+        self.inboxes
+            .entry(parent.clone())
+            .or_insert_with(new_inbox)
+            .deliver(&signal)?;
         Ok(())
     }
 }
+
+/// What one dispatch left behind. Carried rather than re-derived,
+/// because the run that asked for the work has to be told how it ended
+/// and the ledger is not a thing this layer reads back mid-command.
+pub(crate) struct Dispatched {
+    run: RunId,
+    addr: Address,
+    who: String,
+    completion: kernel::Completion,
+}
+
+/// Who checks a delegate's own done check. Not the delegate: the whole
+/// point of `Claim::verified` is that a producer's verdict on its own
+/// work is not verification.
+const CITY_VERIFIER: &str = "city";
 
 /// Either the model this process calls together with the facts about it
 /// that a request must state, or the reason there is no model.
@@ -6566,6 +6650,95 @@ addr = \"gone/room1\"
         assert!(
             history.contains("E_DELEGATION_DEPTH") || !history.contains("lab/grandchild"),
             "a delegate that delegated would have opened a third room"
+        );
+        // The way back. Before this, a delegate's result reached the
+        // ledger and never the run that asked for it, and a person had
+        // to watch the live page to find out.
+        assert!(
+            history.contains("handback"),
+            "what came back is waiting in the room that asked: {history}"
+        );
+        assert!(
+            history.contains(r#"\"room\":\"lab/helper\""#)
+                || history.contains("lab/helper finished"),
+            "the handback names the room the work was done in"
+        );
+    }
+
+    /// The result of handed-down work is waiting in the asking room's
+    /// inbox, which is what `status.signals_pending` counts and what the
+    /// `signal` tool takes. The parent's own run is frozen by the time a
+    /// child starts - only the assembly layer can build a run, and it
+    /// gets control back after the parent's last turn - so the way back
+    /// crosses runs, and the door that already does that is the room's
+    /// queue.
+    #[test]
+    fn what_came_back_from_a_delegate_waits_in_the_room_that_asked_for_it() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                completion_with(
+                    "handing it down",
+                    "delegate",
+                    "tu_1",
+                    serde_json::json!({
+                        "room": "lab/helper",
+                        "task": "measure the thing",
+                        "goal": "a number, then stop",
+                    }),
+                ),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        let room = Address::parse("lab/room1").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: room.clone(),
+                task: "get it measured".to_owned(),
+                goal: "the number is written down, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let waiting = worker
+            .inboxes
+            .get(&room)
+            .expect("the asking room has a queue")
+            .pending();
+        assert_eq!(
+            waiting, 1,
+            "exactly one handback per piece of work handed down"
+        );
+        let taken = worker
+            .inboxes
+            .get_mut(&room)
+            .expect("the asking room has a queue")
+            .pull()
+            .unwrap();
+        let body = taken[0].payload().as_map();
+        assert_eq!(body["room"], "lab/helper");
+        assert_eq!(
+            taken[0].from(),
+            "lab/helper",
+            "the handback comes from the delegate, not from the city"
+        );
+        assert!(
+            body["at"].as_str().unwrap().starts_with("cas:b3-"),
+            "the account is pinned before it is judged"
         );
     }
 

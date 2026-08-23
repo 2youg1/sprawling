@@ -62,9 +62,22 @@ fn fold_steer(window: &mut Window, interrupt: &Interrupt) {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SafePoint {
-    BeforeAssemble { turn: u32 },
-    BeforeCall { turn: u32 },
-    BeforeWave { turn: u32 },
+    BeforeAssemble {
+        turn: u32,
+    },
+    BeforeCall {
+        turn: u32,
+    },
+    BeforeWave {
+        turn: u32,
+    },
+    /// After the wave, before the run acts on what the turn decided.
+    /// The one boundary a run that concluded still passes through, so a
+    /// cancel arriving that late stops the work the turn handed down
+    /// instead of arriving at a run that has already ended.
+    BeforeSpawn {
+        turn: u32,
+    },
 }
 
 /// What one turn did. Exhaustive on purpose: a new ending has to make
@@ -228,7 +241,12 @@ impl Run<Active> {
             PhaseOutcome::Cancelled(_) => return Ok(Advance::Concluded(Completion::Cancelled)),
         };
 
-        let report = turn.record(ledger)?;
+        let settling = (hooks.interrupt)(SafePoint::BeforeSpawn { turn: index });
+        fold_steer(&mut self.state.window, &settling);
+        let report = match turn.record(settling, ledger)? {
+            PhaseOutcome::Advanced(report) => report,
+            PhaseOutcome::Cancelled(_) => return Ok(Advance::Concluded(Completion::Cancelled)),
+        };
         self.state.turns = self.state.turns.saturating_add(1);
         self.state
             .window

@@ -409,3 +409,47 @@ fn a_steer_at_a_safe_point_reaches_the_next_window_and_not_only_the_ledger() {
     );
     assert!(windows[1].contains("user"), "attributed to whoever sent it");
 }
+
+/// The fourth boundary. A run whose last turn made no tool call would
+/// otherwise conclude `Done` with nowhere left to stop it, and whatever
+/// that turn handed down would start anyway. `BeforeSpawn` is the point
+/// where a cancel arriving that late still lands.
+#[test]
+fn a_cancel_after_the_wave_stops_the_run_before_anything_it_handed_down_starts() {
+    let mut ledger = RecordingLedger::new();
+    let mut model = ScriptedModel {
+        seen: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
+        waves: vec![vec![call("t-1")]],
+    };
+    let mut now = counter();
+    let mut interrupt = |point: SafePoint| match point {
+        SafePoint::BeforeSpawn { turn: 0 } => Interrupt::Cancel,
+        _ => Interrupt::None,
+    };
+    let mut invoke = |_: &ToolCall, _: TimeMs| {
+        Ok(ToolOutcome {
+            result: Payload::empty(),
+        })
+    };
+    let mut hooks = RunHooks {
+        now: &mut now,
+        interrupt: &mut interrupt,
+        fence: None,
+        invoke: &mut invoke,
+    };
+
+    let frozen = drive(plan(4), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();
+
+    assert!(matches!(frozen.completion(), Completion::Cancelled));
+    assert_eq!(
+        frozen.turns(),
+        0,
+        "a turn cancelled at its close did not count"
+    );
+    let kinds = ledger.kinds();
+    assert_eq!(kinds[kinds.len() - 3], "cancel_received");
+    // The wave ran before the boundary was consulted: what the tools did
+    // is on the ledger, and the cancel comes after it rather than
+    // pretending the work never happened.
+    assert!(kinds.iter().any(|kind| kind == "tool_result"));
+}

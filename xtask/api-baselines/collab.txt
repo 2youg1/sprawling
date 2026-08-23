@@ -17,6 +17,7 @@ impl collab::Escalation
 impl collab::FanIn
 impl collab::GoalDesk
 impl collab::GoalTool
+impl collab::Handback
 impl collab::HoldToken
 impl collab::Inbox
 impl collab::Joined
@@ -78,6 +79,10 @@ pub collab::GoalEffect::Conflicted
 pub collab::GoalEffect::Conflicted::entry: kernel::goal::GoalEntry
 pub collab::GoalEffect::Conflicted::level: collab::Level
 pub collab::GoalEffect::Registered(kernel::goal::GoalEntry)
+pub collab::Handback::Finished(collab::Artifact)
+pub collab::Handback::Stopped
+pub collab::Handback::Stopped::because: alloc::string::String
+pub collab::Handback::Stopped::claim: collab::Claim
 pub collab::Held::kind: alloc::string::String
 pub collab::Held::text: alloc::string::String
 pub collab::Landing::addr: kernel::address::Address
@@ -143,6 +148,7 @@ pub const collab::ARCHIVE_KINDS: [&str; 4]
 pub enum collab::ArchiveEffect
 pub enum collab::ClaimEffect
 pub enum collab::GoalEffect
+pub enum collab::Handback
 pub enum collab::Lane
 pub enum collab::PrEffect
 pub enum collab::Reflex
@@ -159,6 +165,7 @@ pub fn collab::ArchiveTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::
 pub fn collab::ArchiveTool::meta(&self) -> &kernel::tool::ToolMeta
 pub fn collab::ArchiveTool::new(alloc::rc::Rc<core::cell::RefCell<collab::ArchiveDesk>>) -> core::result::Result<collab::ArchiveTool, kernel::error::AxError>
 pub fn collab::Artifact::at(&self) -> &kernel::locator::Locator
+pub fn collab::Artifact::by(&self) -> &str
 pub fn collab::Artifact::node(&self) -> &collab::NodeId
 pub fn collab::Artifact::verified_by(&self) -> &str
 pub fn collab::Claim::at(&self) -> &kernel::locator::Locator
@@ -205,6 +212,10 @@ pub fn collab::GoalDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::Goal
 pub fn collab::GoalTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub fn collab::GoalTool::meta(&self) -> &kernel::tool::ToolMeta
 pub fn collab::GoalTool::new(kernel::address::Address, alloc::rc::Rc<core::cell::RefCell<collab::GoalDesk>>) -> core::result::Result<collab::GoalTool, kernel::error::AxError>
+pub fn collab::Handback::by(&self) -> &str
+pub fn collab::Handback::node(&self) -> &collab::NodeId
+pub fn collab::Handback::of(collab::Claim, bool, &str) -> collab::Handback
+pub fn collab::Handback::signal(&self, collab::SignalId, kernel::address::Address, kernel::event::TimeMs) -> core::result::Result<collab::Signal, kernel::error::AxError>
 pub fn collab::HoldToken::shown(&self) -> kernel::version::Version
 pub fn collab::HoldToken::turn(&self) -> u32
 pub fn collab::Inbox::deliver(&mut self, &collab::Signal) -> core::result::Result<kernel::backpressure::Admission, kernel::error::AxError>
