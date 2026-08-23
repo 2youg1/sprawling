@@ -2327,6 +2327,60 @@ mod tests {
     /// buildings, and no endpoint: the one section that makes the other
     /// three non-empty sat last, below the fold, with its own submit
     /// button off-screen.
+    /// The run a person just started is the one they are taken to.
+    ///
+    /// Not a guess between several runs - the client sent this dispatch
+    /// and knows which room it asked for, so recognising the start of
+    /// that run is knowledge rather than a coin toss (web-SPEC 8-31).
+    #[test]
+    fn the_session_a_person_just_started_is_the_one_they_are_shown() {
+        let started = |addr: &str, run: [u8; 16]| {
+            let mut draft = kernel_draft(EventKind::RunStarted, run);
+            draft.addr = Some(Address::parse(addr).unwrap());
+            EventRecord::from_draft(draft, Seq::new(1), B3Hash::digest(b"prev"))
+        };
+        let mine = started("lab/refactor", [4u8; 16]);
+        assert_eq!(
+            started_here(&mine, "lab/refactor"),
+            Some(RunId::from_bytes([4u8; 16]))
+        );
+        // The city suffixes a name that is taken, so the room it opened
+        // is not always the room that was asked for.
+        let suffixed = started("lab/refactor-2", [5u8; 16]);
+        assert_eq!(
+            started_here(&suffixed, "lab/refactor"),
+            Some(RunId::from_bytes([5u8; 16]))
+        );
+        // Somebody else's work, and a name that merely begins the same
+        // way, are not this person's session.
+        assert_eq!(started_here(&started("lab/other", [6u8; 16]), "lab/refactor"), None);
+        assert_eq!(
+            started_here(&started("lab/refactoring", [7u8; 16]), "lab/refactor"),
+            None
+        );
+        // Only the start of a run: a later event in that room is not a
+        // second reason to move the page somebody may have navigated
+        // away from.
+        let mut later = kernel_draft(EventKind::ToolCalled, [4u8; 16]);
+        later.addr = Some(Address::parse("lab/refactor").unwrap());
+        let later = EventRecord::from_draft(later, Seq::new(2), B3Hash::digest(b"prev"));
+        assert_eq!(started_here(&later, "lab/refactor"), None);
+    }
+
+    /// A person standing on a building's page can start work there.
+    #[test]
+    fn a_building_page_offers_to_start_a_session_in_that_building() {
+        let painted = paint(
+            View::Building(Address::parse("lab").unwrap()),
+            Snapshot::new(),
+            Vec::new(),
+        );
+        assert!(
+            painted.says("start a session here"),
+            "the only way to work in this building is a bar on another page"
+        );
+    }
+
     /// A session is picked by the name its person gave it. The picker
     /// offered `d41d8cd9 · running`, which identifies a run to a machine
     /// and nothing at all to the person who started it.
