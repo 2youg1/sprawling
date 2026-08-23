@@ -3303,7 +3303,7 @@ fn local_model_facts(model: &str) -> Result<gateway::ModelEntry, AxError> {
 /// worker is inside a dispatch. A Cancel that waits for the run it
 /// cancels is not a Cancel. The desk keeps arrival order, and the run
 /// looks at it only at its own safe points.
-struct CommandDesk {
+pub(crate) struct CommandDesk {
     queue: std::sync::Mutex<std::collections::VecDeque<Posted>>,
     arrived: std::sync::Condvar,
 }
@@ -3340,7 +3340,7 @@ impl CommandDesk {
         }
     }
 
-    fn post(&self, command: channels::Command, reply: channels::Reply) {
+    pub(crate) fn post(&self, command: channels::Command, reply: channels::Reply) {
         if let Ok(mut queue) = self.queue.lock() {
             queue.push_back(Posted { command, reply });
             self.arrived.notify_one();
@@ -3480,15 +3480,39 @@ fn run_id_for(job: &Locator, addr: &Address, now: TimeMs) -> RunId {
 /// # Errors
 /// Refuses an exposed bind with no pairing token, and propagates whatever
 /// the operating system says about the address.
-pub(crate) async fn serve(
-    city_root: &Path,
-    addr: SocketAddr,
-    token: Option<&str>,
-    client: channels::ClientAssets,
-    vault: gateway::Custodian,
-    vault_notice: Option<Payload>,
-    log: runtime::diagnostics::Diagnostics,
-) -> Result<(), AxError> {
+/// Everything one served city is made of, in one value.
+///
+/// Eight loose parameters is a signature nobody calls correctly from
+/// memory, and two `Option`s of the same shape passed the wrong way
+/// round is a mistake the compiler cannot see. Named fields make the
+/// call site say which is which.
+pub(crate) struct Serving {
+    pub(crate) city_root: std::path::PathBuf,
+    pub(crate) addr: SocketAddr,
+    /// The pairing token in plaintext, read once by the caller. It gets
+    /// no further than the digest this takes from it, except into the
+    /// console's `/web`, which is the one place it has to travel.
+    pub(crate) token: Option<String>,
+    pub(crate) client: channels::ClientAssets,
+    pub(crate) vault: gateway::Custodian,
+    pub(crate) vault_notice: Option<Payload>,
+    pub(crate) log: runtime::diagnostics::Diagnostics,
+    pub(crate) console: Option<crate::console::Terminal>,
+}
+
+pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
+    let Serving {
+        city_root,
+        addr,
+        token,
+        client,
+        vault,
+        vault_notice,
+        log,
+        console,
+    } = serving;
+    let city_root = city_root.as_path();
+    let token = token.as_deref();
     let cas_root = city_root.join(".sprawling").join("cas");
     std::fs::create_dir_all(&cas_root).map_err(|source| {
         AxError::failure(
@@ -3655,6 +3679,15 @@ pub(crate) async fn serve(
             channels::UploadId::parse(&digest)
         }),
     };
+    // The terminal this city is running in, if it was asked for. It gets
+    // the same desk the socket posts to and the same event stream the
+    // browser reads, so nothing here is a second control surface - it is
+    // the first one, reached from the keyboard that started the city.
+    if let Some(terminal) = console {
+        let console_desk = Arc::clone(&desk);
+        let watching = config.events.subscribe();
+        crate::console::start(terminal, console_desk, watching);
+    }
     channels::serve(config).await
 }
 

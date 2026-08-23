@@ -508,6 +508,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | bin::firstrun | crates/sprawling/src/firstrun.rs | the first screen, where a city goes when nobody said, and handing a URL to the desktop | adapter | P7 | built |
 | bin::install | crates/sprawling/src/install.rs | putting this binary where a shell will find it, and taking it back out | adapter | P0 | built |
 | bin::wire_client | crates/sprawling/src/wire_client.rs | the second client of the wire: one frame out, every frame back, and enrolment from stdin | adapter | P3 | built |
+| bin::console | crates/sprawling/src/console.rs | what a served city says to the terminal it is running in, and what a line typed there means | decision | P1 | built |
 
 ## 13 Changing this document
 

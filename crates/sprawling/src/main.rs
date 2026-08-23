@@ -8,6 +8,7 @@
 //! export, restore, resume, fork.
 
 mod assembly;
+mod console;
 mod firstrun;
 mod install;
 mod mcp_http;
@@ -47,6 +48,7 @@ commands:
   install [--uninstall]        put this binary on your PATH, or take it back off
   init <dir>                   raise a city: writes the genesis record
   serve <dir> [addr] [--open]  serve a city that already exists
+                               (--console enters it, --no-console does not)
   resume <dir>                 after a restart: verify, close what was lost, report
   status [--deps]              this binary: version, client, what it is built from
   fork <dir> <run> <seq>       branch a lineage from one step of a run
@@ -380,7 +382,14 @@ fn report(err: kernel::AxError) -> ExitCode {
 /// and an address beyond this machine needs `SPRAWLING_PAIRING_TOKEN` -
 /// refused at startup, not at connect time.
 fn serve(dir: Option<&String>, addr: Option<&String>, args: &[String]) -> ExitCode {
-    let Some(dir) = dir else {
+    // `--help` after a subcommand asks about the subcommand, not for a
+    // city called `--help`; without this the storage layer reported that
+    // it could not list `--help\.sprawling\ledger`.
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("{COMMANDS}");
+        return ExitCode::SUCCESS;
+    }
+    let Some(dir) = dir.filter(|a| !a.starts_with("--")) else {
         eprintln!("usage: sprawling serve <city-dir> [addr] [--log <level>] [--web-dir <dir>]");
         return ExitCode::from(2);
     };
@@ -397,6 +406,21 @@ fn serve(dir: Option<&String>, addr: Option<&String>, args: &[String]) -> ExitCo
 /// difference between them: `up` is the appliance and opens the WebUI,
 /// `serve` stays where a person put it unless asked.
 fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) -> ExitCode {
+    // A directory with no history is not a city, and saying so beats the
+    // storage layer's report that it could not list a ledger directory -
+    // which is true, unhelpful, and names a path nobody chose.
+    if !assembly::has_history(city) {
+        eprintln!("no city at {}", city.display());
+        eprintln!(
+            "recovery: `sprawling up {0}` raises one and serves it",
+            city.display()
+        );
+        eprintln!(
+            "          `sprawling init {0}` raises one and stops",
+            city.display()
+        );
+        return ExitCode::from(2);
+    }
     let Ok(bind) = raw.parse() else {
         eprintln!("not a socket address: {raw}");
         eprintln!("recovery: give host:port, for example 127.0.0.1:8787");
@@ -463,16 +487,30 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
             return ExitCode::from(2);
         }
     };
+    // The terminal this city runs in becomes its console when `up`
+    // started it, or when `serve` was asked. `--no-console` is the way
+    // out for a supervisor that wants the old blocking shape.
+    let wanted = (open || args.iter().any(|a| a == "--console"))
+        && !args.iter().any(|a| a == "--no-console");
+    let console = wanted.then(|| console::Terminal {
+        url: firstrun::local_url(bind),
+        token: token.clone(),
+    });
+    if console.is_some() {
+        println!("  This terminal is the console. `/help` lists what it takes.");
+        println!();
+    }
     let (vault, vault_notice) = assembly::open_vault();
-    match runtime.block_on(assembly::serve(
-        city,
-        bind,
-        token.as_deref(),
+    match runtime.block_on(assembly::serve(assembly::Serving {
+        city_root: city.to_path_buf(),
+        addr: bind,
+        token,
         client,
         vault,
         vault_notice,
         log,
-    )) {
+        console,
+    })) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("{err}");

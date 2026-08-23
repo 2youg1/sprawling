@@ -4,19 +4,7 @@ Future work, highest priority first. A row names an outcome; its design lands in
 
 Where a row says **needs a ruling**, it touches something in the `guard` row of AGENTS.md and cannot start without the person's word, recorded as a `Verdict:` trailer.
 
-## P1 — A console, so the terminal stops being a dead end
-
-`sprawling up` prints four lines and then blocks until Ctrl-C. That terminal is a surface the product currently throws away, and it is the only surface a machine without a browser has at all.
-
-Serving a city enters a console instead. A line beginning `/` is a control verb; any other line is work dispatched to the selected room. `/web` opens the WebUI and carries the pairing token, so nobody has to copy one. With no argument, the working directory is the city — the gesture `claude` and `git` already taught everybody.
-
-- **The verb table is a projection of `channels::wire`'s `COMMAND_NAMES` and `QUERY_NAMES`, never a second hand-written list.** A hand-written list is a second vocabulary that drifts, and the drift is invisible
-- The console decides nothing: every judgement stays server-side, exactly as the browser client's does
-- Ctrl-C becomes an orderly close that writes a Handoff, rather than a death `sprawling resume` has to clean up
-- Not a TTY, not interactive: fall back rather than hang
-- Refuses to grow tables or pictures. Those belong to the browser, and serving two masters is what the CLI literature warns against
-
-## P2 — Redo the front end
+## P1 — Redo the front end
 
 Rebuild the client's appearance from the ground up rather than adjusting it. The client is correct today and does not yet look like something a person wants to keep open all day. Everything else in this project is judged through it, so this is not cosmetic.
 
@@ -32,7 +20,7 @@ Ordered, because each step needs the one above it:
 - Lands in `crates/web/`; colour comes from `web::theme` and nowhere else, which the `color` gate holds
 - Decisions go into `crates/web/web-SPEC.md` first
 
-## P3 — A tool that reads a file, and the catalog ablation behind it
+## P2 — A tool that reads a file, and the catalog ablation behind it
 
 The catalog now reaches the model (`runtime-SPEC.md` §8-11), but only its first level. A skill's `expansion` is an address under the reserved prefix `.sprawling/`, and no tool in this build reads a file — `edit` changes one, it does not read one. So the reading room can name a skill and can never hand it over, and `Catalog::expand` has no path to a caller.
 
@@ -43,7 +31,7 @@ With it, the ablation this was blocked on: hold the task fixed, vary how much th
 - Per-building admission is the design: a building that does not handle mail is not given a mail server, and a general capability like search sits in the city layer that every building inherits. `city::config_layers` already resolves exactly those three layers, so the mechanism exists and only the reading of it is untested
 - The first-level reading is recorded: Resident 106 B → 1,176 B for eight tools and one mode
 
-## P4 — Enrolment answers before the credential is stored
+## P3 — Enrolment answers before the credential is stored
 
 `POST /enroll` returns 201 as soon as the command is posted to the desk, and the worker's refusal reaches nobody — the one instance of the P2 defect that is still open, recorded in `channels-SPEC.md` §8. `sprawling enrol` therefore reports "accepted", not "stored", which is honest but is not the answer a person wants.
 
@@ -51,9 +39,10 @@ The desk is not read while a dispatch is running, so a synchronous wait would ha
 
 - Lands in `crates/channels/` and `crates/sprawling/`; the positive answer is already an event, so nothing new has to be invented to carry it
 
-## P5 — Two claims made by construction rather than by observation
+## P4 — Claims made by construction rather than by observation
 
 Neither is known to be wrong; neither has been watched.
 
 - Nobody has unpacked the Linux archive on a Linux desktop and seen `start.sh` open a browser. `release.yml` builds it, `ci.yml` tests the tree that goes into it, and no human has run the result
+- Ctrl-C on a served city is still a process death rather than an orderly close. `/quit` closes the console and leaves the city serving; `sprawling resume` already recovers a hard stop, so what is missing is the Handoff a clean shutdown would write
 - `dist/start.cmd` and `dist/start.sh` lost their reason to exist when `sprawling install` landed. Removing them changes `xtask package`'s entry table — **needs a ruling**

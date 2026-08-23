@@ -243,6 +243,38 @@ pub(crate) fn split_reference(raw: &str) -> Option<(&str, &str)>;   // "realm/na
 
 **本章测试**：`split_reference` 对 `realm/name`、缺斜杠、空段、多斜杠四类输入给出正确答案；握手帧的 `wire_v` 与 `schema` 逐字节等于 `channels` 自己的值（这条断言就是「不存在第二份握手权威」的可执行形式）。真城验收：`call` 一条必被拒的命令，收到 `refusal` 且退 1。
 
+## 8-11 控制台：服务中的那个终端不再是死胡同（P1）
+
+**病灶**：`sprawling up` 打四行字然后阻塞到 Ctrl-C。那块屏幕是产品白白扔掉的一个面，也是一台没有浏览器的机器**仅有的**那一个面。
+
+```rust
+// bin::console（形状 1 decision；壳在一条线程里，判定全在纯函数）
+pub(crate) enum Line {
+    Nothing,
+    Help,
+    OpenWeb,
+    Select(Address),
+    Quit,
+    Frame(Box<channels::ClientFrame>),   // 一个 wire 动词
+    Work(String),                        // 普通一行：派给当前选中的 room
+    Unknown { verb: String, nearest: Vec<String> },
+}
+pub(crate) fn parse(line: &str, selected: Option<&Address>) -> Line;
+pub(crate) fn verbs() -> Vec<String>;      // 控制动词 ⊕ wire 动词
+pub(crate) fn snake(camel: &str) -> String;
+```
+
+- **wire 动词表是投影，不是第二份手写清单**。`verbs()` 从 `channels::COMMAND_NAMES` 与 `QUERY_NAMES` 逐个转 snake_case 得来；一份手写清单就是第二套词汇，而它漂开时没有任何东西会发出声音。一条断言钉住这件事：每个 wire 名字都在动词表里。
+- **控制动词另成一个穷尽枚举**（`/help`、`/web`、`/at`、`/quit`）。它们是**控制台自己的**动词，不在 wire 上，故不属于那张投影。两张表合并后仍不得重名，一条断言钉住。
+- **控制台不做任何判定**。一行变成 `Command` 之后，走的是人在页面上点按钮走的**同一张桌子**（`CommandDesk`）与同一个 `Reply`。拒绝因此自动回到控制台，不需要为它另写一条回程——这正是 P2 那条回信地址的第二个消费者。
+- **普通一行就是派活**。要人为一件活敲 `/dispatch {"addr":…}` 是把 JSON 当人机界面；选中一个 room（`/at`）后直接写任务，才是终端本来的手势。未选中任何 room 时拒，并说该敲什么。
+- **不是 TTY 就不进控制台**。stdin 读到 EOF（管道、服务、CI）即退出控制台循环而**城照跑**：一座因为没人敲键盘而停止服务的城是一个以交互换服务的回归。
+- **拒长表与图**。查询的答案在控制台以 JSONL 逐行输出，与 `sprawling call` 同形；表格与图归浏览器。一个同时伺候两个主人的 CLI 是 CLI 文献里的反面教材。
+- **`/web` 携配对令牌**，故没有人需要手拷一串东西。令牌在 `serve` 里只被读一次，控制台拿到的是那一次的副本，不重新读环境。
+- **未做且已知**：Ctrl-C 仍是进程终止而非有序收口。`/quit` 是有序的那一条；把信号处理接成有序收口需要一个跨平台的信号依赖，而 `sprawling resume` 已经能收拾一次破死。写成明账。
+
+**本章测试**：每个 `COMMAND_NAMES`／`QUERY_NAMES` 都在 `verbs()` 里（这就是「投影而非第二份清单」的可执行形式）；控制动词与 wire 动词不重名；`snake` 对 `AttachEndpoint`／`RunView` 给出预期串；空行、`/quit`、`/at <addr>`、普通文本（选中与未选中两情形）、未知动词（携最接近的几个）各得正确枚举。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。
