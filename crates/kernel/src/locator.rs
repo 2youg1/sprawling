@@ -81,6 +81,22 @@ impl GitOid {
         GitOid(bytes)
     }
 
+    /// The hex spelling, read back.
+    ///
+    /// Public because a checkpoint identity travels as a string in more
+    /// than one direction: the wire deserialises one, and a client that
+    /// was shown a checkpoint in a sentence has to turn it back into an
+    /// oid to act on it. Without this the caller decodes its own hex,
+    /// which is a second definition of what an oid looks like - the exact
+    /// thing the note on `Deserialize` below says stays here.
+    ///
+    /// `None` on anything that is not exactly forty lowercase hex digits:
+    /// a wrong length is a refusal, never a padded guess.
+    #[must_use]
+    pub fn parse(raw: &str) -> Option<Self> {
+        Self::parse_hex(raw)
+    }
+
     fn parse_hex(raw: &str) -> Option<Self> {
         decode_hex_fixed::<20>(raw).map(GitOid)
     }

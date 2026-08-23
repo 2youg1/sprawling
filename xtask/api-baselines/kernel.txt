@@ -265,6 +265,7 @@ pub fn kernel::GateRefusal::violation(&self) -> &str
 pub fn kernel::GitOid::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
 pub fn kernel::GitOid::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernel::GitOid::from_bytes([u8; 20]) -> Self
+pub fn kernel::GitOid::parse(&str) -> core::option::Option<Self>
 pub fn kernel::GitOid::serialize<S: serde_core::ser::Serializer>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error>
 pub fn kernel::GoalId::as_str(&self) -> &str
 pub fn kernel::GoalId::new(impl core::convert::Into<alloc::string::String>) -> core::option::Option<kernel::GoalId>

@@ -594,6 +594,22 @@ pub enum View { Overview, … }                           // 新的 `#[default]`
 - **整行即按钮**：一句话里埋一个链接是让人去瞄准；被瞄准的就是那一整行。
 - **不新增任何查询**：全靠事件流的 fold 加上别的页本就要问的一条 `CityView`。一个会轮询的总览页会是全库最贵的一页，而它能告诉人的东西 fold 都已经知道。
 
+### 8-31 人对一个 Run 能做的事，不只是说话和停（F2.05）
+
+```rust
+pub fn takeover_command(run: RunId) -> ClientFrame;              // web::live
+pub fn fork_command(run: RunId, at_seq: Seq) -> ClientFrame;     // web::live
+pub fn rollback_command(checkpoint: &str) -> Option<ClientFrame>;// web::approval
+impl GitOid { pub fn parse(raw: &str) -> Option<Self> }          // kernel::locator
+```
+
+**盘点的结果**：线格式上二十条 Command，界面发得出十一条。`channels::control` 把五条归为 Intervention（Steer／Cancel／Takeover／Rollback／Halt＋Release），而其中 **Takeover 与 Rollback 根本发不出去**。一个只有「说一句」与「停下来」两个动词的委派工作界面，不是 control surface，是一份带开关的记录。
+
+- **Fork 的点只能是本页看得见的那一步**：`at_seq` 取直播窗口里最后一条的 seq——一个看着它跑的人能“意指”的就只有这一点。按钮写它**造出什么**（一条分支）而不是它启动什么：词汇表写明 Fork 只记谱系，不自己开始开。
+- **Rollback 不是「还原这个文件」**，按钮就这么写：它把整个 worktree 拉回一个 checkpoint。回收站里返回路径是内容地址或重建说明的行**恒不给按钮**——线格式上没有那条命令，而一个按下去没反应的按钮比没有按钮更坏（延用 §8-22）。
+- **`GitOid::parse` 开在 kernel 而不是在客户端重写十六进制解码**：那份文件的 `Deserialize` 旁边就写着「形状权威留在这里，以免 wire 长出第二个定义」——客户端同理。长度不对即拒，恒不补零猜。
+- **尚未接出的三条，各自的阻塞写在 TODO**：`SetAutonomy`（需先定下 Owner／Deferred 在界面上各自意味着什么）、`BatchByBuilding`（`ApprovalItem` 不携 Address，从 `actor` 反推楼名是猜）、`Attach`（客户端根本没有上传面）。**写出来而不是假装它们不存在。**
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

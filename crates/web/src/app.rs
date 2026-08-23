@@ -1956,6 +1956,32 @@ mod tests {
     }
 
     #[test]
+    fn a_person_can_reach_every_intervention_the_wire_classifies() {
+        // `channels::control` names five interventions. Before F2.05 this
+        // client could send two of them, so an interface for delegated
+        // work offered "say something" and "stop" and nothing else. This
+        // asserts the pages that own each verb actually render it; the
+        // scopes that own Halt and Release are the control surface, which
+        // the nav test already walks.
+        let mut snapshot = Snapshot::new();
+        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
+        let run = latest_run(&snapshot);
+        let live = paint(
+            View::Live(run),
+            snapshot.clone(),
+            vec![record(2, EventKind::ToolCalled, [1u8; 16])],
+        );
+        assert!(live.says("answer for this run from here"), "Takeover");
+        assert!(live.says("branch a new run from step"), "Fork");
+        assert!(live.says("send at the next safe point"), "Steer");
+        let bin = paint(View::RecycleBin, snapshot, Vec::new());
+        assert!(
+            bin.says("put the whole worktree back to that checkpoint"),
+            "Rollback, and only where the way back really is a checkpoint"
+        );
+    }
+
+    #[test]
     fn the_city_is_drawn_as_shapes_a_person_can_reach() {
         // What a canvas could not be asked. Before F2.02 the drawing
         // existed only on wasm, so no host test could see whether the

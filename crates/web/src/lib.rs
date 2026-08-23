@@ -35,7 +35,7 @@ pub use app::{destinations, dispatch_command, invalidated_by};
 pub use app::{latest_run, opened_building, rebuild};
 pub use app::{render_tokens, render_usd, spend_line, status_line, waiting_line};
 pub use approval::{ApprovalsView, BinRow, Cluster, RecycleBinView, ReturnPath};
-pub use approval::{bin_rows, inbox, policy_admits, recycle_bin};
+pub use approval::{bin_rows, inbox, policy_admits, recycle_bin, rollback_command};
 pub use archive_search::{ArchiveView, FILED_LATELY_MAX, Shelf};
 pub use archive_search::{filed_at, filed_lately, filed_line, searchable, shelves};
 pub use building_view::{BuildingView, Leaf, RoomQueue, day_label, opening_leaf};
@@ -48,7 +48,8 @@ pub use dashboard::{CostDimension, CostRow, SavingsRow, Trend, cost_rows, drawab
 pub use dashboard::{SERIES_DASHES, SERIES_PER_CHART_MAX, SERIES_WIDTHS, share_per_mille};
 pub use ledger_view::{Filter, LedgerView, PAGE_ROWS, Page, Row};
 pub use ledger_view::{export, kind_name, kind_named, page};
-pub use live::{Feed, Line, LiveView, WINDOW, describe, short_run};
+pub use live::takeover_command;
+pub use live::{Feed, Line, LiveView, WINDOW, describe, fork_command, short_run};
 pub use overview::{Attention, OverviewView, Working, headline, needs_you, working};
 pub use progress::distinguishable_without_colour;
 pub use progress::{Bar, BarState, ProgressBar, Subject, bar};

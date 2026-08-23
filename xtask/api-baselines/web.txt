@@ -151,6 +151,7 @@ pub fn web::filed_at(kernel::event::TimeMs) -> alloc::string::String
 pub fn web::filed_lately(&channels::wire::RegistryAnswer, usize) -> alloc::vec::Vec<channels::wire::RegistryLine>
 pub fn web::filed_line(&channels::wire::RegistryAnswer, usize) -> alloc::string::String
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
+pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::wire::ClientFrame
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
 pub fn web::headline(&web::Working) -> alloc::string::String
@@ -177,6 +178,7 @@ pub fn web::refused(&kernel::error::AxError) -> web::Refused
 pub fn web::render_tokens(kernel::budget::Tokens) -> alloc::string::String
 pub fn web::render_usd(kernel::budget::UsdMicros) -> alloc::string::String
 pub fn web::resolved_chroma(u16, u16, u16) -> u16
+pub fn web::rollback_command(&str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::room_addr(&kernel::address::Address, &str) -> core::option::Option<kernel::address::Address>
 pub fn web::searchable(&str) -> core::option::Option<alloc::string::String>
 pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> u16
@@ -188,6 +190,7 @@ pub fn web::status_line(&web::Snapshot) -> [alloc::string::String; 4]
 pub fn web::storeys(u64) -> u32
 pub fn web::superellipse_tenths(u16) -> u16
 pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
+pub fn web::takeover_command(kernel::event::RunId) -> channels::wire::ClientFrame
 pub fn web::to_fragment(&web::View) -> alloc::string::String
 pub fn web::track_token() -> &'static str
 pub fn web::url_is_safe(&str) -> bool

@@ -339,6 +339,13 @@
               grid-template-columns: 180px 1fr 1fr 116px auto; align-items: end; }
   .dispatch input, .dispatch select { width: 100%; }
   .steer input { min-width: 320px; }
+  /* What a person may do to a run, beside what they may say to it. Quiet
+     buttons: these are available rather than suggested, and a page that
+     highlighted them would be recommending an interruption. */
+  .interventions { display: flex; gap: var(--space-snug); align-items: baseline;
+                   flex-wrap: wrap; margin-top: var(--space-base);
+                   padding-top: var(--space-base); border-top: 1px solid var(--G2); }
+  .interventions .note { flex-basis: 100%; }
   .filters input, .filters select { min-width: 160px; }
   .export textarea { width: 100%; background: var(--G1); color: var(--G7);
                      border: 1px solid var(--G3); border-radius: var(--corner-card);

@@ -174,6 +174,7 @@ pub fn LiveView(
     let dropped = feed.dropped();
     let held = lines.len();
     let known = runs.len();
+    let last_seq = lines.last().map(|line| line.seq);
     rsx! {
         section { class: "live",
             crate::panel::Panel {
@@ -270,6 +271,34 @@ pub fn LiveView(
                     "send at the next safe point"
                 }
             }
+            // The rest of what a person may do to a run. Each says what it
+            // makes rather than how it feels, and none of them acts on a
+            // guess about which run was meant.
+            if let Some(id) = run {
+                div { class: "interventions",
+                    button {
+                        class: "quiet",
+                        onclick: move |_| on_frame.call(takeover_command(id)),
+                        "answer for this run from here"
+                    }
+                    button {
+                        class: "quiet",
+                        disabled: last_seq.is_none(),
+                        onclick: move |_| {
+                            if let Some(at) = last_seq {
+                                on_frame.call(fork_command(id, at));
+                            }
+                        },
+                        match last_seq {
+                            Some(at) => rsx! { "branch a new run from step {at.value()}" },
+                            None => rsx! { "nothing to branch from yet" },
+                        }
+                    }
+                    p { class: "note",
+                        "A branch records where it came from and does not start working by itself. Taking over answers for this run from here; what it already did is not undone."
+                    }
+                }
+            }
             }
         }
     }
@@ -281,6 +310,36 @@ pub fn LiveView(
 pub fn short_run(run: RunId) -> String {
     let full = run.to_string();
     full.split('-').next().unwrap_or(&full).to_owned()
+}
+
+/// Taking a run over: the person answers for it from here.
+///
+/// One of the five interventions `channels::control` classifies, and one
+/// of the two this client had no way to send at all. An interface for
+/// delegated work whose only verbs are "say something" and "stop" is not
+/// a control surface; it is a transcript with a kill switch.
+#[must_use]
+pub fn takeover_command(run: RunId) -> ClientFrame {
+    ClientFrame::Command(Box::new(channels::WireCommand::Takeover {
+        idem: channels::IdemKey::derive(&run, Seq::FIRST, b"takeover"),
+        run,
+    }))
+}
+
+/// Branching a new run from a point in this one's history.
+///
+/// `at_seq` is the last record this page has seen for the run, which is
+/// the only point a person watching it can actually mean. A fork records
+/// a lineage and does not start driving by itself, so the button says
+/// what it makes rather than what it starts.
+#[must_use]
+pub fn fork_command(run: RunId, at_seq: Seq) -> ClientFrame {
+    ClientFrame::Command(Box::new(channels::WireCommand::Fork {
+        idem: channels::IdemKey::derive(&run, at_seq, b"fork"),
+        run,
+        at_seq,
+        addr: None,
+    }))
 }
 
 /// A person's word into a running session. It arrives at the next safe

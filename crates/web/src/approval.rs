@@ -324,6 +324,31 @@ pub fn bin_rows(answer: &channels::DiscardAnswer) -> Vec<BinRow> {
 /// There is no restore button. The wire carries no such Command, and a
 /// button that does nothing when pressed is worse than an instruction a
 /// person can act on - which is what [`ReturnPath::sentence`] gives.
+/// Rolling a worktree back to a checkpoint.
+///
+/// **It is not a file restore, and the button says so.** `Rollback` names
+/// a git checkpoint and moves the whole tree to it; a row whose way back
+/// is a content address or a rebuild instruction gets no button, because
+/// the wire carries no command for those and offering one would be the
+/// interface promising something it cannot do.
+///
+/// `None` when the recorded checkpoint is not an object id this build can
+/// parse: fail-closed, exactly as the `Undescribed` return path is.
+#[must_use]
+pub fn rollback_command(checkpoint: &str) -> Option<ClientFrame> {
+    let oid = channels::GitOid::parse(checkpoint.trim())?;
+    Some(ClientFrame::Command(Box::new(
+        channels::WireCommand::Rollback {
+            idem: channels::IdemKey::derive(
+                &channels::RunId::CITY,
+                channels::Seq::FIRST,
+                checkpoint.trim().as_bytes(),
+            ),
+            checkpoint: oid,
+        },
+    )))
+}
+
 #[component]
 pub fn RecycleBinView(
     answer: Option<channels::DiscardAnswer>,
@@ -377,12 +402,25 @@ pub fn RecycleBinView(
                     span { class: "way-back", "{row.return_path.sentence()}" }
                     if row.restored {
                         span { class: "note", "already restored" }
+                    } else if let ReturnPath::FromCheckpoint(ref oid) = row.return_path {
+                        button {
+                            class: "quiet",
+                            onclick: {
+                                let at = oid.clone();
+                                move |_| {
+                                    if let Some(frame) = rollback_command(&at) {
+                                        on_frame.call(frame);
+                                    }
+                                }
+                            },
+                            "put the whole worktree back to that checkpoint"
+                        }
                     }
                 }
             }
             if count > 0 {
                 p { class: "note",
-                    "There is no restore button here because the wire has no command that puts one file back. What each row gives is the sentence a person can act on - which checkpoint, or which content address."
+                    "A checkpoint row can be rolled back, and that puts the whole worktree back to that point - not this one file. Rows whose way back is a content address or a rebuild have no button, because the wire has no command that restores one file, and a button that did nothing would be worse than the sentence beside it."
                 }
             }
             }
