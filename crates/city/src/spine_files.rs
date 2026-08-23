@@ -49,6 +49,106 @@ pub struct JobBrief<'a> {
     pub budget: &'a str,
 }
 
+/// What one session was given to work from.
+///
+/// Exhaustive, and the two arms are different situations rather than a
+/// present and an absent value: a session either carries out a task
+/// somebody wrote down, or works with the person directly and takes the
+/// work from the conversation. The prefix says which, because an agent
+/// told to read a job file that nobody wrote spends its first turn
+/// looking for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunBrief {
+    /// The job file's own text, as it was written to the room.
+    Job { text: String },
+    /// Nobody assigned this session a task: the person is here.
+    Principal,
+}
+
+/// What the prefix says when there is no job file.
+///
+/// It states the situation rather than the absence, because "there is no
+/// JOB.md" describes the disk and what the agent needs is what to do
+/// instead.
+const PRINCIPAL_BRIEF: &str = "No task file was written for this session. You are working with the \
+     person directly: what to do arrives in the conversation, and you \
+     answer there.\n";
+
+impl RunBrief {
+    /// The bytes this brief contributes to the prefix's run segment.
+    #[must_use]
+    pub fn segment_text(&self) -> &str {
+        match self {
+            RunBrief::Job { text } => text,
+            RunBrief::Principal => PRINCIPAL_BRIEF,
+        }
+    }
+}
+
+/// Lays down this session's brief and answers which of the two it is.
+///
+/// A stated goal is what makes a task a job: the file's one irreplaceable
+/// section says when to stop, and a form with that field blank teaches an
+/// agent that stopping is undefined. So a dispatch that states a goal
+/// gets a job file, and one that does not is a conversation.
+///
+/// **The brief is this dispatch's, never what an earlier session left in
+/// the room.** A job file from last week is still on disk and can still
+/// be read; what it may not do is present itself as the task of a session
+/// nobody assigned one to.
+///
+/// # Errors
+/// Propagates a room that cannot be created or written.
+pub fn write_brief(
+    city_root: &Path,
+    addr: &Address,
+    brief: &JobBrief<'_>,
+) -> Result<RunBrief, AxError> {
+    if brief.goal.trim().is_empty() {
+        return Ok(RunBrief::Principal);
+    }
+    let text = write_job(city_root, addr, brief)?;
+    Ok(RunBrief::Job { text })
+}
+
+/// What the last session in this building left for the next one.
+///
+/// `None` when the building has no handoff, or when it holds only the
+/// blank form: an unfilled template in the prefix costs the same bytes as
+/// a filled one and carries nothing.
+#[must_use]
+pub fn handoff(city_root: &Path, building_addr: &Address) -> Option<String> {
+    let mut path = city_root.to_path_buf();
+    for segment in building_addr.as_str().split('/') {
+        path.push(segment);
+    }
+    path.push(HANDOFF_FILE);
+    let text = std::fs::read_to_string(&path).ok()?;
+    if is_blank_form(&text) {
+        return None;
+    }
+    Some(text)
+}
+
+/// Whether a handoff is still the form it was laid out as.
+///
+/// The test is the form's own parenthetical guidance: every section of
+/// the template carries one, and a session that wrote the file replaced
+/// them with what it found.
+fn is_blank_form(text: &str) -> bool {
+    let filled = text
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.is_empty()
+                && !trimmed.starts_with('#')
+                && !trimmed.starts_with('>')
+                && !(trimmed.starts_with('(') && trimmed.ends_with(')'))
+        })
+        .count();
+    filled == 0
+}
+
 /// Lays out the spine documents a building starts with.
 ///
 /// # Errors
@@ -292,6 +392,83 @@ mod tests {
             !on_disk.contains("## Budget"),
             "a section with no fact behind it is not written"
         );
+    }
+
+    #[test]
+    fn a_stated_goal_is_what_makes_a_task_a_job() {
+        let dir = tempfile::tempdir().unwrap();
+        let room = addr("lab/room1");
+        let brief = write_brief(
+            dir.path(),
+            &room,
+            &JobBrief {
+                task: "measure the thing",
+                goal: "a number with a unit, then stop",
+                budget: "24 turns",
+            },
+        )
+        .unwrap();
+
+        let RunBrief::Job { text } = &brief else {
+            panic!("a dispatch that says when to stop is a job");
+        };
+        assert!(text.contains("a number with a unit, then stop"));
+        assert_eq!(
+            std::fs::read_to_string(job_path(dir.path(), &room)).unwrap(),
+            *text,
+            "the brief in the prefix and the file in the room are the same bytes"
+        );
+    }
+
+    /// A session nobody assigned a goal to is a conversation, and no job
+    /// file is written for it: a form whose one irreplaceable field is
+    /// blank teaches an agent that stopping is undefined.
+    #[test]
+    fn a_session_with_no_goal_is_the_person_and_leaves_no_job_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let room = addr("lab/room1");
+        for empty in ["", "   ", "\n"] {
+            let brief = write_brief(
+                dir.path(),
+                &room,
+                &JobBrief {
+                    task: "what do you make of this",
+                    goal: empty,
+                    budget: "24 turns",
+                },
+            )
+            .unwrap();
+            assert_eq!(brief, RunBrief::Principal);
+            assert!(
+                !job_path(dir.path(), &room).exists(),
+                "{empty:?} wrote a job file anyway"
+            );
+        }
+        assert!(
+            RunBrief::Principal.segment_text().contains("person"),
+            "the brief says what to do instead, not that a file is missing"
+        );
+    }
+
+    /// The prefix pays for every byte it carries, and a handoff nobody
+    /// filled in carries nothing.
+    #[test]
+    fn an_unfilled_handoff_is_not_worth_prefix_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lab");
+        let lab = addr("lab");
+        assert_eq!(handoff(dir.path(), &lab), None, "no building, no handoff");
+
+        lay_out(&root, &lab).unwrap();
+        assert_eq!(
+            handoff(dir.path(), &lab),
+            None,
+            "the blank form is the absence of a handoff, not a handoff"
+        );
+
+        let written = "# Handoff — lab\n\n## 1 Must-read list\n\nRead the wire spec first.\n";
+        std::fs::write(root.join(HANDOFF_FILE), written).unwrap();
+        assert_eq!(handoff(dir.path(), &lab).as_deref(), Some(written));
     }
 
     #[test]

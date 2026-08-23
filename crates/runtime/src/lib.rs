@@ -63,5 +63,5 @@ pub use prefix::{FrozenPrefix, FrozenSegment, SegmentSlot};
 pub use prefix::{PrefixPlan, SegmentCaps, SourceDoc, build_prefix};
 pub use replay::{VerifiedLedger, VerifiedLine};
 pub use run::{Advance, Run, RunHooks, RunPlan, SafePoint, drive};
-pub use turn::{Interrupt, PhaseOutcome, Turn, TurnCancelled, TurnReport};
+pub use turn::{Interrupt, Opening, PhaseOutcome, Turn, TurnCancelled, TurnReport};
 pub use watchdog::{Disposal, FreezeReason, Watchdog};

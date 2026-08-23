@@ -89,6 +89,7 @@ pub enum runtime::BreakerVerdict
 pub enum runtime::DigestOutcome
 pub enum runtime::Disposal
 pub enum runtime::FreezeReason
+pub enum runtime::Opening
 pub enum runtime::PhaseOutcome<Next>
 pub enum runtime::SegmentSlot
 pub enum runtime::VerifiedLine
@@ -100,6 +101,7 @@ pub enum runtime::mode::Admission
 pub enum runtime::prefix::SegmentSlot
 pub enum runtime::replay::VerifiedLine
 pub enum runtime::run::Advance
+pub enum runtime::turn::Opening
 pub enum runtime::turn::PhaseOutcome<Next>
 pub fn runtime::AbsentSandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
 pub fn runtime::AbsentSandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
@@ -323,7 +325,7 @@ pub fn runtime::turn::Window::messages(&self) -> &[kernel::model::ChatMessage]
 pub fn runtime::turn::Window::new() -> runtime::turn::Window
 pub fn runtime::turn::Window::push_assistant(&mut self, alloc::vec::Vec<kernel::model::ContentBlock>)
 pub fn runtime::turn::Window::push_steer(&mut self, &str, &str)
-pub fn runtime::turn::Window::push_task_lines(&mut self, &str, &str, &str)
+pub fn runtime::turn::Window::push_task_lines(&mut self, &str, &str, runtime::turn::Opening)
 pub fn runtime::turn::Window::push_tool_results(&mut self, alloc::vec::Vec<kernel::model::ContentBlock>)
 pub fn runtime::version_of(&[u8]) -> alloc::string::String
 pub mod runtime
@@ -393,6 +395,8 @@ pub runtime::OffloadRecord::rest_path: std::path::PathBuf
 pub runtime::OffloadRecord::substitute: alloc::vec::Vec<u8>
 pub runtime::OffloadSite::cas: &'a mut memory::cas::Cas
 pub runtime::OffloadSite::environment: &'a std::path::Path
+pub runtime::Opening::FromJob
+pub runtime::Opening::WithPerson
 pub runtime::PackContext::cap_bytes: u64
 pub runtime::PackContext::net_notice: bool
 pub runtime::PackContext::offload: core::option::Option<runtime::offload::OffloadSite<'a>>
@@ -424,6 +428,7 @@ pub runtime::RunPlan::addr: kernel::address::Address
 pub runtime::RunPlan::budget_turns: u32
 pub runtime::RunPlan::goal: alloc::string::String
 pub runtime::RunPlan::job: kernel::locator::Locator
+pub runtime::RunPlan::opening: runtime::turn::Opening
 pub runtime::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::RunPlan::prefix: runtime::prefix::FrozenPrefix
 pub runtime::RunPlan::run: kernel::event::RunId
@@ -588,6 +593,7 @@ pub runtime::run::RunPlan::addr: kernel::address::Address
 pub runtime::run::RunPlan::budget_turns: u32
 pub runtime::run::RunPlan::goal: alloc::string::String
 pub runtime::run::RunPlan::job: kernel::locator::Locator
+pub runtime::run::RunPlan::opening: runtime::turn::Opening
 pub runtime::run::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::run::RunPlan::prefix: runtime::prefix::FrozenPrefix
 pub runtime::run::RunPlan::run: kernel::event::RunId
@@ -640,6 +646,8 @@ pub runtime::turn::Interrupt::None
 pub runtime::turn::Interrupt::Steer
 pub runtime::turn::Interrupt::Steer::source: alloc::string::String
 pub runtime::turn::Interrupt::Steer::text: alloc::string::String
+pub runtime::turn::Opening::FromJob
+pub runtime::turn::Opening::WithPerson
 pub runtime::turn::PhaseOutcome::Advanced(Next)
 pub runtime::turn::PhaseOutcome::Cancelled(runtime::turn::TurnCancelled)
 pub struct runtime::AbsentSandbox

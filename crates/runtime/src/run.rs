@@ -19,7 +19,7 @@ use serde_json::{Map, Value};
 
 use crate::handoff::Handoff;
 use crate::prefix::FrozenPrefix;
-use crate::turn::{CallShape, Interrupt, PhaseOutcome, Turn, Window};
+use crate::turn::{CallShape, Interrupt, Opening, PhaseOutcome, Turn, Window};
 
 /// Everything constant about one run. Assembled by the caller, because
 /// what a prefix contains and which tools exist are decisions of the city
@@ -30,6 +30,11 @@ pub struct RunPlan {
     pub addr: Address,
     pub task: String,
     pub goal: String,
+    /// Whether this session was handed a written task or a person.
+    /// Decided by the city when it laid the brief down, carried here so
+    /// the window and the prefix's run segment cannot disagree about
+    /// which situation the agent is in.
+    pub opening: Opening,
     pub job: Locator,
     pub budget_turns: u32,
     pub shape: CallShape,
@@ -150,7 +155,7 @@ impl Run<Active> {
         })?;
 
         let mut window = Window::new();
-        window.push_task_lines(&plan.task, &plan.job.to_string(), &plan.goal);
+        window.push_task_lines(&plan.task, &plan.goal, plan.opening);
         Ok(Run {
             plan,
             state: Active {

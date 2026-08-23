@@ -122,6 +122,7 @@ fn plan(budget_turns: u32) -> RunPlan {
         addr: addr.clone(),
         task: "close the loop".to_owned(),
         goal: "one turn, then stop".to_owned(),
+        opening: runtime::Opening::FromJob,
         job: Locator::parse(&format!("file:{}/JOB.md@{}", addr.as_str(), "a".repeat(40))).unwrap(),
         budget_turns,
         shape: CallShape {

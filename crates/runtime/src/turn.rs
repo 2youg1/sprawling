@@ -99,6 +99,21 @@ impl TurnReport {
     }
 }
 
+/// How the first user message opens.
+///
+/// Exhaustive, and the choice is made once by the city that wrote (or
+/// did not write) the job file. It is not a formatting preference: a
+/// session working from an assignment and a session talking with the
+/// person want different first words, and inferring which from an empty
+/// string would make the emptiness of a goal mean two things.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opening {
+    /// Somebody wrote the task down; the job file's text is in the prefix.
+    FromJob,
+    /// Nobody did; the person is on the other side of this message.
+    WithPerson,
+}
+
 /// The run's conversation history, owned by the executor and folded
 /// forward turn by turn. Frozen-prefix bytes never live here — the
 /// window is the volatile half of the request.
@@ -112,12 +127,22 @@ impl Window {
         Window::default()
     }
 
-    /// The three dispatch lines: deterministic from
-    /// `run_started`'s recorded inputs, hence rebuildable.
-    pub fn push_task_lines(&mut self, task: &str, job_locator: &str, goal: &str) {
-        self.push_user_text(format!(
-            "Task: {task}\nFULL READ: {job_locator}\nGoal: {goal}"
-        ));
+    /// The dispatch lines: deterministic from `run_started`'s recorded
+    /// inputs, hence rebuildable.
+    ///
+    /// No pointer to the job file. Its text is the run segment of the
+    /// frozen prefix, so a line sending the agent to fetch what it has
+    /// already been handed costs a turn and buys nothing; the content
+    /// hash that line used to carry is recorded twice in the ledger,
+    /// which is where provenance belongs.
+    pub fn push_task_lines(&mut self, task: &str, goal: &str, opening: Opening) {
+        self.push_user_text(match opening {
+            Opening::FromJob => format!("Task: {task}\nGoal: {goal}"),
+            // The person's own line, unwrapped. A conversational turn
+            // dressed in field labels reads as a form, and a form is
+            // answered with a form.
+            Opening::WithPerson => task.to_owned(),
+        });
     }
 
     /// Steer joins the tail of the last user message, or opens one if none is open.
@@ -645,7 +670,7 @@ mod tests {
             calls: vec![probe_call()],
         };
         let mut window = Window::new();
-        window.push_task_lines("probe the city", "file:job.md@abc", "one probe");
+        window.push_task_lines("probe the city", "one probe", Opening::FromJob);
         let turn = Turn::begin(run_id(), "resident@sim.1".into(), TimeMs::new(1));
         let turn = advance(
             turn.assemble(
@@ -794,6 +819,46 @@ mod tests {
         let steer: serde_json::Value = serde_json::from_slice(&ledger.lines[0]).unwrap();
         assert_eq!(steer["data"]["source"], "user");
         assert_eq!(steer["data"]["text"], "prefer the short route");
+    }
+
+    /// The two openings are two situations, and the words differ.
+    /// A session nobody assigned a task to gets the person's own line,
+    /// because a conversational turn wrapped in field labels reads as a
+    /// form and is answered as one.
+    #[test]
+    fn a_session_with_a_person_opens_in_the_persons_own_words() {
+        let mut assigned = Window::new();
+        assigned.push_task_lines("close the loop", "one turn, then stop", Opening::FromJob);
+        let ContentBlock::Text { text } = &assigned.messages()[0].content[0] else {
+            panic!("the dispatch lines are text");
+        };
+        assert_eq!(text, "Task: close the loop\nGoal: one turn, then stop");
+
+        let mut talking = Window::new();
+        talking.push_task_lines("what do you make of this", "", Opening::WithPerson);
+        let ContentBlock::Text { text } = &talking.messages()[0].content[0] else {
+            panic!("the dispatch line is text");
+        };
+        assert_eq!(text, "what do you make of this");
+    }
+
+    /// The job file's text is the prefix's run segment, so nothing sends
+    /// the agent to fetch what it was already handed. Before this, the
+    /// opening line carried a `cas:` hash no tool in the city can resolve.
+    #[test]
+    fn no_opening_line_points_at_a_file_the_agent_already_has() {
+        for (goal, opening) in [
+            ("stop when it builds", Opening::FromJob),
+            ("", Opening::WithPerson),
+        ] {
+            let mut window = Window::new();
+            window.push_task_lines("do the thing", goal, opening);
+            let ContentBlock::Text { text } = &window.messages()[0].content[0] else {
+                panic!("the opening is text");
+            };
+            assert!(!text.contains("FULL READ"), "{opening:?} still points away");
+            assert!(!text.contains("cas:"), "{opening:?} carries a content hash");
+        }
     }
 
     #[test]

@@ -218,7 +218,8 @@ pub fn resume(handoff: &Handoff, new_run: RunId) -> ResumeSeed;
 pub struct Window { /* messages: Vec<ChatMessage> —— 私有；执行器持有，逐回合推进 */ }
 impl Window { pub fn new() -> Window;
     pub fn push_steer(&mut self, source: &str, text: &str);          // 「user」或「@ID」前缀形
-    pub fn push_task_lines(&mut self, task: &str, job_locator: &Locator, goal: &str);  // 首轮三行，run_started 可重建
+    pub fn push_task_lines(&mut self, task: &str, goal: &str, opening: Opening);  // 首轮，run_started 可重建
+pub enum Opening { FromJob, WithPerson }   // P6.03：穷尽两臂，城在写 brief 时已决定
     pub fn push_assistant(&mut self, content: Vec<ContentBlock>);
     pub fn push_tool_results(&mut self, results: Vec<ContentBlock>); // ToolResult 块（pipeline 产出的成品文本）
     pub fn messages(&self) -> &[ChatMessage]; }
@@ -251,6 +252,7 @@ pub struct PrefixBuild { pub prefix: FrozenPrefix, pub notes: Payload }   // not
 pub fn build_prefix(plan: PrefixPlan) -> Result<PrefixBuild, AxError>;
 ```
 
+- **首轮不再指向任何东西（P6.03）**：`JOB.md` 的正文已是 Run 段，故 `FULL READ:` 那一行与它携的 `cas:b3-…` 一起取消——城里没有一个工具解析得了内容哈希，而溯源在 Ledger 里已记两遍。`Opening` 的两臂不是排版偏好：被派了一件活的会话与正在和人说话的会话要的第一句话不同，而把人那句话包成 `Task:`／`Goal:` 表单，换回来的也是一张表单。
 - 跨段去重：同 addr 两段命中只装首次（段序 city→building→resident→run）；后段记 skipped{reason:"duplicate"}。
 - 截断：文件超段位余额即截到边界，原处留 ASCII 标记 `[truncated: N bytes]`（prefix 面向英文窗口），恒不静默丢尾；标记字节从段预算先扣。
 - 断点：`FrozenPrefix::system_blocks()` 产四块、逐块 cache=true＝断点恒 4＝`CACHE_BREAKPOINTS_MAX`，断点只落段界。

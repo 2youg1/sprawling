@@ -10,6 +10,7 @@ impl city::Identity
 impl city::Library
 impl city::Link
 impl city::Resident
+impl city::RunBrief
 impl city::Schedule
 impl city::Source
 impl city::Watch
@@ -49,6 +50,9 @@ pub city::ModelPool::LocalOnly
 pub city::Relocation::crosses_building: bool
 pub city::Relocation::from: kernel::address::Address
 pub city::Relocation::to: kernel::address::Address
+pub city::RunBrief::Job
+pub city::RunBrief::Job::text: alloc::string::String
+pub city::RunBrief::Principal
 pub const city::ARCHIVE_DIR: &str
 pub const city::BUILDING_FILE: &str
 pub const city::BUILDING_SHELF: &str
@@ -67,6 +71,7 @@ pub enum city::Identity
 pub enum city::Layer
 pub enum city::Link
 pub enum city::ModelPool
+pub enum city::RunBrief
 pub fn city::ArchiveKind::as_str(self) -> &'static str
 pub fn city::ArchiveKind::parse(&str) -> core::result::Result<city::ArchiveKind, kernel::error::AxError>
 pub fn city::Building::addr(&self) -> &kernel::address::Address
@@ -114,6 +119,7 @@ pub fn city::Link::is_live(&self) -> bool
 pub fn city::Link::since(&self) -> kernel::event::TimeMs
 pub fn city::Resident::addr(&self) -> &kernel::address::Address
 pub fn city::Resident::digest(&self) -> kernel::locator::B3Hash
+pub fn city::RunBrief::segment_text(&self) -> &str
 pub fn city::Schedule::due(&self, kernel::event::TimeMs, kernel::event::TimeMs) -> alloc::vec::Vec<&city::Entry>
 pub fn city::Schedule::entries(&self) -> &[city::Entry]
 pub fn city::Schedule::load(&std::path::Path) -> core::result::Result<city::Schedule, kernel::error::AxError>
@@ -137,6 +143,7 @@ pub fn city::create_building(&std::path::Path, &kernel::address::Address, city::
 pub fn city::day_of(kernel::event::TimeMs) -> u64
 pub fn city::evaluate(&kernel::address::Address, &str) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub fn city::file_archive(&std::path::Path, &kernel::address::Address, city::ArchiveKind, kernel::event::TimeMs, &str, &str) -> core::result::Result<city::ArchiveEntry, kernel::error::AxError>
+pub fn city::handoff(&std::path::Path, &kernel::address::Address) -> core::option::Option<alloc::string::String>
 pub fn city::job_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::load(&std::path::Path, &kernel::address::Address) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub fn city::load_config(&std::path::Path, &kernel::address::Address) -> core::result::Result<kernel::config::FrozenConfig, kernel::error::AxError>
@@ -146,6 +153,7 @@ pub fn city::relocate(&kernel::address::Address, &kernel::address::Address) -> c
 pub fn city::schedule_path(&std::path::Path) -> std::path::PathBuf
 pub fn city::urbanite_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::watch_path(&std::path::Path) -> std::path::PathBuf
+pub fn city::write_brief(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<city::RunBrief, kernel::error::AxError>
 pub fn city::write_effort(&std::path::Path, &kernel::address::Address, kernel::model::Effort) -> core::result::Result<(), kernel::error::AxError>
 pub fn city::write_job(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<alloc::string::String, kernel::error::AxError>
 pub mod city

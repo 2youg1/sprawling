@@ -162,9 +162,12 @@ pub(crate) const MEMO_FILE: &str = "Memo.md";      // 尚无外部读者
 pub(crate) const HANDOFF_FILE: &str = "Handoff.md";
 
 pub struct JobBrief<'a> { pub task: &'a str, pub goal: &'a str, pub budget: &'a str }
+pub enum RunBrief { Job { text: String }, Principal }          // P6.03：穷尽两臂
 pub(crate) fn lay_out(building_root: &Path, addr: &Address) -> Result<(), AxError>;  // 唯一调用方是 building::create
 pub fn job_path(city_root: &Path, addr: &Address) -> PathBuf;
 pub fn write_job(city_root: &Path, addr: &Address, brief: &JobBrief<'_>) -> Result<String, AxError>;
+pub fn write_brief(city_root: &Path, addr: &Address, brief: &JobBrief<'_>) -> Result<RunBrief, AxError>;
+pub fn handoff(city_root: &Path, building_addr: &Address) -> Option<String>;
 pub fn norms(city_root: &Path, addr: &Address) -> Result<Vec<PathBuf>, AxError>;
 ```
 
@@ -173,6 +176,8 @@ pub fn norms(city_root: &Path, addr: &Address) -> Result<Vec<PathBuf>, AxError>;
 - **模板的占位行不进新楼的 Roadmap**：`docs/templates/Roadmap.md` 里的两行 `Not started` 是给人看的例子；照抄进去，一栋新楼开局就有两件不存在的待办，而它们会进分母。实例化时删掉 Item 列为空的数据行，断言是「新楼的分母是 0」。
 - **JOB.md 先落盘，再产 `run_started`**（模板第一行就这么写）；内容同时进 CAS，于是盘上那份是现场、CAS 那份是历史——Agent 改了 JOB.md 也不会使「当时派的是什么活」不可考。同一个房间再派一件活即覆写它（JOB.md 是本次会话的任务，不是档案）。
 - **机器只填它知道的段**：Task／Goal／Budget 三段有事实就写；Background／Delivery 无事实则不写——写一个 `(未知)` 占位，只是让模型每回合读一遍没信息的行。
+- **一次会话的 brief 只有两种，且由本次派活决定（P6.03）**：说得出 Goal 的就写 `JOB.md`（`RunBrief::Job`），说不出的就不写（`RunBrief::Principal`）。**判据选 Goal 而不选「盘上有没有 JOB.md」**：一个房间里上周留下的任务书仍在盘上，它可以被读，但不得冒充一次没人派任务的会话的 brief。Goal 是那份表单里唯一不可替代的一栏（什么时候停），它空着就等于告诉 Agent「停不停没定义」。
+- **`handoff` 不把空白表单当交接件**：一张没填过的 `Handoff.md` 与一张填过的占同样的 prefix 字节而一个字的信息也不带。识别靠模板自己的括号提示行。
 - **规范类 must-read 由 `norms` 给路径，不给 Locator**：Locator 需要 CAS 或 git oid，而 city 不认识落盘物（拓扑上也依赖不到 memory）。本模块答「哪几份是规范」，装配层把它们入 CAS 变成 Locator。这也是 must-read 最大失败模式的解：不让模型凭记忆重抄规范清单。
 
 ### 8-6 city::schedule（P2.11；形状 1 判定＋形状 6 数据面）

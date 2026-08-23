@@ -174,6 +174,7 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
         addr: addr.clone(),
         task,
         goal,
+        opening: runtime::Opening::FromJob,
         job,
         budget_turns,
         shape: CallShape {

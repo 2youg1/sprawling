@@ -251,6 +251,46 @@ fn city_segment(city_root: &Path) -> Vec<u8> {
     std::fs::read(city_root.join(city::CITY_FILE)).unwrap_or_else(|_| CITY_MD.as_bytes().to_vec())
 }
 
+/// The building slot: where this run stands, then the rules it stands
+/// under.
+///
+/// `BUILDING.md` is here rather than left for the agent to open because
+/// it is exactly as stable as the resident's own file — a person writes
+/// it, no run may write it, and it does not move for the length of a
+/// session. A rule an agent has to fetch before it can obey it is a rule
+/// that gets obeyed one turn late, or not at all.
+fn building_segment(city_root: &Path, addr: &Address, building: &Address) -> Vec<u8> {
+    let mut out = addr.as_str().as_bytes().to_vec();
+    if let Ok(rules) = std::fs::read(city::building_path(city_root, building)) {
+        out.push(NEWLINE);
+        out.push(NEWLINE);
+        out.extend_from_slice(&rules);
+    }
+    out
+}
+
+/// The run slot: what the last session left behind, then what this one
+/// was asked for.
+///
+/// In that order, because the brief is what the agent acts on and the
+/// last thing in a prompt is the thing that is read. A handoff that is
+/// still its blank form contributes nothing and is left out.
+fn run_segment(city_root: &Path, building: &Address, brief: &city::RunBrief) -> Vec<u8> {
+    let mut out = Vec::new();
+    if let Some(handoff) = city::handoff(city_root, building) {
+        out.extend_from_slice(handoff.as_bytes());
+        out.push(NEWLINE);
+        out.push(NEWLINE);
+    }
+    out.extend_from_slice(brief.segment_text().as_bytes());
+    out
+}
+
+/// One line ending, named once. The prefix joins documents with it, and
+/// a literal `10` at four call sites is four chances to mean something
+/// else.
+const NEWLINE: u8 = 10;
+
 /// The derived views a query reads. They are rebuilt from the ledger at
 /// startup and folded forward by the write observer, so deleting them
 /// costs nothing but the rebuild — the ledger remains the only history.
@@ -2530,7 +2570,7 @@ impl RunWorker {
         // disk is what the agent reads, and the copy in the store is
         // what the history keeps, so editing one cannot rewrite the
         // other.
-        let job_text = city::write_job(
+        let brief = city::write_brief(
             &self.city_root,
             &addr,
             &city::JobBrief {
@@ -2539,9 +2579,14 @@ impl RunWorker {
                 budget: &format!("{DISPATCH_TURN_BUDGET} turns"),
             },
         )?;
+        // What the run was given, pinned whichever arm it is: for a
+        // session nobody assigned, the pin holds the words that said so,
+        // so the ledger's `job` locator resolves to the bytes the run
+        // segment actually carried rather than to a file that was never
+        // written.
         let job_hash = self
             .cas
-            .put(job_text.as_bytes())
+            .put(brief.segment_text().as_bytes())
             .map_err(memory::MemoryError::into_ax)?;
         let job = Locator::parse(&format!("cas:b3-{job_hash}"))?;
         // Kept for the post-drive sweep: an escalation names the work it
@@ -2777,15 +2822,20 @@ impl RunWorker {
         // prefix stays cacheable across the run's life. Assembled here
         // rather than earlier because the catalog does not exist until
         // the tools, the reading room and the mode are known.
-        const NEWLINE: u8 = 10;
         let mut resident = identity.segment_bytes();
         resident.push(NEWLINE);
         resident.extend_from_slice(catalog.render().as_bytes());
         let prefix = FrozenPrefix::assemble(
             FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)),
-            FrozenSegment::new(SegmentSlot::Building, addr.as_str().as_bytes().to_vec()),
+            FrozenSegment::new(
+                SegmentSlot::Building,
+                building_segment(&self.city_root, &addr, building.addr()),
+            ),
             FrozenSegment::new(SegmentSlot::Resident, resident),
-            FrozenSegment::new(SegmentSlot::Run, job.to_string().into_bytes()),
+            FrozenSegment::new(
+                SegmentSlot::Run,
+                run_segment(&self.city_root, building.addr(), &brief),
+            ),
         )?;
 
         let plan = RunPlan {
@@ -2794,6 +2844,12 @@ impl RunWorker {
             addr: addr.clone(),
             task,
             goal,
+            // The city decided this when it laid the brief down; the
+            // window and the run segment read the one decision.
+            opening: match &brief {
+                city::RunBrief::Job { .. } => runtime::Opening::FromJob,
+                city::RunBrief::Principal => runtime::Opening::WithPerson,
+            },
             job: job.clone(),
             budget_turns: DISPATCH_TURN_BUDGET,
             shape: CallShape {
@@ -6133,6 +6189,107 @@ addr = \"gone/room1\"
             .as_array()
             .expect("the handoff carries its must-read list");
         assert_eq!(must_read.len(), 3, "city, building, job: {must_read:?}");
+    }
+
+    /// The prefix carries what it tells the agent to read.
+    ///
+    /// Before this card the building slot held twelve bytes of address
+    /// and the run slot held a `cas:` hash no tool in the city can
+    /// resolve, so an agent was told to read its building's rules and
+    /// its own task and had no way to reach either.
+    #[test]
+    fn the_prefix_carries_the_rules_and_the_task_rather_than_pointing_at_them() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let room = Address::parse("lab/room1").unwrap();
+        let (base_url, provider) = fake_openai(&["m-local"], vec![completion("done", None)]);
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        // A handoff the last session actually wrote, as against the blank
+        // form a new building starts with.
+        std::fs::write(
+            dir.path().join("lab").join("Handoff.md"),
+            "# Handoff \u{2014} lab\n\nThe meter reads in millivolts.\n",
+        )
+        .unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: room.clone(),
+                task: "measure the thing".to_owned(),
+                goal: "a number with a unit, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let asked = provider.bodies().join("\n");
+        assert!(
+            asked.contains("confidential: false"),
+            "the building's own rules reach the model: {asked}"
+        );
+        assert!(
+            asked.contains("The meter reads in millivolts."),
+            "what the last session left reaches the next one"
+        );
+        assert!(
+            asked.contains("a number with a unit, then stop"),
+            "this session's brief is in the prompt, not addressed by it"
+        );
+        assert!(
+            !asked.contains("FULL READ"),
+            "nothing sends the agent after what it already holds"
+        );
+        assert!(
+            !asked.contains("cas:b3-"),
+            "no content hash reaches a model that cannot resolve one"
+        );
+    }
+
+    /// A dispatch that never says when to stop is a conversation, and the
+    /// prefix says so instead of handing over a form with its one
+    /// irreplaceable field blank.
+    #[test]
+    fn a_dispatch_with_no_goal_leaves_no_job_file_and_says_the_person_is_here() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let room = Address::parse("lab/room1").unwrap();
+        let (base_url, provider) = fake_openai(&["m-local"], vec![completion("done", None)]);
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: room.clone(),
+                task: "what do you make of this".to_owned(),
+                goal: String::new(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"talk"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        assert!(
+            !city::job_path(dir.path(), &room).exists(),
+            "a conversation writes no task file"
+        );
+        let asked = provider.bodies().join("\n");
+        assert!(
+            asked.contains("working with the person directly"),
+            "the prefix states the situation: {asked}"
+        );
+        assert!(
+            !asked.contains("Task: what do you make of this"),
+            "the person's line goes out as they wrote it, not as a form"
+        );
     }
 
     #[test]
