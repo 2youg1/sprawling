@@ -21,8 +21,14 @@ use std::path::{Path, PathBuf};
 
 use kernel::{Address, AxCode, AxError};
 
-/// Where the stock sits, under the reserved prefix.
+/// Where the city's shared stock sits, under its reserved prefix.
 pub const LIBRARY_DIR: &str = "library";
+
+/// Where a building's own stock sits, under the building's reserved
+/// subtree. Inside the building directory, so a building copied
+/// elsewhere carries what it knows how to do; outside every write
+/// domain, so the residents of that building still cannot restock it.
+pub const BUILDING_SHELF: &str = "skills";
 
 /// One shelved item: what it is called, which section it sits in, and
 /// the one line a catalog would show.
@@ -35,6 +41,11 @@ pub struct Holding {
     /// summary of a summary is a digest, and digests are suspect.
     pub disclosure: String,
     pub path: PathBuf,
+    /// Where this holding sits, as the city spells it. Computed once at
+    /// the scan that found the file, because a holding on a building's
+    /// own shelf and one on the city's are at different addresses and a
+    /// formula over `section` and `name` can only be right about one.
+    pub addr: Address,
 }
 
 /// The city's stock, by section then name.
@@ -52,50 +63,25 @@ impl Library {
     /// # Errors
     /// Propagates a directory that exists and cannot be read — that is
     /// a broken installation rather than an empty one.
-    pub fn scan(city_root: &Path) -> Result<Library, AxError> {
-        let root = city_root.join(kernel::RESERVED_PREFIX).join(LIBRARY_DIR);
+    pub fn scan(city_root: &Path, building: Option<&Address>) -> Result<Library, AxError> {
         let mut holdings = BTreeMap::new();
-        if !root.exists() {
-            return Ok(Library { holdings });
-        }
-        for section in read_dir(&root)? {
-            if !section.is_dir() {
-                continue;
-            }
-            let section_name = file_name(&section);
-            for item in read_dir(&section)? {
-                if item.is_dir() || item.extension().is_none_or(|ext| ext != "md") {
-                    continue;
-                }
-                let name = item
-                    .file_stem()
-                    .and_then(|stem| stem.to_str())
-                    .unwrap_or_default()
-                    .to_owned();
-                if name.is_empty() {
-                    continue;
-                }
-                let text = std::fs::read_to_string(&item).map_err(|err| {
-                    AxError::failure(
-                        AxCode::StorageFatal,
-                        "read a library holding",
-                        format!("{}: {err}", item.display()),
-                    )
-                })?;
-                holdings.insert(
-                    (section_name.clone(), name.clone()),
-                    Holding {
-                        name,
-                        section: section_name.clone(),
-                        disclosure: first_line(&text),
-                        path: item,
-                    },
-                );
-            }
+        // The city's shelf first, then the building's over the top of
+        // it: the nearer shelf wins, which is the rule the configuration
+        // ladder already applies to the values a run is governed by.
+        shelve(
+            city_root,
+            &[kernel::RESERVED_PREFIX, LIBRARY_DIR],
+            &mut holdings,
+        )?;
+        if let Some(building) = building {
+            shelve(
+                city_root,
+                &[building.as_str(), kernel::RESERVED_PREFIX, BUILDING_SHELF],
+                &mut holdings,
+            )?;
         }
         Ok(Library { holdings })
     }
-
     /// Everything on the shelves, in section then name order.
     #[must_use]
     pub fn all(&self) -> Vec<&Holding> {
@@ -142,19 +128,62 @@ impl Library {
     }
 }
 
-/// Where a holding sits, as an address, for the must-read list and for
-/// cost attribution by skill.
+/// Reads one shelf into the map. A shelf that is not there is an empty
+/// shelf: most cities start with nothing settled, and most buildings
+/// never keep a skill of their own.
 ///
 /// # Errors
-/// Propagates an address the city cannot spell.
-pub fn holding_address(holding: &Holding) -> Result<Address, AxError> {
-    Address::parse(&format!(
-        "{}/{}/{}/{}.md",
-        kernel::RESERVED_PREFIX.trim_end_matches('/'),
-        LIBRARY_DIR,
-        holding.section,
-        holding.name
-    ))
+/// Propagates a directory that exists and cannot be read, a holding
+/// that cannot be read, and a path the city cannot spell as an address.
+fn shelve(
+    city_root: &Path,
+    segments: &[&str],
+    holdings: &mut BTreeMap<(String, String), Holding>,
+) -> Result<(), AxError> {
+    let root = segments
+        .iter()
+        .fold(city_root.to_path_buf(), |path, segment| path.join(segment));
+    if !root.exists() {
+        return Ok(());
+    }
+    for section in read_dir(&root)? {
+        if !section.is_dir() {
+            continue;
+        }
+        let section_name = file_name(&section);
+        for item in read_dir(&section)? {
+            if item.is_dir() || item.extension().is_none_or(|ext| ext != "md") {
+                continue;
+            }
+            let name = item
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            if name.is_empty() {
+                continue;
+            }
+            let text = std::fs::read_to_string(&item).map_err(|err| {
+                AxError::failure(
+                    AxCode::StorageFatal,
+                    "read a library holding",
+                    format!("{}: {err}", item.display()),
+                )
+            })?;
+            let addr = Address::parse(&format!("{}/{section_name}/{name}.md", segments.join("/")))?;
+            holdings.insert(
+                (section_name.clone(), name.clone()),
+                Holding {
+                    name,
+                    section: section_name.clone(),
+                    disclosure: first_line(&text),
+                    path: item,
+                    addr,
+                },
+            );
+        }
+    }
+    Ok(())
 }
 
 fn read_dir(path: &Path) -> Result<Vec<PathBuf>, AxError> {
@@ -227,7 +256,7 @@ mod tests {
     #[test]
     fn a_city_with_no_library_has_an_empty_one_rather_than_an_error() {
         let dir = tempfile::tempdir().unwrap();
-        let library = Library::scan(dir.path()).unwrap();
+        let library = Library::scan(dir.path(), None).unwrap();
         assert!(library.all().is_empty());
         assert!(library.reading_room(&["anything".to_owned()]).is_empty());
     }
@@ -236,7 +265,7 @@ mod tests {
     fn a_building_takes_only_what_its_list_admits() {
         let dir = tempfile::tempdir().unwrap();
         stocked(dir.path());
-        let library = Library::scan(dir.path()).unwrap();
+        let library = Library::scan(dir.path(), None).unwrap();
         assert_eq!(library.all().len(), 3, "the shelves hold everything");
         let admitted = library.reading_room(&["unit-tests".to_owned(), "diffing".to_owned()]);
         let names: Vec<&str> = admitted.iter().map(|h| h.name.as_str()).collect();
@@ -251,7 +280,7 @@ mod tests {
     fn the_one_line_is_the_authors_line() {
         let dir = tempfile::tempdir().unwrap();
         stocked(dir.path());
-        let library = Library::scan(dir.path()).unwrap();
+        let library = Library::scan(dir.path(), None).unwrap();
         let holding = library
             .all()
             .into_iter()
@@ -265,7 +294,7 @@ mod tests {
     fn a_name_on_the_list_that_is_not_on_the_shelf_is_reported_to_whoever_wrote_it() {
         let dir = tempfile::tempdir().unwrap();
         stocked(dir.path());
-        let library = Library::scan(dir.path()).unwrap();
+        let library = Library::scan(dir.path(), None).unwrap();
         let asked = vec!["diffing".to_owned(), "imagined".to_owned()];
         assert_eq!(library.reading_room(&asked).len(), 1);
         assert_eq!(library.missing(&asked), vec!["imagined".to_owned()]);
@@ -298,11 +327,7 @@ mod tests {
             .join("utilities");
         std::fs::create_dir_all(&own).unwrap();
         std::fs::write(own.join("kiln.md"), "Firing a kiln in this lab\n").unwrap();
-        std::fs::write(
-            own.join("unit-tests.md"),
-            "This lab's own rule for tests\n",
-        )
-        .unwrap();
+        std::fs::write(own.join("unit-tests.md"), "This lab's own rule for tests\n").unwrap();
 
         let library = Library::scan(dir.path(), Some(&lab)).unwrap();
         let names: Vec<&str> = library.all().iter().map(|h| h.name.as_str()).collect();

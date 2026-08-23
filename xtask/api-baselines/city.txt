@@ -26,6 +26,7 @@ pub city::BuildingTemplate::Minimal
 pub city::Cadence::DailyAt(u64)
 pub city::Cadence::EveryMinutes(u64)
 pub city::Cadence::WeeklyAt(u64)
+pub city::Holding::addr: kernel::address::Address
 pub city::Holding::disclosure: alloc::string::String
 pub city::Holding::name: alloc::string::String
 pub city::Holding::path: std::path::PathBuf
@@ -50,6 +51,7 @@ pub city::Relocation::from: kernel::address::Address
 pub city::Relocation::to: kernel::address::Address
 pub const city::ARCHIVE_DIR: &str
 pub const city::BUILDING_FILE: &str
+pub const city::BUILDING_SHELF: &str
 pub const city::CITY_FILE: &str
 pub const city::CONFIG_FILE: &str
 pub const city::JOB_FILE: &str
@@ -106,7 +108,7 @@ pub fn city::Identity::who(&self) -> alloc::string::String
 pub fn city::Library::all(&self) -> alloc::vec::Vec<&city::Holding>
 pub fn city::Library::missing(&self, &[alloc::string::String]) -> alloc::vec::Vec<alloc::string::String>
 pub fn city::Library::reading_room(&self, &[alloc::string::String]) -> alloc::vec::Vec<&city::Holding>
-pub fn city::Library::scan(&std::path::Path) -> core::result::Result<city::Library, kernel::error::AxError>
+pub fn city::Library::scan(&std::path::Path, core::option::Option<&kernel::address::Address>) -> core::result::Result<city::Library, kernel::error::AxError>
 pub fn city::Library::sections(&self) -> alloc::vec::Vec<&str>
 pub fn city::Link::is_live(&self) -> bool
 pub fn city::Link::since(&self) -> kernel::event::TimeMs
@@ -135,7 +137,6 @@ pub fn city::create_building(&std::path::Path, &kernel::address::Address, city::
 pub fn city::day_of(kernel::event::TimeMs) -> u64
 pub fn city::evaluate(&kernel::address::Address, &str) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub fn city::file_archive(&std::path::Path, &kernel::address::Address, city::ArchiveKind, kernel::event::TimeMs, &str, &str) -> core::result::Result<city::ArchiveEntry, kernel::error::AxError>
-pub fn city::holding_address(&city::Holding) -> core::result::Result<kernel::address::Address, kernel::error::AxError>
 pub fn city::job_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::load(&std::path::Path, &kernel::address::Address) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub fn city::load_config(&std::path::Path, &kernel::address::Address) -> core::result::Result<kernel::config::FrozenConfig, kernel::error::AxError>

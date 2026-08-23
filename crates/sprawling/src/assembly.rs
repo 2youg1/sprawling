@@ -2712,12 +2712,12 @@ impl RunWorker {
         // thousand skills; what costs resident bytes is the list this
         // building's own file admits, and a name on that list which is
         // not on the shelves is left out rather than promised.
-        let shelves = city::Library::scan(&self.city_root)?;
+        let shelves = city::Library::scan(&self.city_root, Some(building.addr()))?;
         for holding in shelves.reading_room(rules.reading_room()) {
             catalog.admit_skill(runtime::CatalogEntry {
                 name: holding.name.clone(),
                 disclosure: holding.disclosure.clone(),
-                expansion: city::holding_address(holding)?.as_str().to_owned(),
+                expansion: holding.addr.as_str().to_owned(),
             })?;
         }
         for absent in shelves.missing(rules.reading_room()) {

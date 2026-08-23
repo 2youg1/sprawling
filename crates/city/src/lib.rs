@@ -28,7 +28,7 @@ pub use building::created_payload as building_created_payload;
 pub use building::{Building, BuildingTemplate, create as create_building};
 pub use config_layers::path as config_path;
 pub use config_layers::{CONFIG_FILE, ConfigLayer, Layer, load as load_config};
-pub use library::{Holding, LIBRARY_DIR, Library, holding_address};
+pub use library::{BUILDING_SHELF, Holding, LIBRARY_DIR, Library};
 pub use policy::{BUILDING_FILE, BuildingRules, ModelPool, building_path, evaluate, load};
 pub use resident::{Dossier, Identity, Resident, URBANITE_FILE, urbanite_path};
 pub use schedule::{Cadence, Entry, SCHEDULE_FILE, Schedule, schedule_path};
