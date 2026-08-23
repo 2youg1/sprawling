@@ -116,6 +116,7 @@ pub channels::Command::Dispatch::budget: kernel::budget::BudgetCap
 pub channels::Command::Dispatch::goal: alloc::string::String
 pub channels::Command::Dispatch::idem: kernel::idem::IdemKey
 pub channels::Command::Dispatch::mode: channels::ModeTag
+pub channels::Command::Dispatch::session: core::option::Option<kernel::address::SessionName>
 pub channels::Command::Dispatch::task: alloc::string::String
 pub channels::Command::Fork
 pub channels::Command::Fork::addr: core::option::Option<kernel::address::Address>
@@ -408,6 +409,7 @@ pub use channels::Restoration
 pub use channels::RunId
 pub use channels::Sealed
 pub use channels::Seq
+pub use channels::SessionName
 pub use channels::TimeMs
 pub use channels::Tokens
 pub use channels::UnplannedProgress

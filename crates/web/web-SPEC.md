@@ -644,6 +644,17 @@ pub(crate) fn models_of(answer: &EndpointsAnswer, endpoint: &str) -> Vec<String>
 
 验收：`Painted` 渲 `View::Settings`，断言 `Attach a provider` 的文本序号小于 `choose a model for a job`；渲 `View::Live(None)`，断言页面说出要先选一个 session 且**不含**可提交的 steer 表单；`models_of` 只答选中 provider 的模型；派活条渲出四个 `label`。
 
+### 8-34 派活时给这次会话取个名字（F2.11 的客户端半边）
+
+```rust
+pub fn dispatch_command(addr, task, goal, mode, session: &str) -> Option<ClientFrame>;
+fn city_view::session_name(task: &str) -> String;   // 任务的前四个词
+```
+
+- **派活条多一格「call it」**：填了就开一个新房间（地址栏给楼即可），空着就是向地址栏那个房间继续干。一个字段表达两种意图，而不是两个模式开关。
+- **城市页不再把每一件活都扔进 `room1`**：原先 `city_view::dispatch_command` 写死 `{building}/room1`，于是同一栋楼上发出的第二件活盖掉第一件的文件。现在地址给楼，名字取自任务的前四个词——人刚写完的词，一小时后在文件夹列表里认得出来。
+- **名字不合法就拒整条命令**（`SessionName::parse` 答 `None`），而不是自作主张改拼写：一个没人敲过的名字不应该出现在别人的目录里。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

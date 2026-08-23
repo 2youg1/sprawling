@@ -65,7 +65,9 @@ pub fn open(city_root: &Path, building: &Address, name: &SessionName) -> Result<
         "open a room for this session",
         name.as_str().to_owned(),
     )
-    .with_recovery("that name and its first 999 suffixes are taken; give this session another word"))
+    .with_recovery(
+        "that name and its first 999 suffixes are taken; give this session another word",
+    ))
 }
 
 #[cfg(test)]

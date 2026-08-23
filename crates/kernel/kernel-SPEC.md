@@ -983,6 +983,23 @@ pub fn dedup(seen: &BTreeSet<IdemKey>, key: &IdemKey) -> DedupVerdict;   // 去�
 - **首次公网出网**：`egress` 对 Public 且 `!prior_public_egress` 置 `first_public_egress`；NetNotice 挂信封属 pipeline（S3）。Loopback/Private 恒不触发（对 localhost 提醒注入只会训练模型忽略提醒）。
 - kani：五门组合 fail-closed——reserved 目标恒不 Allow；spans 非空恒 Deny；超预算恒不 Allow；Unplanned Discard 恒不 Allow；Delegated 再派生恒不 Allow。
 
+### 8-29 kernel::address::SessionName（F2.11；形状 2 value）
+
+```rust
+pub struct SessionName(String);
+impl SessionName {
+    pub fn parse(raw: &str) -> Result<Self, AxError>;   // 唯一构造点；修剪两端
+    pub fn as_str(&self) -> &str;
+}
+```
+
+一个人给一次会话的名字会变成它干活的目录，所以它必须恰好是一个地址段。用 `String` 就是把这条规则散到每个记得它的调用方里。
+
+- **段规则向 `Address::parse` 问，不重写**：反斜杠、`:`、控制字符这些判据只有一份；本类型只多拒 `/`、`.`／`..`、`.sprawling` 与 64 字符上限。
+- **修剪两端而不改中间**：人多敲一个空格不是意图；把中间的空格换成连字符则是替他取名。
+- **64 字符**：超过这个长度的不是名字，是一件被写进名字栏的任务；它还要当别人机器上的目录名。
+- **serde 进口复验**：`Deserialize` 走 `parse`（同 `Address`），于是一个从线上来的名字不会因为发送方没检查而变成路径。
+
 ### 8-28 C17 从「首段」扩到「任一段」（F2.08；形状 2 value 的一条原语）
 
 ```rust

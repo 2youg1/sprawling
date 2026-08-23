@@ -35,6 +35,7 @@ impl core::fmt::Display for kernel::Range
 impl core::fmt::Display for kernel::RunId
 impl core::fmt::Display for kernel::SecretRef
 impl core::fmt::Display for kernel::ServerLabel
+impl core::fmt::Display for kernel::SessionName
 impl core::fmt::Display for kernel::ToolName
 impl kernel::ActionFingerprint
 impl kernel::Address
@@ -73,6 +74,7 @@ impl kernel::Sealed<alloc::string::String>
 impl kernel::SecretRef
 impl kernel::Seq
 impl kernel::ServerLabel
+impl kernel::SessionName
 impl kernel::TaintSet
 impl kernel::TaintSource
 impl kernel::TimeMs
@@ -96,6 +98,7 @@ impl<'de> serde_core::de::Deserialize<'de> for kernel::IdemKey
 impl<'de> serde_core::de::Deserialize<'de> for kernel::Locator
 impl<'de> serde_core::de::Deserialize<'de> for kernel::Payload
 impl<'de> serde_core::de::Deserialize<'de> for kernel::SecretRef
+impl<'de> serde_core::de::Deserialize<'de> for kernel::SessionName
 impl<'de> serde_core::de::Deserialize<'de> for kernel::ToolName
 impl<T: zeroize::Zeroize> kernel::Sealed<T>
 impl<T> core::default::Default for kernel::LayeredValue<T>
@@ -324,6 +327,10 @@ pub fn kernel::ServerLabel::as_str(&self) -> &str
 pub fn kernel::ServerLabel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernel::ServerLabel::parse(&str) -> core::result::Result<kernel::ServerLabel, kernel::AxError>
 pub fn kernel::ServerLabel::try_from(alloc::string::String) -> core::result::Result<kernel::ServerLabel, kernel::AxError>
+pub fn kernel::SessionName::as_str(&self) -> &str
+pub fn kernel::SessionName::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
+pub fn kernel::SessionName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernel::SessionName::parse(&str) -> core::result::Result<Self, kernel::AxError>
 pub fn kernel::TaintSet::contains(&self, &kernel::TaintSource) -> bool
 pub fn kernel::TaintSet::empty() -> kernel::TaintSet
 pub fn kernel::TaintSet::is_empty(&self) -> bool
@@ -882,6 +889,7 @@ pub struct kernel::SecretRef
 pub struct kernel::SecretSpan
 pub struct kernel::Seq(_)
 pub struct kernel::ServerLabel(_)
+pub struct kernel::SessionName(_)
 pub struct kernel::SystemBlock
 pub struct kernel::TaintSet(_)
 pub struct kernel::TaintSource(_)

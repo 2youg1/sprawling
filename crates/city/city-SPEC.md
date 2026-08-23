@@ -275,6 +275,8 @@ pub fn index(city_root, building) -> Result<Vec<Entry>, AxError>;   // 算出来
 
 ```rust
 pub fn open(city_root: &Path, building: &Address, name: &SessionName) -> Result<Address, AxError>;
+// crate 面：`pub use room::open as open_room;`——调用方读到的是 `city::open_room`，
+// 因为裸的 `city::open` 在装配层里说不出开的是什么。
 ```
 
 与 `city::building` 同形：一个判定加一个落盘动作，而不是一个长住的值。

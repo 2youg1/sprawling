@@ -692,17 +692,27 @@ pub const HELD_RECORDS: usize = 2_000;
 ///
 /// No budget travels from a person: `BudgetCap::default()` is what the
 /// wire carries, and what a run costs is reported after it runs.
+///
+/// `session` is the word this person is calling the work by. Given one,
+/// the city opens a room of that name under the building in `addr` and
+/// the session has a folder nobody else writes into; left empty, `addr`
+/// is the room itself and the dispatch continues what is already there.
 #[must_use]
 pub fn dispatch_command(
     addr: &str,
     task: &str,
     goal: &str,
     mode: &str,
+    session: &str,
 ) -> Option<channels::ClientFrame> {
     let (task, goal) = (task.trim(), goal.trim());
     if task.is_empty() || goal.is_empty() {
         return None;
     }
+    let session = match session.trim() {
+        "" => None,
+        named => Some(channels::SessionName::parse(named).ok()?),
+    };
     let addr = Address::parse(addr.trim()).ok()?;
     Some(channels::ClientFrame::Command(Box::new(
         channels::WireCommand::Dispatch {
@@ -716,6 +726,7 @@ pub fn dispatch_command(
             goal: goal.to_owned(),
             mode: channels::ModeTag::parse(mode).ok()?,
             budget: channels::BudgetCap::default(),
+            session,
         },
     )))
 }
@@ -967,6 +978,7 @@ fn DispatchBar(
     let mut task = use_signal(String::new);
     let mut goal = use_signal(String::new);
     let mut mode = use_signal(|| "plan".to_owned());
+    let mut session = use_signal(String::new);
     rsx! {
         form {
             class: "dispatch",
@@ -977,11 +989,13 @@ fn DispatchBar(
                     &task.read(),
                     &goal.read(),
                     &mode.read(),
+                    &session.read(),
                 );
                 if let Some(frame) = frame {
                     on_frame.call(frame);
                     task.set(String::new());
                     goal.set(String::new());
+                    session.set(String::new());
                     // The run this frame starts reports itself on the
                     // live page, so that is where the person who sent it
                     // belongs. Which session they then watch stays their
@@ -994,9 +1008,22 @@ fn DispatchBar(
                 input {
                     id: "dispatch-addr",
                     name: "addr",
-                    placeholder: "building/room",
+                    // Short, because the label above already said what
+                    // the field is: a placeholder wider than its column
+                    // teaches half a format.
+                    placeholder: "lab",
                     value: "{at}",
                     oninput: move |event| at.set(event.value()),
+                }
+            }
+            div { class: "field",
+                label { r#for: "dispatch-session", "call it" }
+                input {
+                    id: "dispatch-session",
+                    name: "session",
+                    placeholder: "give it a name",
+                    value: "{session}",
+                    oninput: move |event| session.set(event.value()),
                 }
             }
             div { class: "field",
@@ -1032,7 +1059,13 @@ fn DispatchBar(
             }
             button {
                 r#type: "submit",
-                disabled: dispatch_command(&at.read(), &task.read(), &goal.read(), &mode.read())
+                disabled: dispatch_command(
+                        &at.read(),
+                        &task.read(),
+                        &goal.read(),
+                        &mode.read(),
+                        &session.read(),
+                    )
                     .is_none(),
                 "send it"
             }

@@ -26,13 +26,15 @@
 use kernel::{
     Address, ApprovalId, ApprovalItem, Autonomy, AxCode, AxError, B3Hash, BudgetCap, DialectKind,
     EventKind, EventRecord, GitOid, IdemKey, ModelTag, PolicyVerdict, Progress, Restoration, RunId,
-    Sealed, Seq, TimeMs, UsdMicros,
+    Sealed, Seq, SessionName, TimeMs, UsdMicros,
 };
 use serde::{Deserialize, Serialize};
 
 /// Wire format version. Bumped whenever the frame grammar changes shape in a
 /// way the schema hash alone would not explain to a human reading a log.
-pub const WIRE_V: u32 = 4;
+///
+/// 5: `Dispatch` carries the name of the session it starts (F2.11).
+pub const WIRE_V: u32 = 5;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
@@ -186,6 +188,15 @@ pub enum Command<Secret = Sealed<String>> {
         mode: ModeTag,
         budget: BudgetCap,
         idem: IdemKey,
+        /// What this session is called, when it is a new one.
+        ///
+        /// `Some` means `addr` names a building and the city opens a
+        /// room of this name under it; `None` means `addr` already
+        /// names the room, which is how an earlier session is
+        /// continued. Two dispatches to one room are one session with a
+        /// history, and that is a different thing from two sessions
+        /// sharing a folder.
+        session: Option<SessionName>,
     },
     /// One step of a subscription login. Which step is named rather
     /// than inferred: beginning and redeeming are different actions
@@ -396,6 +407,7 @@ impl From<WireCommand> for Command {
                 mode,
                 budget,
                 idem,
+                session,
             } => Self::Dispatch {
                 addr,
                 task,
@@ -403,6 +415,7 @@ impl From<WireCommand> for Command {
                 mode,
                 budget,
                 idem,
+                session,
             },
             Command::Login {
                 provider,

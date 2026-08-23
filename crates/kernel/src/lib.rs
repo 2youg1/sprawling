@@ -12,7 +12,7 @@ pub use error::{AxCode, AxError, Carrier, GateRefusal};
 mod address;
 mod locator;
 
-pub use address::{Address, RESERVED_PREFIX};
+pub use address::{Address, RESERVED_PREFIX, SessionName};
 pub use locator::{B3Hash, GitOid, Locator, Range};
 
 pub mod consts_external;

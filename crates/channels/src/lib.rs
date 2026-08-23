@@ -50,4 +50,4 @@ pub use kernel::{BudgetUse, Locator, PlannedProgress, Progress, UnplannedProgres
 pub use kernel::{DialectKind, Effort, ModelTag};
 pub use kernel::{EventDraft, EventKind, EventRecord, GitOid, IdemKey, RunId};
 pub use kernel::{Payload, Sealed, Seq, TimeMs, Tokens, UsdMicros};
-pub use kernel::{PolicyVerdict, WriteDomain};
+pub use kernel::{PolicyVerdict, SessionName, WriteDomain};

@@ -113,6 +113,84 @@ impl<'de> Deserialize<'de> for Address {
     }
 }
 
+/// The longest word a person may give a session. It becomes a directory
+/// name on their file system, and a name longer than this is a sentence
+/// that wanted to be a task.
+const SESSION_NAME_MAX: usize = 64;
+
+/// What a person calls one session: one address segment, and therefore
+/// one directory under a building.
+///
+/// A `String` here would put the segment rules in whichever caller
+/// remembered them. This has one constructor, so a name that cannot be
+/// a room cannot be spelled, on the wire or anywhere else.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct SessionName(String);
+
+impl SessionName {
+    /// Sole constructor. Trims the ends - a person types a trailing
+    /// space and means nothing by it - and then refuses anything that
+    /// is not exactly one usable segment.
+    ///
+    /// # Errors
+    /// `E_INVALID_ARGS` for empty input, a separator, a `.` or `..`
+    /// segment, the reserved directory name, a control character, or a
+    /// name past [`SESSION_NAME_MAX`].
+    pub fn parse(raw: &str) -> Result<Self, AxError> {
+        let trimmed = raw.trim();
+        let reject = |violation: &str| {
+            Err(
+                AxError::failure(AxCode::InvalidArgs, "name a session", raw).with_recovery(
+                    format!(
+                        "{violation}; give one word or phrase this session can be found by - it \
+                         becomes a folder beside the others in that building"
+                    ),
+                ),
+            )
+        };
+        if trimmed.is_empty() {
+            return reject("a session with no name has no folder to work in");
+        }
+        if trimmed.chars().count() > SESSION_NAME_MAX {
+            return reject("that is longer than a name and shorter than a task");
+        }
+        if trimmed == "." || trimmed == ".." {
+            return reject("that names a directory rather than a session");
+        }
+        if trimmed == RESERVED_PREFIX {
+            return reject("that name belongs to the city itself");
+        }
+        // The segment rules are Address's, asked rather than restated: a
+        // second copy of them here would drift from the one that judges
+        // the path this name becomes.
+        if trimmed.contains('/') || Address::parse(trimmed).is_err() {
+            return reject(
+                "a session name is one segment: no `/`, `\\`, `:` or control characters",
+            );
+        }
+        Ok(SessionName(trimmed.to_owned()))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SessionName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        SessionName::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,

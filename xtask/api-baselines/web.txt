@@ -137,7 +137,7 @@ pub fn web::custom_properties() -> alloc::string::String
 pub fn web::day_label(u64) -> alloc::string::String
 pub fn web::describe(&kernel::event::EventRecord) -> alloc::string::String
 pub fn web::destinations(&web::Snapshot) -> alloc::vec::Vec<web::NavGroup>
-pub fn web::dispatch_command(&str, &str, &str, &str) -> core::option::Option<channels::wire::ClientFrame>
+pub fn web::dispatch_command(&str, &str, &str, &str, &str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::distinguishable_without_colour() -> bool
 pub fn web::done_band_of(&web::Camera, &web::Prism) -> alloc::vec::Vec<web::Face>
 pub fn web::draw(&web::Camera, alloc::vec::Vec<web::Prism>, core::option::Option<&str>) -> web::DisplayList
