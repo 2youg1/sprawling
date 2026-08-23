@@ -61,6 +61,11 @@ admission／market／cost：纯判定与数据面，被 endpoint 与 S3 回合�
 
 城内规范会话类型住 `kernel::model`（缝上类型，S3 只加）；本模块只做 canonical↔wire 翻译，纯函数、无 I/O、无状态。
 
+**P6.01 改：每一条形状不匹配都带出路，而空答案不再被当成形状不匹配**。真机派活时拿到 `E_WIRE_MISMATCH: translate wire on response.choices: expected array`，**`recovery` 为空串**——一条让人无从下手的拒绝，而 `AxError` 的契约写着 `recovery` 必须是可直接执行的信息。两处修正：
+
+- `mismatch()` 统一携一句出路（对一句 dialect 选错与 base url 写错）。这是 25 个调用点共用的那一句。
+- **`choices` 为 `null` 不是形状问题**，单独报 `E_PROVIDER`：信封是对的、字段都在、只是答案被丢了。实测来源：一家 OpenAI 兼容的托管端点在 `max_tokens` 高于所选模型的上限时，**既不拒也不答**，回 HTTP 200 携 `"choices": null` 与全零 usage。同一家端点上限因模型而异（实测：一个模型在 1024 与 2048 之间就翻，另一个 8192 仍然正常），故**恒不把某个上限写进代码**：那是对侧的数字，写下来就是第二个会漂的权威。拒词只指向该改的那一项（max output tokens），并标 `retriable`。
+
 ```rust
 #[non_exhaustive] pub enum DialectKind { Anthropic, OpenAi }
 pub fn request_wire(kind: DialectKind, req: &ChatRequest) -> Result<serde_json::Value, AxError>;

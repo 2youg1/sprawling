@@ -64,6 +64,14 @@ zeroize = "1.9"
 # authority, not two.
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time"] }
 axum = "0.8"
+# P3: the second client of the wire, in a terminal. This is the same
+# crate axum's `ws` feature already carries - a direct dependency adds no
+# package to the lock, and adding a different WebSocket library would put
+# two implementations of one protocol in one binary. `connect` without
+# TLS: a city's control surface is reached over `ws://`, and a city
+# reachable over TLS is a city behind something that terminates it.
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect", "handshake"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 # S4.01 conclusion book (crates/web/web-SPEC.md section 8.5): Dioxus, built
 # without `dx`. default-features off is load-bearing - it drops `asset` and
 # `devtools`, both of which need the CLI we deliberately do not use, and it

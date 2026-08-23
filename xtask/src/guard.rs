@@ -24,6 +24,18 @@ const PROTECTED_FILES: [&str; 5] = [
     "clippy.toml",
     "justfile",
 ];
+/// What a gate *produced*, as opposed to how a gate *decides*.
+///
+/// A public-surface baseline is the recorded output of `apisync`, and
+/// `apisync` refuses a crate whose baseline is stale while naming
+/// `cargo xtask apisync --write` as the way to fix it. With this
+/// directory guarded, obeying one gate broke the other and every change
+/// to any public surface would need a separate ruling - which teaches
+/// people that a `Verdict:` trailer is a formality rather than a
+/// decision. Regenerating a baseline cannot loosen anything: `apisync`
+/// still compares it against the live API, and the diff is in the
+/// commit for a reviewer to read.
+const PRODUCED_PREFIXES: [&str; 1] = ["xtask/api-baselines/"];
 const TRAILER: &str = "Verdict:";
 
 pub(crate) fn check(root: &Path, range: Option<&str>) -> Result<Vec<Violation>, XtaskError> {
@@ -66,6 +78,9 @@ pub(crate) fn check(root: &Path, range: Option<&str>) -> Result<Vec<Violation>, 
 }
 
 fn is_protected(file: &str) -> bool {
+    if PRODUCED_PREFIXES.iter().any(|p| file.starts_with(p)) {
+        return false;
+    }
     PROTECTED_FILES.contains(&file) || PROTECTED_PREFIXES.iter().any(|p| file.starts_with(p))
 }
 
@@ -200,5 +215,15 @@ mod tests {
         // member manifests are not the root manifest
         assert!(!is_protected("crates/kernel/Cargo.toml"));
         assert!(!is_protected("ARCHITECTURE.md"));
+        // What a gate produced is not how a gate decides. `apisync`
+        // orders this file to be regenerated whenever a public surface
+        // moves; guarding it would make the two gates contradict, and a
+        // ruling demanded on every public-surface change is a ruling
+        // nobody reads.
+        assert!(!is_protected("xtask/api-baselines/channels.txt"));
+        assert!(
+            is_protected("xtask/src/apisync.rs"),
+            "the gate's own machinery stays guarded"
+        );
     }
 }

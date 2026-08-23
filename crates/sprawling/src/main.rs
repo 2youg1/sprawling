@@ -12,6 +12,7 @@ mod firstrun;
 mod install;
 mod mcp_http;
 mod mcp_stdio;
+mod wire_client;
 
 use std::process::ExitCode;
 
@@ -50,6 +51,8 @@ commands:
   status [--deps]              this binary: version, client, what it is built from
   fork <dir> <run> <seq>       branch a lineage from one step of a run
   adopt <dir> <addr>           take an existing directory in as a building
+  call <frame|-> [--at a]      send one wire frame, print every frame back
+  enrol <realm>/<name>         read a credential from stdin, hand it to a city
   replay <dir>                 verify a chain offline, read-only
   export <city> <dest>         pack a whole city
   restore <bundle> <city>      unpack it on another machine";
@@ -62,6 +65,8 @@ fn main() -> ExitCode {
         Some("init") => init(args.get(1)),
         Some("up") => up(&args),
         Some("install") => install(&args),
+        Some("call") => call(&args),
+        Some("enrol" | "enroll") => enrol(&args),
         Some("serve") => serve(args.get(1), args.get(2), &args),
         Some("export") => export(args.get(1), args.get(2)),
         Some("restore") => restore(args.get(1), args.get(2)),
@@ -181,6 +186,109 @@ fn init(dir: Option<&String>) -> ExitCode {
             eprintln!("recovery: {}", err.recovery());
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Where a running city is unless somebody says otherwise. The same
+/// address `up` and `serve` bind by default, so the common case needs
+/// no flag at all.
+const DEFAULT_AT: &str = "127.0.0.1:8787";
+
+/// Sends one frame over the wire and prints everything that comes back.
+///
+/// Exits 1 when the city refused something, so an agent driving this
+/// learns the outcome from the exit code rather than by parsing JSON.
+fn call(args: &[String]) -> ExitCode {
+    let Some(frame) = args.get(1).filter(|a| !a.starts_with("--")) else {
+        eprintln!(
+            "usage: sprawling call <frame-json|-> [--at host:port] [--token T] [--quiet-ms N]"
+        );
+        eprintln!("commands: {}", channels::COMMAND_NAMES.join(", "));
+        eprintln!("queries:  {}", channels::QUERY_NAMES.join(", "));
+        return ExitCode::from(2);
+    };
+    // `-` reads the frame from stdin, which is how a frame too long for
+    // one command line, or one a script generated, gets in.
+    let frame = if frame == "-" {
+        match std::io::read_to_string(std::io::stdin()) {
+            Ok(text) => text,
+            Err(err) => {
+                eprintln!("could not read the frame from stdin: {err}");
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        frame.clone()
+    };
+    let at = flag_value(args, "--at").unwrap_or_else(|| DEFAULT_AT.to_owned());
+    let token = flag_value(args, "--token");
+    let quiet = match flag_value(args, "--quiet-ms") {
+        None => 2_000,
+        Some(raw) => match raw.parse::<u64>() {
+            Ok(ms) => ms,
+            Err(_) => {
+                eprintln!("not a number of milliseconds: {raw}");
+                return ExitCode::from(2);
+            }
+        },
+    };
+    match wire_client::call(
+        &at,
+        &frame,
+        token.as_deref(),
+        std::time::Duration::from_millis(quiet),
+    ) {
+        Ok(heard) => {
+            eprintln!("{} frame(s), {} refusal(s)", heard.frames, heard.refusals);
+            if heard.refusals > 0 {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(err) => report(err),
+    }
+}
+
+/// Hands a credential to a city on this machine, reading it from stdin.
+///
+/// Never from `argv`: a key on a command line is in the process table,
+/// in shell history, and in the log of whatever started this process.
+fn enrol(args: &[String]) -> ExitCode {
+    let Some(reference) = args.get(1).filter(|a| !a.starts_with("--")) else {
+        eprintln!("usage: sprawling enrol <realm>/<name> [--at host:port]");
+        eprintln!("the value is read from stdin, never from the command line");
+        return ExitCode::from(2);
+    };
+    let Some((realm, name)) = wire_client::split_reference(reference) else {
+        eprintln!("not a credential reference: {reference}");
+        eprintln!("recovery: give it as <realm>/<name>, for example modelscope/api");
+        return ExitCode::from(2);
+    };
+    let value = match std::io::read_to_string(std::io::stdin()) {
+        Ok(text) => text.trim().to_owned(),
+        Err(err) => {
+            eprintln!("could not read the credential from stdin: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if value.is_empty() {
+        eprintln!("nothing arrived on stdin");
+        eprintln!(
+            "recovery: pipe the value in, for example: cat key.txt | sprawling enrol {reference}"
+        );
+        return ExitCode::from(2);
+    }
+    let at = flag_value(args, "--at").unwrap_or_else(|| DEFAULT_AT.to_owned());
+    match wire_client::enrol(&at, realm, name, &value) {
+        Ok(reference) => {
+            println!("{reference}");
+            // Accepted, not yet stored: the route answers before the
+            // worker has taken it (channels-SPEC.md section 8).
+            eprintln!("accepted; the city stores it as soon as its worker is free");
+            ExitCode::SUCCESS
+        }
+        Err(err) => report(err),
     }
 }
 

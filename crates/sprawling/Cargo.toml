@@ -14,10 +14,12 @@ channels = { path = "../channels" }
 city = { path = "../city" }
 collab = { path = "../collab" }
 protocol = { path = "../protocol" }
+futures-util = { workspace = true }
 getrandom = { workspace = true }
 reqwest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
 
 [build-dependencies]
 flate2 = { workspace = true }

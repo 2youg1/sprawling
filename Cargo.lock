@@ -3532,6 +3532,7 @@ dependencies = [
  "city",
  "collab",
  "flate2",
+ "futures-util",
  "gateway",
  "getrandom 0.3.4",
  "kernel",
@@ -3542,6 +3543,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-tungstenite",
 ]
 
 [[package]]

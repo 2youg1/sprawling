@@ -45,6 +45,34 @@ fn mismatch(path: &str, detail: &str) -> AxError {
         "translate wire",
         format!("{path}: {detail}"),
     )
+    .with_recovery(
+        "the provider answered in a shape this dialect does not know; check that the \
+         endpoint's dialect matches the provider and that its base url is the one its \
+         documentation prints",
+    )
+}
+
+/// The provider took the request, answered 200, and put nothing in it.
+///
+/// Told apart from every other shape mismatch because it is not one: the
+/// envelope is this dialect's, every field is where it belongs, and
+/// `choices` is null. Observed on a hosted OpenAI-compatible endpoint
+/// when `max_tokens` is above what the chosen model allows - the request
+/// is neither refused nor answered, it is dropped, and the only trace is
+/// a nulled answer with a zeroed usage block. A person reading
+/// "expected array" learns nothing they can act on, which is why this
+/// case says what to change.
+fn empty_answer() -> AxError {
+    AxError::failure(
+        AxCode::Provider,
+        "read the provider's answer",
+        "the provider accepted the request and returned no answer at all",
+    )
+    .with_recovery(
+        "lower this model's max output tokens - a ceiling above what the model allows is \
+         answered this way rather than refused - then dispatch again",
+    )
+    .retriable()
 }
 
 /// Canonical request onto the wire.
@@ -493,7 +521,13 @@ fn openai_request(req: &ChatRequest) -> Result<Value, AxError> {
 }
 
 fn openai_response_from(wire: &Value) -> Result<ChatResponse, AxError> {
-    let choices = require(wire, "response", "choices")?
+    let offered = require(wire, "response", "choices")?;
+    // A null here is a provider that dropped the request rather than a
+    // provider speaking a shape we do not know.
+    if offered.is_null() {
+        return Err(empty_answer());
+    }
+    let choices = offered
         .as_array()
         .ok_or_else(|| mismatch("response.choices", "expected array"))?;
     let first = choices
@@ -614,6 +648,39 @@ fn openai_response_wire(resp: &ChatResponse) -> Result<Value, AxError> {
     reason = "test code"
 )]
 mod tests {
+    /// A provider that answers 200 with a nulled `choices` has not spoken
+    /// a shape we do not know - it has dropped the request. Found on a
+    /// real hosted endpoint, where `max_tokens` above the model's own
+    /// ceiling produced exactly this and the refusal that reached the
+    /// person said "expected array" with an empty recovery.
+    #[test]
+    fn a_dropped_request_is_told_apart_from_a_shape_we_cannot_read() {
+        let dropped = serde_json::json!({
+            "id": "", "object": "", "created": 0, "model": "m",
+            "choices": null,
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        });
+        let refused = super::response_from_wire(kernel::DialectKind::OpenAi, &dropped)
+            .expect_err("a nulled answer is not an answer");
+        assert_eq!(refused.code(), &kernel::AxCode::Provider);
+        assert!(
+            refused.recovery().contains("max output tokens"),
+            "a refusal has to name what to change: {}",
+            refused.recovery()
+        );
+    }
+
+    /// Every shape mismatch carries a way out. An empty `recovery` is
+    /// the contract `AxError` states being broken in the one place a
+    /// person meets it.
+    #[test]
+    fn no_translation_refusal_leaves_a_person_with_nothing_to_try() {
+        let alien = serde_json::json!({ "choices": "not an array", "usage": {} });
+        let refused = super::response_from_wire(kernel::DialectKind::OpenAi, &alien)
+            .expect_err("a string is not a choices array");
+        assert!(!refused.recovery().is_empty());
+    }
+
     use super::*;
     use kernel::{ChatMessage, SystemBlock, ToolDef, ToolName};
     use proptest::prelude::*;

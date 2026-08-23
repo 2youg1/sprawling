@@ -26,16 +26,9 @@ The desk carries a reply address (`channels::Reply`), the worker hands every ref
 
 One instance of the same defect is left, recorded in `channels-SPEC.md` section 8: the `/enroll` route answers 201 before the worker has taken the credential, so a refusal there still reaches nobody. Bounding that wait belongs to P3.
 
-## P3 — `sprawling call` and `sprawling enrol`
+## P3 — done
 
-The scriptable half, and the one an agent can drive. `call` sends one `ClientFrame` and prints every `ServerFrame` until the city goes quiet, computing the handshake in-process. `enrol` reads a credential from **stdin**, never from `argv`, and posts it to the local enrolment route.
-
-Both exist because the wire is supposed to be the whole API. Today that claim has one client, which makes `channels::wire` a hypothetical seam by the repository's own test in ARCHITECTURE.md §4; a second client is what makes it real.
-
-`enrol` is also better custody than what exists: the browser path requires the page to hold the plaintext key in memory first.
-
-- Lands in `crates/sprawling/`
-- Deletes the throwaway probe that had to reimplement `schema_hash` and `IdemKey::derive` outside the workspace to do this once
+`sprawling call` and `sprawling enrol` landed. The handshake is computed from `channels::WIRE_V` and `channels::schema_hash()` in-process, so the throwaway probe that reimplemented both outside the workspace is deleted. Verified against a real city: enrolment from stdin, then attach, select, create and dispatch, all over `call`.
 
 ## P4 — Redo the front end
 
@@ -63,11 +56,15 @@ So the stateless adapter can speak to a shrinking minority of servers. This is n
 - `McpTransport::Http`'s `header` does not redeem `secret:` references, so a paid key would sit in plaintext in a building's `CONFIG.toml`. That contradicts the credential rule and `xtask secret` cannot see it, because a city's config is not in this repository
 - Also here: `assembly.rs:1925` and `1936` label every MCP failure `bin::mcp_stdio`, including failures of the HTTP transport, which sends a reader to the wrong file
 
-## P6 — Find out whether a model will use what it is given
+## P6 — partly done: the model does use what it is given
 
-A dispatched run assembled a prefix whose Resident segment was **106 bytes** — about the length of the catalog's header sentence alone. No tool was disclosed to the model, not the three built-in ones and not any from a server. Until that is understood, connecting anything is pointless: a tool the model is never told about does not exist to it.
+**The earlier diagnosis was wrong and is withdrawn.** The 106-byte Resident segment is `city::resident::EPHEMERAL_SEGMENT` — "You have no standing identity…" — and has nothing to do with the catalog. Tools reach the model through `ChatRequest.tools`, and always did.
 
-After that, the ablation: hold the task fixed, vary how much the catalog says — bare name, one-line disclosure, disclosure plus an expansion fetched on demand, everything eagerly — and measure which tool gets called, how often the wrong one gets called, and what each level costs in prefix bytes. `runtime::catalog` already implements two-level disclosure, which is the arrangement the published work recommends; nobody has yet measured whether it works here.
+A real dispatch against a real provider called `status`, then `edit`, wrote the file it was asked for, reported, and froze `done` with evidence. What had actually killed the earlier run was a provider answering HTTP 200 with `"choices": null` when `max_tokens` exceeds the chosen model's ceiling, and a refusal whose `recovery` was the empty string. Both are fixed (`gateway-SPEC.md` section 8-1).
+
+**What is left is the disclosure half.** `Catalog::render()` and `Catalog::expand()` have no production caller — only their own tests. So the reading room admits skills that reach no model, and the two-level disclosure `runtime::catalog` implements is not wired to anything. Today's level is "everything eagerly", via the provider's native tool array.
+
+Then the ablation: hold the task fixed, vary how much the catalog says — bare name, one-line disclosure, disclosure plus an expansion fetched on demand, everything eagerly — and measure which tool gets called, how often the wrong one gets called, and what each level costs in prefix bytes. `runtime::catalog` already implements two-level disclosure, which is the arrangement the published work recommends; nobody has yet measured whether it works here.
 
 Per-building admission is the design: a building that does not handle mail is not given a mail server, and a general capability like search sits in the city layer that every building inherits. `city::config_layers` already resolves exactly those three layers, so the mechanism exists and only the reading of it is untested.
 
