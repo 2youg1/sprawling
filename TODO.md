@@ -26,14 +26,19 @@ In dependency order — each step is small, and none can be skipped:
 3. **The fourth cancellation point.** `runtime::turn` has three; runtime-SPEC defers the fourth — before a spawn — "until the first spawn producer", which is step 1.
 4. **`status` reports real children.** Follows P0.2, and is the half of it that only matters once spawning works: a parent that cannot see what it sent out cannot decide anything about it.
 5. **The interface shows the tree.** `RunRow` carries no parent, so the live page's session list is flat. A person watching delegated work needs to see which run answers for which.
-6. **The catalog discloses all of it, and City.md states the rules.** A capability that exists and is not in the catalog does not exist for the model — `runtime::catalog`'s own header says so. Each new tool needs its one-line disclosure, and City.md needs the rules that the disclosure cannot hold: one level deep, a delegate gets a small task and a stop condition, a delegate's result is a claim to verify. **This row closes with every other row in P1, not before**: a rule written for a tool that does not exist yet is the defect this whole section is about.
+6. **The catalog discloses all of it, and City.md states the rules**, including one sentence City.md does not have yet: *unless the person has allowed it, do not call the delegate tool.* A capability the model can see is one it will try, and the permission is the person's to give. A capability that exists and is not in the catalog does not exist for the model — `runtime::catalog`'s own header says so. Each new tool needs its one-line disclosure, and City.md needs the rules that the disclosure cannot hold: one level deep, a delegate gets a small task and a stop condition, a delegate's result is a claim to verify. **This row closes with every other row in P1, not before**: a rule written for a tool that does not exist yet is the defect this whole section is about.
 7. **Workshop orchestration and fan-in.** `NodeContract` already states what a node reaches, reads at which version, may write, and when it stops — and says its disk form is that node's `JOB.md`. It is the layer above spawning, not on its critical path.
 
-## P2 — A building's rules are drafted by an agent, not typed by a person
+## P2 — The city can be changed from inside it, and says so in one line
+
+1. **The catalog names the three self-change modes.** `up`, `sc` and `ud` exist in `runtime::mode` with their admission rules, and a run is only ever told about the one it is in — so an agent never learns that this city's own code and SPECs are changeable, or under what discipline. **One line, and only the modes the run is not in**: the current mode already has its own row, and most sessions never need this. It says what each mode is for and that the SPEC beside the code is read before either changes.
+2. **`README.md` states the shape that makes this possible**: every component carries its SPEC next to it, so a person and an agent change the same thing by reading the same file. Both languages.
+
+## P3 — A building's rules are drafted by an agent, not typed by a person
 
 `BUILDING.md` is a governance document with six sections, and asking a person to write one by hand is the wrong door. The reserved-subtree rule is not in the way: it says **no write domain** reaches `.sprawling/`, and `city::write_effort` (F2.16) already writes there through a validated path that no write domain touches. Give `BUILDING.md` the same kind of door — draft, `evaluate` into `BuildingRules`, refuse what does not evaluate — **and put an approval in front of it**, because a building rewriting its own rules mid-run is what the reserved subtree exists to prevent. Judgement, not evidence: the approval is my reading of the rule, not something the rule states.
 
-## P3 — What the last run left unfinished
+## P4 — What the last run left unfinished
 
 1. **Ask a provider what it serves before attaching it.** The model list arrives only as a side effect of `AttachEndpoint`, so a person cannot see what a key buys until it is registered, and cannot choose a subset. Needs a `Query` that probes a base URL and returns model ids, and a settings form that ticks the ones to admit. `gateway::endpoint` already does the probing; the wire has no way to ask for it.
 2. **The two configuration layers nothing writes.** `[mcp]` and `[sandbox]` resolve city → building → room and have no surface. `city::write_effort` is the pattern to follow. A building's MCP servers belong on the building page.
@@ -41,12 +46,12 @@ In dependency order — each step is small, and none can be skipped:
 4. **The live page cannot see anything from before it opened.** The server broadcasts and never backfills. A `Query` returning a bounded slice of history would fix it; `memory::index` already maps `seq` to a byte offset, which is the half that would otherwise be hard.
 5. **Ctrl-C is still a process death.** `/quit` closes the console and leaves the city serving; `sprawling resume` recovers a hard stop. What is missing is the Handoff an orderly close would write, so a stop that was chosen and a stop that was a crash are indistinguishable in the record.
 
-## P4 — The words and the ledger of numbers
+## P5 — The words and the ledger of numbers
 
 1. **`方言` retires in favour of `兼容格式`.** Six places in Chinese prose: `channels-SPEC.md`, `gateway-SPEC.md` (four), `kernel-SPEC.md`, `getting-started.zh-CN.md` (two), `README.zh-CN.md`. The English identifier `gateway::dialect` does not move — identifiers are English. Holding it needs an entry in `xtask/lexicon.toml`; **needs a ruling** (given in conversation 2026-08-24, to be recorded as the trailer).
 2. **Two size readings have drifted past their slack.** `frontend_artifact` measures 524,254 B against a best of 490,594 B, and `release_binary` 8,317,952 B against 7,249,920 B. The likely cause is `web::lang`'s two-language table (F2.14, F2.18) and the binary that embeds it. `just check` does not build either artifact, so CI is not red; a `just dist` is. Rebuild both, then either recover the size or record the readings with the reason. **needs a ruling**: `xtask/budgets.toml`.
 
-## P5 — Claims made by construction rather than by observation
+## P6 — Claims made by construction rather than by observation
 
 Not known to be wrong; not watched.
 

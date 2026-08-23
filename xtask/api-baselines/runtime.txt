@@ -87,6 +87,7 @@ impl runtime::turn::Window
 pub const runtime::diagnostics::Level::ALL: [runtime::diagnostics::Level; 5]
 pub const runtime::diagnostics::Level::DEFAULT: runtime::diagnostics::Level
 pub const runtime::diagnostics::REDACTED: &str
+pub const runtime::mode::DEV_ENTRY: &str
 pub enum runtime::Admission
 pub enum runtime::Advance
 pub enum runtime::BreakerVerdict
@@ -243,6 +244,7 @@ pub fn runtime::mode::Mode::as_str(&self) -> &'static str
 pub fn runtime::mode::Mode::catalog_entry(&self) -> runtime::catalog::CatalogEntry
 pub fn runtime::mode::Mode::catalog_entry(&self) -> runtime::catalog::CatalogEntry
 pub fn runtime::mode::admits(runtime::mode::Mode, &runtime::mode::Produced) -> runtime::mode::Admission
+pub fn runtime::mode::dev_entry() -> runtime::catalog::CatalogEntry
 pub fn runtime::offload(&[u8], u64, &mut runtime::offload::OffloadSite<'_>) -> core::result::Result<runtime::offload::OffloadRecord, kernel::error::AxError>
 pub fn runtime::offload::offload(&[u8], u64, &mut runtime::offload::OffloadSite<'_>) -> core::result::Result<runtime::offload::OffloadRecord, kernel::error::AxError>
 pub fn runtime::offload::rematerialize(&kernel::locator::Locator, &mut runtime::offload::OffloadSite<'_>) -> core::result::Result<std::path::PathBuf, kernel::error::AxError>
@@ -386,8 +388,8 @@ pub runtime::Disposal::Freeze
 pub runtime::Disposal::Freeze::reason: runtime::FreezeReason
 pub runtime::Disposal::Proceed
 pub runtime::EchoSandbox::seen: alloc::vec::Vec<runtime::SandboxJob>
-pub runtime::Expansion::Mode
-pub runtime::Expansion::Mode::text: alloc::string::String
+pub runtime::Expansion::Said
+pub runtime::Expansion::Said::text: alloc::string::String
 pub runtime::Expansion::Skill
 pub runtime::Expansion::Skill::addr: alloc::string::String
 pub runtime::FreezeReason::ProviderExhausted
@@ -514,8 +516,8 @@ pub runtime::ZoneEntry::offset_min: i32
 pub runtime::catalog::CatalogEntry::disclosure: alloc::string::String
 pub runtime::catalog::CatalogEntry::expansion: alloc::string::String
 pub runtime::catalog::CatalogEntry::name: alloc::string::String
-pub runtime::catalog::Expansion::Mode
-pub runtime::catalog::Expansion::Mode::text: alloc::string::String
+pub runtime::catalog::Expansion::Said
+pub runtime::catalog::Expansion::Said::text: alloc::string::String
 pub runtime::catalog::Expansion::Skill
 pub runtime::catalog::Expansion::Skill::addr: alloc::string::String
 pub runtime::clock::ClockStamp::utc_ms: kernel::event::TimeMs

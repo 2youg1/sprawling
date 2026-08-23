@@ -6,6 +6,12 @@
 //! catalog lists only that one (progressive disclosure — the other modes'
 //! semantics stay out of the window).
 //!
+//! One exception, and it is one line long: [`change_modes_line`] names
+//! the self-change modes a run is *not* in. Without it an agent working
+//! in this city never learns that the city's own code and SPECs are
+//! changeable at all, or under what discipline — and a capability nobody
+//! is told about is one nobody uses.
+//!
 //! P3 adds the half that decides: [`admits`] says whether what a run
 //! produced may land, given the mode it was in. The evidence arrives as
 //! plain answers rather than as an `eval` type, because that crate sits
@@ -22,6 +28,38 @@ pub enum Mode {
     Sc,
     Ud,
     Experiment,
+}
+
+/// The name of the catalog row that opens the developer discipline.
+pub const DEV_ENTRY: &str = "dev";
+
+/// The row that tells a run this city is changeable, and nothing more.
+///
+/// One line in the resident segment, and the whole discipline behind an
+/// expansion. That split is the point: most sessions never change this
+/// city, so they pay a line; a session that is about to change it asks
+/// once and gets the modes, the reading order and what to do next. The
+/// same progressive disclosure the tool rows use, applied to the one
+/// capability an agent would otherwise never learn it has.
+#[must_use]
+pub fn dev_entry() -> CatalogEntry {
+    CatalogEntry {
+        name: DEV_ENTRY.to_owned(),
+        disclosure: "when the work is to change this city's own code, SPECs or tools, open this \
+                     entry before you touch anything"
+            .to_owned(),
+        expansion: "This city is built from small components, each with its SPEC beside it at \
+                    `crates/<crate>/<crate>-SPEC.md`. Read that SPEC, then the code, then the \
+                    tests next to the code - in that order, and before you change any of them. \
+                    Where the implementation would differ from the SPEC, the SPEC changes first \
+                    and says why.\n\nChanging anything here happens under one of three modes, and \
+                    the person grants the mode:\n- up: build one asset that has its own tests.\n\
+                    - sc: renovate an existing asset without moving its observable contract.\n\
+                    - ud: change behaviour, carrying held-in and held-out evidence.\n\nYour next \
+                    step: say which of the three this work needs and why, and wait for the \
+                    person to grant it. Do not start the change in the mode you are in now."
+            .to_owned(),
+    }
 }
 
 impl Mode {

@@ -1170,17 +1170,23 @@ struct Governance {
     pending: std::collections::BTreeMap<String, kernel::ApprovalItem>,
     autonomy: kernel::Autonomy,
     granted: Vec<kernel::ClusterKey>,
+    /// The scopes a person has shut, by the name `scope_name` gives
+    /// them. Folded from the ledger like everything else the panel
+    /// shows, so a restarted city is still halted.
+    halted: std::collections::BTreeSet<String>,
 }
 
 fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
     let mut pending = std::collections::BTreeMap::new();
     let mut autonomy = kernel::consts_policy::AUTONOMY_DEFAULT;
     let mut granted: Vec<kernel::ClusterKey> = Vec::new();
+    let mut halted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     if !ledger_dir.exists() {
         return Ok(Governance {
             pending,
             autonomy,
             granted,
+            halted,
         });
     }
     let verified = runtime::replay::verify_ledger_dir(ledger_dir)?;
@@ -1213,6 +1219,19 @@ fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
                     autonomy = read_autonomy(name);
                 }
             }
+            // One kind for both directions: halting and releasing are
+            // one fact changing value, and a second kind would let a
+            // reader see a release with no halt before it.
+            EventKind::CityHalted => {
+                let Some(scope) = data.get("scope").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                if data.get("state").and_then(serde_json::Value::as_str) == Some(HALTED) {
+                    halted.insert(scope.to_owned());
+                } else {
+                    halted.remove(scope);
+                }
+            }
             _ => {}
         }
     }
@@ -1220,8 +1239,14 @@ fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
         pending,
         autonomy,
         granted,
+        halted,
     })
 }
+
+/// The value of a halt record's `state` field when the scope is shut.
+const HALTED: &str = "halted";
+/// And when it is open again.
+const RELEASED: &str = "released";
 
 pub(crate) fn rebuild_book(ledger_dir: &Path) -> Result<gateway::EndpointBook, AxError> {
     let mut book = gateway::EndpointBook::new();
@@ -1299,6 +1324,8 @@ pub(crate) struct RunWorker {
     /// Who may answer. Folded from `autonomy_changed`, never mirrored:
     /// the panel shows what a replay can verify.
     autonomy: kernel::Autonomy,
+    /// The scopes work is not admitted into, folded from `city_halted`.
+    halted: std::collections::BTreeSet<String>,
     /// Clusters the person has allowed, folded from the answers. A
     /// resumed run carries them so it does not stop at a door that was
     /// just opened for it.
@@ -1366,6 +1393,7 @@ impl RunWorker {
             pending: governance.pending,
             autonomy: governance.autonomy,
             granted: governance.granted,
+            halted: governance.halted,
             inboxes: collaboration.inboxes,
             goals: collaboration.goals,
             requests: collaboration.requests,
@@ -1952,6 +1980,7 @@ impl RunWorker {
                 mode,
                 session,
                 effort,
+                budget,
                 ..
             } => {
                 let addr = self.room_for(addr, session.as_ref())?;
@@ -1964,7 +1993,7 @@ impl RunWorker {
                 if let Some(effort) = effort {
                     city::write_effort(&self.city_root, &addr, effort)?;
                 }
-                self.dispatch_in(addr, task, goal, mode_of(&mode))
+                self.dispatch_in(addr, task, goal, mode_of(&mode), budget)
             }
             channels::Command::Wake {
                 source,
@@ -2020,6 +2049,8 @@ impl RunWorker {
             channels::Command::Fork {
                 run, at_seq, addr, ..
             } => self.fork(run, at_seq, addr).map(|_| ()),
+            channels::Command::Halt { scope, .. } => self.set_admission(&scope, HALTED),
+            channels::Command::Release { scope, .. } => self.set_admission(&scope, RELEASED),
             other => Err(AxError::failure(
                 AxCode::InvalidArgs,
                 "run a command",
@@ -2377,6 +2408,49 @@ impl RunWorker {
         Ok(None)
     }
 
+    /// Shuts a scope to new work, or opens it again.
+    ///
+    /// Halting is admission control and nothing else: what is already
+    /// running keeps running, because stopping a run in flight is
+    /// `Cancel` and one verb that did two things would leave a person
+    /// unable to ask for either alone. The refusal a halted city gives a
+    /// dispatch says which scope refused and how to open it.
+    fn set_admission(&mut self, scope: &channels::HaltScope, state: &str) -> Result<(), AxError> {
+        let name = scope_name(scope);
+        let mut map = serde_json::Map::new();
+        map.insert("scope".to_owned(), serde_json::Value::String(name.clone()));
+        map.insert(
+            "state".to_owned(),
+            serde_json::Value::String(state.to_owned()),
+        );
+        self.record(EventKind::CityHalted, Payload::new(map)?)?;
+        if state == HALTED {
+            self.halted.insert(name);
+        } else {
+            self.halted.remove(&name);
+        }
+        Ok(())
+    }
+
+    /// Which shut scope covers this address, if one does.
+    ///
+    /// The city covers everything; a building or a workshop covers what
+    /// is inside it, by the same containment `WriteDomain` uses, so
+    /// "inside" means one thing in this city rather than two.
+    fn halted_by(&self, addr: &Address) -> Option<String> {
+        if self.halted.contains("city") {
+            return Some("city".to_owned());
+        }
+        self.halted
+            .iter()
+            .find(|name| {
+                name.split_once(':')
+                    .and_then(|(_, rest)| Address::parse(rest).ok())
+                    .is_some_and(|scope| addr.is_within(&scope))
+            })
+            .cloned()
+    }
+
     /// Records who may answer for a scope from now on.
     ///
     /// The current value is folded from the ledger rather than mirrored
@@ -2540,7 +2614,13 @@ impl RunWorker {
 
     /// One dispatch, run to its frozen end on this thread.
     fn dispatch(&mut self, addr: Address, task: String, goal: String) -> Result<(), AxError> {
-        self.dispatch_in(addr, task, goal, runtime::Mode::PlanGoal)
+        self.dispatch_in(
+            addr,
+            task,
+            goal,
+            runtime::Mode::PlanGoal,
+            kernel::BudgetCap::default(),
+        )
     }
 
     /// Where a dispatch works: the room a named session opens, or the
@@ -2573,7 +2653,22 @@ impl RunWorker {
         task: String,
         goal: String,
         mode: runtime::Mode,
+        budget: kernel::BudgetCap,
     ) -> Result<(), AxError> {
+        // Nothing is written before the city agrees to take the work:
+        // a halted city that laid a job file down would leave a task in
+        // a room no run ever opened.
+        if let Some(scope) = self.halted_by(&addr) {
+            return Err(AxError::failure(
+                AxCode::GateDenied,
+                "dispatch work",
+                addr.as_str().to_owned(),
+            )
+            .with_recovery(format!(
+                "{scope} is halted; release it to let work in again. Runs already going are \
+                 unaffected - stopping one is `cancel`"
+            )));
+        }
         // The task file exists first, then the run exists: the job on
         // disk is what the agent reads, and the copy in the store is
         // what the history keeps, so editing one cannot rewrite the
@@ -2739,7 +2834,27 @@ impl RunWorker {
         // catalog entry reached no model.
         catalog.borrow_mut().set_mode(mode);
         let edit = EditTool::new(&write_root, addr.clone(), rules.write_domain()?)?;
-        let status = StatusTool::new(status_snapshot(&addr, &who, waiting))?;
+        let writable = rules.write_domain()?;
+        let status = StatusTool::new(status_snapshot(Situation {
+            addr: &addr,
+            who: &who,
+            signals_pending: waiting,
+            mode,
+            write_domain: &writable,
+            worktree: &write_root,
+            trust: &self.autonomy,
+            context_tokens: model.context_tokens,
+            budget,
+            // What this resident already holds, so a model asking what
+            // it may touch is answered from the same list the conflict
+            // check reads.
+            locks: self
+                .goals
+                .iter()
+                .filter(|entry| entry.owner == who)
+                .map(|entry| entry.statement.clone())
+                .collect(),
+        }))?;
         let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&signals))?;
         let goal_tool = collab::GoalTool::new(addr.clone(), std::rc::Rc::clone(&goals))?;
         let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
@@ -3572,21 +3687,52 @@ fn task_line(plan: &RunPlan) -> String {
     format!("{} at {}", plan.task, plan.addr.as_str())
 }
 
-fn status_snapshot(addr: &Address, who: &str, signals_pending: u32) -> runtime::StatusSnapshot {
+/// What a run can be told about itself at the moment it starts.
+///
+/// Every field here is read from something. Eight of them used to be
+/// constants — the mode was always `plan_goal`, the write domain was
+/// the room rather than what the building granted, and the budget, the
+/// context limit and the locks were zeros. City.md tells a model to call
+/// `status` for exactly those, so a model that obeyed got a row of
+/// noughts and learnt not to ask again.
+///
+/// `ctx_used` and `children` stay at their empty values, and both are
+/// true: nothing has been read at dispatch, and this city cannot yet
+/// make a child. `worktree_disk` is zero because measuring a tree costs
+/// a walk of it, and a number nobody has asked for is not worth one.
+struct Situation<'a> {
+    addr: &'a Address,
+    who: &'a str,
+    signals_pending: u32,
+    mode: runtime::Mode,
+    write_domain: &'a kernel::WriteDomain,
+    worktree: &'a Path,
+    trust: &'a kernel::Autonomy,
+    context_tokens: u64,
+    budget: kernel::BudgetCap,
+    locks: Vec<String>,
+}
+
+fn status_snapshot(situation: Situation<'_>) -> runtime::StatusSnapshot {
     runtime::StatusSnapshot {
-        who: who.to_owned(),
-        addr: addr.clone(),
-        mode: runtime::Mode::PlanGoal,
+        who: situation.who.to_owned(),
+        addr: situation.addr.clone(),
+        mode: situation.mode,
         ctx_used: kernel::Tokens::default(),
-        ctx_limit: kernel::Tokens::new(200_000),
-        budget_usd: kernel::UsdMicros::default(),
-        budget_tokens: kernel::Tokens::default(),
-        trust: "owner".to_owned(),
-        write_domain: addr.as_str().to_owned(),
-        locks: Vec::new(),
-        worktree_path: addr.as_str().to_owned(),
+        ctx_limit: kernel::Tokens::new(situation.context_tokens),
+        budget_usd: situation.budget.usd,
+        budget_tokens: situation.budget.tokens,
+        trust: autonomy_name(situation.trust),
+        write_domain: situation
+            .write_domain
+            .prefixes()
+            .map(|prefix| prefix.as_str().to_owned())
+            .collect::<Vec<String>>()
+            .join(", "),
+        locks: situation.locks,
+        worktree_path: situation.worktree.display().to_string(),
         worktree_disk: kernel::ByteLen::default(),
-        signals_pending,
+        signals_pending: situation.signals_pending,
         children: Vec::new(),
         now: None,
         provider_mode: runtime::ProviderMode::Normal,
@@ -6287,6 +6433,77 @@ addr = \"gone/room1\"
             !asked.contains("cas:b3-"),
             "no content hash reaches a model that cannot resolve one"
         );
+    }
+
+    /// Halting is admission control: it refuses new work and says which
+    /// scope refused, and a release opens the same scope again. Both
+    /// survive a restart, because the worker folds them from the ledger
+    /// rather than holding them only in memory.
+    #[test]
+    fn a_halted_scope_refuses_new_work_and_a_release_takes_it_again() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let room = Address::parse("lab/room1").unwrap();
+        let (base_url, _provider) = fake_openai(&["m-local"], vec![completion("done", None)]);
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        let work = |tag: &[u8]| channels::Command::Dispatch {
+            addr: room.clone(),
+            task: "measure the thing".to_owned(),
+            goal: "a number, then stop".to_owned(),
+            mode: channels::ModeTag::parse("plan").unwrap(),
+            budget: kernel::BudgetCap::default(),
+            idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, tag),
+            session: None,
+            effort: None,
+        };
+        let halt = |scope| channels::Command::Halt {
+            scope,
+            idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"halt"),
+        };
+
+        worker
+            .handle(halt(channels::HaltScope::Building(
+                Address::parse("lab").unwrap(),
+            )))
+            .unwrap();
+        let refused = worker.handle(work(b"one")).unwrap_err();
+        assert_eq!(refused.code(), &AxCode::GateDenied);
+        assert!(
+            refused.recovery().contains("release"),
+            "a refusal says how to undo the thing that caused it: {}",
+            refused.recovery()
+        );
+        assert!(
+            !city::job_path(dir.path(), &room).exists(),
+            "a refused dispatch leaves no task in a room no run opened"
+        );
+
+        // A different building is not covered by that halt.
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("shop").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        let mut elsewhere = work(b"two");
+        if let channels::Command::Dispatch { addr, .. } = &mut elsewhere {
+            *addr = Address::parse("shop/room1").unwrap();
+        }
+        worker.handle(elsewhere).unwrap();
+
+        worker
+            .handle(channels::Command::Release {
+                scope: channels::HaltScope::Building(Address::parse("lab").unwrap()),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"release"),
+            })
+            .unwrap();
+        worker.handle(work(b"three")).unwrap();
+
+        // The posture is history, not a field: a second worker over the
+        // same ledger knows the building is open again.
+        let restarted = rebuild_governance(&ledger_dir(dir.path())).unwrap();
+        assert!(restarted.halted.is_empty());
     }
 
     /// A dispatch that never says when to stop is a conversation, and the

@@ -29,27 +29,24 @@ pub struct CatalogEntry {
 
 /// What a second-level disclosure turns out to be.
 ///
-/// Exhaustive: a catalog entry either lives somewhere the run can open,
-/// or is text the run already has.
+/// Exhaustive: an entry either lives somewhere the run can open, or is
+/// text the catalog itself holds. Neither is in the prompt — the prompt
+/// carries one line per entry, and this is what that line was standing
+/// in for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expansion {
     /// A skill, and the address it is kept at.
     Skill { addr: String },
-    /// The mode this run sits in, and what it asks of it.
-    Mode { text: String },
+    /// Text the catalog holds: the mode's own discipline, or the
+    /// developer entry's.
+    Said { text: String },
 }
 
 #[derive(Debug, Default)]
 pub struct Catalog {
-    tools: BTreeMap<String, ToolRow>,
+    tools: BTreeMap<String, ToolDef>,
     skills: BTreeMap<String, CatalogEntry>,
     mode: Option<Mode>,
-}
-
-#[derive(Debug)]
-struct ToolRow {
-    disclosure: String,
-    def: ToolDef,
 }
 
 impl Catalog {
@@ -78,13 +75,10 @@ impl Catalog {
         }
         self.tools.insert(
             key,
-            ToolRow {
-                disclosure: meta.disclosure.clone(),
-                def: ToolDef {
-                    name: meta.name.clone(),
-                    description: meta.disclosure.clone(),
-                    input_schema: meta.params.clone(),
-                },
+            ToolDef {
+                name: meta.name.clone(),
+                description: meta.disclosure.clone(),
+                input_schema: meta.params.clone(),
             },
         );
         Ok(())
@@ -115,20 +109,22 @@ impl Catalog {
         self.mode = Some(mode);
     }
 
-    /// The Resident-segment text: header line, then one line per entry.
-    /// BTreeMap order makes the bytes a pure function of the content.
+    /// The Resident-segment text: header line, then one line per entry
+    /// the request cannot carry by itself. BTreeMap order makes the
+    /// bytes a pure function of the content.
+    ///
+    /// **Tools are not among them.** Their name, disclosure and schema
+    /// travel in `ChatRequest.tools` on every turn, and writing the
+    /// disclosure here as well put every tool's sentence into the prompt
+    /// twice - about 700 bytes of a 1,069-byte segment, paid on every
+    /// call of every run. What stays is what that array has no field
+    /// for: the skills this building admits, the mode this run sits in,
+    /// and the one line that says the city itself can be changed.
     pub fn render(&self) -> String {
         let mut out = String::from(
-            "Catalog: one line per capability. Expand an entry before first use; \
-             a tool not listed here does not exist.\n",
+            "Catalog: what you can reach beyond the tools listed with this request. \
+             Open an entry by name with `read` before first use.\n",
         );
-        for (name, row) in &self.tools {
-            out.push_str("- tool ");
-            out.push_str(name);
-            out.push_str(": ");
-            out.push_str(&row.disclosure);
-            out.push('\n');
-        }
         for (name, entry) in &self.skills {
             out.push_str("- skill ");
             out.push_str(name);
@@ -144,12 +140,20 @@ impl Catalog {
             out.push_str(&entry.disclosure);
             out.push('\n');
         }
+        // The one line that says this city is changeable from inside
+        // it. The discipline behind it is fetched, not carried.
+        let dev = crate::mode::dev_entry();
+        out.push_str("- ");
+        out.push_str(&dev.name);
+        out.push_str(": ");
+        out.push_str(&dev.disclosure);
+        out.push('\n');
         out
     }
 
     /// The only source of `ChatRequest.tools`.
     pub fn tool_defs(&self) -> Vec<ToolDef> {
-        self.tools.values().map(|row| row.def.clone()).collect()
+        self.tools.values().cloned().collect()
     }
 
     /// Second-level disclosure. Tools expand to their schema via
@@ -170,10 +174,15 @@ impl Catalog {
         if let Some(mode) = self.mode {
             let entry = mode.catalog_entry();
             if entry.name == name {
-                return Some(Expansion::Mode {
+                return Some(Expansion::Said {
                     text: entry.expansion,
                 });
             }
+        }
+        if name == crate::mode::DEV_ENTRY {
+            return Some(Expansion::Said {
+                text: crate::mode::dev_entry().expansion,
+            });
         }
         None
     }
@@ -218,12 +227,33 @@ mod tests {
             .unwrap();
         catalog.set_mode(Mode::PlanGoal);
         let text = catalog.render();
-        let alpha = text.find("- tool alpha").unwrap();
-        let zeta = text.find("- tool zeta").unwrap();
+        let defs = catalog.tool_defs();
+        let alpha = defs
+            .iter()
+            .position(|def| def.name.as_str() == "alpha")
+            .unwrap();
+        let zeta = defs
+            .iter()
+            .position(|def| def.name.as_str() == "zeta")
+            .unwrap();
         assert!(alpha < zeta, "BTreeMap order");
         assert!(text.contains("- skill review:"));
+        assert!(
+            !text.contains("does one thing"),
+            "the tools array carries it"
+        );
         assert!(text.contains("- mode:plan_goal:"));
         assert_eq!(text, catalog.render(), "same content, same bytes");
+        // One line says the city itself can be changed; the three modes
+        // and the reading order sit behind an expansion nobody pays for
+        // until they ask.
+        assert!(text.contains("- dev: when the work is to change"));
+        assert!(!text.contains("held-out evidence"), "the detail is fetched");
+        let Some(Expansion::Said { text: detail }) = catalog.expand("dev") else {
+            panic!("the developer entry expands");
+        };
+        assert!(detail.contains("-SPEC.md"));
+        assert!(detail.contains("held-out evidence"));
     }
 
     #[test]
@@ -246,7 +276,7 @@ mod tests {
         assert_eq!(defs[0].name.as_str(), "probe");
         assert!(matches!(
             catalog.expand("mode:experiment"),
-            Some(Expansion::Mode { .. })
+            Some(Expansion::Said { .. })
         ));
         assert!(catalog.expand("missing").is_none());
     }

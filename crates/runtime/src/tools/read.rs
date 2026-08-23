@@ -31,6 +31,12 @@ use serde_json::{Map, Value};
 
 use crate::catalog::{Catalog, Expansion};
 
+/// Where the answer to one call comes from.
+enum Found {
+    File(PathBuf),
+    Text(String),
+}
+
 /// What a read answers with, and what it refuses.
 pub struct ReadTool {
     city_root: PathBuf,
@@ -86,7 +92,7 @@ impl ReadTool {
     /// Catalog entries are tried first: a building that admits a skill
     /// called `review` has said what that word means here, and a file
     /// that happens to share the name must not be able to shadow it.
-    fn resolve(&self, asked: &str) -> Result<PathBuf, AxError> {
+    fn resolve(&self, asked: &str) -> Result<Found, AxError> {
         if let Ok(catalog) = self.catalog.try_borrow()
             && let Some(expansion) = catalog.expand(asked)
         {
@@ -103,14 +109,12 @@ impl ReadTool {
                              a person has to fix the shelf",
                         )
                     })?;
-                    Ok(self.under_city(&addr))
+                    Ok(Found::File(self.under_city(&addr)))
                 }
-                Expansion::Mode { .. } => Err(AxError::failure(
-                    AxCode::InvalidArgs,
-                    "read",
-                    format!("{asked} is not a file"),
-                )
-                .with_recovery("this entry's text is already in your prompt; nothing to open")),
+                // The catalog's own second level. The prompt carries one
+                // line per entry, and this is what that line stood for,
+                // so it is handed over rather than refused.
+                Expansion::Said { text } => Ok(Found::Text(text)),
             };
         }
         let addr = kernel::Address::parse(asked).map_err(|err| {
@@ -135,7 +139,7 @@ impl ReadTool {
                  governance; ask for a skill by its catalog name instead",
             ));
         }
-        Ok(self.under_city(&addr))
+        Ok(Found::File(self.under_city(&addr)))
     }
 
     fn under_city(&self, addr: &kernel::Address) -> PathBuf {
@@ -173,17 +177,19 @@ impl Tool for ReadTool {
                 )
                 .with_recovery("pass one string: a city-relative path, or a catalog name")
             })?;
-        let path = self.resolve(asked)?;
-        let text = std::fs::read_to_string(&path).map_err(|err| {
-            let code = match err.kind() {
-                std::io::ErrorKind::NotFound => AxCode::InvalidArgs,
-                _ => AxCode::StorageFatal,
-            };
-            AxError::failure(code, "read", format!("{asked}: {err}")).with_recovery(
-                "check the name against what the catalog lists, or list the \
-                                directory with `exec` first",
-            )
-        })?;
+        let text = match self.resolve(asked)? {
+            Found::Text(text) => text,
+            Found::File(path) => std::fs::read_to_string(&path).map_err(|err| {
+                let code = match err.kind() {
+                    std::io::ErrorKind::NotFound => AxCode::InvalidArgs,
+                    _ => AxCode::StorageFatal,
+                };
+                AxError::failure(code, "read", format!("{asked}: {err}")).with_recovery(
+                    "check the name against what the catalog lists, or list the \
+                                    directory with `exec` first",
+                )
+            })?,
+        };
         let mut out = Map::new();
         out.insert("path".to_owned(), Value::String(asked.to_owned()));
         // The count the model needs to decide whether it has the whole
@@ -293,14 +299,22 @@ mod tests {
         assert_eq!(outcome.result.as_map()["text"], "check the diff first\n");
     }
 
+    /// The catalog's own second level: the prompt carries one line per
+    /// entry, and this is the tool that fetches what the line stood for.
     #[test]
-    fn a_name_that_is_not_a_file_says_so_rather_than_reading_one() {
+    fn an_entry_the_catalog_holds_is_handed_over_not_refused() {
         let dir = tempfile::tempdir().unwrap();
         let (mut tool, catalog) = tool(dir.path());
         catalog.borrow_mut().set_mode(crate::mode::Mode::Experiment);
-        let err = tool.invoke(&call("mode:experiment")).unwrap_err();
-        assert_eq!(err.code(), &AxCode::InvalidArgs);
-        assert!(err.recovery().contains("already in your prompt"));
+
+        let mode = tool.invoke(&call("mode:experiment")).unwrap();
+        let said = mode.result.as_map()["text"].as_str().unwrap_or_default();
+        assert!(said.contains("Memo.md"), "the mode's discipline: {said}");
+
+        let dev = tool.invoke(&call("dev")).unwrap();
+        let said = dev.result.as_map()["text"].as_str().unwrap_or_default();
+        assert!(said.contains("-SPEC.md"), "the developer entry: {said}");
+        assert!(said.contains("wait for the person to grant it"));
     }
 
     #[test]
