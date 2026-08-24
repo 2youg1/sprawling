@@ -36,15 +36,15 @@ fn exposed() -> SocketAddr {
 
 #[test]
 fn the_command_and_query_tables_hold_their_declared_counts() {
-    // Twenty-one commands, eleven queries. The count is not a style
+    // Twenty-two commands, eleven queries. The count is not a style
     // choice - it is the wire's closed surface.
-    assert_eq!(COMMAND_NAMES.len(), 21, "command table");
+    assert_eq!(COMMAND_NAMES.len(), 22, "command table");
     assert_eq!(QUERY_NAMES.len(), 11, "query table");
 
     let mut sorted = COMMAND_NAMES.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 21, "command names are distinct");
+    assert_eq!(sorted.len(), 22, "command names are distinct");
 
     let mut sorted = QUERY_NAMES.to_vec();
     sorted.sort_unstable();
@@ -79,14 +79,14 @@ fn the_schema_hash_is_stable_across_calls_and_covers_the_wire_version() {
         "schema hash changed - update channels-SPEC.md section 8-1 in the same commit"
     );
     assert_eq!(
-        WIRE_V, 7,
+        WIRE_V, 8,
         "the version rises when the grammar changes shape without a name changing"
     );
 }
 
 /// Pinned on the first green of S4.02. It is a function of WIRE_V and the two
 /// name tables, so any change to the protocol surface lands here first.
-const WIRE_SCHEMA_GOLDEN: &str = "4bb71c0be50d6e6d191151b38ceafbe9cb14222b74a5f1a701194bb2a7eab36d";
+const WIRE_SCHEMA_GOLDEN: &str = "0a600659847426c0367f2af968ccce6489701c5cc1e3b78f05e22c4f80c0ae8a";
 
 // -------------------------------------------------------------- binding face
 
@@ -269,6 +269,12 @@ fn sample_of_every_command() -> Vec<Command> {
         Command::Login {
             provider: ProviderName::parse("anthropic").unwrap(),
             step: channels::LoginStep::Begin,
+            idem,
+        },
+        Command::ConfigureBuilding {
+            addr: Address::parse("lab").unwrap(),
+            sandbox: Some(kernel::SandboxLimits::default()),
+            mcp: Some(Vec::new()),
             idem,
         },
         Command::ProbeEndpoint {

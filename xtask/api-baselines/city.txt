@@ -161,7 +161,9 @@ pub fn city::watch_path(&std::path::Path) -> std::path::PathBuf
 pub fn city::write_brief(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<city::RunBrief, kernel::error::AxError>
 pub fn city::write_effort(&std::path::Path, &kernel::address::Address, kernel::model::Effort) -> core::result::Result<(), kernel::error::AxError>
 pub fn city::write_job(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn city::write_mcp(&std::path::Path, &kernel::address::Address, city::Layer, &[kernel::config::McpServer]) -> core::result::Result<(), kernel::error::AxError>
 pub fn city::write_rules(&std::path::Path, &kernel::address::Address, &str) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
+pub fn city::write_sandbox(&std::path::Path, &kernel::address::Address, city::Layer, &kernel::config::SandboxLimits) -> core::result::Result<(), kernel::error::AxError>
 pub mod city
 pub struct city::ArchiveEntry
 pub struct city::Building

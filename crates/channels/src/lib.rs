@@ -49,5 +49,6 @@ pub use kernel::{ApprovalClass, ApprovalItem, ApprovalSource, ClusterKey, Restor
 pub use kernel::{BudgetUse, Locator, PlannedProgress, Progress, UnplannedProgress};
 pub use kernel::{DialectKind, Effort, ModelTag};
 pub use kernel::{EventDraft, EventKind, EventRecord, GitOid, IdemKey, RunId};
+pub use kernel::{McpServer, McpTransport, SandboxLimits, ServerLabel};
 pub use kernel::{Payload, Sealed, Seq, TimeMs, Tokens, UsdMicros};
 pub use kernel::{PolicyVerdict, SessionName, WriteDomain};

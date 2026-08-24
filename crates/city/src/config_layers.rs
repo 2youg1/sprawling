@@ -97,6 +97,105 @@ pub fn write_effort(city_root: &Path, addr: &Address, effort: Effort) -> Result<
     std::fs::write(&file, rendered).map_err(|err| refuse_file(&file, &err.to_string()))
 }
 
+/// Writes the sandbox limits into one scope's own configuration.
+///
+/// Same door as [`write_effort`] and the same reason: the ladder that
+/// resolves city → building → room is already the authority on what a
+/// run may reach, and a second store would be a second answer. Other
+/// keys are preserved, because a person may have written them.
+///
+/// # Errors
+/// Propagates a file that exists and cannot be read or parsed, and a
+/// directory that cannot be written.
+pub fn write_sandbox(
+    city_root: &Path,
+    addr: &Address,
+    layer: Layer,
+    limits: &SandboxLimits,
+) -> Result<(), AxError> {
+    let file = path(city_root, addr, layer)?;
+    let mut document = read_document(&file)?;
+    let spelled =
+        toml::Value::try_from(limits).map_err(|err| refuse_file(&file, &err.to_string()))?;
+    document.insert("sandbox".to_owned(), spelled);
+    write_document(&file, &document)
+}
+
+/// Writes the external servers this scope reaches into its own
+/// configuration.
+///
+/// An empty list is a scope that reaches none, written rather than
+/// omitted: leaving the key out would inherit the layer above, and a
+/// person who removed the last server did not mean to inherit one.
+///
+/// # Errors
+/// Propagates a file that exists and cannot be read or parsed, and a
+/// directory that cannot be written.
+pub fn write_mcp(
+    city_root: &Path,
+    addr: &Address,
+    layer: Layer,
+    servers: &[McpServer],
+) -> Result<(), AxError> {
+    let file = path(city_root, addr, layer)?;
+    let mut document = read_document(&file)?;
+    // Written as the reader below spells it, not as `McpServer`
+    // serialises: the file's grammar is `ConfigFile`'s, and a writer
+    // that emitted serde's nesting would produce a file this build
+    // refuses to read back.
+    let mut rows = Vec::with_capacity(servers.len());
+    for server in servers {
+        let mut row = toml::Table::new();
+        row.insert(
+            "label".to_owned(),
+            toml::Value::String(server.label.as_str().to_owned()),
+        );
+        match &server.transport {
+            McpTransport::Stdio { command, args } => {
+                row.insert("command".to_owned(), toml::Value::String(command.clone()));
+                row.insert(
+                    "args".to_owned(),
+                    toml::Value::Array(args.iter().cloned().map(toml::Value::String).collect()),
+                );
+            }
+            McpTransport::Http { url, header } => {
+                row.insert("url".to_owned(), toml::Value::String(url.clone()));
+                if let Some(header) = header {
+                    row.insert("header".to_owned(), toml::Value::String(header.clone()));
+                }
+            }
+            // A transport this build cannot spell is refused rather than
+            // written as a row with no way to reach anything.
+            other => {
+                return Err(refuse_file(
+                    &file,
+                    &format!("{other:?}: this version cannot write that transport"),
+                ));
+            }
+        }
+        rows.push(toml::Value::Table(row));
+    }
+    document.insert("mcp".to_owned(), toml::Value::Array(rows));
+    write_document(&file, &document)
+}
+
+fn read_document(file: &Path) -> Result<toml::Table, AxError> {
+    match std::fs::read_to_string(file) {
+        Ok(text) => toml::from_str(&text).map_err(|err| refuse_file(file, &err.to_string())),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(toml::Table::new()),
+        Err(err) => Err(refuse_file(file, &err.to_string())),
+    }
+}
+
+fn write_document(file: &Path, document: &toml::Table) -> Result<(), AxError> {
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir).map_err(|err| refuse_file(dir, &err.to_string()))?;
+    }
+    let rendered =
+        toml::to_string_pretty(document).map_err(|err| refuse_file(file, &err.to_string()))?;
+    std::fs::write(file, rendered).map_err(|err| refuse_file(file, &err.to_string()))
+}
+
 fn refuse_file(path: &Path, why: &str) -> AxError {
     AxError::failure(
         AxCode::ConfigInvalid,

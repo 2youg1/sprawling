@@ -57,9 +57,11 @@ pub channels::BindVerdict::Serve(channels::BindFace)
 pub channels::BuildingAnswer::addr: kernel::address::Address
 pub channels::BuildingAnswer::archive: alloc::vec::Vec<channels::ArchiveLine>
 pub channels::BuildingAnswer::docs: alloc::vec::Vec<channels::BuildingDoc>
+pub channels::BuildingAnswer::mcp: alloc::vec::Vec<kernel::config::McpServer>
 pub channels::BuildingAnswer::problems: alloc::vec::Vec<alloc::string::String>
 pub channels::BuildingAnswer::progress: kernel::completion::Progress
 pub channels::BuildingAnswer::rooms: alloc::vec::Vec<alloc::string::String>
+pub channels::BuildingAnswer::sandbox: core::option::Option<kernel::config::SandboxLimits>
 pub channels::BuildingDoc::bytes: u64
 pub channels::BuildingDoc::name: alloc::string::String
 pub channels::BuildingDoc::text: alloc::string::String
@@ -104,6 +106,11 @@ pub channels::Command::BatchByBuilding::idem: kernel::idem::IdemKey
 pub channels::Command::Cancel
 pub channels::Command::Cancel::idem: kernel::idem::IdemKey
 pub channels::Command::Cancel::run: kernel::event::RunId
+pub channels::Command::ConfigureBuilding
+pub channels::Command::ConfigureBuilding::addr: kernel::address::Address
+pub channels::Command::ConfigureBuilding::idem: kernel::idem::IdemKey
+pub channels::Command::ConfigureBuilding::mcp: core::option::Option<alloc::vec::Vec<kernel::config::McpServer>>
+pub channels::Command::ConfigureBuilding::sandbox: core::option::Option<kernel::config::SandboxLimits>
 pub channels::Command::CreateBuilding
 pub channels::Command::CreateBuilding::addr: kernel::address::Address
 pub channels::Command::CreateBuilding::idem: kernel::idem::IdemKey
@@ -290,7 +297,7 @@ pub channels::Welcome::city: core::option::Option<kernel::address::Address>
 pub channels::Welcome::resume_from: core::option::Option<kernel::event::Seq>
 pub channels::Welcome::schema: kernel::locator::B3Hash
 pub channels::Welcome::wire_v: u32
-pub const channels::COMMAND_NAMES: [&str; 21]
+pub const channels::COMMAND_NAMES: [&str; 22]
 pub const channels::QUERY_NAMES: [&str; 11]
 pub const channels::WIRE_V: u32
 pub enum channels::Answer
@@ -409,6 +416,8 @@ pub use channels::EventRecord
 pub use channels::GitOid
 pub use channels::IdemKey
 pub use channels::Locator
+pub use channels::McpServer
+pub use channels::McpTransport
 pub use channels::ModelTag
 pub use channels::Payload
 pub use channels::PlannedProgress
@@ -416,8 +425,10 @@ pub use channels::PolicyVerdict
 pub use channels::Progress
 pub use channels::Restoration
 pub use channels::RunId
+pub use channels::SandboxLimits
 pub use channels::Sealed
 pub use channels::Seq
+pub use channels::ServerLabel
 pub use channels::SessionName
 pub use channels::TimeMs
 pub use channels::Tokens

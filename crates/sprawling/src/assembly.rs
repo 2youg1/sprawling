@@ -196,6 +196,14 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
             subject: entry.subject,
         })
         .collect();
+    // The building's own rung of the ladder, not the resolved value: a
+    // form filled from the resolved value would write the city's
+    // setting into the building the first time anybody pressed save.
+    let own = city::config_path(city_root, addr, city::Layer::Building)
+        .ok()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| city::ConfigLayer::parse(&text).ok())
+        .unwrap_or_default();
     Some(channels::BuildingAnswer {
         addr: addr.clone(),
         progress,
@@ -203,6 +211,11 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
         rooms,
         docs,
         archive,
+        sandbox: own.sandbox().cloned(),
+        mcp: own
+            .mcp()
+            .map(<[kernel::McpServer]>::to_vec)
+            .unwrap_or_default(),
     })
 }
 
@@ -1707,6 +1720,43 @@ impl RunWorker {
     /// it serves. The probe happens before the record: an endpoint that
     /// cannot be reached is not attached, so the book never advertises a
     /// model nobody can call.
+    /// Writes what a building's runs may reach into that building's own
+    /// configuration layer.
+    ///
+    /// Nothing is recorded: `CONFIG.toml` is the authority for what a
+    /// run is governed by, and an event carrying the same fact would be
+    /// a second one. What the ledger keeps is what the run did with it.
+    fn configure_building(
+        &mut self,
+        addr: &Address,
+        sandbox: Option<&kernel::SandboxLimits>,
+        mcp: Option<&[kernel::McpServer]>,
+    ) -> Result<(), AxError> {
+        let building = city::Building::of(addr)?;
+        if let Some(limits) = sandbox {
+            city::write_sandbox(
+                &self.city_root,
+                building.addr(),
+                city::Layer::Building,
+                limits,
+            )?;
+        }
+        if let Some(servers) = mcp {
+            city::write_mcp(
+                &self.city_root,
+                building.addr(),
+                city::Layer::Building,
+                servers,
+            )?;
+        }
+        self.note(
+            runtime::diagnostics::Level::Effect,
+            "city::config_layers",
+            &format!("{} was reconfigured", building.addr().as_str()),
+        );
+        Ok(())
+    }
+
     /// Asks a base URL what it serves, and attaches nothing.
     ///
     /// The list is recorded rather than returned: a query would have to
@@ -2130,6 +2180,9 @@ impl RunWorker {
                 body,
                 ..
             } => self.wake(&source, &subject, &body),
+            channels::Command::ConfigureBuilding {
+                addr, sandbox, mcp, ..
+            } => self.configure_building(&addr, sandbox.as_ref(), mcp.as_deref()),
             channels::Command::ProbeEndpoint {
                 name,
                 base_url,
@@ -7005,6 +7058,66 @@ addr = \"gone/room1\"
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
         );
+    }
+
+    /// `[sandbox]` and `[mcp]` resolve city -> building -> room and
+    /// nothing wrote either, so a person was governed by settings they
+    /// could not change without a text editor.
+    #[test]
+    fn a_building_can_be_told_what_its_runs_may_reach() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        let room = Address::parse("lab/room1").unwrap();
+        let before = city::load_config(dir.path(), &room).unwrap();
+        assert!(!before.sandbox.shell, "the shell arm is off by default");
+
+        worker
+            .handle(channels::Command::ConfigureBuilding {
+                addr: room.clone(),
+                sandbox: Some(kernel::SandboxLimits {
+                    shell: true,
+                    fuel: 4096,
+                    mounts: vec![Address::parse("lab/shared").unwrap()],
+                }),
+                mcp: Some(vec![kernel::McpServer {
+                    label: kernel::ServerLabel::parse("docs").unwrap(),
+                    transport: kernel::McpTransport::Http {
+                        url: "https://mcp.example/v1".to_owned(),
+                        header: None,
+                    },
+                }]),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"reach"),
+            })
+            .unwrap();
+
+        // The ladder is the authority: what a run in the room resolves
+        // to is what the building's own rung now says.
+        let after = city::load_config(dir.path(), &room).unwrap();
+        assert!(after.sandbox.shell);
+        assert_eq!(after.sandbox.fuel, 4096);
+        assert_eq!(after.mcp.len(), 1);
+        assert_eq!(after.mcp[0].label.as_str(), "docs");
+
+        // And the page reads the building's own rung back, not the
+        // resolved value, so saving twice does not copy the city's
+        // settings down into the building.
+        let shown = read_building(dir.path(), &Address::parse("lab").unwrap())
+            .expect("the building page has an answer");
+        assert_eq!(shown.mcp.len(), 1);
+        assert!(shown.sandbox.is_some_and(|limits| limits.shell));
     }
 
     /// A person could not see what a key bought until they had already

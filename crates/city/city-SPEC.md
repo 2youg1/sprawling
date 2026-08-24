@@ -290,6 +290,17 @@ pub fn index(city_root, building) -> Result<Vec<Entry>, AxError>;   // 算出来
 - **召回是结构化的**：按类与日期归档，循索引读**原文**。不做向量记忆；翻案条件写死——真实召回率 <90% 才重议。
 - **日期取整天**：给人浏览用，精度高过问题所需只会招来没人打算做的比较。
 
+### 8-4b 两个没人写的配置层长出写面（P3.02）
+
+```rust
+pub fn write_sandbox(city_root: &Path, addr: &Address, layer: Layer, limits: &SandboxLimits) -> Result<(), AxError>;
+pub fn write_mcp(city_root: &Path, addr: &Address, layer: Layer, servers: &[McpServer]) -> Result<(), AxError>;
+```
+
+- **与 `write_effort` 同一道门**：梯子（城→楼→房间）本就是「一个 Run 被什么治理」的权威，第二个存储就是第二个答案。其余键原样保留，因为可能是人手写的。
+- **写出的字节必须是 `ConfigFile` 读得回来的那种**：`McpServer` 的 serde 形状是嵌套的，而文件语法是平的（`label` ＋ `command`/`args` 或 `url`/`header`）。写面照文件语法拼，本 crate 内一处正读一处反写，两者对不上时编译不会说话、测试会。
+- **空的 `mcp` 表要写出来而不是省略**：省略即继承上一级，而一个人删掉最后一台服务器不是想继承一台。
+
 ### 8-14 一次会话选一次的思考强度（F2.16）
 
 ```rust

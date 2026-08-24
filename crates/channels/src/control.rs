@@ -92,6 +92,7 @@ pub fn classify(command: &Command) -> ControlVerdict {
         Command::Dispatch { .. }
         | Command::Wake { .. }
         | Command::ProbeEndpoint { .. }
+        | Command::ConfigureBuilding { .. }
         | Command::AttachEndpoint { .. }
         | Command::SelectModel { .. }
         | Command::Login { .. }

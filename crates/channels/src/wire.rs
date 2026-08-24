@@ -25,8 +25,8 @@
 
 use kernel::{
     Address, ApprovalId, ApprovalItem, Autonomy, AxCode, AxError, B3Hash, BudgetCap, DialectKind,
-    Effort, EventKind, EventRecord, GitOid, IdemKey, ModelTag, PolicyVerdict, Progress,
-    Restoration, RunId, Sealed, Seq, SessionName, TimeMs, UsdMicros,
+    Effort, EventKind, EventRecord, GitOid, IdemKey, McpServer, ModelTag, PolicyVerdict, Progress,
+    Restoration, RunId, SandboxLimits, Sealed, Seq, SessionName, TimeMs, UsdMicros,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,12 +37,14 @@ use serde::{Deserialize, Serialize};
 /// 6: and how hard that session thinks (F2.16).
 /// 7: a provider can be asked what it serves before it is attached, and
 ///    an attachment names which of those models it admits (P3.01).
-pub const WIRE_V: u32 = 7;
+/// 8: a building's sandbox limits and external servers have a surface
+///    (P3.02).
+pub const WIRE_V: u32 = 8;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
 /// different hash is refused rather than served a half-understood protocol.
-pub const COMMAND_NAMES: [&str; 21] = [
+pub const COMMAND_NAMES: [&str; 22] = [
     "Dispatch",
     "Wake",
     "Login",
@@ -52,6 +54,7 @@ pub const COMMAND_NAMES: [&str; 21] = [
     "Fork",
     "Attach",
     "CreateBuilding",
+    "ConfigureBuilding",
     "PutSecret",
     "Steer",
     "Cancel",
@@ -238,6 +241,20 @@ pub enum Command<Secret = Sealed<String>> {
         auth_header: Option<String>,
         idem: IdemKey,
     },
+    /// What a building's runs may reach: the sandbox's limits, and the
+    /// external servers its tools come from.
+    ///
+    /// Both resolve city -> building -> room and neither had a surface,
+    /// so a person could read what they were governed by and not change
+    /// it. Each field is optional and an absent one leaves that section
+    /// alone; an empty `mcp` list is a building that reaches no server,
+    /// which is a different statement from not saying.
+    ConfigureBuilding {
+        addr: Address,
+        sandbox: Option<SandboxLimits>,
+        mcp: Option<Vec<McpServer>>,
+        idem: IdemKey,
+    },
     AttachEndpoint {
         name: ProviderName,
         /// The base URL as a provider's documentation prints it; the
@@ -367,6 +384,7 @@ impl<Secret> Command<Secret> {
             Self::Dispatch { .. } => "Dispatch",
             Self::Wake { .. } => "Wake",
             Self::Login { .. } => "Login",
+            Self::ConfigureBuilding { .. } => "ConfigureBuilding",
             Self::ProbeEndpoint { .. } => "ProbeEndpoint",
             Self::AttachEndpoint { .. } => "AttachEndpoint",
             Self::SelectModel { .. } => "SelectModel",
@@ -398,6 +416,7 @@ impl<Secret> Command<Secret> {
             | Self::Login { ref idem, .. }
             | Self::Fork { ref idem, .. }
             | Self::ProbeEndpoint { ref idem, .. }
+            | Self::ConfigureBuilding { ref idem, .. }
             | Self::Attach { ref idem, .. }
             | Self::CreateBuilding { ref idem, .. }
             | Self::Steer { ref idem, .. }
@@ -459,6 +478,17 @@ impl From<WireCommand> for Command {
             } => Self::Login {
                 provider,
                 step,
+                idem,
+            },
+            Command::ConfigureBuilding {
+                addr,
+                sandbox,
+                mcp,
+                idem,
+            } => Self::ConfigureBuilding {
+                addr,
+                sandbox,
+                mcp,
                 idem,
             },
             Command::ProbeEndpoint {
@@ -733,6 +763,12 @@ pub struct BuildingAnswer {
     pub rooms: Vec<String>,
     pub docs: Vec<BuildingDoc>,
     pub archive: Vec<ArchiveLine>,
+    /// What this building's own layer states its runs may reach. The
+    /// resolved value is the ladder's; this is the rung a person edits,
+    /// so a form that showed the resolved value would silently rewrite
+    /// what a city-wide setting had said.
+    pub sandbox: Option<SandboxLimits>,
+    pub mcp: Vec<McpServer>,
 }
 
 /// The five cuts of one authoritative total. Each dimension sums to

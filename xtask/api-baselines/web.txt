@@ -110,6 +110,7 @@ pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::inner
 pub fn web::Phrase::in_lang(self, web::Lang) -> &'static str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::as_str(self) -> &'static str
+pub fn web::ReachForm(web::reach::ReachFormProps) -> dioxus_core::innerlude::Element
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ReturnPath::of(&kernel::discard::Restoration) -> Self
 pub fn web::ReturnPath::sentence(&self) -> alloc::string::String
@@ -143,6 +144,7 @@ pub fn web::bar(&kernel::completion::Progress, bool, web::Subject, web::Lang) ->
 pub fn web::bin_rows(&channels::wire::DiscardAnswer) -> alloc::vec::Vec<web::BinRow>
 pub fn web::can_dispatch(&channels::wire::EndpointsAnswer) -> bool
 pub fn web::cleared_by(&kernel::event::EventRecord) -> core::option::Option<alloc::string::String>
+pub fn web::configure_command(&kernel::address::Address, kernel::config::SandboxLimits, alloc::vec::Vec<kernel::config::McpServer>) -> channels::wire::WireCommand
 pub fn web::continuity_order(u16) -> u16
 pub fn web::cost_rows(alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros, kernel::budget::UsdMicros)>, kernel::budget::UsdMicros) -> alloc::vec::Vec<web::CostRow>
 pub fn web::custom_properties() -> alloc::string::String
@@ -186,6 +188,8 @@ pub fn web::place(&str, u32) -> (i32, i32)
 pub fn web::points_attr(&[(i32, i32); 4]) -> alloc::string::String
 pub fn web::policy_admits(&kernel::approval::ApprovalItem) -> bool
 pub fn web::read_frame(&str) -> web::LinkEvent
+pub fn web::read_mounts(&str) -> (alloc::vec::Vec<kernel::address::Address>, alloc::vec::Vec<alloc::string::String>)
+pub fn web::read_servers(&str) -> (alloc::vec::Vec<kernel::config::McpServer>, alloc::vec::Vec<alloc::string::String>)
 pub fn web::ready(&web::AttachForm) -> web::AttachReadiness
 pub fn web::rebuild<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> web::Snapshot
 pub fn web::recycle_bin(alloc::vec::Vec<web::BinRow>) -> alloc::vec::Vec<web::BinRow>
@@ -201,6 +205,8 @@ pub fn web::searchable(&str) -> core::option::Option<alloc::string::String>
 pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> u16
 pub fn web::shelves(&channels::wire::ArchiveAnswer) -> alloc::vec::Vec<web::Shelf>
 pub fn web::short_run(kernel::event::RunId) -> alloc::string::String
+pub fn web::show_mounts(&[kernel::address::Address]) -> alloc::string::String
+pub fn web::show_servers(&[kernel::config::McpServer]) -> alloc::string::String
 pub fn web::signs(&channels::wire::MetricsAnswer) -> [web::Sign; 3]
 pub fn web::spend_line(web::Lang, &web::Snapshot) -> alloc::string::String
 pub fn web::started_here(&kernel::event::EventRecord, &str) -> core::option::Option<kernel::event::RunId>
@@ -259,6 +265,7 @@ pub use web::LedgerView
 pub use web::LiveView
 pub use web::OverviewView
 pub use web::ProgressBar
+pub use web::ReachForm
 pub use web::RecycleBinView
 pub use web::Root
 pub use web::Vitals
@@ -340,6 +347,7 @@ pub web::Lang::En
 pub web::Lang::Zh
 pub web::Leaf::Archive
 pub web::Leaf::Doc(alloc::string::String)
+pub web::Leaf::Reach
 pub web::Leaf::Room(alloc::string::String)
 pub web::Line::from_person: bool
 pub web::Line::kind: kernel::event::EventKind
@@ -422,13 +430,20 @@ pub web::Msg::BuildingAsking
 pub web::Msg::BuildingAskingRoom
 pub web::Msg::BuildingAskingRoomWhat
 pub web::Msg::BuildingAskingWhat
+pub web::Msg::BuildingFuel
+pub web::Msg::BuildingMounts
 pub web::Msg::BuildingNoDocument
 pub web::Msg::BuildingNoRooms
 pub web::Msg::BuildingNothingFiled
 pub web::Msg::BuildingNothingFiledWhat
+pub web::Msg::BuildingReachTab
 pub web::Msg::BuildingRoomEmpty
 pub web::Msg::BuildingRoomEmptyWhat
+pub web::Msg::BuildingSaveReach
 pub web::Msg::BuildingScope
+pub web::Msg::BuildingServers
+pub web::Msg::BuildingServersHint
+pub web::Msg::BuildingShell
 pub web::Msg::BuildingSignalFrom
 pub web::Msg::BuildingSource
 pub web::Msg::BuildingStartHere

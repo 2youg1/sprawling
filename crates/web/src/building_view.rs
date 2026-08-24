@@ -11,9 +11,16 @@
 //! of them, and until this page existed a person could only read them by
 //! leaving the interface and opening a text editor.
 //!
-//! **The page reads; it does not edit.** Editing here would be a second way
-//! to change a building - one that leaves no run, no ledger line and no
-//! checkpoint. What a person can do here is read, and then dispatch.
+//! **The page reads; it does not edit.** Editing a document here would be
+//! a second way to change a building - one that leaves no run, no ledger
+//! line and no checkpoint. What a person can do with a document here is
+//! read it, and then dispatch.
+//!
+//! One tab is not a document. What a building's runs may reach lives in
+//! its `CONFIG.toml`, inside the reserved subtree that no write domain
+//! touches, so no run can set it and a person's form is not a second way
+//! to do anything. That form is `web::reach`'s, mounted here rather than
+//! written here, which keeps this file a reader.
 
 use crate::lang::{Msg, fill, say};
 use channels::{Address, BuildingAnswer, ClientFrame, InboxAnswer, Query};
@@ -30,6 +37,9 @@ pub enum Leaf {
     Archive,
     /// One room, and what waits in it.
     Room(String),
+    /// What this building's runs may reach: the only face on this page
+    /// a person writes through, and the only one no agent can.
+    Reach,
 }
 
 /// The address of one room of this building.
@@ -225,6 +235,12 @@ pub fn BuildingView(
                     onclick: move |_| leaf.set(Some(Leaf::Archive)),
                     "{archive_tab}"
                 }
+                button {
+                    class: "tab",
+                    "aria-current": if showing == Leaf::Reach { "true" } else { "false" },
+                    onclick: move |_| leaf.set(Some(Leaf::Reach)),
+                    "{word(Msg::BuildingReachTab)}"
+                }
                 // The rooms are listed here and nowhere else on this page:
                 // a second list of them would be a second answer to "what
                 // is in this building".
@@ -272,6 +288,14 @@ pub fn BuildingView(
                                 }
                             },
                         }
+                    }
+                },
+                Leaf::Reach => rsx! {
+                    crate::reach::ReachForm {
+                        addr: answer.addr.clone(),
+                        sandbox: answer.sandbox.clone(),
+                        servers: answer.mcp.clone(),
+                        on_frame,
                     }
                 },
                 Leaf::Archive => rsx! {
@@ -335,6 +359,8 @@ mod tests {
 
     fn answer(docs: Vec<&str>) -> BuildingAnswer {
         BuildingAnswer {
+            sandbox: None,
+            mcp: Vec::new(),
             addr: Address::parse("lab").unwrap(),
             progress: Progress::Planned(PlannedProgress {
                 done: 3,

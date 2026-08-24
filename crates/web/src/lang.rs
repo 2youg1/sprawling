@@ -398,6 +398,13 @@ pub enum Msg {
     SettingsKeyHint,
     SettingsPutKeyInVault,
     SettingsAttachThisProvider,
+    BuildingReachTab,
+    BuildingShell,
+    BuildingFuel,
+    BuildingMounts,
+    BuildingServers,
+    BuildingServersHint,
+    BuildingSaveReach,
     SettingsAskWhatItServes,
     SettingsServes,
     SettingsAdmitAll,
@@ -1458,6 +1465,34 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "attach this provider",
             zh: "接上这个 provider",
         },
+        Msg::BuildingReachTab => Phrase {
+            en: "what it may reach",
+            zh: "它够得到什么",
+        },
+        Msg::BuildingShell => Phrase {
+            en: "offer the shell arm",
+            zh: "开放 shell 那条臂",
+        },
+        Msg::BuildingFuel => Phrase {
+            en: "instruction budget for one sandboxed call",
+            zh: "一次沙箱调用的指令预算",
+        },
+        Msg::BuildingMounts => Phrase {
+            en: "extra readable paths, one per line",
+            zh: "额外可读路径，每行一条",
+        },
+        Msg::BuildingServers => Phrase {
+            en: "external servers, one per line as `label url` or `label ! command`",
+            zh: "外部服务器，每行一条，写成 `label url` 或 `label ! 命令`",
+        },
+        Msg::BuildingServersHint => Phrase {
+            en: "an empty list is a building that reaches none, which is not the same as saying nothing",
+            zh: "空表意味着这栋楼一个都不够到，与「什么都没说」不是一回事",
+        },
+        Msg::BuildingSaveReach => Phrase {
+            en: "save what this building may reach",
+            zh: "保存这栋楼够得到的东西",
+        },
         Msg::SettingsAskWhatItServes => Phrase {
             en: "ask what it serves",
             zh: "问它供应什么",
@@ -1879,6 +1914,13 @@ mod tests {
             Msg::SettingsKeyHint,
             Msg::SettingsPutKeyInVault,
             Msg::SettingsAttachThisProvider,
+            Msg::BuildingReachTab,
+            Msg::BuildingShell,
+            Msg::BuildingFuel,
+            Msg::BuildingMounts,
+            Msg::BuildingServers,
+            Msg::BuildingServersHint,
+            Msg::BuildingSaveReach,
             Msg::SettingsAskWhatItServes,
             Msg::SettingsServes,
             Msg::SettingsAdmitAll,
@@ -2163,6 +2205,13 @@ mod tests {
                 | Msg::SettingsKeyHint
                 | Msg::SettingsPutKeyInVault
                 | Msg::SettingsAttachThisProvider
+                | Msg::BuildingReachTab
+                | Msg::BuildingShell
+                | Msg::BuildingFuel
+                | Msg::BuildingMounts
+                | Msg::BuildingServers
+                | Msg::BuildingServersHint
+                | Msg::BuildingSaveReach
                 | Msg::SettingsAskWhatItServes
                 | Msg::SettingsServes
                 | Msg::SettingsAdmitAll

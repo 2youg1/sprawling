@@ -717,6 +717,22 @@ fn live::named(runs: &[(RunId, String)], run: RunId) -> String;
 - **Run 标识符不从页面上拿掉**，只是变安静：人读名字，而 `sprawling fork` 与账本寻址用的是它。
 - **标题与按钮同源**：`named()` 从 picker 的同一份列表里取字，于是两处不会对不上。
 
+### 8-36 一栋楼够得到什么，人自己填（P3.02；形状 1 判定＋一个薄组件）
+
+```rust
+pub fn read_mounts(text: &str) -> (Vec<Address>, Vec<String>);     // 好行与读不懂的行同回
+pub fn read_servers(text: &str) -> (Vec<McpServer>, Vec<String>);  // `label url` 或 `label ! 命令`
+pub fn show_mounts(mounts: &[Address]) -> String;
+pub fn show_servers(servers: &[McpServer]) -> String;              // read_servers 的逆，同文件
+pub fn configure_command(addr: &Address, sandbox: SandboxLimits, servers: Vec<McpServer>) -> WireCommand;
+#[component] pub fn ReachForm(addr, sandbox: Option<SandboxLimits>, servers: Vec<McpServer>, on_frame)
+```
+
+- **为什么不写在 `building_view` 里**：那份文件明写「本页只读不改」，理由是改一份 Agent 写的文档等于开出第二条不留 Run、不留账本行的改楼路径。**配置不属于那一类**：`CONFIG.toml` 住保留子树，没有写域够得到，故没有任何 Run 能写它，人的表单不是第二条路而是唯一一条。分成两个文件，那句话才继续成立。
+- **两处文本域而不是每种 transport 一个控件**：上游 `McpTransport` 每长一个 variant，控件就要长一根分支。行的形状（有没有 `!`）决定 transport，而不是从内容里猜——与 `McpTransport` 是枚举而非「可能是 URL 也可能是命令」的字符串同一个理由。
+- **读不懂的行报出来而不是丢掉**：丢掉即写下一份人没写过、又看不出自己没写过的配置。
+- **表单填的是楼自己那一级**：用解析后的值填，第一次保存就把城一级的设置抄进了楼里。
+
 ### 8-35b 看得出谁替谁干活（P1.03）
 
 ```rust

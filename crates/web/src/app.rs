@@ -2183,6 +2183,8 @@ mod tests {
 
     fn building_answer() -> channels::BuildingAnswer {
         channels::BuildingAnswer {
+            sandbox: None,
+            mcp: Vec::new(),
             addr: Address::parse("lab").unwrap(),
             progress: channels::Progress::Planned(channels::PlannedProgress {
                 done: 1,

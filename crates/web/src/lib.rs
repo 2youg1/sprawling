@@ -22,6 +22,7 @@ mod live;
 mod overview;
 mod panel;
 mod progress;
+mod reach;
 mod route;
 mod settings;
 mod socket;
@@ -57,6 +58,8 @@ pub use overview::{Attention, OverviewView, Working, headline, needs_you, workin
 pub use progress::distinguishable_without_colour;
 pub use progress::{Bar, BarState, ProgressBar, Subject, bar};
 pub use progress::{per_mille_of, track_token};
+pub use reach::{ReachForm, configure_command, read_mounts, read_servers};
+pub use reach::{show_mounts, show_servers};
 pub use route::{from_fragment, to_fragment};
 pub use settings::{AttachForm, AttachReadiness, EndpointRow, TagRow};
 pub use settings::{can_dispatch, endpoint_rows, ready, tag_rows, url_is_safe};

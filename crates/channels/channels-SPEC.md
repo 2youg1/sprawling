@@ -21,7 +21,7 @@
 
 - **wire**：Command 恰 18 个 variant（P4.08 增 `Wake`）、Query 恰 9 个（计数断言，对本 SPEC §8-1 两表逐名核对）；每个改状态 Command 携 `IdemKey`（类型强制，无可省字段）；`PutSecret` 的 `value: Sealed<String>` 不实现 `Serialize`——**「远程录凭证」这条帧编译不出来**，以 trybuild 反例钉死。
 - **握手**：版本＋schema 哈希不配即断连并回 `E_WIRE_MISMATCH`（装载期码，无 carrier）；schema 哈希由 wire 类型集派生，改一个 variant 即变。golden 钉住当前哈希，改哈希必须与本 SPEC 同集变更。
-  **当前 golden**（P3.01 起）：`4bb71c0be50d6e6d191151b38ceafbe9cb14222b74a5f1a701194bb2a7eab36d`；**WIRE_V ＝ 7**（新增 `ProbeEndpoint`，`AttachEndpoint` 长出 `admit`）。前值 `c059c6e2…`（F2.16–P2.01，WIRE_V 6）、`d825e83a…`（F2.11–F2.15，WIRE_V 5）、 `aa57cb7e…`（F1.01–F2.10，WIRE_V 4）、 `941ede9f…`（R1.16–R1.18，WIRE_V 3）、`defe9a75…`（R1.14–R1.15，WIRE_V 2）、 `85705c03…`（R1.11–R1.13，WIRE_V 1）、`238f11b2…`（P1.11–R1.10）、`692b5f96…`（S4.02–P1.10）。
+  **当前 golden**（P3.02 起）：`0a600659847426c0367f2af968ccce6489701c5cc1e3b78f05e22c4f80c0ae8a`；**WIRE_V ＝ 8**（新增 `ConfigureBuilding`）。前值 `4bb71c0b…`（P3.01，WIRE_V 7：新增 `ProbeEndpoint`，`AttachEndpoint` 长出 `admit`）、`c059c6e2…`（F2.16–P2.01，WIRE_V 6）、`d825e83a…`（F2.11–F2.15，WIRE_V 5）、 `aa57cb7e…`（F1.01–F2.10，WIRE_V 4）、 `941ede9f…`（R1.16–R1.18，WIRE_V 3）、`defe9a75…`（R1.14–R1.15，WIRE_V 2）、 `85705c03…`（R1.11–R1.13，WIRE_V 1）、`238f11b2…`（P1.11–R1.10）、`692b5f96…`（S4.02–P1.10）。
   P1.11 增三帧：`AttachEndpoint`／`SelectModel` 两个 Command（十九），`EndpointView` 一个 Query（十）。`PutSecret` 仍无线格式——它经 `/enroll` 路由在进程内成形，见 §8-2 录入口。
 - **server**：默认绑定回环；绑非回环且 `auth` 未配置令牌时**拒绝启动**并回 `E_CONFIG_INVALID`（不是启动后再拒连——这是绑定面判定，不是请求面判定）。
 - **auth**：令牌比较恒为常数时间（不早退）；比较函数以「逐字节差异位置不影响耗时」的性质测试看守。S4.02 已落其地基（`server::constant_time_eq`＋`decide_handshake`）；S4.03 的 `auth` 模块接令牌的生成、展示与持久化。
@@ -109,6 +109,7 @@ pub struct Welcome { pub wire_v: u32, pub schema: B3Hash, pub resume_from: Optio
 **三个形状决定及其理由**：
 
 1. **`Command`／`Query` 不标 `#[non_exhaustive]`**。它们的版本机制是 schema 哈希（加一个 variant 即改哈希，旧客户端在握手处被拒），不是通配臂。不标它使装配层必须**穷尽处理 18 条命令**——新增一条而无人处理在编译期即红。这是想要的约束，不是疏漏。
+- **`ConfigureBuilding` 写的是楼自己那一级（P3.02）**：`[sandbox]` 与 `[mcp]` 沿城→楼→房间解析，先前无任何写面，于是一个人读得到自己被什么治理却改不动它。答复里回的是**楼自己那一级的值**而不是解析后的值——用解析值填表，第一次按保存就会把城一级的设置抄进楼里。两个字段各自可缺省，缺省即不动那一节；`mcp` 为空表是「这栋楼一个服务器都不够到」，与「没说」不是一回事。
 - **`ProbeEndpoint` 与 `AttachEndpoint` 是两条命令而不是一个开关（P3.01）**：先前模型清单只作为 attach 的副产物到达，于是「看看这把 key 买到了什么」必须先注册。两者的 `IdemKey` 由不同素材派生（`probe:` 前缀），因为问与登记是两件事，一件不得把另一件去重掉。`AttachEndpoint.admit` 空表即全部准入——没看过清单的人本就是这个意思；表里有而 endpoint 不供应的名字被略去而不是被承诺，与阅览室对不在书架上的 skill 的答复同形。
 
 2. **`name()` 的穷尽 match 是计数断言的真机制**。光有 `COMMAND_NAMES.len() == 17` 拦不住「加 variant 但不改表」；`name()` 穷尽后，新 variant 必须在 `name()` 里现身，测试再断言它必在名表内。三道连环：编译 → 名表 → schema 哈希 golden → SPEC 同集变更。
