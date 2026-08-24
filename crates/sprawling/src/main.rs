@@ -46,7 +46,8 @@ const COMMANDS: &str = "\
 commands:
   up [dir] [addr]              raise a city here if needed, serve it, open the WebUI
   install [--uninstall]        put this binary on your PATH, or take it back off
-  init <dir>                   raise a city: writes the genesis record
+  init <dir> [--adopt]         raise a city: writes the genesis record
+                               (--adopt: every folder there becomes a building)
   serve <dir> [addr] [--open]  serve a city that already exists
                                (--console enters it, --no-console does not)
   resume <dir>                 after a restart: verify, close what was lost, report
@@ -64,7 +65,7 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("status") => status(&args),
         Some("replay") => replay(named(&args, 1)),
-        Some("init") => init(named(&args, 1)),
+        Some("init") => init(&args),
         Some("up") => up(&args),
         Some("install") => install(&args),
         Some("call") => call(&args),
@@ -109,6 +110,7 @@ fn first_screen() -> ExitCode {
     let answered = firstrun::ask(&city, &mut std::io::stdin().lock(), &mut std::io::stdout());
     let code = match answered {
         Ok(firstrun::FirstScreen::Start(city)) => up_at(&city, "127.0.0.1:8787", &[]),
+        Ok(firstrun::FirstScreen::Use(folder)) => use_folder(&folder),
         Ok(firstrun::FirstScreen::Quit) => {
             println!("{COMMANDS}");
             ExitCode::from(2)
@@ -166,6 +168,64 @@ fn up(args: &[String]) -> ExitCode {
     up_at(&city, addr, args)
 }
 
+/// A folder the person already works in becomes a city around their
+/// work.
+///
+/// The folder has to be there. A path that is not a directory is
+/// reported and nothing is created: the alternative is making a city out
+/// of a typo, at a location nobody looked at.
+fn use_folder(folder: &std::path::Path) -> ExitCode {
+    if !folder.is_dir() {
+        eprintln!("{} is not a folder on this machine", folder.display());
+        eprintln!(
+            "recovery: paste the path of a folder you already work in, or press Enter to start a new city"
+        );
+        return ExitCode::FAILURE;
+    }
+    if assembly::has_history(folder) {
+        println!("{} is already a city; opening it", folder.display());
+        return serve_city(folder, "127.0.0.1:8787", &[], true);
+    }
+    match assembly::form_city(folder, assembly::Adopt::EveryFolder) {
+        Ok(report) => {
+            report_standing(&report);
+            serve_city(folder, "127.0.0.1:8787", &[], true)
+        }
+        Err(err) => report(err),
+    }
+}
+
+/// What forming a city found, and what it did about it. Printed rather
+/// than assumed, because the person is watching their own work being
+/// taken in.
+fn report_standing(report: &assembly::InitReport) {
+    println!(
+        "city raised: ledger at {} (genesis seq {})",
+        report.ledger_dir.display(),
+        report.genesis.seq().value()
+    );
+    match &report.standing {
+        city::Standing::Empty => println!("the folder was empty; nothing was there to touch"),
+        city::Standing::AlreadyACity => println!("the folder was already a city"),
+        city::Standing::Work { adoptable, loose } => {
+            println!(
+                "found {} folder(s) and {loose} other item(s); nothing in them was read, moved or rewritten",
+                adoptable.len()
+            );
+        }
+        // A standing this build does not know is reported by name
+        // rather than passed over: the person is watching their own
+        // work being taken in.
+        other => println!("the folder is in a state this build does not describe: {other:?}"),
+    }
+    for addr in &report.adopted {
+        println!(
+            "  {} is now a building - edit its rules on its page",
+            addr.as_str()
+        );
+    }
+}
+
 fn up_at(city: &std::path::Path, raw: &str, args: &[String]) -> ExitCode {
     if !assembly::has_history(city) {
         match assembly::init_city(city) {
@@ -182,18 +242,20 @@ fn up_at(city: &std::path::Path, raw: &str, args: &[String]) -> ExitCode {
 
 /// The genesis write: a city is born when city_initialized becomes line
 /// zero of its ledger (walkthrough step 1).
-fn init(dir: Option<&String>) -> ExitCode {
-    let Some(dir) = dir else {
-        eprintln!("usage: sprawling init <city-dir>");
+fn init(args: &[String]) -> ExitCode {
+    let Some(dir) = named(args, 1) else {
+        eprintln!("usage: sprawling init <city-dir> [--adopt]");
+        eprintln!("--adopt turns every folder already there into a building");
         return ExitCode::from(2);
     };
-    match assembly::init_city(std::path::Path::new(dir)) {
+    let adopt = if args.iter().any(|arg| arg == "--adopt") {
+        assembly::Adopt::EveryFolder
+    } else {
+        assembly::Adopt::Nothing
+    };
+    match assembly::form_city(std::path::Path::new(dir), adopt) {
         Ok(report) => {
-            println!(
-                "city initialized: ledger at {} (genesis seq {})",
-                report.ledger_dir.display(),
-                report.genesis.seq().value()
-            );
+            report_standing(&report);
             ExitCode::SUCCESS
         }
         Err(err) => {

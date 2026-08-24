@@ -6,15 +6,6 @@ Where a row says **needs a ruling**, it touches something in the `guard` row of 
 
 Where a row says **evidence**, the claim was checked by running something or by a search whose empty result is the finding. Rows without it are judgements, and are marked as such.
 
-## P0 — A person who already has a workspace
-
-**evidence**: `sprawling init` lays a city into a directory; `sprawling adopt <city-dir> <addr>` takes a directory that is *already inside a city* in as a building, and its own usage line says "move or clone the directory under the city first". Nothing takes a folder that exists somewhere else and makes it workable, and the first-run screen (`bin::firstrun`) offers only a new city.
-
-The outcome: **a person points at the work they already have, and the city forms around it rather than beside it.** Two halves, and both have to hold the rule that a city owns its own subtree and nothing else:
-
-1. `init` over a directory that is not empty must be a decision with an exhaustive answer — what it found, what it will lay down, what it will not touch — rather than a refusal or a silent overwrite.
-2. The first screen and the wire need the same door, so a person who never opens a terminal gets there too. `adopt` already exists and is the shape to reuse; what is missing is the case where the folder is not yet under the city.
-
 ## P0.1 — Dragging is one gesture that means one thing
 
 **evidence**: `grep -rn "ondrop\|ondragover\|drag" crates/web/src` is empty. The client has no drag handling at all; attachments reach the city through the upload route and a form.

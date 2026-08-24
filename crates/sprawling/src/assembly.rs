@@ -61,6 +61,43 @@ fn ledger_dir(city_root: &Path) -> PathBuf {
 pub(crate) struct InitReport {
     pub(crate) ledger_dir: PathBuf,
     pub(crate) genesis: EventRef,
+    /// What was already in the directory when the city formed, so the
+    /// person who pointed at a year of their own work is told what was
+    /// laid down beside it and what was left alone.
+    pub(crate) standing: city::Standing,
+    /// The folders that became buildings. Empty unless the caller asked
+    /// for it: what is already on disk becomes governed only because
+    /// somebody said so.
+    pub(crate) adopted: Vec<Address>,
+}
+
+/// Whether the folders already in a directory become buildings.
+///
+/// Exhaustive rather than a flag, because the two are different acts: one
+/// forms a city beside existing work and leaves it alone, and the other
+/// puts that work under rules. A boolean would make them look like one
+/// act with a setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Adopt {
+    Nothing,
+    EveryFolder,
+}
+
+/// What a directory holds, read from the directory itself.
+///
+/// The decision is `city::survey`'s; this only does the reading. A
+/// directory that cannot be listed reads as empty, and the city forms -
+/// the alternative is refusing to start over a permission error that the
+/// next write would report anyway, with a better sentence.
+fn standing_of(city_root: &Path) -> city::Standing {
+    let mut entries: Vec<(String, bool)> = Vec::new();
+    if let Ok(listing) = std::fs::read_dir(city_root) {
+        for entry in listing.flatten() {
+            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+            entries.push((entry.file_name().to_string_lossy().into_owned(), is_dir));
+        }
+    }
+    city::survey(&entries, has_history(city_root))
 }
 
 /// `sprawling init <dir>`: the genesis write. The city is born when
@@ -77,6 +114,21 @@ pub(crate) fn has_history(city_root: &Path) -> bool {
 }
 
 pub(crate) fn init_city(city_root: &Path) -> Result<InitReport, AxError> {
+    form_city(city_root, Adopt::Nothing)
+}
+
+/// Forms a city in a directory, and says what was already there.
+///
+/// `Adopt::EveryFolder` is the case a person with a workspace wants:
+/// each top-level folder becomes a building with its own rules, its
+/// files untouched. Adoption happens after genesis, because a building
+/// is recorded against a city and there is no city before line zero.
+///
+/// # Errors
+/// Refuses a directory that already has history, and propagates whatever
+/// the ledger, the store or the filesystem says.
+pub(crate) fn form_city(city_root: &Path, adopt: Adopt) -> Result<InitReport, AxError> {
+    let standing = standing_of(city_root);
     let dir = ledger_dir(city_root);
     if has_history(city_root) {
         return Err(AxError::failure(
@@ -120,9 +172,24 @@ pub(crate) fn init_city(city_root: &Path) -> Result<InitReport, AxError> {
             .with_recovery("check the city directory is writable")
         })?;
     }
+    let mut adopted = Vec::new();
+    if let (Adopt::EveryFolder, city::Standing::Work { adoptable, .. }) = (adopt, &standing) {
+        // Through the same door `sprawling adopt` uses, so a folder
+        // taken in at genesis and one taken in a month later end up
+        // governed by the same rules.
+        let (vault, _notice) = open_vault();
+        let mut worker =
+            RunWorker::new(city_root, vault, runtime::diagnostics::Diagnostics::off())?;
+        for addr in adoptable {
+            worker.adopt_building(addr.clone())?;
+            adopted.push(addr.clone());
+        }
+    }
     Ok(InitReport {
         ledger_dir: dir,
         genesis,
+        standing,
+        adopted,
     })
 }
 
@@ -7209,6 +7276,54 @@ addr = \"gone/room1\"
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
         );
+    }
+
+    /// A person who already has a workspace could only be told to make a
+    /// new one: `init` formed a city and said nothing about what was
+    /// there, and `adopt` needed the folder to be inside a city already.
+    #[test]
+    fn a_folder_somebody_already_works_in_becomes_a_city_around_that_work() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("parser").join("src")).unwrap();
+        std::fs::write(
+            dir.path().join("parser").join("src").join("lib.rs"),
+            "fn main() {}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.path().join("notes")).unwrap();
+        std::fs::write(dir.path().join("README.md"), "# my work\n").unwrap();
+
+        let report = form_city(dir.path(), Adopt::EveryFolder).unwrap();
+        let city::Standing::Work { adoptable, loose } = &report.standing else {
+            panic!("a folder with work in it is not an empty one");
+        };
+        assert_eq!(adoptable.len(), 2);
+        assert_eq!(*loose, 1, "the README is counted and left alone");
+        assert_eq!(report.adopted.len(), 2);
+
+        // The work itself is untouched, byte for byte.
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("parser").join("src").join("lib.rs")).unwrap(),
+            "fn main() {}\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("README.md")).unwrap(),
+            "# my work\n"
+        );
+        // And each folder is now a building with its own rules, in the
+        // reserved subtree where its own runs cannot reach them.
+        for name in ["parser", "notes"] {
+            let addr = Address::parse(name).unwrap();
+            assert!(
+                city::building_path(dir.path(), &addr).is_file(),
+                "{name} has no rules of its own"
+            );
+            assert!(city::load(dir.path(), &addr).is_ok());
+        }
+
+        // Forming a city over a city is refused: history starts once.
+        let err = form_city(dir.path(), Adopt::EveryFolder).unwrap_err();
+        assert_eq!(err.code(), &AxCode::ConfigInvalid);
     }
 
     /// A stop somebody chose and a stop that was a crash left the same

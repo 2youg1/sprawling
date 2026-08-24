@@ -31,6 +31,10 @@ const PROBE_INTERVAL: Duration = Duration::from_millis(200);
 /// irreversible act in this system - always has somebody behind it.
 pub(crate) enum FirstScreen {
     Start(PathBuf),
+    /// A folder the person already works in. The city forms around it
+    /// and every folder inside becomes a building; nothing already there
+    /// is read, moved or rewritten.
+    Use(PathBuf),
     Quit,
 }
 
@@ -90,6 +94,15 @@ pub(crate) fn ask<R: BufRead, W: Write>(
     writeln!(out, "  No city was named. Start one here?\n")?;
     writeln!(out, "      {}\n", city.display())?;
     writeln!(out, "      [Enter]  start it, and open the WebUI")?;
+    writeln!(
+        out,
+        "      [path]   use a folder you already work in: the city forms"
+    )?;
+    writeln!(
+        out,
+        "               around it, every folder inside becomes a building,"
+    )?;
+    writeln!(out, "               and nothing already there is touched")?;
     writeln!(out, "      [q]      quit, and print the command list\n")?;
     write!(out, "  > ")?;
     out.flush()?;
@@ -100,13 +113,32 @@ pub(crate) fn ask<R: BufRead, W: Write>(
         return Ok(FirstScreen::Quit);
     }
     let answer = answer.trim();
-    let consented =
-        answer.is_empty() || answer.eq_ignore_ascii_case("y") || answer.eq_ignore_ascii_case("yes");
-    if consented {
-        Ok(FirstScreen::Start(city.to_path_buf()))
-    } else {
-        Ok(FirstScreen::Quit)
+    if answer.is_empty() || answer.eq_ignore_ascii_case("y") || answer.eq_ignore_ascii_case("yes") {
+        return Ok(FirstScreen::Start(city.to_path_buf()));
     }
+    if answer.eq_ignore_ascii_case("q") || answer.eq_ignore_ascii_case("quit") {
+        return Ok(FirstScreen::Quit);
+    }
+    // Anything else is a path. Whether it exists is the caller's to
+    // check and to report: a screen that guessed would either refuse a
+    // real folder over a typo in its own reading, or create one where
+    // somebody meant to point at work they already had.
+    Ok(FirstScreen::Use(PathBuf::from(strip_quotes(answer))))
+}
+
+/// A path pasted from a file manager arrives wrapped in quotes on every
+/// platform that has spaces in its directory names, which is all of
+/// them.
+fn strip_quotes(answer: &str) -> &str {
+    answer
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .or_else(|| {
+            answer
+                .strip_prefix('\'')
+                .and_then(|rest| rest.strip_suffix('\''))
+        })
+        .unwrap_or(answer)
 }
 
 /// The URL a person on this machine can open.
@@ -245,7 +277,33 @@ mod tests {
         let (outcome, _) = screen("\n");
         match outcome {
             FirstScreen::Start(path) => assert_eq!(path, PathBuf::from("/tmp/here/city")),
-            FirstScreen::Quit => panic!("Enter starts the city"),
+            _ => panic!("Enter starts the city"),
+        }
+    }
+
+    /// The case a person with a workspace is in: they paste the folder
+    /// they already work in, and the city forms around it.
+    #[test]
+    fn a_pasted_path_is_a_folder_to_use_rather_than_a_place_to_start() {
+        let (outcome, drawn) = screen("/tmp/already/work\n");
+        match outcome {
+            FirstScreen::Use(path) => assert_eq!(path, PathBuf::from("/tmp/already/work")),
+            _ => panic!("a path is a folder to use"),
+        }
+        assert!(
+            drawn.contains("nothing already there is touched"),
+            "the screen has to say what will happen to their work: {drawn}"
+        );
+    }
+
+    /// A file manager wraps a pasted path in quotes the moment it has a
+    /// space in it, which is most of them.
+    #[test]
+    fn a_pasted_path_keeps_its_spaces_and_loses_its_quotes() {
+        let (outcome, _) = screen("\"/tmp/already/my work\"\n");
+        match outcome {
+            FirstScreen::Use(path) => assert_eq!(path, PathBuf::from("/tmp/already/my work")),
+            _ => panic!("a quoted path is still a path"),
         }
     }
 

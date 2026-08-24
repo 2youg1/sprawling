@@ -257,7 +257,21 @@ pub fn holding_address(holding: &Holding) -> Result<Address, AxError>;
 - **一行式条目取作者写的第一行**，不生成摘要：摘要的摘要是消化产物，而消化产物默认可疑。
 - **清单上没有的名字不进 catalog、也不报错**，只留一行诊断给写清单的人——承诺一件取不到的技能比它不在还糟。
 
-### 8-10 city::wizard（P4.10；形状 1 判定＋形状 2 值类型）
+### 8-10 city::wizard（P4.10；形状 1 判定＋形状 2 值类型；P0.01 增 survey）
+
+```rust
+#[non_exhaustive] pub enum Standing {
+    Empty,
+    Work { adoptable: Vec<Address>, loose: usize },
+    AlreadyACity,
+}
+pub fn survey(entries: &[(String, bool)], has_history: bool) -> Standing;
+```
+
+- **「目录非空」不是一个人能据以行动的答案**：三个臂各自说清接下来会发生什么，因为指着自己干了一年的文件夹的那个人要知道**会往他的工作旁边放什么、不会动什么**。
+- **收列表而不是收路径**：本模块的全部纪律就是「决定是值，落盘是二进制的活」；判断一座城形成在这里会做什么，不该需要一块磁盘。
+- **地址语法拼不出的名字算 loose**：一栋 dispatch 不到的楼不是楼。点目录、含 `:` 或 `\` 的名字都归此类；**带空格的名字语法收得下，故照样可作楼**。
+- **排序后再答**：两台机器读同一个目录必须得出同一个答案。
 
 ```rust
 pub struct CityPlan { /* dirs、first 私有 */ }

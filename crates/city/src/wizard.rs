@@ -21,6 +21,76 @@ use kernel::{Address, AxCode, AxError, RESERVED_PREFIX};
 
 use crate::building::BuildingTemplate;
 
+/// What a directory already holds, seen from a city about to form in
+/// it.
+///
+/// Exhaustive on purpose: "the directory is not empty" is not an answer
+/// anybody can act on. Each arm names what happens next, so the person
+/// who points at a folder they have been working in for a year is told
+/// what will be laid down beside their work and what will not be
+/// touched.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Standing {
+    /// Nothing here. A city forms and touches nothing, because there is
+    /// nothing to touch.
+    Empty,
+    /// Work that is not a city. Forming one adds the reserved subtree
+    /// and the city's own prompt beside it; the folders already here can
+    /// become buildings, and nothing in them is read, moved or
+    /// rewritten.
+    Work {
+        /// The top-level folders that could each become a building, in
+        /// the order a listing gives them, sorted so two machines
+        /// looking at one directory answer the same.
+        adoptable: Vec<Address>,
+        /// Loose files at the top level. Counted rather than listed:
+        /// what a person needs to know is that they are there and that
+        /// nothing will happen to them.
+        loose: usize,
+    },
+    /// A city already. A second genesis over it would be a second answer
+    /// to when this city began.
+    AlreadyACity,
+}
+
+/// Reads a directory listing as a standing.
+///
+/// Takes the listing rather than the path, for the reason this whole
+/// module takes values: what a city forming here would do is a decision,
+/// and deciding it should not need a disk. `entries` is `(name, is_dir)`
+/// as the caller read them; `has_history` is whether a ledger is already
+/// there, which only the caller can see.
+///
+/// A name this city could not address - a dot directory, a name holding
+/// a colon or a backslash - is counted as loose rather than offered as a
+/// building: a building the address grammar cannot spell is one nothing
+/// could ever dispatch to. A name with a space is spellable and is
+/// offered, because the grammar takes it.
+#[must_use]
+pub fn survey(entries: &[(String, bool)], has_history: bool) -> Standing {
+    if has_history {
+        return Standing::AlreadyACity;
+    }
+    if entries.is_empty() {
+        return Standing::Empty;
+    }
+    let mut adoptable = Vec::new();
+    let mut loose: usize = 0;
+    for (name, is_dir) in entries {
+        if !is_dir || name.starts_with('.') {
+            loose = loose.saturating_add(1);
+            continue;
+        }
+        match Address::parse(name) {
+            Ok(addr) if !addr.is_reserved() => adoptable.push(addr),
+            _ => loose = loose.saturating_add(1),
+        }
+    }
+    adoptable.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    Standing::Work { adoptable, loose }
+}
+
 /// What `init` makes. Values only, so the shape of a new city can be
 /// asserted without a filesystem.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +230,54 @@ fn building_of(addr: &Address) -> &str {
 )]
 mod tests {
     use super::*;
+
+    fn listing(entries: &[(&str, bool)]) -> Vec<(String, bool)> {
+        entries
+            .iter()
+            .map(|(name, is_dir)| ((*name).to_owned(), *is_dir))
+            .collect()
+    }
+
+    /// The case this exists for: somebody has been working in a folder
+    /// for a year and points the city at it.
+    #[test]
+    fn a_folder_with_work_in_it_says_what_could_become_a_building() {
+        let standing = survey(
+            &listing(&[
+                ("notes.md", false),
+                ("parser", true),
+                (".git", true),
+                ("api", true),
+                ("weird:name", true),
+            ]),
+            false,
+        );
+        let Standing::Work { adoptable, loose } = standing else {
+            panic!("a folder with work in it is not empty and is not a city");
+        };
+        assert_eq!(
+            adoptable
+                .iter()
+                .map(|addr| addr.as_str().to_owned())
+                .collect::<Vec<String>>(),
+            ["api", "parser"],
+            "sorted, so two machines reading one directory answer the same"
+        );
+        assert_eq!(
+            loose, 3,
+            "a file, a dot directory and a name the address grammar cannot spell"
+        );
+    }
+
+    #[test]
+    fn an_empty_folder_and_a_city_are_different_answers() {
+        assert_eq!(survey(&[], false), Standing::Empty);
+        assert_eq!(
+            survey(&listing(&[("parser", true)]), true),
+            Standing::AlreadyACity,
+            "history is what makes a directory a city, whatever else is in it"
+        );
+    }
 
     fn addr(raw: &str) -> Address {
         Address::parse(raw).unwrap()

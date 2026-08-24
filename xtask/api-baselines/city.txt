@@ -1,3 +1,4 @@
+#[non_exhaustive] pub enum city::Standing
 impl city::ArchiveKind
 impl city::Building
 impl city::BuildingRules
@@ -55,6 +56,11 @@ pub city::Relocation::to: kernel::address::Address
 pub city::RunBrief::Job
 pub city::RunBrief::Job::text: alloc::string::String
 pub city::RunBrief::Principal
+pub city::Standing::AlreadyACity
+pub city::Standing::Empty
+pub city::Standing::Work
+pub city::Standing::Work::adoptable: alloc::vec::Vec<kernel::address::Address>
+pub city::Standing::Work::loose: usize
 pub const city::ARCHIVE_DIR: &str
 pub const city::BUILDING_FILE: &str
 pub const city::BUILDING_SHELF: &str
@@ -156,6 +162,7 @@ pub fn city::norms(&std::path::Path, &kernel::address::Address) -> core::result:
 pub fn city::open_room(&std::path::Path, &kernel::address::Address, &kernel::address::SessionName) -> core::result::Result<kernel::address::Address, kernel::error::AxError>
 pub fn city::relocate(&kernel::address::Address, &kernel::address::Address) -> core::result::Result<city::Relocation, kernel::error::AxError>
 pub fn city::schedule_path(&std::path::Path) -> std::path::PathBuf
+pub fn city::survey(&[(alloc::string::String, bool)], bool) -> city::Standing
 pub fn city::urbanite_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::watch_path(&std::path::Path) -> std::path::PathBuf
 pub fn city::write_brief(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<city::RunBrief, kernel::error::AxError>
