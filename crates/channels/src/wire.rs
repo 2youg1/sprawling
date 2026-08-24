@@ -39,7 +39,9 @@ use serde::{Deserialize, Serialize};
 ///    an attachment names which of those models it admits (P3.01).
 /// 8: a building's sandbox limits and external servers have a surface
 ///    (P3.02).
-pub const WIRE_V: u32 = 8;
+/// 9: a page can ask for the history that happened before it opened
+///    (P3.04).
+pub const WIRE_V: u32 = 9;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
@@ -70,7 +72,8 @@ pub const COMMAND_NAMES: [&str; 22] = [
 ];
 
 /// The Query surface, in declaration order.
-pub const QUERY_NAMES: [&str; 11] = [
+pub const QUERY_NAMES: [&str; 12] = [
+    "History",
     "RunView",
     "CityView",
     "ApprovalQueue",
@@ -605,6 +608,18 @@ impl From<WireCommand> for Command {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Query {
+    /// A bounded slice of the one history, ending just before `before`
+    /// or at the tail when that is absent.
+    ///
+    /// The server broadcasts what happens next and never what happened,
+    /// so a page opened today saw a city that had been running for a
+    /// month as an empty one. Bounded because the whole ledger is not a
+    /// thing to put on a socket, and paged backwards because what a
+    /// reader wants first is the end.
+    History {
+        before: Option<Seq>,
+        limit: u32,
+    },
     RunView {
         run: RunId,
     },
@@ -635,6 +650,7 @@ impl Query {
     #[must_use]
     pub fn name(&self) -> &'static str {
         match *self {
+            Self::History { .. } => "History",
             Self::RunView { .. } => "RunView",
             Self::CityView => "CityView",
             Self::ApprovalQueue => "ApprovalQueue",
@@ -649,6 +665,29 @@ impl Query {
         }
     }
 }
+
+/// A slice of the one history, oldest first.
+///
+/// Oldest first because that is the order the ledger wrote them and the
+/// order a fold expects; a reader that wants the newest first reverses a
+/// list it already has, and a server that reversed it would make the
+/// fold the caller's problem.
+// No `Eq`: an `EventRecord` carries a payload whose numbers may be
+// floats, and the wire's other answers derive it only because none of
+// them holds one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HistoryAnswer {
+    pub records: Vec<EventRecord>,
+    /// Where to ask next to go further back. `None` means this slice
+    /// reaches the first record the city ever wrote.
+    pub earlier: Option<Seq>,
+}
+
+/// The most records one `History` answer may carry. A page asking for
+/// more gets this many; the whole ledger is not a thing to put on a
+/// socket, and a limit the caller cannot exceed is one fewer way for a
+/// client to make the server do unbounded work.
+pub const HISTORY_MAX: u32 = 500;
 
 /// One run, as a reader needs it. The client folds the live stream for
 /// itself; this shape is what a query answers about runs it never saw,
@@ -788,9 +827,14 @@ pub struct CostAnswer {
 /// What a query returns. `Unavailable` is a real answer: a view this
 /// build does not evaluate yet says so by name, rather than returning an
 /// empty result a reader would mistake for an empty city.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Eq` went when `History` arrived: a record's payload is arbitrary
+/// JSON, and JSON has no total equality. Nothing compared two answers
+/// for equality outside a test.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Answer {
+    History(Box<HistoryAnswer>),
     City(CityAnswer),
     Run(Option<RunSummary>),
     Approvals(ApprovalsAnswer),
@@ -1003,6 +1047,10 @@ mod tests {
     #[test]
     fn the_query_names_match_the_variants() {
         let queries = [
+            Query::History {
+                before: None,
+                limit: 20,
+            },
             Query::RunView {
                 run: RunId::from_bytes([1u8; 16]),
             },

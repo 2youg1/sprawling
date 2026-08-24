@@ -29,6 +29,7 @@ pub channels::Answer::City(channels::CityAnswer)
 pub channels::Answer::Cost(alloc::boxed::Box<channels::CostAnswer>)
 pub channels::Answer::Discards(channels::DiscardAnswer)
 pub channels::Answer::Endpoints(channels::EndpointsAnswer)
+pub channels::Answer::History(alloc::boxed::Box<channels::HistoryAnswer>)
 pub channels::Answer::Inbox(channels::InboxAnswer)
 pub channels::Answer::Metrics(alloc::boxed::Box<channels::MetricsAnswer>)
 pub channels::Answer::Registry(channels::RegistryAnswer)
@@ -219,6 +220,8 @@ pub channels::HandshakeVerdict::Reject(kernel::error::AxError)
 pub channels::Hello::schema: kernel::locator::B3Hash
 pub channels::Hello::token: core::option::Option<alloc::string::String>
 pub channels::Hello::wire_v: u32
+pub channels::HistoryAnswer::earlier: core::option::Option<kernel::event::Seq>
+pub channels::HistoryAnswer::records: alloc::vec::Vec<kernel::event::EventRecord>
 pub channels::InboxAnswer::addr: kernel::address::Address
 pub channels::InboxAnswer::waiting: alloc::vec::Vec<channels::SignalLine>
 pub channels::Intervention::Cancel
@@ -246,6 +249,9 @@ pub channels::Query::CityView
 pub channels::Query::CostView
 pub channels::Query::DiscardView
 pub channels::Query::EndpointView
+pub channels::Query::History
+pub channels::Query::History::before: core::option::Option<kernel::event::Seq>
+pub channels::Query::History::limit: u32
 pub channels::Query::InboxView
 pub channels::Query::InboxView::addr: kernel::address::Address
 pub channels::Query::Metrics
@@ -298,7 +304,8 @@ pub channels::Welcome::resume_from: core::option::Option<kernel::event::Seq>
 pub channels::Welcome::schema: kernel::locator::B3Hash
 pub channels::Welcome::wire_v: u32
 pub const channels::COMMAND_NAMES: [&str; 22]
-pub const channels::QUERY_NAMES: [&str; 11]
+pub const channels::HISTORY_MAX: u32
+pub const channels::QUERY_NAMES: [&str; 12]
 pub const channels::WIRE_V: u32
 pub enum channels::Answer
 pub enum channels::AssetReply
@@ -378,6 +385,7 @@ pub struct channels::EndpointSummary
 pub struct channels::EndpointsAnswer
 pub struct channels::Forwarded
 pub struct channels::Hello
+pub struct channels::HistoryAnswer
 pub struct channels::InboxAnswer
 pub struct channels::MetricsAnswer
 pub struct channels::ModeTag(_)

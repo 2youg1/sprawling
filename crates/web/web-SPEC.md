@@ -717,6 +717,18 @@ fn live::named(runs: &[(RunId, String)], run: RunId) -> String;
 - **Run 标识符不从页面上拿掉**，只是变安静：人读名字，而 `sprawling fork` 与账本寻址用的是它。
 - **标题与按钮同源**：`named()` 从 picker 的同一份列表里取字，于是两处不会对不上。
 
+### 8-37 页面折得进它没连上时发生的事（P3.04）
+
+```rust
+pub enum Backfill { Folded(usize), AlreadyLive }
+impl Snapshot { pub fn backfill(&mut self, records: &[EventRecord]) -> Backfill; }
+// 链路一转 live 立即问一次 Query::History { before: None, limit: HISTORY_MAX }
+```
+
+- **只在还没折过任何 live 事件时接受**：折叠是单向前推的，`run_started` 落在 `run_frozen` 之后会把一个已完成的 Run 重新显示成运行中。已经折过 live 的页面**不是**本条要修的那种空页面，所以答「已在直播」而不是去猜。
+- **问的时机是链路刚转 live 的那一瞬**，早于任何 live 记录可能被折进来——那正是 `backfill` 拒绝在其之后工作的条件。
+- **回来的记录进同一个有界仓库**（`HELD_RECORDS`），按 `seq` 排序去重：一个标签页持有多少历史只有一个答案。
+
 ### 8-36 一栋楼够得到什么，人自己填（P3.02；形状 1 判定＋一个薄组件）
 
 ```rust

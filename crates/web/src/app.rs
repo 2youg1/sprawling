@@ -222,6 +222,27 @@ impl Snapshot {
         self.city = Some(city);
     }
 
+    /// Folds a slice of history this client was not connected for.
+    ///
+    /// Refused once anything live has been folded. The fold is forward
+    /// only - `run_started` after `run_frozen` puts a finished run back
+    /// on screen as running - so replaying older records over newer ones
+    /// would move the page backwards. Saying so is better than guessing:
+    /// a page that has already folded live events is not empty, which is
+    /// the condition this exists to fix.
+    pub fn backfill(&mut self, records: &[EventRecord]) -> Backfill {
+        if self.applied_through.is_some() {
+            return Backfill::AlreadyLive;
+        }
+        let mut folded: usize = 0;
+        for record in records {
+            if self.apply(record) {
+                folded = folded.saturating_add(1);
+            }
+        }
+        Backfill::Folded(folded)
+    }
+
     /// Replaces the pending set with what the server says is pending.
     ///
     /// The stream only carries what happened after this client connected,
@@ -838,6 +859,15 @@ pub fn latest_run(snapshot: &Snapshot) -> Option<RunId> {
         .runs()
         .max_by_key(|(_, row)| (row.phase == RunPhase::Running, row.started_at_seq))
         .map(|(id, _)| *id)
+}
+
+/// What became of a backfill. Exhaustive, because "nothing was folded"
+/// and "this page was already live" are different facts and only one of
+/// them is worth saying anything about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backfill {
+    Folded(usize),
+    AlreadyLive,
 }
 
 /// Which standing answer an event makes stale.
@@ -1620,6 +1650,7 @@ fn connect(wiring: Wiring) -> Outbound {
                 // anything. Read from the link rather than inferred from
                 // the action, because the link owns what "live" means.
                 let flowing = link.try_borrow().is_ok_and(|link| link.is_live());
+                let opened = flowing && !*live.peek();
                 if *live.peek() != flowing {
                     live.set(flowing);
                 }
@@ -1633,6 +1664,21 @@ fn connect(wiring: Wiring) -> Outbound {
                 let Some(socket) = held.as_ref() else {
                     return;
                 };
+                // The stream carries what happens next, so a tab opened
+                // over a city that has been running for a month saw an
+                // empty one. Asked once, the moment frames start
+                // flowing, and before any live record can have been
+                // folded - which is the condition `backfill` refuses to
+                // work without.
+                if opened {
+                    let _ = crate::socket::send(
+                        socket,
+                        &channels::ClientFrame::Query(channels::Query::History {
+                            before: None,
+                            limit: channels::HISTORY_MAX,
+                        }),
+                    );
+                }
                 match action {
                     crate::socket::LinkAction::Send(hello) => {
                         let _ = crate::socket::send(socket, &channels::ClientFrame::Hello(*hello));
@@ -1694,6 +1740,24 @@ fn connect(wiring: Wiring) -> Outbound {
                         channels::Answer::Archive(view) => hits.set(Some(view)),
                         channels::Answer::Registry(view) => filed.set(Some(view)),
                         channels::Answer::Metrics(view) => vitals.set(Some(*view)),
+                        // What happened before this tab opened. Folded
+                        // into the snapshot and kept for the pages that
+                        // read history, in the same bounded store the
+                        // live stream fills - one answer to "how much
+                        // does a tab hold".
+                        channels::Answer::History(view) => {
+                            snapshot.write().backfill(&view.records);
+                            let mut held = records.write();
+                            for record in view.records {
+                                held.push(record);
+                            }
+                            held.sort_by_key(channels::EventRecord::seq);
+                            held.dedup_by_key(|record| record.seq());
+                            let excess = held.len().saturating_sub(HELD_RECORDS);
+                            if excess > 0 {
+                                held.drain(..excess);
+                            }
+                        }
                         // What was already waiting when this page
                         // connected. The stream carries what happens
                         // next; without this the inbox would show only
@@ -1902,6 +1966,40 @@ mod tests {
         let mut snapshot = Snapshot::new();
         snapshot.apply(&record(1, EventKind::ApprovalResolved, [5u8; 16]));
         assert_eq!(snapshot.approvals_pending(), 0);
+    }
+
+    /// A tab opened over a city that has been running for a month used
+    /// to show an empty one: the server broadcasts what happens next and
+    /// never what happened.
+    #[test]
+    fn a_page_folds_the_history_it_was_not_connected_for() {
+        let mut snapshot = Snapshot::new();
+        let history = [
+            record(1, EventKind::RunStarted, [1u8; 16]),
+            record(2, EventKind::ModelReturned, [1u8; 16]),
+        ];
+        assert_eq!(snapshot.backfill(&history), Backfill::Folded(2));
+        assert_eq!(snapshot.runs().count(), 1);
+        assert_eq!(snapshot.resume_from(), Some(Seq::new(2)));
+
+        // And the live stream continues from there rather than being
+        // refused as a duplicate.
+        assert!(snapshot.apply(&record(3, EventKind::RunFrozen, [1u8; 16])));
+    }
+
+    /// The fold is forward only, so replaying older records over newer
+    /// ones would put a finished run back on screen as running. A page
+    /// that has already folded live events is not the empty one this
+    /// exists to fix, so it says so instead of guessing.
+    #[test]
+    fn a_page_that_is_already_live_refuses_to_be_backfilled() {
+        let mut snapshot = Snapshot::new();
+        snapshot.apply(&record(9, EventKind::RunFrozen, [1u8; 16]));
+        assert_eq!(
+            snapshot.backfill(&[record(1, EventKind::RunStarted, [1u8; 16])]),
+            Backfill::AlreadyLive
+        );
+        assert_eq!(snapshot.resume_from(), Some(Seq::new(9)));
     }
 
     #[test]

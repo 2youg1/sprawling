@@ -555,6 +555,52 @@ impl Views {
         Ok(())
     }
 
+    /// A bounded slice of the one history, ending just before `before`
+    /// or at the tail.
+    ///
+    /// Read from the ledger rather than held: a view that kept the
+    /// records would be a second copy of the only history, and the index
+    /// already maps a sequence to a byte offset. An unreadable line ends
+    /// the slice rather than emptying it - what was read is still true.
+    fn history(&self, before: Option<kernel::Seq>, limit: u32) -> channels::HistoryAnswer {
+        let empty = channels::HistoryAnswer {
+            records: Vec::new(),
+            earlier: None,
+        };
+        let dir = ledger_dir(&self.city_root);
+        let Ok(index) = memory::LedgerIndex::load_or_rebuild(&dir) else {
+            return empty;
+        };
+        let Some(tail) = index.tail_seq() else {
+            return empty;
+        };
+        let end = match before {
+            None => tail,
+            // The record just before the oldest one the caller holds. A
+            // `before` of the first record has nothing behind it.
+            Some(seq) => match seq.value().checked_sub(1) {
+                Some(0) | None => return empty,
+                Some(value) => kernel::Seq::new(value),
+            },
+        };
+        let want = u64::from(limit.clamp(1, channels::HISTORY_MAX));
+        let start = end.value().saturating_sub(want.saturating_sub(1)).max(1);
+        let mut records = Vec::new();
+        for value in start..=end.value() {
+            let Ok(line) = index.line_at(&dir, kernel::Seq::new(value)) else {
+                break;
+            };
+            let Ok(record) = EventRecord::parse_line(&line) else {
+                break;
+            };
+            records.push(record);
+        }
+        channels::HistoryAnswer {
+            records,
+            earlier: (start > 1).then(|| kernel::Seq::new(start)),
+        }
+    }
+
     /// Answers one query. Every arm either answers or names itself
     /// unavailable; none of them returns an empty result that a reader
     /// would mistake for an empty city.
@@ -591,6 +637,9 @@ impl Views {
                     by_tool: report.by_tool,
                     by_skill: report.by_skill,
                 }))
+            }
+            channels::Query::History { before, limit } => {
+                channels::Answer::History(Box::new(self.history(*before, *limit)))
             }
             channels::Query::EndpointView => {
                 channels::Answer::Endpoints(endpoints_answer(&self.book))
@@ -7058,6 +7107,62 @@ addr = \"gone/room1\"
         assert!(
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
+        );
+    }
+
+    /// The live page could see nothing from before it opened, because
+    /// the server broadcasts and never backfills.
+    #[test]
+    fn a_page_can_ask_for_the_history_that_happened_before_it_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        for n in 0..6u8 {
+            worker
+                .handle(channels::Command::CreateBuilding {
+                    addr: Address::parse(&format!("lab{n}")).unwrap(),
+                    template: channels::TemplateName::parse("minimal").unwrap(),
+                    idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, &[n]),
+                })
+                .unwrap();
+        }
+        let views = rebuild_views(&report.ledger_dir).unwrap();
+
+        let channels::Answer::History(tail) = views.answer(&channels::Query::History {
+            before: None,
+            limit: 3,
+        }) else {
+            panic!("the history query has an answer");
+        };
+        assert_eq!(tail.records.len(), 3);
+        let seqs: Vec<u64> = tail.records.iter().map(|r| r.seq().value()).collect();
+        let mut ascending = seqs.clone();
+        ascending.sort_unstable();
+        assert_eq!(seqs, ascending, "oldest first: that is the fold's order");
+        let earlier = tail.earlier.expect("there is more behind this slice");
+
+        // Paging back reaches the genesis record and then says there is
+        // nothing behind it, rather than answering an empty slice
+        // forever.
+        let channels::Answer::History(older) = views.answer(&channels::Query::History {
+            before: Some(earlier),
+            limit: channels::HISTORY_MAX,
+        }) else {
+            panic!("the history query has an answer");
+        };
+        assert_eq!(older.records[0].seq().value(), 1);
+        assert!(
+            older.earlier.is_none(),
+            "the first record has nothing behind it"
+        );
+        assert!(
+            older.records.last().map(|r| r.seq().value()) < seqs.first().copied(),
+            "the two slices do not overlap"
         );
     }
 

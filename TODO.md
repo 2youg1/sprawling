@@ -23,8 +23,7 @@ The outcome: **a person who works by dragging can start work, file something, an
 
 ## P3 — What the last run left unfinished
 
-1. **The live page cannot see anything from before it opened.** The server broadcasts and never backfills. A `Query` returning a bounded slice of history would fix it; `memory::index` already maps `seq` to a byte offset, which is the half that would otherwise be hard.
-2. **Ctrl-C is still a process death.** `/quit` closes the console and leaves the city serving; `sprawling resume` recovers a hard stop. What is missing is the Handoff an orderly close would write, so a stop that was chosen and a stop that was a crash are indistinguishable in the record. **The path, now traced**: `tokio::select!` in `assembly::serve` against `tokio::signal::ctrl_c`, then a `HandoffWritten` at `RunId::CITY` whose must-read is the city's own norms. Two obstacles, both stated rather than discovered later — tokio needs its `signal` feature (**needs a ruling**: the root `Cargo.toml`; no new package), and the ledger lives inside the worker thread, so the close has to reach it as a `Command` the desk does not yet have.
+1. **Ctrl-C is still a process death.** `/quit` closes the console and leaves the city serving; `sprawling resume` recovers a hard stop. What is missing is the Handoff an orderly close would write, so a stop that was chosen and a stop that was a crash are indistinguishable in the record. **The path, now traced**: `tokio::select!` in `assembly::serve` against `tokio::signal::ctrl_c`, then a `HandoffWritten` at `RunId::CITY` whose must-read is the city's own norms. Two obstacles, both stated rather than discovered later — tokio needs its `signal` feature (**needs a ruling**: the root `Cargo.toml`; no new package), and the ledger lives inside the worker thread, so the close has to reach it as a `Command` the desk does not yet have.
 
 ## P4 — The ledger of numbers
 

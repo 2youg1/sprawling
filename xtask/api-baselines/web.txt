@@ -45,6 +45,7 @@ pub const web::WINDOW: usize
 pub const web::ZOOM_STOPS: [u32; 3]
 pub enum web::AlertKind
 pub enum web::AttachReadiness
+pub enum web::Backfill
 pub enum web::BarState
 pub enum web::CostDimension
 pub enum web::Enrolment
@@ -121,6 +122,7 @@ pub fn web::Snapshot::adopt_city(&mut self, kernel::address::Address)
 pub fn web::Snapshot::apply(&mut self, &kernel::event::EventRecord) -> bool
 pub fn web::Snapshot::approvals(&self) -> alloc::vec::Vec<kernel::approval::ApprovalItem>
 pub fn web::Snapshot::approvals_pending(&self) -> u32
+pub fn web::Snapshot::backfill(&mut self, &[kernel::event::EventRecord]) -> web::Backfill
 pub fn web::Snapshot::city(&self) -> core::option::Option<&kernel::address::Address>
 pub fn web::Snapshot::is_halted(&self) -> bool
 pub fn web::Snapshot::login_url(&self) -> core::option::Option<&str>
@@ -290,6 +292,8 @@ pub web::Attention::count: u32
 pub web::Attention::slots: alloc::vec::Vec<(&'static str, alloc::string::String)>
 pub web::Attention::view: web::View
 pub web::Attention::what: web::Msg
+pub web::Backfill::AlreadyLive
+pub web::Backfill::Folded(usize)
 pub web::Bar::filled: core::option::Option<u16>
 pub web::Bar::label: alloc::string::String
 pub web::Bar::state: web::BarState
