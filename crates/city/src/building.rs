@@ -152,6 +152,44 @@ impl Building {
     }
 }
 
+/// The buildings this city has, in address order.
+///
+/// A building is a top-level directory whose name an address can hold.
+/// The reserved subtree is not one, and neither is anything a dot
+/// prefixes. Rules are not required here: [`adopt`] exists precisely to
+/// draw them over a directory that was already there, so a directory
+/// with no `BUILDING.md` is a building nobody has written rules for
+/// yet - and a lister that hid it would hide the thing a person is
+/// about to adopt.
+///
+/// # Errors
+/// Propagates a city directory that cannot be read.
+pub fn all(city_root: &Path) -> Result<Vec<Address>, AxError> {
+    let entries = std::fs::read_dir(city_root).map_err(|err| {
+        AxError::failure(
+            AxCode::StorageFatal,
+            "list the buildings of a city",
+            format!("{}: {err}", city_root.display()),
+        )
+        .with_recovery("check the city directory is readable")
+    })?;
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        if let Ok(addr) = Address::parse(&name) {
+            out.push(addr);
+        }
+    }
+    out.sort_by(|left: &Address, right: &Address| left.as_str().cmp(right.as_str()));
+    Ok(out)
+}
+
 /// Lays out a new building and returns it.
 ///
 /// # Errors

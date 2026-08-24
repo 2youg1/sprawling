@@ -367,6 +367,25 @@ impl Inbox {
         Ok(out)
     }
 
+    /// Takes one signal from the urgent line, or nothing when it is
+    /// empty. The ordinary line is not touched.
+    ///
+    /// The urgent line and the steer kind are the same set — [`Signal::lane`]
+    /// sends `Steer` there and nothing else — so this is how a run
+    /// collects what is allowed to interrupt it without reading the mail
+    /// it has not asked for yet.
+    ///
+    /// A queued payload that does not read back as a signal is dropped
+    /// rather than returned as a failure, and the contract says so:
+    /// this is called from a run's safe point, where the only
+    /// alternative to moving on is stopping a run over somebody else's
+    /// corrupt entry. The same payload still fails loudly through
+    /// [`Inbox::pull`], which is the door the model itself uses.
+    pub fn take_steer(&mut self) -> Option<Signal> {
+        let item = self.urgent.consume()?;
+        Signal::from_wire(item.payload.as_map()).ok()
+    }
+
     /// What `status` reports as `signals_pending`.
     #[must_use]
     pub fn pending(&self) -> u32 {

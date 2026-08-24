@@ -72,9 +72,13 @@ impl Inbox {
     pub fn new(capacity: u64, bandwidth: u32) -> Inbox;
     pub fn deliver(&mut self, signal: &Signal) -> Result<Admission, AxError>;
     pub fn pull(&mut self) -> Result<Vec<Signal>, AxError>;   // ≤ bandwidth，急件先出
+    pub fn take_steer(&mut self) -> Option<Signal>;           // P3.07：只取急件 lane 一件
     pub fn pending(&self) -> u32;                             // status 的 signals_pending
 }
 ```
+
+- **`take_steer` 取的是 lane 而不是 kind（P3.07）**：急件 lane 与 Steer 是同一个集合（`lane()` 只把 Steer 送进去），故“取一件能插队的东西”不需要在队列之上再建一层 kind 筛选——第二处判定只会与 `lane()` 分叉。它不碰普通 lane，因为插队与拆信是两件事：前者是别人把话塞进正在干活的人手里，后者是它自己决定去看信箱。
+- **读不回来的载荷在这条路上丢弃而不报错**，并写进了契约：调用点是一次 Run 的安全点，在那里除了“继续”的唯一替代选项是为别人的一条损坏条目停掉这一跑；同一条载荷仍然会在 `pull`（模型自己那扇门）上大声报错，所以事实不会消失。
 
 - **去重先于副作用**：去重由 `memory::EventQueue` 的 `seen` 给（IdemKey 由 `SignalId` 派生），而不在本模块再建一张表——一条规则一个权威。此事要成立，同一个 id 就必须恒落同一条 lane，**所以 lane 由 kind 推出、不由调用方给**。
 - **`SignalKind` 四值而非三值**（早先的设计记三值）：紧急与否必须是 Signal 自己的属性，否则同一件 Signal 从两个调用点进来会落入两条 lane，去重就有了两个权威。
@@ -105,6 +109,8 @@ impl AgentSteer {
 - **两个入口、一个落点**：人的 Steer 只从 control surface 进城，恒不走 Inbox；Agent 的 Steer 是一件插队首的 Signal。两者都追在下一次工具结果末尾，因为模型只需要认识一种形状。
 - **`user` 前缀只有一个构造子写得出**：`AgentSteer` 的 source 由它自己的 id 拼成 `@id`，故一件自称来自人的注入内容拼不出 `user`——入口分立是安全要求，类型把它变成判定。
 - **Steer 不打断动作**（下接 8-3）：它在安全点被消费并推进（`runtime::turn` 已定）；同一边界上 Cancel 压过 Steer，因为停是不可撤销的那个。本模块只产出落点形状，不重建中断梯。
+- **本模块自 P2.04 建成起零调用方，P3.07 才把线接上**：装配层的 `interrupt_for` 只读人的命令队列，于是 `Steer::from_signal` 与整个 `AgentSteer` 是一套写好、测过、永远不会发生的机制。现在中断源先问人、再问本屋信箱（`SignalDesk::take_steer`），**人压过居民**。
+- **属名就是回信地址，这是 `@id` 不能改成别的什么的理由**：模型在窗口里读到 `@market/hana:` 时，它读到的既是“这句话不是人说的”，也是 `signal` 的 `to` 参数该填什么。一个只标注“来自另一个 agent”而不给地址的前缀，会让回信变成猜测。
 
 ### 8-3 collab::draft（P2.05；形状 1 判定＋形状 2 值类型）
 
@@ -276,6 +282,7 @@ impl SignalDesk {
     pub fn new(run: RunId, room: Address, who: String, reach: Address, inbox: Inbox) -> SignalDesk;
     pub fn pending(&self) -> u32;                     // 借出前读，status.signals_pending 的真值
     pub fn take_effects(&mut self) -> Vec<SignalEffect>;
+    pub fn take_steer(&mut self) -> Option<Steer>;    // P3.07：一件插队信，已属名为 `@发件人地址`
     pub fn take_inbox(&mut self) -> Inbox;            // 归还借出的 Inbox
 }
 pub struct SignalTool { /* meta、desk: Rc<RefCell<SignalDesk>> —— 私有 */ }
@@ -287,6 +294,7 @@ impl Tool for SignalTool { /* 两个 action：send｜pull */ }
 - **`send` 只入队不投递**：工具只把 Signal 放进 `effects`，真正 `deliver` 到收件房间发生在驱动返回之后、且恒在 `signal_enqueued` 落账之后。因为投影只允许因一条已追加的事件而改变（同 `RunWorker::record`：“the book states what the history says, never what the process hoped to write”）。
 - **发件范围由 `reach` 定界**：`reach` 是发件人所属楼的地址，由装配层经 `city::Building::of` 算好传入——**「一个地址归哪栋楼管」的权威在 city，collab 只执行交给它的边界**。越楼发件恒拒，报 `E_CROSS_BUILDING_DENIED` 且三段完整。`ToolMeta.effect` 是静态的（申报为 `Write { domain: room }`），所以逐件目标判定必须在工具内——工具拥有自己的策略。
 - **id 不采时钟不取随机**：`{run}-s{n}`，`n` 是 desk 自己的计数器。重放同一段历史得到同一批 id，去重才有意义（确定性第七条）。
+- **`take_steer` 取走一件就当场记 `Consumed`（P3.07）**：一件落进窗口的插队信就是已读，不论模型拿它做了什么——否则同一句话会在下一个安全点再落一次，而发件人从历史里看不出它到没到。它与 `pull` 共用同一张队列与同一条 `signal_consumed` 形状，故两扇门没有第二份已读账。
 - **`pull` 的剩余量写在结果里**：`status.signals_pending` 是派活那一刻的事实（StatusTool 持的是快照），所以 `pull` 结果里带 `remaining`——一个数字比一套让 status 活起来的机制便宜得多，而且它就在模型正在读的那句话里。
 - **投递失败不静默**：`deliver` 返回 `Admission::Shed` 时，入账的是事实而非成功；削峰判定住 `kernel::backpressure`，本模块不自建第二套限流。
 

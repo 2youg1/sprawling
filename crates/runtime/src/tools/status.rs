@@ -3,13 +3,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The status tool: the model's view of its own situation, in the
-//! twelve frozen fields, in that order.
+//! thirteen frozen fields, in that order.
 //!
 //! The order is not cosmetic. A model reading its status reads the top
 //! first, so identity and mode come before budget, and budget comes
 //! before the long tail of locks and children. Freezing the order means
 //! a Resident's habits transfer across versions instead of being
-//! relearned each time the field list grows.
+//! relearned each time the field list grows - which is why the
+//! thirteenth field went on the end rather than beside the twelfth it
+//! belongs with.
 //!
 //! Nothing here samples. The executor sets the snapshot once per turn
 //! and the tool reports it; a tool that read the clock itself would
@@ -58,7 +60,7 @@ pub struct ChildStatus {
     pub kind: DelegateKind,
 }
 
-/// The twelve fields, in the frozen order.
+/// The thirteen fields, in the frozen order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusSnapshot {
     pub who: String,
@@ -76,6 +78,15 @@ pub struct StatusSnapshot {
     pub signals_pending: u32,
     pub now: Option<ClockStamp>,
     pub provider_mode: ProviderMode,
+    /// How many residents this run can reach, itself excluded. A count
+    /// rather than a list: the list grows with the building's population
+    /// and this text does not, so the names live behind the `neighbours`
+    /// tool and what stands here is whether asking is worth a call.
+    ///
+    /// People, not places. An empty room takes messages nobody reads, so
+    /// counting one would make `neighbours: 1` mean the opposite of what
+    /// it says.
+    pub neighbours: u32,
 }
 
 pub struct StatusTool {
@@ -176,6 +187,7 @@ impl StatusSnapshot {
             format!("children: {children}"),
             format!("now: {now}"),
             format!("provider_mode: {}", self.provider_mode.as_str()),
+            format!("neighbours: {}", self.neighbours),
         ]
         .join("\n")
     }
@@ -247,6 +259,7 @@ mod tests {
             signals_pending: 2,
             now: None,
             provider_mode: ProviderMode::Normal,
+            neighbours: 3,
         }
     }
 
@@ -259,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn the_twelve_fields_report_in_the_frozen_order() {
+    fn the_thirteen_fields_report_in_the_frozen_order() {
         let mut tool = StatusTool::new(snapshot()).unwrap();
         let outcome = tool.invoke(&call()).unwrap();
         let value = serde_json::to_value(&outcome.result).unwrap();
@@ -277,9 +290,14 @@ mod tests {
             "children",
             "now",
             "provider_mode",
+            "neighbours",
         ];
         let lines: Vec<&str> = text.lines().collect();
-        assert_eq!(lines.len(), 12, "the frozen list is twelve fields: {text}");
+        assert_eq!(
+            lines.len(),
+            13,
+            "the frozen list is thirteen fields: {text}"
+        );
         for (line, field) in lines.iter().zip(order) {
             assert!(
                 line.starts_with(&format!("{field}:")),

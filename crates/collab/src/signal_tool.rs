@@ -96,6 +96,29 @@ impl SignalDesk {
         self.inbox.pending()
     }
 
+    /// Takes one steer waiting for this run, ready to land at its next
+    /// safe point.
+    ///
+    /// The landing is the same one the person's steer uses, and the
+    /// attribution is what keeps them apart: [`crate::Steer::from_signal`]
+    /// can only write `@<the sender's address>`, and only
+    /// `Steer::from_person` can write `user`. A resident reading its own
+    /// window can therefore tell who spoke, and the prefix it reads is
+    /// the address it answers to — which is what makes a reply
+    /// possible at all.
+    ///
+    /// Consuming it here is what the ledger records: a steer that landed
+    /// in a window has been read, whether or not the model acts on it.
+    pub fn take_steer(&mut self) -> Option<crate::Steer> {
+        let signal = self.inbox.take_steer()?;
+        let landed = crate::Steer::from_signal(&signal).ok()?;
+        self.effects.push(SignalEffect::Consumed {
+            signal,
+            by: self.who.clone(),
+        });
+        Some(landed)
+    }
+
     /// What the worker has to record. Draining is deliberate: an effect
     /// read twice would be a signal delivered twice.
     pub fn take_effects(&mut self) -> Vec<SignalEffect> {

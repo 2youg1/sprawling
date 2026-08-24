@@ -18,6 +18,7 @@
 | **P2.11** | **`schedule`** | **到点发车：谁在什么节奏上自己开始** | **8-6** |
 | P3 | `archive`、`library` | 东西存哪里、怎么找回来 | 待写 |
 | P4 | `office`、`wizard` | OFFICE.md；建城向导与搬家 | 待写 |
+| **P3.06** | **`neighbourhood`、`neighbours_tool`** | **这座城有哪些地方，我身边站着谁，我该跟谁说话** | **8-15** |
 
 ## 2 验收标准
 
@@ -289,6 +290,49 @@ pub fn relocate(from: &Address, to: &Address) -> Result<Relocation, AxError>;
 - **恒不得搬到楼根**：住在楼根等于从侧门拿到整栋楼的写域。
 - **`city::office` 已并入 `config_layers` 并删行〔P4.10 定谳〕**：三层配置（City／Building／Resident）已是完整的梯子，OFFICE.md 没有任何一条自有规则，第四层只会成为「同一个设置在哪儿写」的第二个答案。
 
+### 8-15 city::neighbourhood（P3.06；形状 1 判定＋形状 2 值类型）
+
+```rust
+pub enum Occupancy { Resident { bring: String }, Empty }   // 穷尽两态
+pub struct Neighbour { pub addr: Address, pub name: String, pub occupancy: Occupancy, pub waiting: u32 }
+pub struct Neighbourhood { /* building、rooms: Vec<Neighbour>、buildings: Vec<Address> —— 私有 */ }
+impl Neighbourhood {
+    pub fn scan(city_root: &Path, building: &Address, me: &Address,
+                waiting: &dyn Fn(&Address) -> u32) -> Result<Neighbourhood, AxError>;
+    pub fn building(&self) -> &Address;
+    pub fn here(&self) -> &[Neighbour];        // 本楼，除我之外的每个地址
+    pub fn buildings(&self) -> &[Address];     // 全城，只有楼名
+    pub fn residents(&self) -> u32;            // here 中真有人站着的个数
+}
+// 房间与楼的枚举各归其既有权威，本模块只调用：
+pub fn room::all(city_root: &Path, building: &Address) -> Vec<Address>;   // city::rooms
+pub fn building::all(city_root: &Path) -> Vec<Address>;                   // city::buildings
+```
+
+- **这栋楼里有言语，却没有地址簿**：`signal` 的 `to` 只说「the address you are speaking to」，越界拒词只报边界不报住户，于是地址靠猜；而装配层投递时 `.entry(room).or_insert_with(new_inbox)`，**猜错的一句话会当场开出一个没人读的信箱并回 `queued: true`**。本模块存在的第一个理由是让那次猜测消失。
+- **`docs/templates/URBANITE.md` 早就承诺了这件事**：模板原话是「other agents and the person read it to know what to expect from them and what to bring to them」。承诺写在模板里，兑现的代码到本卡才有。
+- **一行取自 `## Bring them`，取不到才退回第一段正文**：这一行要回答的是「我为什么找他」，而模板里正是那一节写「什么样的活属于这位住户」。退回规则跳过标题行与引文行——引文行是模板留给作者的说明，把它显示出来等于让全城住户共用一句自述。**这与 `library::first_line` 不是同一条规则**：书架条目取的是标题，住户名册取的是正文，两种文档、两条规则、两个家。
+- **准入判定复用 `Identity::load`，不自读文件**：「一个地址上有没有常住的人」已经有权威，第二次实现必然在某天与第一次分叉。空的 `URBANITE.md` 仍是 Resident（`bring` 为空串），沿用 §11 已记的口径：空描述是作者的选择，不是缺陷。
+- **空房间照列，不隐藏**：藏起来的话，模型会把「这里没人」读成「这个地址不存在」，而一间空房恰是可以请人搬进来、或派一件活过去的地方。
+- **详略随距离衰减**：本楼给到每个地址的自述，全城只给楼名。这不是新规则，而是 `signal` 的 `reach` 与 `CrossBuildingTransfer` 已经画好的那条界——**看得清的范围与说得着的范围必须是同一个**，否则名册会教模型去够它够不到的人。
+- **房间＝楼下一层的非点头目录，且不是 archive 目录**：这条规则本来在装配层 `read_building` 里写着一份、`buildings_of` 与 `read_spine` 又各写了一份城级的同类规则。本卡把两条搬进 `city::room::all` 与 `city::building::all`，调用方三处改为调用——一条规则一个权威，页面看到的房间与模型看到的房间从此不可能不同。
+- **只到直接子目录**：房间就是这样被造出来的（`room::open` 与 delegate 都建直接子目录）。翻案条件：楼层真的成为目录的那天，改的是 `room::all` 一处。
+- **一个活口径接进来了，另一个被判定为噪音（P3.08）**：`waiting`（那间房积压几封信）由装配层以闭包供给——队列是它的，本 crate 看不到那么远。而「谁在跑」**不接**：这座城一次只驱一跑，故答案对除自己以外的每一位恒为「否」，一列恒定的词教不了任何人；`Dossier::is_live` 真正能说的是「某位的上一跑没冻结过」，那是崩溃后的事实，归 `resume` 而不归名册。
+
+### 8-15b city::neighbours_tool（P3.06；形状 4 适配器）
+
+```rust
+pub struct NeighboursTool { /* meta＋Neighbourhood —— 私有 */ }
+impl NeighboursTool { pub fn new(neighbourhood: Neighbourhood) -> Result<NeighboursTool, AxError>; }
+impl Tool for NeighboursTool { /* name=neighbours、effect=Read、cost=Free、render=Generic、temporal=Timeless */ }
+// args：{scope}，`building`（缺省）｜`city`；结果为 {text}，一行一个地址，BTreeMap 序
+```
+
+- **`scope` 的两个取值取自配置梯子已有的层名**（`Layer::{City, Building}`），不另造一套远近词。
+- **答案是按序渲染的文本而非 JSON 数组**：与 `status` 同一条已被红测试抓出的理由——`serde_json::Map` 对键排序，没有读者可依赖的序；序是模型读到的东西的属性，故落在模型读到的地方。
+- **表头把「没列出的名字没有读者」写在第一行**：这是本工具存在的那个缺陷的正面表述，放在模型最先读到的位置。
+- **随 Run 冻结，与 catalog 同理**：装配层单线程驱动，一次 drive 之内没有第二个 Run 在跑，且本 Run 发出的 signal 在 drive 结束后才投递——所以「派活那一刻扫到的」与「此刻」在一次 drive 内不可能不同。`Temporal::Timeless` 因此是实话：这份名册没有一个会在回合之间变化的时刻。
+
 ### 8-9 city::archive（P3.13；形状 2 值类型＋形状 7 投影）
 
 ```rust
@@ -416,11 +460,15 @@ bin 装配层的 prefix 组装（P1.06 同集改）；`docs/templates/URBANITE.m
 
 P2.01 波及 bin 装配层三处：`run_command` 增 `CreateBuilding` 臂；`dispatch` 里的本地函数 `building_of` **删除**，改用 `city::Building::of`（一条规则一个权威）；`CallShape.effort` 不再恒为 `None`，改由 `config_layers::load` 供给——接线台账里「Effort 值的生产者待接」那一行到此为止。
 
+P3.06 波及四处：装配层本地函数 `buildings_of` **删除**，`read_spine` 的内联同类规则与 `read_building` 的房间枚举一并改调 `city::buildings`／`city::rooms`；`dispatch` 增一次 `Neighbourhood::scan`，其结果既供 `NeighboursTool` 也供 `status` 的第十三字段；`runtime::StatusSnapshot` 增 `neighbours: u32`（runtime-SPEC §8-14 同集改）；工具表增一件，故 `ChatRequest.tools` 每回合多一条 disclosure 与一份 schema。
+
 ## 16 测试与约束
 
 三条：身份两态各一条；**段字节跨两次加载稳定**；Dossier 只计本人的 Run 且跨 Run 累加。bin 侧另有一条端到端断言（两次 Dispatch 的 resident 段哈希相同、run 段不同）。
 
 P2.01 七条：新建的楼被 `policy::load` 读回且 confidential 模板真的锁本地模型池｜二次出生恒拒｜reserved prefix 下建楼恒拒｜房间地址建楼恒拒且拒词指出该建哪栋｜下层配置盖上层｜不认的键即拒｜**写在 `CONFIG.toml` 里的 effort 出现在真实出线请求体里**（bin 侧端到端，假 provider 录下请求体）。
+
+P3.06 六条：扫到的名册**不含我自己**且有人的与空的各自落在对的臂上｜`## Bring them` 在场时取它、缺席时退回第一段正文且跳过标题与引文｜同一座城扫两次字节相同（`read_dir` 序不得泄漏到答案里）｜`scope=city` 只交出楼名、不交出任何住户｜`.sprawling` 与 archive 目录都不是房间｜**模板仍然带着 `## Bring them` 这一节**（对 `docs/templates/URBANITE.md` 的 `include_str!` 断言；模板改名而代码不改，就是一份永远退回正文的名册）。
 
 ## 17 模型体验
 
@@ -428,8 +476,12 @@ P2.01 入窗零字节：`CONFIG.toml` 改的是请求字段（effort），不是
 
 resident 段是模型每回合都读到的四段之一。`URBANITE.md` 建议 30 行以内：长的描述不会让 Resident 更能干，只会让每个回合更贵——这句话写在模板里，因为模板在场即教学。
 
+P3.06 的常驻代价是一件工具的 disclosure 与 schema，名册本身**不进 prefix**：一栋楼的住户数会长，而每回合都付的字节不该随人口增长。模型读到的常驻新增只有 `status` 的一行 `neighbours: N`——它回答的是「值不值得问」，问出来的详情由工具在需要时交付，与 catalog 对 skill 用的是同一条渐进披露。
+
 ## 18 文档同步
 
 新增模块随卡登记 ARCHITECTURE.md §6 与接线台账；`Dossier` 的生产消费者（Resident 视图）到位时更新台账行。
 
 P2.01 同集四处：§6 模块表两行翻 `已建`；§6 接线台账的 `kernel::config`（freeze 面）与 Effort 两行改成已接线；`xtask/api-baselines/city.txt` 随公开面同集重算；`docs/templates/BUILDING.md` 从此是被实例化的那串字节，改它即改新楼的第一句话。
+
+P3.06 同集五处：ARCHITECTURE.md §12 模块表增 city 两行、`runtime::tools::status` 一行由十二字段改十三；`docs/glossary.md` 增 **Neighbourhood** 与 **neighbours** 两行（一个概念一个名字，且 `directory` 因与文件系统目录同音而被明确弃用）；`crates/runtime/runtime-SPEC.md` §8-14 的 status 接口块；`xtask/api-baselines/` 的 `city.txt` 与 `runtime.txt`；`docs/templates/URBANITE.md` 的 `## Bring them` 从此是被读取的一节，改它即改全城名册显示的那一行。

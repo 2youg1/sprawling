@@ -450,11 +450,12 @@ impl Tool for ReadTool { /* meta：name=read、effect=Read、cost=Light、render
 // 缺参拒词报四字段契约。理由：没有创建能力的城里，Agent 在空房间里无法开始任何工作；
 // 创建住 edit 而非新工具，因为「文件变更＋乐观并发」已是本工具拥有的唯一权威，“absent”只是版本的一个取值。
 
-// tools/status.rs —— 十二字段
+// tools/status.rs —— 十三字段（P3.06 追加第十三行）
 pub struct StatusSnapshot { pub who: String, pub addr: Address, pub mode: Mode, pub ctx_used: Tokens,
     pub ctx_limit: Tokens, pub budget_usd: UsdMicros, pub budget_tokens: Tokens, pub trust: String,
     pub write_domain: String, pub locks: Vec<String>, pub worktree_path: String, pub worktree_disk: ByteLen,
-    pub signals_pending: u32, pub children: Vec<ChildStatus>, pub now: Option<ClockStamp>, pub provider_mode: ProviderMode }
+    pub signals_pending: u32, pub children: Vec<ChildStatus>, pub now: Option<ClockStamp>,
+    pub provider_mode: ProviderMode, pub neighbours: u32 }   // neighbours 在末尾，渲染序与声明序同一
 #[non_exhaustive] pub enum ProviderMode { Normal, Degraded, LocalOnly }
 pub struct ChildStatus { pub room: Address, pub kind: DelegateKind }   // P1.03：重塑
 pub struct StatusTool { /* snapshot＋ children: Box<dyn Fn() -> Vec<ChildStatus>> */ }
@@ -464,6 +465,8 @@ impl Tool for StatusTool { /* meta：name=status、effect=Read、temporal=Timest
 // ToolBench 住 turn.rs（S3.13 同卡加入）：按 Effect 过门是回合层职责（Handoff 裁定 10），不另立 bench 模块。
 
 - **`children` 为何重塑（P1.03）**：旧形状 `{run, phase, ctx_used, ctx_lock}` 预设子已在跑。真实情形是子 Run 在父嚽结之后才开，故父自己那一跑里 **子既无 run id 也无上下文读数**——四个字段里三个只能填零，而零与未知是两件事。现形状只携得出口的两件：派到哪个房间、哪一类代理。
+- **`neighbours` 追加在末尾而不插入到 `signals_pending` 旁边（P3.06）**：冻结序存在的理由是字段表增长时居民的习惯仍可迁移，而一次插入会把前十二行里的一半挪位。它只报**人数**不报名单：名单长度随人口增长，而 `status` 是一份定长文本（`render_children` 已为同一条理由被压成一行）；详情归 `neighbours` 工具，city-SPEC §8-15b。
+- **数的是人，不是地址**：一间没人站着的房间没有读者，把它计入会让 `neighbours: 3` 读起来像「有三个人可以说话」而实际上一个都没有。空房间仍然在工具的答案里，因为它对 delegate 与搬入是真信息。
 - **`children` 是闭包而不是快照字段**：派活发生在 `status` 工具造好之后，一份开跑前拍的快照永远是空的。派生台住 `collab`，而 depmap 不允许 runtime 依赖 collab，故本模块只收一个答「现在派了哪些」的闭包，装配层把台接上去——与 `RunHooks` 四个闭包同一纪律：第二实现不存在时不引 trait。
 // runtime::compaction（P3.14；形状 6 数据面＋形状 1 判定）
 pub enum Content { Prose, Code, Diff, Log, Structured, Table, Unknown }   // 七类，Unknown 是其中之一

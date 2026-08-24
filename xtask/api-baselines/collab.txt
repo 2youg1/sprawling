@@ -228,6 +228,7 @@ pub fn collab::Inbox::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Re
 pub fn collab::Inbox::new(u64, u32) -> collab::Inbox
 pub fn collab::Inbox::pending(&self) -> u32
 pub fn collab::Inbox::pull(&mut self) -> core::result::Result<alloc::vec::Vec<collab::Signal>, kernel::error::AxError>
+pub fn collab::Inbox::take_steer(&mut self) -> core::option::Option<collab::Signal>
 pub fn collab::Joined::nodes(&self) -> &[collab::NodeId]
 pub fn collab::NodeContract::budget(&self) -> kernel::budget::BudgetCap
 pub fn collab::NodeContract::depends_on(&self) -> impl core::iter::traits::iterator::Iterator<Item = &collab::NodeId>
@@ -281,6 +282,7 @@ pub fn collab::SignalDesk::new(kernel::event::RunId, kernel::address::Address, a
 pub fn collab::SignalDesk::pending(&self) -> u32
 pub fn collab::SignalDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::SignalEffect>
 pub fn collab::SignalDesk::take_inbox(&mut self) -> collab::Inbox
+pub fn collab::SignalDesk::take_steer(&mut self) -> core::option::Option<collab::Steer>
 pub fn collab::SignalId::as_str(&self) -> &str
 pub fn collab::SignalId::parse(&str) -> core::result::Result<collab::SignalId, kernel::error::AxError>
 pub fn collab::SignalKind::as_str(self) -> &'static str

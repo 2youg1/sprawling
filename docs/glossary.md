@@ -34,6 +34,7 @@ Two more relations are worth stating because they are easy to invert. A **Gate**
 | **Utilities** | The shared services of a city, in the reserved subtree: nothing a resident writes to. |
 | **Resident** | A standing identity with an `URBANITE.md` and a dossier, surviving across runs. |
 | **Ephemeral** | A derived worker discarded after use, with no standing identity. |
+| **Neighbourhood** | The addresses one run can reach, and who stands at each: this building's rooms in full, the city's other buildings by name only. An empty room is listed as a place, because hiding it would read as "this address does not exist". Never called a directory — that word already names a place on disk. |
 | **Run** | One piece of work with a start and an end. **A resident is an identity; an active run is the cost** — the two numbers differ by two orders of magnitude. |
 | **Fork** | A new run branched from a point in another run's history. It records a lineage; it does not start driving by itself. |
 | **resume** | Reopening a city after the process died: the chain is verified, tool calls whose outcome was lost are closed as unknown, and what waits for a person is reported. |
@@ -91,7 +92,8 @@ Two more relations are worth stating because they are easy to invert. A **Gate**
 |---|---|
 | **exec** | The tool that runs a program, a Python artifact, or a shell line, inside the sandbox the frozen configuration allows. |
 | **edit** | The tool that changes a file, against a base version, inside the write domain. |
-| **status** | The tool that answers what a run's own situation is: turns, budget, what waits for it. |
+| **status** | The tool that answers what a run's own situation is: turns, budget, what waits for it, and how many neighbours it has. |
+| **neighbours** | The tool that lists the Neighbourhood: this building's addresses with the line each resident's `URBANITE.md` offers about what to bring them, or the city's buildings by name. An address it does not list has no reader. |
 | **read** | The tool that opens one file by its path, or one catalog entry — a skill, a mode, the developer entry — by the name the catalog lists it under. A model-chosen path never reaches a reserved subtree; a catalog name may, because a person admitted it. |
 | **dialect** (兼容格式) | The request and reply format one provider speaks — OpenAI-shaped or Anthropic-shaped. `gateway::dialect` translates between the canonical shape and one of them, in both directions. Chinese prose says 兼容格式; the identifier stays English. |
 | **Endpoint** | One provider's chat URL, dialect, credential and headers. The city reaches an **external provider** only through one. |

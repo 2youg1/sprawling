@@ -221,13 +221,22 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
             problems,
         ),
     };
-    let mut rooms = Vec::new();
+    // What counts as a room is `city::rooms`, which the model-facing
+    // roster reads too: a page and an agent disagreeing about which
+    // rooms a building has would be two answers to one question. A
+    // directory this cannot read has no rooms to draw, which is what a
+    // page owes its reader - the roster propagates the same failure
+    // instead, because a resident told it is alone would act on it.
+    let rooms: Vec<String> = city::rooms(city_root, addr)
+        .unwrap_or_default()
+        .iter()
+        .map(|room| name_of(room).to_owned())
+        .collect();
     let mut docs = Vec::new();
-    // The rules, read by their own path. The walk below skips every dot
-    // directory - which is what keeps `.sprawling` from being listed as
-    // a room - and a building's rules now live inside one, so a page
-    // that only walked would have quietly lost the tab that shows what
-    // this building is allowed to do.
+    // The rules, read by their own path: a building's rules live inside
+    // a dot directory, and the walk below reads files rather than
+    // directories, so a page that only walked would have quietly lost
+    // the tab that shows what this building is allowed to do.
     if let Ok(bytes) = std::fs::read(city::building_path(city_root, addr)) {
         docs.push(doc_from(city::BUILDING_FILE.to_owned(), &bytes));
     }
@@ -238,9 +247,6 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
                 continue;
             }
             if entry.path().is_dir() {
-                if name != city::ARCHIVE_DIR {
-                    rooms.push(name);
-                }
                 continue;
             }
             if !name.ends_with(".md") {
@@ -252,7 +258,6 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
             docs.push(doc_from(name, &bytes));
         }
     }
-    rooms.sort();
     docs.sort_by_key(|doc| doc_order(&doc.name));
     let archive = city::archive_index(city_root, addr)
         .unwrap_or_default()
@@ -470,30 +475,6 @@ fn mode_of(tag: &channels::ModeTag) -> runtime::Mode {
     }
 }
 
-/// Which buildings the city currently has, by directory. The reserved
-/// subtree is not one, and neither is anything whose name an address
-/// cannot hold.
-fn buildings_of(city_root: &Path) -> Vec<Address> {
-    let Ok(entries) = std::fs::read_dir(city_root) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue;
-        }
-        if let Ok(addr) = Address::parse(&name) {
-            out.push(addr);
-        }
-    }
-    out.sort_by(|left: &Address, right: &Address| left.as_str().cmp(right.as_str()));
-    out
-}
-
 /// Reads every building's `Roadmap.md` and tallies it.
 ///
 /// The roadmap is read at query time rather than folded from events,
@@ -503,22 +484,11 @@ fn buildings_of(city_root: &Path) -> Vec<Address> {
 /// `Progress::Unplanned` is exactly that fact — it has no ratio method,
 /// so the interface cannot draw a percentage it does not have.
 fn read_spine(city_root: &Path) -> Vec<channels::BuildingProgress> {
-    let Ok(entries) = std::fs::read_dir(city_root) else {
-        return Vec::new();
-    };
     let mut out = Vec::new();
-    for entry in entries.flatten() {
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue; // the reserved prefix is not a building
-        }
-        let Ok(addr) = Address::parse(&name) else {
-            continue;
-        };
-        let Ok(text) = std::fs::read_to_string(entry.path().join(city::ROADMAP_FILE)) else {
+    for addr in city::buildings(city_root).unwrap_or_default() {
+        let Ok(text) =
+            std::fs::read_to_string(city_root.join(addr.as_str()).join(city::ROADMAP_FILE))
+        else {
             continue;
         };
         let (progress, problems) = match kernel::check_roadmap_shape(&text) {
@@ -1542,6 +1512,30 @@ pub(crate) struct RunWorker {
     /// The diagnostic log. Write-only, and nothing here reads it back:
     /// turning it off must leave the ledger byte-identical.
     log: runtime::diagnostics::Diagnostics,
+    /// Residents who were spoken to while nobody was home. Held between
+    /// the run that spoke and the runs that answer, because delivery
+    /// happens after the speaker has frozen.
+    knocks: Vec<Knock>,
+}
+
+/// A resident who was signalled and has no run open.
+///
+/// The second of the two ways a signal reaches somebody. The first
+/// slips under the door of a run that is already working - a steer-kind
+/// signal, landing at that run's next safe point with the sender's
+/// address in front of it. This one knocks: it starts a run for a
+/// resident who is not working, because a message nobody is there to
+/// read is the same as no message.
+struct Knock {
+    addr: Address,
+    /// Who spoke, as they will be named in the woken run's own brief.
+    from: String,
+    /// The mode and the spending ceiling of the run that spoke. Carried
+    /// rather than defaulted: an answer belongs to the same piece of
+    /// work as the question, and a run with no ceiling is the one
+    /// failure with no floor under it.
+    mode: runtime::Mode,
+    budget: kernel::BudgetCap,
 }
 
 impl RunWorker {
@@ -1583,7 +1577,110 @@ impl RunWorker {
             expiries: std::collections::BTreeMap::new(),
             logins: std::collections::BTreeMap::new(),
             log,
+            knocks: Vec::new(),
         })
+    }
+
+    /// Decides whether a signal that has just been delivered starts a
+    /// run, and queues it when it does.
+    ///
+    /// **A knock addresses a resident, never a conversation.** A run
+    /// that has frozen is history: it is read, not woken, and nothing
+    /// here reopens one. What a knock starts is a *new* run of whoever
+    /// stands at that address, carrying whatever the building's Handoff
+    /// says - which is the one artifact designed to cross a freeze.
+    ///
+    /// So an address with no `URBANITE.md` is left alone. It is a room
+    /// rather than somebody: a place a person may send a worker to, and
+    /// a signal waiting there waits until they do. The distinction is
+    /// the city's oldest one, and inverting it is how a design starts
+    /// paying for a hundred idle personalities.
+    ///
+    /// Nothing counts knocks. When a conversation has finished is for
+    /// the residents in it to decide, and what bounds its cost is what
+    /// already bounds every run: the turn budget and the `BudgetCap`
+    /// carried from the run that spoke. A person who wants a resident to
+    /// stop being reachable halts it, and `dispatch_in` already refuses
+    /// a halted scope.
+    ///
+    /// # Errors
+    /// Propagates a resident description that exists and cannot be read:
+    /// treating that as "nobody lives here" would silently make a
+    /// resident unreachable.
+    fn knock(
+        &mut self,
+        signal: &collab::Signal,
+        speaker: &Address,
+        mode: runtime::Mode,
+        budget: kernel::BudgetCap,
+    ) -> Result<(), AxError> {
+        let room = signal.room();
+        if room == speaker || self.knocks.iter().any(|queued| &queued.addr == room) {
+            return Ok(());
+        }
+        if !matches!(
+            city::Identity::load(&self.city_root, room)?,
+            city::Identity::Resident(_)
+        ) {
+            return Ok(());
+        }
+        self.knocks.push(Knock {
+            addr: room.clone(),
+            from: signal.from().to_owned(),
+            mode,
+            budget,
+        });
+        Ok(())
+    }
+
+    /// Starts a run for everyone who was spoken to while nobody was
+    /// home, and keeps going while those runs go on speaking to each
+    /// other.
+    ///
+    /// A loop rather than recursion, and drained in waves so that a run
+    /// answering two neighbours wakes both before either replies.
+    ///
+    /// A knock that cannot be answered is noted and stepped over. The
+    /// run that spoke did its part; a halted building or an unreadable
+    /// room is a fact about the city, and failing the speaker's dispatch
+    /// over it would punish the wrong run.
+    fn answer_knocks(&mut self) {
+        while !self.knocks.is_empty() {
+            for knock in std::mem::take(&mut self.knocks) {
+                // Attribution is the whole point of this text. The woken
+                // resident is told that an agent spoke and which one, in
+                // the same `@address` form a steer lands in, so that
+                // "answer them" resolves to an address `signal` accepts.
+                // A brief that read like the person would make every
+                // reply go to the wrong place.
+                let speaker = &knock.from;
+                let outcome = self.dispatch_in(
+                    knock.addr.clone(),
+                    format!(
+                        "@{speaker} signalled you. This run exists because that signal arrived: \
+                         nobody else asked for it."
+                    ),
+                    format!(
+                        "The signals waiting for you have been read, and @{speaker} has an answer \
+                         if one was needed."
+                    ),
+                    knock.mode,
+                    knock.budget,
+                    None,
+                );
+                if let Err(err) = outcome {
+                    self.note(
+                        runtime::diagnostics::Level::Refuse,
+                        "collab::inbox",
+                        &format!(
+                            "{} was signalled and could not be woken: {}",
+                            knock.addr.as_str(),
+                            err.subject()
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     /// Renews a subscription credential that is about to stop working.
@@ -2328,7 +2425,13 @@ impl RunWorker {
                     city::write_effort(&self.city_root, &addr, effort)?;
                 }
                 self.dispatch_in(addr, task, goal, mode_of(&mode), budget, None)
-                    .map(drop)
+                    .map(drop)?;
+                // Whoever this run spoke to answers next, and whoever
+                // they speak to after that. The person asked for one
+                // dispatch; what returns to them is the conversation it
+                // started, finished.
+                self.answer_knocks();
+                Ok(())
             }
             channels::Command::Wake {
                 source,
@@ -2873,7 +2976,7 @@ impl RunWorker {
     /// which is a person reading it.
     fn wake(&mut self, source: &str, subject: &str, body: &str) -> Result<(), AxError> {
         let watch = city::Watch::load(&self.city_root)?;
-        let standing: Vec<Address> = buildings_of(&self.city_root);
+        let standing: Vec<Address> = city::buildings(&self.city_root)?;
         let listening = watch.listening(&standing);
         if listening.is_empty() {
             // Recorded rather than refused: "nothing was listening" is a
@@ -2956,7 +3059,13 @@ impl RunWorker {
             format!("answer what arrived from {source}, or say why it needs a person"),
         );
         self.tainted_arrival = false;
-        outcome
+        outcome?;
+        // An arrival from outside can start a conversation inside, and
+        // the residents it speaks to answer on the same terms as any
+        // other. The taint travels with each run rather than with this
+        // loop, so it is already off by the time anybody is woken.
+        self.answer_knocks();
+        Ok(())
     }
 
     /// Where a building keeps the plan its residents claim rows from.
@@ -3200,6 +3309,16 @@ impl RunWorker {
         catalog.borrow_mut().set_mode(mode);
         let edit = EditTool::new(&write_root, addr.clone(), rules.write_domain()?)?;
         let writable = rules.write_domain()?;
+        // Who this run can reach, read once at dispatch and frozen with
+        // it. Nothing here can move under the run: the assembly is
+        // single-threaded, so no second run executes while this one
+        // drives, and a signal this run sends is delivered after the
+        // drive returns. The same value answers the `neighbours` tool
+        // and the count `status` reports.
+        let seen = city::Neighbourhood::scan(&self.city_root, building.addr(), &addr, &|room| {
+            self.inboxes.get(room).map_or(0, collab::Inbox::pending)
+        })?;
+        let neighbours = seen.residents();
         // Where this run stands, carried rather than worked out: a run
         // that inferred its own depth would be one wrong answer away
         // from a delegate that delegates.
@@ -3222,6 +3341,7 @@ impl RunWorker {
                 trust: &self.autonomy,
                 context_tokens: model.context_tokens,
                 budget,
+                neighbours,
                 // What this resident already holds, so a model asking
                 // what it may touch is answered from the same list the
                 // conflict check reads.
@@ -3323,6 +3443,15 @@ impl RunWorker {
         catalog
             .borrow_mut()
             .admit_tool(kernel::Tool::meta(&rules_tool))?;
+        // The one door onto the rest of the city. It is registered
+        // beside `signal` rather than behind it because the two answer
+        // different questions - who is there, and what to say to them -
+        // and until this line a model could only reach an address
+        // somebody had already handed it.
+        let neighbours_tool = city::NeighboursTool::new(seen)?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&neighbours_tool))?;
         // The one tool that reads, and the only caller of the catalog's
         // second-level disclosure: without it a building's reading room
         // could name a skill and never hand it over. It holds the
@@ -3351,6 +3480,7 @@ impl RunWorker {
         bench.register(Box::new(delegate_tool))?;
         bench.register(Box::new(workshop_tool))?;
         bench.register(Box::new(rules_tool))?;
+        bench.register(Box::new(neighbours_tool))?;
         bench.register(Box::new(archive_tool))?;
         bench.register(Box::new(exec))?;
         bench.register(Box::new(read))?;
@@ -3502,16 +3632,60 @@ impl RunWorker {
             let raised = raised_by_bench;
             let fenced = fenced_by_bench;
             let ran = ran_by_bench;
-            let mut interrupt = |_: SafePoint| match source.as_mut() {
-                Some(ask) => ask(run_id),
-                None => Interrupt::None,
+            // Two speakers, one landing, and the person outranks the
+            // resident. What keeps them apart where the model reads them
+            // is `collab::Steer`: only the person's entrance can write
+            // the `user` prefix, and a resident's writes `@` and its own
+            // address - the address a reply is sent to. A run that could
+            // not tell the two apart would answer the person by
+            // signalling them, and answer a neighbour by talking to
+            // nobody.
+            let steers = std::rc::Rc::clone(&signals);
+            let mut interrupt = |_: SafePoint| {
+                let from_person = match source.as_mut() {
+                    Some(ask) => ask(run_id),
+                    None => Interrupt::None,
+                };
+                if !matches!(from_person, Interrupt::None) {
+                    return from_person;
+                }
+                // A desk in use answers nothing rather than refusing:
+                // the interrupt runs between tool calls, so this borrow
+                // is free in practice, and a safe point is the wrong
+                // place to fail over a lock.
+                let Ok(mut desk) = steers.try_borrow_mut() else {
+                    return Interrupt::None;
+                };
+                match desk.take_steer() {
+                    Some(steer) => Interrupt::Steer {
+                        source: steer.source().to_owned(),
+                        text: steer.text().to_owned(),
+                    },
+                    None => Interrupt::None,
+                }
             };
+            // Where this call sits in this run. The key used to derive
+            // from the turn's millisecond stamp and the tool's name,
+            // which broke twice over: it took a clock, which determinism
+            // rule 7 forbids outright, and it ignored the arguments - so
+            // two `read`s of two different files in one turn were one
+            // key, and the second came back "this call was already
+            // made". A model reads that as a fault in itself.
+            let placed = std::cell::Cell::new(0u64);
             let mut invoke = |call: &kernel::ToolCall, t: TimeMs| {
-                let key = kernel::IdemKey::derive(
-                    &run_id,
-                    kernel::Seq::new(t.value()),
-                    call.name.as_str().as_bytes(),
+                let at = placed.get();
+                placed.set(at.saturating_add(1));
+                // Name and arguments together are the action. Two
+                // identical calls at two positions are two keys and both
+                // run; the same position replayed is one key, which is
+                // what deduplication is for.
+                let mut action = call.name.as_str().as_bytes().to_vec();
+                action.extend_from_slice(
+                    serde_json::to_string(&call.args)
+                        .unwrap_or_default()
+                        .as_bytes(),
                 );
+                let key = kernel::IdemKey::derive(&run_id, kernel::Seq::new(at), &action);
                 let ctx = kernel::GateContext {
                     actor: bench_who.clone(),
                     now: t,
@@ -3621,6 +3795,10 @@ impl RunWorker {
                         .entry(signal.room().clone())
                         .or_insert_with(new_inbox)
                         .deliver(&signal)?;
+                    // Somebody was spoken to. Whether that starts a run
+                    // is decided in one place, below, so that the two
+                    // ways of reaching a resident stay one decision.
+                    self.knock(&signal, &addr, mode, budget)?;
                 }
                 collab::SignalEffect::Consumed { signal, by } => {
                     let payload = signal.consumed_payload(&by)?;
@@ -4281,6 +4459,7 @@ struct Situation<'a> {
     context_tokens: u64,
     budget: kernel::BudgetCap,
     locks: Vec<String>,
+    neighbours: u32,
 }
 
 fn status_snapshot(situation: Situation<'_>) -> runtime::StatusSnapshot {
@@ -4305,6 +4484,7 @@ fn status_snapshot(situation: Situation<'_>) -> runtime::StatusSnapshot {
         signals_pending: situation.signals_pending,
         now: None,
         provider_mode: runtime::ProviderMode::Normal,
+        neighbours: situation.neighbours,
     }
 }
 
@@ -5744,6 +5924,315 @@ mod tests {
         assert!(
             history.contains("pong"),
             "and what the server answered came back through the tool seam"
+        );
+    }
+
+    /// Two different calls to one tool in one turn are two calls. The key
+    /// used to be the turn's millisecond stamp plus the tool's name, so
+    /// the second came back as a duplicate of the first - and the model
+    /// read that as a fault in itself.
+    #[test]
+    fn the_same_tool_twice_with_different_arguments_runs_twice() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        city::create_building(
+            dir.path(),
+            &Address::parse("lab").unwrap(),
+            city::BuildingTemplate::Minimal,
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("lab").join("one.md"), "first\n").unwrap();
+        std::fs::write(dir.path().join("lab").join("two.md"), "second\n").unwrap();
+
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion(
+                    "one",
+                    "tu_1",
+                    "read",
+                    serde_json::json!({ "path": "lab/one.md" }),
+                ),
+                tool_completion(
+                    "two",
+                    "tu_2",
+                    "read",
+                    serde_json::json!({ "path": "lab/two.md" }),
+                ),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("lab/room1").unwrap(),
+                task: "read both files".to_owned(),
+                goal: "both read".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let history: String = verified
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(history.contains("first"), "the first read answered");
+        assert!(
+            history.contains("second"),
+            "and so did the second: {history}"
+        );
+        assert!(
+            !history.contains("already made"),
+            "two files are two actions"
+        );
+    }
+
+    /// A resident who is signalled and has no run open gets one, and its
+    /// brief names the resident who spoke rather than reading like the
+    /// person. Two residents can therefore hold a conversation without
+    /// somebody dispatching each turn of it by hand.
+    #[test]
+    fn a_signal_wakes_the_resident_it_was_sent_to_and_says_who_spoke() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        city::create_building(
+            dir.path(),
+            &Address::parse("market").unwrap(),
+            city::BuildingTemplate::Minimal,
+        )
+        .unwrap();
+        for who in ["ito", "hana"] {
+            let room = dir.path().join("market").join(who);
+            std::fs::create_dir_all(&room).unwrap();
+            std::fs::write(
+                room.join(city::URBANITE_FILE),
+                format!("# URBANITE.md\n\nTrades in the market as {who}.\n"),
+            )
+            .unwrap();
+        }
+        // A room with nobody in it, to prove the other half of the rule.
+        std::fs::create_dir_all(dir.path().join("market").join("store")).unwrap();
+
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion(
+                    "asking hana",
+                    "tu_1",
+                    "signal",
+                    serde_json::json!({
+                        "action": "send",
+                        "to": "market/hana",
+                        "text": "what is your rate?",
+                    }),
+                ),
+                tool_completion(
+                    "nobody is listening at the empty room, and that is fine",
+                    "tu_2",
+                    "signal",
+                    serde_json::json!({
+                        "action": "send",
+                        "to": "market/store",
+                        "text": "anyone there?",
+                    }),
+                ),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("market/ito").unwrap(),
+                task: "ask hana what she charges".to_owned(),
+                goal: "a price".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let started: Vec<String> = verified
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .filter(|line| line.contains("\"kind\":\"run_started\""))
+            .collect();
+        assert_eq!(
+            started.len(),
+            2,
+            "one run the person asked for, one the signal woke: {started:?}"
+        );
+        assert!(
+            started[1].contains("market/hana"),
+            "the woken run belongs to whoever was spoken to: {}",
+            started[1]
+        );
+        assert!(
+            !started.iter().any(|line| line.contains("market/store")),
+            "a room with nobody in it is a place, not somebody to wake"
+        );
+        let asked = provider.bodies().join("\n");
+        assert!(
+            asked.contains("@market/ito signalled you"),
+            "the woken resident is told an agent spoke, and which address answers it"
+        );
+        assert!(
+            !asked.contains("user: @market/ito"),
+            "a resident never renders as the person"
+        );
+    }
+
+    /// The other half of the same rule: a steer-kind signal slips under
+    /// the door of the run it reaches, landing at that run's next safe
+    /// point with the sender's address in front of it. `collab::steer`
+    /// has held both entrances since P2.04 and the resident's one had no
+    /// caller until now.
+    #[test]
+    fn a_steer_from_a_resident_lands_in_the_window_as_that_resident() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        city::create_building(
+            dir.path(),
+            &Address::parse("market").unwrap(),
+            city::BuildingTemplate::Minimal,
+        )
+        .unwrap();
+        for who in ["ito", "hana"] {
+            let room = dir.path().join("market").join(who);
+            std::fs::create_dir_all(&room).unwrap();
+            std::fs::write(
+                room.join(city::URBANITE_FILE),
+                format!("# URBANITE.md\n\nTrades in the market as {who}.\n"),
+            )
+            .unwrap();
+        }
+
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion(
+                    "cutting in",
+                    "tu_1",
+                    "signal",
+                    serde_json::json!({
+                        "action": "send",
+                        "to": "market/hana",
+                        "kind": "steer",
+                        "text": "drop the glaze order, the kiln comes first",
+                    }),
+                ),
+                completion("sent", None),
+                tool_completion("where do I stand", "tu_2", "status", serde_json::json!({})),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("market/ito").unwrap(),
+                task: "tell hana what matters first".to_owned(),
+                goal: "hana knows".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let asked = provider.bodies().join("\n");
+        assert!(
+            asked.contains("@market/ito: drop the glaze order"),
+            "the steer lands at the end of a tool result, attributed to the resident who sent it"
+        );
+        assert!(
+            !asked.contains("user: drop the glaze order"),
+            "only the person's entrance can render as the person"
+        );
+    }
+
+    /// Until this tool existed a run could only signal an address
+    /// somebody had already handed it, and a guessed one opened a queue
+    /// nobody read. The evidence has to come through the production
+    /// path, because what is being claimed is that the model is *told*.
+    #[test]
+    fn a_run_is_told_who_shares_its_building_and_what_to_bring_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        city::create_building(
+            dir.path(),
+            &Address::parse("lab").unwrap(),
+            city::BuildingTemplate::Minimal,
+        )
+        .unwrap();
+        let mason = dir.path().join("lab").join("mason");
+        std::fs::create_dir_all(&mason).unwrap();
+        std::fs::write(
+            mason.join(city::URBANITE_FILE),
+            "# URBANITE.md \u{2014} mason\n\n## Bring them\n\nAnything that has to survive a firing.\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.path().join("lab").join("store")).unwrap();
+
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion("who is here", "tu_1", "neighbours", serde_json::json!({})),
+                tool_completion(
+                    "and where do I stand",
+                    "tu_2",
+                    "status",
+                    serde_json::json!({}),
+                ),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("lab/room1").unwrap(),
+                task: "find out who else is here".to_owned(),
+                goal: "one answer is enough".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        assert!(
+            provider.bodies().join("\n").contains("neighbours"),
+            "the tool table the model is given carries the way to ask"
+        );
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let history: String = verified
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(
+            history.contains("Anything that has to survive a firing"),
+            "the line a resident wrote about itself is what reaches the one asking"
+        );
+        assert!(
+            history.contains("lab/store"),
+            "an open room is a place to send work to, not something to hide"
+        );
+        assert!(
+            history.contains("neighbours: 1"),
+            "status counts people rather than places: two rooms, one resident"
         );
     }
 

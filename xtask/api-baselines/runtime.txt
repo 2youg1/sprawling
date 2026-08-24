@@ -496,6 +496,7 @@ pub runtime::StatusSnapshot::ctx_limit: kernel::budget::Tokens
 pub runtime::StatusSnapshot::ctx_used: kernel::budget::Tokens
 pub runtime::StatusSnapshot::locks: alloc::vec::Vec<alloc::string::String>
 pub runtime::StatusSnapshot::mode: runtime::mode::Mode
+pub runtime::StatusSnapshot::neighbours: u32
 pub runtime::StatusSnapshot::now: core::option::Option<runtime::clock::ClockStamp>
 pub runtime::StatusSnapshot::provider_mode: runtime::ProviderMode
 pub runtime::StatusSnapshot::signals_pending: u32
@@ -647,6 +648,7 @@ pub runtime::tools::StatusSnapshot::ctx_limit: kernel::budget::Tokens
 pub runtime::tools::StatusSnapshot::ctx_used: kernel::budget::Tokens
 pub runtime::tools::StatusSnapshot::locks: alloc::vec::Vec<alloc::string::String>
 pub runtime::tools::StatusSnapshot::mode: runtime::mode::Mode
+pub runtime::tools::StatusSnapshot::neighbours: u32
 pub runtime::tools::StatusSnapshot::now: core::option::Option<runtime::clock::ClockStamp>
 pub runtime::tools::StatusSnapshot::provider_mode: runtime::ProviderMode
 pub runtime::tools::StatusSnapshot::signals_pending: u32

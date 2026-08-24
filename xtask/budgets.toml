@@ -44,10 +44,19 @@
 # of it, and it is the product's voice rather than padding: a page that
 # states a figure now says what produced it. Headroom is still 4.3x against
 # a budget of 2 MB, and the ratchet holds from the new number.
+# P3.06 records 558,419 after the person ruled on the drift the P4 row had
+# been holding open. The 67.8 KB since F2.05 is two things that were asked
+# for: `web::lang`'s second language, which is a table of every string the
+# interface says rather than a mechanism (F2.14, F2.18), and the four
+# client modules the same stage added. Neither is slack that accumulated -
+# each is a feature somebody uses - so the reading is recorded rather than
+# recovered, and the ratchet holds the line from here. Headroom against the
+# 2 MB budget is 3.8x, which is why this is not the size to spend attention
+# on today.
 [frontend_artifact]
 what = "the client the browser downloads, gzipped, fonts excluded"
 budget_bytes = 2097152
-best_bytes = 490594
+best_bytes = 558419
 slack_bytes = 20480
 measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
 status = "gated"
@@ -63,10 +72,19 @@ badge_label = "client"
 # refuses a release binary whose file table lacks web_bg.wasm, so this
 # cannot regress silently. The ratchet holds the line from the first honest
 # reading.
+# P3.06 records 8,620,032, freshly linked rather than read off a stale
+# artifact. Of the 1.37 MB since the first honest reading, the largest
+# single cause is tokio's `signal` feature, which is what lets a Windows
+# console deliver both of its stop signals to a city that must close its
+# ledger cleanly (P3.05b) - a binary that exits without that is smaller and
+# wrong. This card's own two modules measure 12,800 B of it, taken by
+# building the binary before and after. Recorded on the person's ruling:
+# the growth is bought, not drifted, and 15.6x headroom against the 128 MB
+# budget says the next reading to spend attention on is not this one.
 [release_binary]
 what = "the single binary a person installs, before fonts, wasmtime and CPython are embedded"
 budget_bytes = 134217728
-best_bytes = 7249920
+best_bytes = 8620032
 slack_bytes = 1048576
 measured_by = "just build-web, cargo build --release, then just gates"
 status = "gated"

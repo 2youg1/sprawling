@@ -383,6 +383,7 @@ fn s3_14_one_resident_closes_the_loop_through_the_real_adapters() {
                 signals_pending: 0,
                 now: None,
                 provider_mode: runtime::ProviderMode::Normal,
+                neighbours: 0,
             })
             .unwrap(),
         ))

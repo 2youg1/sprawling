@@ -15,10 +15,61 @@ use std::path::Path;
 
 use kernel::{Address, AxCode, AxError, SessionName};
 
+use crate::archive::ARCHIVE_DIR;
+
 /// How many suffixed names are tried before a person is asked to pick
 /// another word. High enough that nobody meets it by working, low
 /// enough that a wrong loop stops rather than fills a disk.
 const SUFFIX_LIMIT: u32 = 999;
+
+/// The rooms this building has, in address order.
+///
+/// One authority for what counts as a room, because there were three:
+/// the building page walked the directory itself, and so did two
+/// city-level readers. A room is a direct subdirectory whose name an
+/// address can hold, which is exactly how rooms come into being -
+/// [`open`] and delegation both create one level down. Dot directories
+/// are not rooms (that is what keeps the reserved subtree out), and
+/// neither is the archive, which is where a building keeps what it
+/// remembers rather than somebody to talk to.
+///
+/// A building with no directory yet has no rooms; that is an answer
+/// rather than a failure.
+///
+/// # Errors
+/// Propagates a directory that exists and cannot be read. A caller that
+/// would rather show what it could read says so at its own call site.
+pub fn all(city_root: &Path, building: &Address) -> Result<Vec<Address>, AxError> {
+    let root = city_root.join(building.as_str());
+    if !root.is_dir() {
+        return Ok(Vec::new());
+    }
+    let entries = std::fs::read_dir(&root).map_err(|err| {
+        AxError::failure(
+            AxCode::StorageFatal,
+            "list the rooms of a building",
+            format!("{}: {err}", root.display()),
+        )
+        .with_recovery("check the building directory is readable")
+    })?;
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') || name == ARCHIVE_DIR {
+            continue;
+        }
+        if let Ok(addr) = Address::parse(&format!("{}/{name}", building.as_str())) {
+            out.push(addr);
+        }
+    }
+    // Two machines reading one directory must answer the same thing;
+    // `read_dir` order is the filesystem's, not ours.
+    out.sort_by(|left: &Address, right: &Address| left.as_str().cmp(right.as_str()));
+    Ok(out)
+}
 
 /// Opens a room under `building` for a session called `name`.
 ///

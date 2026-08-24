@@ -306,6 +306,43 @@ fn run_segment(city_root: &Path, building: &Address, brief: &city::RunBrief) -> 
 
 **本章测试**：一次真派活后，provider 收到的请求里含楼规原文（`confidential: false`）、含上一场的 Handoff 正文、含本次 Goal，且**不含** `FULL READ` 与 `cas:b3-`；一次无 Goal 的派活不写 `JOB.md`，请求里说出「working with the person directly」且不把人那句话包成 `Task:` 表单。
 
+## 8-13 一封信与一次敲门（P3.07）
+
+**病灶**（一次真机会话拿出来的，不是读代码读出来的）：两位居民在同一栋楼里谈价，发信的那一跑连续五次 `signal pull` 等一封**在它自己那一跑里物理上不可能到达**的回信，最后以 `limit` 冻结；而收信人根本没有在跑。证据：同一条链上 `signal_enqueued` 落在 `run_frozen` 之后两行。
+
+```rust
+// bin::assembly
+struct Knock { addr: Address, from: String, mode: runtime::Mode, budget: kernel::BudgetCap }
+impl RunWorker {
+    fn knock(&mut self, signal: &Signal, speaker: &Address, mode, budget) -> Result<(), AxError>;
+    fn answer_knocks(&mut self);   // 成波排干，循环而非递归
+}
+```
+
+**两种送达，分法是收信人在不在**：
+
+| 收信人的状态 | 机制 | 落点 |
+|---|---|---|
+| 正在跑 | 信从门缝塑进去——steer 型 Signal，`SignalDesk::take_steer` 在安全点取走 | 追在下一次工具结果末尾，前缀 `@发件人地址` |
+| 没在跑 | 敲门——投递后入 `knocks`，本轮派活结束后 `answer_knocks` 为他开一跑 | 新 Run 的 brief，同样写明 `@发件人地址` |
+
+- **人压过居民**：中断源先问人的命令队列（Cancel 再 Steer），空手才问本屋信箱。
+- **属名不是装饰，是回信地址**：另一个 agent 的话氒不得以人的身份进窗口。类型已经把它变成判定（只有 `Steer::from_person` 写得出 `user`）；本卡把同一条规则延到敲门路上——被叫醒的一跑，其 brief 第一句就是「@X signalled you. This run exists because that signal arrived: nobody else asked for it.」。一份读起来像人写的 brief 会让每一封回信寄错地方。
+- **敲门敲的是 Resident，不是一段已封存的对话**：冻结的 Run 是历史，历史只读而不叫醒；被开出来的是那个地址上住户的**一跑新的 Run**，它靠 `Handoff.md` 接住上一场——那正是为穿过一次冻结而造的那件东西。没有 `URBANITE.md` 的地址因此不敲：它是一间房而不是一个人，信就在那儿等到人派个住户过去。
+- **不设叫醒预算（人的定谳）**：什么时候该停下来是对话里那几位居民的事，城市的活是把话送到。人要让某个居民不再被打扰，用的是已有的 Halt，`dispatch_in` 当场拒一个被 halt 的 scope。
+- **一次对话只有一道底，而它数的不是钱**：每一跑受 `DISPATCH_TURN_BUDGET`（24 回合）约束。`kernel::gate` 的 spend 门至今零调用方——**这座城没有金额上限**，那是定谳而不是遗漏：什么时候停下来归对话里的居民，花了多少事后从 Ledger 报出来。
+- **一个敲不成不连坐发件人**：叫不醒的人进诊断日志，不把发件那一跑的 dispatch 弄成失败。
+
+**本章测试**：一位居民向另一位发信，无人再派活而收信人自己跑了一跑，且其 brief 里带着发件人的地址；向一个无 `URBANITE.md` 的房间发信不开任何 Run，信仍在队里。
+
+## 8-14 幂等键里的那个时钟（P3.08）
+
+**病灶**（真机会话抓出来的）：同一跑里两次 `read` 被拒为 `this call was already made`，下一回合同一路径又读得干净。原因在一行里：`IdemKey::derive(&run_id, Seq::new(t.value()), call.name.as_bytes())`——
+
+一、**它取了一个时钟**（回合的毫秒戳），而确定性第七条写着「IdemKey 恒不得源于时钟或随机数」；二、**它不含参数**，于是同一回合内对同一件工具的任两次调用归为一键——两次 `edit` 也会，而那是丢写。
+
+现形：`(run_id, 本跑内的调用序号, 工具名＋参数 JSON)`。序号由闭包自己的计数器给，重放同一段历史得同一串键。两次不同的调用是两个键，都跑；同一个位置被重放是同一个键，去重正是为此而存在。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。
