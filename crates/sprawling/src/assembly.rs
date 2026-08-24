@@ -643,15 +643,18 @@ impl Views {
         };
         let end = match before {
             None => tail,
-            // The record just before the oldest one the caller holds. A
-            // `before` of the first record has nothing behind it.
+            // The record just before the oldest one the caller holds.
+            // `Seq::FIRST` is zero and it is the genesis line, so a
+            // `before` of it has nothing behind it - and the arithmetic
+            // that says so must not also make the genesis unreachable,
+            // which is what a floor of one did.
             Some(seq) => match seq.value().checked_sub(1) {
-                Some(0) | None => return empty,
+                None => return empty,
                 Some(value) => kernel::Seq::new(value),
             },
         };
         let want = u64::from(limit.clamp(1, channels::HISTORY_MAX));
-        let start = end.value().saturating_sub(want.saturating_sub(1)).max(1);
+        let start = end.value().saturating_sub(want.saturating_sub(1));
         let mut records = Vec::new();
         for value in start..=end.value() {
             let Ok(line) = index.line_at(&dir, kernel::Seq::new(value)) else {
@@ -664,7 +667,7 @@ impl Views {
         }
         channels::HistoryAnswer {
             records,
-            earlier: (start > 1).then(|| kernel::Seq::new(start)),
+            earlier: (start > kernel::Seq::FIRST.value()).then(|| kernel::Seq::new(start)),
         }
     }
 
@@ -7432,7 +7435,11 @@ addr = \"gone/room1\"
         }) else {
             panic!("the history query has an answer");
         };
-        assert_eq!(older.records[0].seq().value(), 1);
+        assert_eq!(
+            older.records[0].seq().value(),
+            kernel::Seq::FIRST.value(),
+            "paging back reaches the genesis line, which is sequence zero"
+        );
         assert!(
             older.earlier.is_none(),
             "the first record has nothing behind it"
