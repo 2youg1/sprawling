@@ -271,7 +271,10 @@ pub(crate) fn snake(camel: &str) -> String;
 - **不是 TTY 就不进控制台**。stdin 读到 EOF（管道、服务、CI）即退出控制台循环而**城照跑**：一座因为没人敲键盘而停止服务的城是一个以交互换服务的回归。
 - **拒长表与图**。查询的答案在控制台以 JSONL 逐行输出，与 `sprawling call` 同形；表格与图归浏览器。一个同时伺候两个主人的 CLI 是 CLI 文献里的反面教材。
 - **`/web` 携配对令牌**，故没有人需要手拷一串东西。令牌在 `serve` 里只被读一次，控制台拿到的是那一次的副本，不重新读环境。
-- **未做且已知**：Ctrl-C 仍是进程终止而非有序收口。`/quit` 是有序的那一条；把信号处理接成有序收口需要一个跨平台的信号依赖，而 `sprawling resume` 已经能收拾一次破死。写成明账。
+- **Ctrl-C 已是有序收口（P3.05）**：`serve` 在 `channels::serve` 与 `tokio::signal::ctrl_c` 之间 `select!`。收到信号后先停止接受连接，再 `CommandDesk::close()` 告诉 worker，worker **在读队列的同一处**读到它，于是正在跑的那条命令先跑完，`handoff_written` 是最后一行而不是某一行的中间。主线程 join worker 线程再返回——先返回的 main 会在那一行写出来之前结束进程。
+  - **`DeskWait::Close` 与 `Gone` 不是一回事**：前者是人选择停城，值一份 Handoff；后者是桌子自己坏了，那座城已经写不出 Handoff 了。
+  - **收口不是一条 Command**：能被拼出来的线上帧就是陌生人停掉别人城市的一条路。`closing` 是台子上的一个 `AtomicBool`，只有起城的那个进程按得动。
+  - **裁定与代价**：根 `Cargo.toml` 给 tokio 开 `signal` feature。TODO 当时写的「不新增包」是错的——unix 上它引入 `signal-hook-registry`（Apache-2.0/MIT，deny 表内），依赖数 496 → 497。这一条如实记在这里。
 
 **本章测试**：每个 `COMMAND_NAMES`／`QUERY_NAMES` 都在 `verbs()` 里（这就是「投影而非第二份清单」的可执行形式）；控制动词与 wire 动词不重名；`snake` 对 `AttachEndpoint`／`RunView` 给出预期串；空行、`/quit`、`/at <addr>`、普通文本（选中与未选中两情形）、未知动词（携最接近的几个）各得正确枚举。
 

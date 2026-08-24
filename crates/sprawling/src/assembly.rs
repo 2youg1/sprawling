@@ -1747,6 +1747,43 @@ impl RunWorker {
         Ok(())
     }
 
+    /// Closes the city in the record, so a stop somebody chose and a
+    /// stop that was a crash are different lines rather than the same
+    /// silence.
+    ///
+    /// The five sections are the city's own: what the next session must
+    /// read is the city's norms, and where it left off is the position
+    /// the ledger stands at. Written through `runtime::handoff`, which
+    /// is the one construction point for the shape - a hand-built
+    /// payload here would be a second one.
+    ///
+    /// # Errors
+    /// Propagates the handoff's refusal of an empty must-read list, and
+    /// the ledger's refusal to take the line.
+    pub(crate) fn close_city(&mut self) -> Result<(), AxError> {
+        // The city's own norm, not a building's: `city::norms` answers
+        // for a run at an address, and this line belongs to the city.
+        let mut must_read = Vec::new();
+        let city_file = self.city_root.join(city::CITY_FILE);
+        let bytes = std::fs::read(&city_file).unwrap_or_default();
+        let hash = self.cas.put(&bytes).map_err(memory::MemoryError::into_ax)?;
+        must_read.push(Locator::parse(&format!("cas:b3-{hash}"))?);
+        let standing = self.ledger.position();
+        let handoff = runtime::handoff::Handoff::new(
+            must_read,
+            "the city was closed by the person running it".to_owned(),
+            format!("the ledger stands at {}", standing.value()),
+            "an orderly close, not a crash: nothing was interrupted mid-command".to_owned(),
+            "`sprawling serve` on this directory continues from here".to_owned(),
+        )?;
+        self.note(
+            runtime::diagnostics::Level::Effect,
+            "bin::assembly",
+            "the city is closing; its handoff is on the ledger",
+        );
+        self.record(EventKind::HandoffWritten, handoff.payload()?)
+    }
+
     /// Appends one city record and folds it into the worker's own book.
     /// The append comes first: the book states what the history says,
     /// never what the process hoped to write.
@@ -3996,6 +4033,10 @@ fn local_model_facts(model: &str) -> Result<gateway::ModelEntry, AxError> {
 pub(crate) struct CommandDesk {
     queue: std::sync::Mutex<std::collections::VecDeque<Posted>>,
     arrived: std::sync::Condvar,
+    /// Set once, by whoever decided the city stops. Read at the same
+    /// point the queue is read, so a close lands between commands and
+    /// never inside one.
+    closing: std::sync::atomic::AtomicBool,
 }
 
 /// A command and the address its refusal goes back to.
@@ -4014,6 +4055,10 @@ struct Posted {
 enum DeskWait {
     Command(Posted),
     Idle,
+    /// A person chose to stop. Distinct from `Gone`, which is the desk
+    /// itself breaking: one of these deserves a handoff and the other is
+    /// a city that can no longer write one.
+    Close,
     Gone,
 }
 
@@ -4027,7 +4072,21 @@ impl CommandDesk {
         CommandDesk {
             queue: std::sync::Mutex::new(std::collections::VecDeque::new()),
             arrived: std::sync::Condvar::new(),
+            closing: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    /// Says the city is stopping, and wakes the worker so it hears.
+    ///
+    /// Not a Command: closing is not something a peer asks the city for,
+    /// it is the process's own end, and a wire frame that could spell it
+    /// would be a stranger's way to stop somebody's city. The worker
+    /// reads it where it reads the queue, so whatever is running
+    /// finishes first.
+    pub(crate) fn close(&self) {
+        self.closing
+            .store(true, std::sync::atomic::Ordering::Release);
+        self.arrived.notify_all();
     }
 
     pub(crate) fn post(&self, command: channels::Command, reply: channels::Reply) {
@@ -4046,12 +4105,19 @@ impl CommandDesk {
         let Ok(mut queue) = self.queue.lock() else {
             return DeskWait::Gone;
         };
+        // Work already accepted is finished first: a close that dropped
+        // a queued command would make "stopped" and "lost" the same
+        // thing in the record.
         if let Some(command) = queue.pop_front() {
             return DeskWait::Command(command);
+        }
+        if self.closing.load(std::sync::atomic::Ordering::Acquire) {
+            return DeskWait::Close;
         }
         match self.arrived.wait_timeout(queue, patience) {
             Ok((mut queue, _)) => match queue.pop_front() {
                 Some(command) => DeskWait::Command(command),
+                None if self.closing.load(std::sync::atomic::Ordering::Acquire) => DeskWait::Close,
                 None => DeskWait::Idle,
             },
             Err(_) => DeskWait::Gone,
@@ -4274,7 +4340,7 @@ pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
     let (ready_tx, ready_rx) = mpsc::sync_channel::<Result<(), AxError>>(0);
     let worker_root = city_root.to_path_buf();
     let to_clients = events.clone();
-    std::thread::Builder::new()
+    let worker_thread = std::thread::Builder::new()
         .name("sprawling-runs".to_owned())
         .spawn(move || {
             let mut worker = match RunWorker::new(&worker_root, vault, log) {
@@ -4318,6 +4384,12 @@ pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
                         if let Ok(now) = now_ms() {
                             let _ = worker.tick(now);
                         }
+                    }
+                    DeskWait::Close => {
+                        if let Err(err) = worker.close_city() {
+                            eprintln!("the city could not write its handoff: {err}");
+                        }
+                        break;
                     }
                     DeskWait::Gone => break,
                 }
@@ -4409,7 +4481,36 @@ pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
         let watching = config.events.subscribe();
         crate::console::start(terminal, console_desk, watching);
     }
-    channels::serve(config).await
+    // Ctrl-C used to be a process death: `sprawling resume` recovered
+    // it, and a stop somebody chose and a stop that was a crash left the
+    // same silence in the record. The listener stops accepting first,
+    // then the worker is told - it reads that where it reads its queue,
+    // so whatever command is running finishes and the handoff is the
+    // last line rather than a line in the middle of one.
+    let served = tokio::select! {
+        result = channels::serve(config) => result,
+        signal = tokio::signal::ctrl_c() => {
+            // A signal handler that cannot be installed is worth saying
+            // out loud: the city keeps serving, and the person now knows
+            // that Ctrl-C will be the hard stop it always was.
+            signal.map_err(|source| {
+                AxError::failure(
+                    AxCode::StorageFatal,
+                    "listen for an orderly close",
+                    source.to_string(),
+                )
+                .with_recovery("stop the city from the console instead; /quit closes it")
+            })
+        }
+    };
+    desk.close();
+    // Joined rather than left to the process exit: the handoff is
+    // written by that thread, and a main that returned first would end
+    // the process before the line it exists to write.
+    if let Err(panicked) = worker_thread.join() {
+        eprintln!("the run worker ended abnormally: {panicked:?}");
+    }
+    served
 }
 
 #[cfg(test)]
@@ -7108,6 +7209,67 @@ addr = \"gone/room1\"
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
         );
+    }
+
+    /// A stop somebody chose and a stop that was a crash left the same
+    /// silence in the record: `sprawling resume` recovered both, and
+    /// nothing said which had happened.
+    #[test]
+    fn a_city_that_is_closed_says_so_before_it_stops() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        worker.close_city().unwrap();
+
+        let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let last = verified
+            .raw_lines()
+            .last()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .expect("the ledger has a last line");
+        assert!(last.contains("handoff_written"), "{last}");
+        assert!(
+            last.contains("closed by the person"),
+            "the record does not say the stop was chosen: {last}"
+        );
+        assert!(
+            last.contains("cas:b3-"),
+            "the next session is not told what to read first: {last}"
+        );
+    }
+
+    /// Work already accepted finishes first: a close that dropped a
+    /// queued command would make "stopped" and "lost" the same thing in
+    /// the record.
+    #[test]
+    fn a_close_lands_between_commands_and_never_inside_one() {
+        let desk = CommandDesk::new();
+        desk.post(
+            channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            },
+            channels::Reply::nowhere(),
+        );
+        desk.close();
+
+        assert!(
+            matches!(
+                desk.wait(std::time::Duration::from_millis(1)),
+                DeskWait::Command(_)
+            ),
+            "the queued command was dropped by the close"
+        );
+        assert!(matches!(
+            desk.wait(std::time::Duration::from_millis(1)),
+            DeskWait::Close
+        ));
     }
 
     /// The live page could see nothing from before it opened, because

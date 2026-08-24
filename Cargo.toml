@@ -62,7 +62,7 @@ zeroize = "1.9"
 # consumer in the workspace - S3 deferred tokio to here on purpose. axum
 # carries tokio-tungstenite itself, so the WS protocol has one version
 # authority, not two.
-tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "signal", "sync", "time"] }
 axum = "0.8"
 # P3: the second client of the wire, in a terminal. This is the same
 # crate axum's `ws` feature already carries - a direct dependency adds no
