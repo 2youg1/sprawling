@@ -72,7 +72,7 @@ The directory tree on disk *is* the space: a **City** is a directory tree, a pro
 
 1. Download the archive for your system from the [latest release](../../releases/latest).
 2. Unpack it anywhere.
-3. Run **`sprawling.exe`** (Windows: double-click it) or **`./sprawling`** (macOS, Linux). It asks one question before it creates anything.
+3. Run **`sprawling.exe`** (Windows: double-click it) or **`./sprawling`** (macOS). Linux archives are not built in this release. It asks one question before it creates anything.
 
 That is the whole install. Nothing is registered, and nothing outside that folder is written to—delete the folder and it is gone. A console window opens and stays open: **that window is the city**. Your browser opens at `http://127.0.0.1:8787`; if it doesn’t, open the address yourself. `Ctrl-C` in the window stops the city.
 

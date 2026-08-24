@@ -72,7 +72,7 @@ Agent记忆的确是实现RSI很重要的途径，但不是依靠Harness做注�
 
 1. 从 [latest release](../../releases/latest) 下载对应系统的压缩包。
 2. 解压到任意位置。
-3. 运行 **`sprawling.exe`**（Windows 直接双击）或 **`./sprawling`**（macOS、Linux）。它在建任何东西之前先问你一句。
+3. 运行 **`sprawling.exe`**（Windows 直接双击）或 **`./sprawling`**（macOS）。本次发布不构建 Linux 包。它在建任何东西之前先问你一句。
 
 这就是全部安装。不写注册表，不装服务，那个文件夹之外一字不动，删掉文件夹即全部清除。会弹出一个控制台窗口并一直开着：**那个窗口就是那座城**。浏览器会自己打开 `http://127.0.0.1:8787`；没打开就自己输这个地址。在那个窗口按 `Ctrl-C` 停城。
 

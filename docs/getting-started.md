@@ -8,7 +8,7 @@
 
 A desktop browser and the `sprawling` binary. Nothing else — no npm, no node, no language runtime, no database.
 
-The quickest way to both: take the archive for your system from the [latest release](../../../releases/latest), unpack it, and run the binary with no arguments — double-click `sprawling.exe` on Windows, `./sprawling` on macOS and Linux. With no command it asks whether to start a city here, showing the folder it is about to create, and then does steps 1 and 2 below in one go and opens the page for you; come back here at step 3. To make `sprawling` a word your shell resolves, run `sprawling install` once. The rest of this walkthrough uses the commands, because knowing them is what lets you run a second city, move one between machines, or drive it from a script.
+The quickest way to both: take the archive for your system from the [latest release](../../../releases/latest), unpack it, and run the binary with no arguments — double-click `sprawling.exe` on Windows, `./sprawling` on macOS. (Linux archives are not built in this release.) With no command it asks whether to start a city here, showing the folder it is about to create, and then does steps 1 and 2 below in one go and opens the page for you; come back here at step 3. To make `sprawling` a word your shell resolves, run `sprawling install` once. The rest of this walkthrough uses the commands, because knowing them is what lets you run a second city, move one between machines, or drive it from a script.
 
 You also need one model to call. Either an API key for a provider that speaks the OpenAI or the Anthropic dialect, or a local server that speaks one of them.
 

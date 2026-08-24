@@ -21,11 +21,11 @@ permissions:
 jobs:
   # Nothing is built for release out of a tree that has not passed.
   #
-  # Windows, and only Windows, because the three platforms are already
-  # covered between them and paying twice for one of them buys nothing:
-  # `ci.yml` runs the whole of `just check` on Linux for every push, and
-  # `platforms.yml` runs it on all three every night. Windows is the one
-  # a tag would otherwise reach without a run of its own.
+  # Windows, and only Windows: the archives this release ships are the
+  # Windows and macOS ones, and this job runs the same check the person
+  # develops against, so a red release verify is a red local `just check`
+  # reproduced exactly. Linux is deliberately not part of this release
+  # (see the archive job below).
   verify:
     runs-on: windows-latest
     steps:
@@ -57,22 +57,28 @@ jobs:
         run: cargo xtask gates
       # See ci.yml: the cache's save step cannot walk trybuild's scratch,
       # and a job whose every gate was green reported failure because of
-      # it. This is the whole of release #5's `verify` failure.
+      # it. This is the whole of release #5's `verify` failure, and it
+      # bites again whenever the step runs in PowerShell, where `rm -rf`
+      # is not a legal invocation - so the shell is named, as it already
+      # is in platforms.yml.
       - name: clear the trybuild scratch before the cache is saved
         if: always()
+        shell: bash
         run: rm -rf target/tests
 
-  # Three platforms. Linux was on hold while nobody could run the result;
-  # it comes back on the ruling that CI is where it gets exercised, and
-  # the ubuntu `check` job has been building and testing this workspace
-  # on every push since C1 - so the archive is the only untested step.
+  # Two platforms. Linux is deliberately out of this release: its
+  # archive was the one job nobody could run the result of on the machine
+  # the project is developed on, and the person ruled it out of the
+  # pipeline rather than debug a platform they cannot see. The macOS and
+  # Windows archives are the product; the ubuntu `check` job that used
+  # to gate every push is gone with it.
   # Archive does not wait for verify: the two are independent, publish
   # waits for both, and the wall clock is the slower one instead of the sum.
   archive:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

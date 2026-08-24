@@ -53,7 +53,10 @@ jobs:
         run: rm -rf target/tests
 
   kani:
-    # V5: the kernel harnesses (cfg(kani)); Linux-only upstream.
+    # V5: the kernel harnesses (cfg(kani)); Linux-only upstream - the one
+    # ubuntu job left in the pipeline, kept because it works and because
+    # there is no other platform the tool runs on. Everything else moved
+    # to the platform the project is developed on.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

@@ -42,7 +42,6 @@ Two residents in one building negotiated six hours of kiln time to a written agr
 |---|---|---|
 | Windows | `sprawling-*-windows-x86_64.zip` | double-click `start.cmd` |
 | macOS | `sprawling-*-macos-aarch64.zip` | `./start.sh` in a terminal |
-| Linux | `sprawling-*-linux-x86_64.zip` | `./start.sh` in a terminal |
 
 A console window opens and stays open — **that window is the city**. Your browser opens at <http://127.0.0.1:8787>. `Ctrl-C` in the window stops the city.
 
@@ -53,6 +52,8 @@ A console window opens and stays open — **that window is the city**. Your brow
 `QUICKSTART.md` inside the archive walks the first ten minutes. Every archive also carries `sbom.cdx.json`, the full bill of materials for the binary beside it.
 
 ## Known before you start
+
+- **Linux archives are not built in this release** — the Linux pipeline was ruled out rather than debugged; Windows and macOS are what this release ships.
 
 - **Nobody has driven this client in a real browser.** Every capability above was verified through the wire protocol, which is a debugging door rather than the product. The face you will judge this by is the least-tested part of it.
 - **First-run has two steps that are easy to miss**: after attaching a provider you must pick a model for `main` *and* for `digest`, or every dispatch is refused with `no model is chosen for this tag`.

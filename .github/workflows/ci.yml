@@ -1,12 +1,12 @@
 # The gate a change closes on, run by a machine.
 #
-# One Linux job carries the whole of `just check`, with its steps ordered
-# cheap-to-expensive so the first real verdict arrives in seconds rather
-# than at the end. The other two platforms and the kani harnesses moved to
-# `platforms.yml`, which runs nightly: they answer a different question
-# (does this hold on every machine) from the one a push asks (did I break
-# something), and paying for the first on every push is what made the
-# second take half an hour.
+# One Windows job carries the whole of `just check` - the same platform
+# the project is developed on, so a red job is the red local run the
+# person can reproduce - with its steps ordered cheap-to-expensive so the
+# first real verdict arrives in seconds rather than at the end. macOS is
+# covered by `platforms.yml` nightly. Linux is deliberately out of the
+# pipeline: the person ruled it out rather than debug a platform they
+# cannot see, and nothing in this release ships a Linux artifact.
 #
 # C1 note: GitHub Actions infrastructure is not part of the artifact build
 # chain; the zero-js gate asserts our own commands never invoke npm/node.
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       # `guard` and `apisync` read git history, so the whole of it is
       # fetched rather than the single commit a shallow checkout gives.
@@ -86,13 +86,14 @@ jobs:
       # lost by clearing it and the cache stops tripping over it.
       - name: clear the trybuild scratch before the cache is saved
         if: always()
+        shell: bash
         run: rm -rf target/tests
 
   # The two places `just check` cannot reach, and so far neither could CI:
   # web's wasm-only paths, and channels built without its server feature.
   # Cheap, and parallel to the job above, so it costs no wall clock.
   web:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - name: install pinned toolchain
@@ -114,7 +115,7 @@ jobs:
   # a reason that has nothing to do with it, which is how people learn to
   # ignore a red build. It runs nightly, where red means "go and look".
   supply:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - uses: taiki-e/install-action@v2
