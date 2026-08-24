@@ -142,13 +142,15 @@ This is the path everything else supports. Following it once explains more than 
 3. **`bin::assembly` turns it into work.** This is the only place that samples the clock, so the timestamp enters as a parameter from here on. A worker takes the dispatch.
 4. **The city writes `run_started` before anything happens.** Every effect becomes an event first; that ordering is the design's load-bearing rule, not a logging preference.
 5. **`runtime::prefix` assembles the frozen prefix** in four segments — city, building, resident, run — from `city::spine_files`, `city::policy` and `city::resident`. Assembling it is itself an event, and the result is frozen for the whole run.
-6. **`runtime::catalog` decides what the model may see**: the three built-in tools, the collaboration tools this building admits, the skills its reading room allows, and any MCP tools discovered from the building's `CONFIG.toml`.
+6. **`runtime::catalog` decides what the model may see**: the three built-in tools, the collaboration tools this building admits, the skills its reading room allows, and any MCP tools discovered from the building's `CONFIG.toml`. `city::neighbourhood` is scanned in the same breath, so the run also knows which addresses it can reach and who stands at them — without it, `signal` takes an address the model has to have been told.
 7. **`runtime::turn` enters its typestate**: Assembling → Calling → Applying → Settling, with four cancellation-safe points. An interruption inside a phase cannot be spelled.
 8. **`gateway` makes the call.** `gateway::router` picks the endpoint attached to this tag; `gateway::dialect` translates the canonical Anthropic-shaped conversation into the provider's dialect; `gateway::credential` redeems a `secret:realm/name` reference into a header at the last moment; `gateway::admission` holds the provider's concurrency limit.
 9. **The reply is scanned before it is recorded.** `runtime::redact` puts model output through the same secret scan as everything else, so a key a model repeated does not become permanent.
 10. **Tools run behind gates.** `kernel::gate` answers with an exhaustive verdict — allowed, refused in three parts, or escalated to a person. `memory::checkpoint` puts a git fence before the wave and scans the worktree after it, so anything that disappeared becomes a `file_discarded` event carrying the way back.
 11. **The result comes back shaped.** `runtime::pipeline` builds the result envelope — clock stamp, network reminder, any steer a person sent — and `runtime::compaction` shortens what is too long, always reporting how much it dropped.
 12. **Everything lands in the Ledger, and the views follow.** `memory::hot`, `memory::projection` and `memory::attribution` fold the same event stream into what the pages ask for. The server pushes each event; `web::app` folds it into a `Snapshot`. The same fold, on both sides of the wire.
+
+13. **A signal reaches whoever it names, working or not.** After the run freezes, each signal it sent is recorded and then delivered. A steer-kind signal slips under the door of a run that is already going, landing at that run's next safe point with `@` and the sender's address in front of it; anyone else who was spoken to is *knocked* — `bin::assembly` starts a run for them, whose brief names the resident who spoke. Only the person's own entrance can render as `user`, which is what makes an answer go to the right place. A knock addresses a resident, never a frozen run: history is read, not woken.
 
 When the process dies mid-call, `sprawling resume` verifies the chain, closes tool calls whose outcome was lost as *unknown* rather than as failed, and reports what waits for a person.
 
@@ -292,7 +294,7 @@ Ten layers, each catching what the layer above cannot. They deliberately do not 
 |---|---|---|
 | V0 unrepresentable | a whole class of error moved out of what can be written | 15 compile-failure counterexamples |
 | V1 types and lints | null, overflow, silent truncation, hidden panics | workspace lints, `-D warnings`, `--all-features` |
-| V2 unit and property | a function wrong across a class of inputs | 915 tests, properties before examples |
+| V2 unit and property | a function wrong across a class of inputs | 1,085 tests, properties before examples |
 | V3 conformance | a second adapter behaving unlike the first | one suite per port |
 | V4 fuzz | parsers meeting hostile bytes | three targets: address, locator, truncated ledger tail |
 | V5 formal | termination, absence of overflow, monotonicity | 11 kani harnesses, Linux CI |
@@ -318,13 +320,13 @@ Sizes are gated because a byte count does not depend on how busy the machine was
 
 | Metric | Budget | Measured | Gated |
 |---|---|---|---|
-| Client bundle, gzipped | ≤2 MB | 461,921 B — 4.5× headroom | yes |
-| The installed binary | ≤128 MB | 7,676,416 B, client included | yes |
+| Client bundle, gzipped | ≤2 MB | 558,419 B — 3.8× headroom | yes |
+| The installed binary | ≤128 MB | 8,620,032 B, client included | yes |
 | Resident memory, one session | ≤30 MB | 4.3 MB idle, 7.8 MB running a real run | no: the counter means something different on each platform |
 | Ledger append plus fsync | p50 ≤5 ms, p99 ≤20 ms | 0.97 ms / 1.61 ms on one NVMe machine | no |
 | Projection rebuild | ≥50,000 records/s | about 493,000 records/s on the same machine | no |
 | Prefix assembly | ≤1 ms | 0.022 ms for 16.5 KB over four slots | no |
-| Catalog, in the Resident segment | none stated | 1,070 B for eight tools and one mode, on one real dispatch | no: what a building admits is the building's, and a reading room with more in it is not a defect |
+| Resident segment, catalog included | none stated | 815 B on one real dispatch, with thirteen tools admitted | no: what a building admits is the building's, and a reading room with more in it is not a defect |
 | Kernel mutation score | ≥90% | by `just mutants` | by that command, not by `just check` |
 
 The two size rows are also rendered as the badges in `README.md`, from this same reading — `cargo xtask badge --write`, which `just dist` ends with. Nobody types a size into a document.
@@ -422,7 +424,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | runtime::tools::exec | crates/runtime/src/tools/exec.rs | the exec tool: three arms, each with its own failure story | adapter | S3 | built |
 | runtime::tools::read | crates/runtime/src/tools/read.rs | the read tool: a path the reserved subtree closes, or a name the reading room opens | adapter | P6 | built |
 | runtime::tools::edit | crates/runtime/src/tools/edit.rs | the edit tool: optimistic concurrency against the version the caller read | adapter | S3 | built |
-| runtime::tools::status | crates/runtime/src/tools/status.rs | the model's view of its own situation, in twelve fields | adapter | S3 | built |
+| runtime::tools::status | crates/runtime/src/tools/status.rs | the model's view of its own situation, in thirteen fields | adapter | S3 | built |
 | runtime::run | crates/runtime/src/run.rs | the run driver: dispatch, turns, freeze — one authority for the loop | typestate | P1 | built |
 | runtime::diagnostics | crates/runtime/src/diagnostics.rs | the diagnostic log: write-only, five levels, anchored to a Ledger position | adapter | P1 | built |
 
@@ -447,7 +449,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | collab::workshop_tool | crates/collab/src/workshop_tool.rs | the face a workshop shows a model: lay out, ask the join, judge it | adapter | P1 | built |
 | collab::triage | crates/collab/src/triage.rs | where something from outside lands, and whether it starts work | decision | P3 | built |
 
-### city (12) — space, identity, and the documents a building keeps
+### city (14) — space, identity, and the documents a building keeps
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -463,6 +465,8 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | city::room | crates/city/src/room.rs | which room a named session works in, and how a new one comes into being | decision | F2 | built |
 | city::watch | crates/city/src/watch.rs | what the city is listening to, and which building answers | value | P4 | built |
 | city::wizard | crates/city/src/wizard.rs | starting a city, and moving a resident inside one | decision | P4 | built |
+| city::neighbourhood | crates/city/src/neighbourhood.rs | which addresses a run can reach and who stands at them, in less detail the further away they are | decision | P3 | built |
+| city::neighbours_tool | crates/city/src/neighbours_tool.rs | the face the neighbourhood shows a model: this building's addresses, or the city's buildings by name | adapter | P3 | built |
 
 ### eval (4) — whether a change made the city better
 

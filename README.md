@@ -52,6 +52,8 @@ The directory tree on disk *is* the space: a **City** is a directory tree, a pro
 
 **One address freezes four things at once.** `lab/room1` tells you where the files live, which files this agent may write, what context it starts with, and whom it reports to. These four never need a mechanism to stay consistent—they are the same fact.
 
+**Agents find each other and speak without you relaying.** A run can ask who shares its building and gets back every address it can reach, each with the line that resident's own `URBANITE.md` offers about what to bring them—so "who do I talk to" has an answer that is not a guess. Speaking to somebody who is working slips the message under their door: it lands at the end of their next tool result. Speaking to somebody who is not starts a run for them. Either way the message arrives labelled `@` and the sender's address, which is also the address that answers it—**a resident can never render as you**, and that is a property of the type rather than a convention.
+
 **The Ledger is the only history.** Every effect first becomes an event, then becomes an effect. Every view in the UI is a projection of that event stream: delete one, rebuild from the Ledger, and the bytes match. Change a single byte in the log and chain verification reports the line number and refuses to proceed.
 
 **Deletion comes with its own undo path.** The type that means “discard a file” has no constructor without a Restoration—“deleted and gone forever” is not rejected at runtime; it cannot even be written. Every row in the recycle bin carries the exact sentence that can restore it.
@@ -103,11 +105,13 @@ Four steps on the page, roughly ten seconds:
 1. **settings** — enter the provider’s base URL, dialect (OpenAI or Anthropic), and key. The key goes straight into the OS credential store; thereafter the page only ever sees a reference of the form `secret:realm/name`.
 2. On the same page, pick models by role: `main` does the thinking, `digest` reads long documents for it.
 3. **city** — raise a building.
-4. The control surface at the bottom — address, what should be produced, what counts as done. **It never asks for a budget**: no one can price a job before it runs, and subscriptions have no unit price anyway. Actual spend is reported from the record afterwards.
+4. The control surface at the bottom — address, what should be produced, what counts as done. **It never asks for a budget**: nobody can price a job before it runs, and subscriptions have no unit price anyway. Actual spend is reported from the record afterwards. **Nothing rations a conversation either** — when agents wake each other, how long they go on is theirs to decide. What bounds a single run is its turn limit.
 
 Other commands:
 
 ```bash
+sprawling install [--uninstall]     # make `sprawling` a word your shell resolves, or take it back off
+sprawling enrol <realm>/<name>      # read a credential from stdin into the OS store; it never touches the command line
 sprawling resume <city-dir>         # after a restart: verify the chain, close tool calls whose results are lost, report who is waiting for a human
 sprawling fork <city> <run> <seq>   # branch a lineage from a given step of a Run
 sprawling adopt <city> <dir>        # absorb an existing directory as a building without overwriting any files
@@ -136,16 +140,14 @@ The rest of the vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 ## What works / what doesn’t
 
-**Works**, each backed by an end-to-end assertion or a real measurement: register a provider and select models; raise a building and dispatch work; the model actually calls tools and writes files into that building; attach an external MCP server to a building; multiple agents working concurrently, each with its own git worktree, changes only merge back after others have reviewed them (this is a compile error, not a rule); ten pages (city, live, approvals, recycle bin, archive, cost, ledger, building, room mailbox, settings); pause a city and release it; offline chain verification; export a city and restore it on another machine.
-
-**Built but never seen the real thing**: hosted MCP servers, real subscription login, real inbound ACP requests over HTTP. All three chains have only been verified against servers we wrote ourselves—that proves the chain, not the far side. Anthropic dialect once hung on a live call and never returned; root cause still unknown. OpenAI dialect is clean.
+**Works**, each backed by an end-to-end assertion or a real measurement: register a provider and select models; raise a building and dispatch work; the model actually calls tools and writes files into that building; **residents find each other, speak, and wake each other without a person relaying a single message** — two of them held a price negotiation to a written agreement against a real provider; attach an external MCP server to a building; multiple agents working concurrently, each with its own git worktree, changes only merge back after others have reviewed them (this is a compile error, not a rule); ten pages (city, live, approvals, recycle bin, archive, cost, ledger, building, room mailbox, settings); pause a city and release it; offline chain verification; export a city and restore it on another machine.
 
 **Not done, and why**:
 
 | Missing piece | Reason |
 |---|---|
 | OS-level sandbox | Requires per-platform work; only one-third can be verified on this machine. Unverified isolation is worse than none, because people will treat it as a defense. Today’s claim is therefore “a deletion can be undone,” not “a deletion cannot happen.” |
-| Browser end-to-end in CI | The loop is a local command, not a gate. |
+| Browser end-to-end in CI | The loop is a local command, not a gate. **Nobody has driven this release's client in a real browser** — every session behind the claims above went through the wire, which is a debugging door rather than the product. |
 | Reproducible builds | Fixtures are ready; the compiler flags that would make two builds byte-identical are not yet set. |
 | Attributing spend to skills | This is a decision, not a debt: a tool call does not happen “under” a skill—a skill is a disclosure line in the prefix, not call context. Charging by skill would invent a metric. |
 
@@ -208,4 +210,5 @@ Connections to external applications are likewise outsourced: the city speaks MC
 MPL-2.0 — see [`LICENSE`](LICENSE).
 
 ---
-If you want any section more aggressive / more modest / shorter for X promotion, just say the word and I’ll adjust.
+
+Questions, bug reports and disagreements are all welcome—open an issue, or write to the address on my profile.
