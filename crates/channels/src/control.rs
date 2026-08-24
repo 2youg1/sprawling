@@ -63,7 +63,7 @@ pub enum ControlVerdict {
 
 /// Classifies one Command.
 ///
-/// Pure and exhaustive: every one of the twenty Commands is answered, so
+/// Pure and exhaustive: every one of the Commands is answered, so
 /// a new Command cannot be added without deciding whether it interrupts
 /// anything. That question is the reason this module is not part of the
 /// listener - the listener could not answer it, and would not know it had
@@ -91,6 +91,7 @@ pub fn classify(command: &Command) -> ControlVerdict {
         Command::Release { .. } => scope_intervention(Intervention::Release),
         Command::Dispatch { .. }
         | Command::Wake { .. }
+        | Command::ProbeEndpoint { .. }
         | Command::AttachEndpoint { .. }
         | Command::SelectModel { .. }
         | Command::Login { .. }

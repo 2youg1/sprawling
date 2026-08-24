@@ -14,7 +14,7 @@ kernel 是纯判定函数层：只吃入参吐 verdict，零内部 crate 依赖�
 | S1.01 | `error` | 2 值类型＋6 数据面 | AxError 七字段；AxCode 35（S2 期初增 `E_STORAGE_FATAL`；P3.01 删 `E_SIGNAL_UNKNOWN`）；carrier 声明位 |
 | S1.02 | `address` | 2 值类型 | 相对 city root 路径 newtype；WriteDomain 原语；reserved prefix 判定 |
 | S1.02 | `locator` | 2 值类型 | `cas:`／`file:` 文法解析与呈现；fail-closed |
-| S1.03 | `event` | 2 值类型 | EventKind 60（S1.03 建 55，P2.09 增 `autonomy_changed`，P4.01 增 roadmap 三件，R1.14 增 `login_started`）；in-window／record-only 二分；EventRecord 规范字节；EventRef 私有铸造 |
+| S1.03 | `event` | 2 值类型 | EventKind 61（S1.03 建 55，P2.09 增 `autonomy_changed`，P4.01 增 roadmap 三件，R1.14 增 `login_started`，P3.01 增 `endpoint_probed`）；in-window／record-only 二分；EventRecord 规范字节；EventRef 私有铸造 |
 | S1.04 | `version` | 2 值类型 | 乐观并发：Version 单调值＋base 新鲜度判定 |
 | S1.04 | `idem` | 2 值类型 | IdemKey 确定性派生（BLAKE3 XOF 16 字节＋版本字节） |
 | S1.05 | `consts_external` | 6 数据面 | 外部事实常量 5 项 |
@@ -38,7 +38,7 @@ Stage 2 落地其余 18 个 kernel 模块（§8-10…§8-27）。**施工序＝�
 ## 2 验收标准
 
 - 每模块单测过 workspace lints（非测试代码零 unwrap/expect/panic/索引切片/裸算术/as）。
-- `EventKind` 60 个 variant、`AxCode` 35 个 variant 与本文 §8-4／§8-1 表逐 variant 一致（S2 起 `xtask specalign` 机器断言，本期人工核对入卡备注）。
+- `EventKind` 61 个 variant、`AxCode` 35 个 variant 与本文 §8-4／§8-1 表逐 variant 一致（S2 起 `xtask specalign` 机器断言，本期人工核对入卡备注）。
 - 每个 EventKind 恰属 in-window／record-only 之一；in-window 恰 8 件。
 - 每个 AxCode 恰有一个 carrier 声明；装载期白名单恰 5 码且封闭。
 - golden EventRecord：规范字节入 insta 快照，跨平台逐字节稳定。
@@ -322,7 +322,7 @@ pub struct EventRef { seq: Seq, kind: EventKind }   // 字段私有；无公开�
 - 铸造纪律（15.3-1）：`EventRef` 唯二铸造路径＝Ledger append 流程（适配器持刚组装的 EventRecord 调 `to_ref`）与 replay 验链后逐条 `to_ref`。字段私有使字面量伪造编译不过（S2.11 trybuild 反例）。
 - `parse_line` 是读侧唯一入口：serde 反序列化＋Payload 复验；未知 kind 在此报错（呈现语义见 runtime::replay 章——携 `ig` 的行例外）。
 
-**EventKind 60 全集与二分（specalign 数据面；「入窗」＝InWindow，共 8）**：
+**EventKind 61 全集与二分（specalign 数据面；「入窗」＝InWindow，共 8）**：
 
 | 组 | kind | 窗类 |
 |---|---|---|
@@ -374,6 +374,7 @@ pub struct EventRef { seq: Seq, kind: EventKind }   // 字段私有；无公开�
 | 治理与设施 | `backpressure_shed` | record-only |
 | 治理与设施 | `digest_invalidated` | record-only |
 | 治理与设施 | `endpoint_attached` | record-only |
+| 治理与设施 | `endpoint_probed` | record-only |
 | 治理与设施 | `endpoint_lost` | record-only |
 | 治理与设施 | `model_selected` | record-only |
 | 治理与设施 | `provider_degraded` | record-only |

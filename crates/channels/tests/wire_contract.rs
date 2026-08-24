@@ -36,17 +36,15 @@ fn exposed() -> SocketAddr {
 
 #[test]
 fn the_command_and_query_tables_hold_their_declared_counts() {
-    // Twenty commands, eleven queries: seventeen and nine from the
-    // the wire table, plus the three registration frames
-    // and the building page's read (R1.11). The count is not a style
+    // Twenty-one commands, eleven queries. The count is not a style
     // choice - it is the wire's closed surface.
-    assert_eq!(COMMAND_NAMES.len(), 20, "command table");
+    assert_eq!(COMMAND_NAMES.len(), 21, "command table");
     assert_eq!(QUERY_NAMES.len(), 11, "query table");
 
     let mut sorted = COMMAND_NAMES.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 20, "command names are distinct");
+    assert_eq!(sorted.len(), 21, "command names are distinct");
 
     let mut sorted = QUERY_NAMES.to_vec();
     sorted.sort_unstable();
@@ -81,14 +79,14 @@ fn the_schema_hash_is_stable_across_calls_and_covers_the_wire_version() {
         "schema hash changed - update channels-SPEC.md section 8-1 in the same commit"
     );
     assert_eq!(
-        WIRE_V, 6,
+        WIRE_V, 7,
         "the version rises when the grammar changes shape without a name changing"
     );
 }
 
 /// Pinned on the first green of S4.02. It is a function of WIRE_V and the two
 /// name tables, so any change to the protocol surface lands here first.
-const WIRE_SCHEMA_GOLDEN: &str = "c059c6e25bf42a0f54e1eabf74c44ed8df4c31fc579e5c64cd05012c195bcd09";
+const WIRE_SCHEMA_GOLDEN: &str = "4bb71c0be50d6e6d191151b38ceafbe9cb14222b74a5f1a701194bb2a7eab36d";
 
 // -------------------------------------------------------------- binding face
 
@@ -273,12 +271,21 @@ fn sample_of_every_command() -> Vec<Command> {
             step: channels::LoginStep::Begin,
             idem,
         },
+        Command::ProbeEndpoint {
+            name: ProviderName::parse("house").unwrap(),
+            base_url: "https://api.example.test/v1".to_owned(),
+            dialect: kernel::DialectKind::OpenAi,
+            secret: Some("secret:house/key".to_owned()),
+            auth_header: None,
+            idem,
+        },
         Command::AttachEndpoint {
             name: ProviderName::parse("house").unwrap(),
             base_url: "https://api.example.test/v1".to_owned(),
             dialect: kernel::DialectKind::OpenAi,
             secret: Some("secret:house/key".to_owned()),
             auth_header: None,
+            admit: vec!["gpt-x".to_owned()],
             idem,
         },
         Command::SelectModel {

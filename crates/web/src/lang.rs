@@ -398,6 +398,9 @@ pub enum Msg {
     SettingsKeyHint,
     SettingsPutKeyInVault,
     SettingsAttachThisProvider,
+    SettingsAskWhatItServes,
+    SettingsServes,
+    SettingsAdmitAll,
     SettingsSignIn,
     SettingsProvider,
     SettingsStartLogin,
@@ -1455,6 +1458,18 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "attach this provider",
             zh: "接上这个 provider",
         },
+        Msg::SettingsAskWhatItServes => Phrase {
+            en: "ask what it serves",
+            zh: "问它供应什么",
+        },
+        Msg::SettingsServes => Phrase {
+            en: "what it serves; tick the ones this city may use",
+            zh: "它供应的模型；勾选本城可以用的那些",
+        },
+        Msg::SettingsAdmitAll => Phrase {
+            en: "nothing ticked admits everything it serves",
+            zh: "一个都不勾即全部准入",
+        },
         Msg::SettingsSignIn => Phrase {
             en: "Sign in with a subscription",
             zh: "用订阅登录",
@@ -1864,6 +1879,9 @@ mod tests {
             Msg::SettingsKeyHint,
             Msg::SettingsPutKeyInVault,
             Msg::SettingsAttachThisProvider,
+            Msg::SettingsAskWhatItServes,
+            Msg::SettingsServes,
+            Msg::SettingsAdmitAll,
             Msg::SettingsSignIn,
             Msg::SettingsProvider,
             Msg::SettingsStartLogin,
@@ -2145,6 +2163,9 @@ mod tests {
                 | Msg::SettingsKeyHint
                 | Msg::SettingsPutKeyInVault
                 | Msg::SettingsAttachThisProvider
+                | Msg::SettingsAskWhatItServes
+                | Msg::SettingsServes
+                | Msg::SettingsAdmitAll
                 | Msg::SettingsSignIn
                 | Msg::SettingsProvider
                 | Msg::SettingsStartLogin

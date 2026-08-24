@@ -161,6 +161,10 @@ pub enum EventKind {
     BackpressureShed,
     DigestInvalidated,
     EndpointAttached,
+    /// What a base URL says it serves, asked before anything is
+    /// attached. A separate fact from `EndpointAttached`: a person may
+    /// look at what a key buys and register none of it.
+    EndpointProbed,
     EndpointLost,
     ModelSelected,
     ProviderDegraded,
@@ -187,7 +191,7 @@ pub enum WindowClass {
 impl EventKind {
     /// Every kind, in the order the SPEC table lists them. Data face for counting tests
     /// and (from S2 on) `xtask specalign`.
-    pub const ALL: [EventKind; 60] = [
+    pub const ALL: [EventKind; 61] = [
         EventKind::CityInitialized,
         EventKind::BuildingCreated,
         EventKind::RunStarted,
@@ -236,6 +240,7 @@ impl EventKind {
         EventKind::BackpressureShed,
         EventKind::DigestInvalidated,
         EventKind::EndpointAttached,
+        EventKind::EndpointProbed,
         EventKind::EndpointLost,
         EventKind::ModelSelected,
         EventKind::ProviderDegraded,
@@ -302,6 +307,7 @@ impl EventKind {
             | EventKind::BackpressureShed
             | EventKind::DigestInvalidated
             | EventKind::EndpointAttached
+            | EventKind::EndpointProbed
             | EventKind::EndpointLost
             | EventKind::ModelSelected
             | EventKind::ProviderDegraded
@@ -536,13 +542,13 @@ mod tests {
     }
 
     #[test]
-    fn event_kind_is_60_with_exactly_8_in_window() {
-        assert_eq!(EventKind::ALL.len(), 60);
+    fn event_kind_is_61_with_exactly_8_in_window() {
+        assert_eq!(EventKind::ALL.len(), 61);
         let names: BTreeSet<String> = EventKind::ALL
             .iter()
             .map(|k| serde_json::to_string(k).unwrap())
             .collect();
-        assert_eq!(names.len(), 60, "serde spellings must be unique");
+        assert_eq!(names.len(), 61, "serde spellings must be unique");
         let in_window: Vec<EventKind> = EventKind::ALL
             .into_iter()
             .filter(|k| k.window_class() == WindowClass::InWindow)

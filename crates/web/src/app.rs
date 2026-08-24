@@ -168,6 +168,11 @@ pub struct Snapshot {
     /// than in the page because the fact arrives as an event, and every
     /// other fact that arrives as an event is folded here.
     login_url: Option<String>,
+    /// What each base URL answered when somebody asked what it serves,
+    /// keyed by that URL. Held here rather than in the settings page for
+    /// the reason `login_url` is: it arrives as an event, and every fact
+    /// that arrives as an event is folded in one place.
+    served: BTreeMap<String, Vec<String>>,
     halted: bool,
     /// How many signal events have gone by. A count, never the queue: a
     /// page that folded the queue here would be a second answer to what
@@ -248,6 +253,13 @@ impl Snapshot {
     #[must_use]
     pub fn login_url(&self) -> Option<&str> {
         self.login_url.as_deref()
+    }
+
+    /// What each probed base URL serves. The settings page ticks from
+    /// this list; an empty map is a city where nobody has asked yet.
+    #[must_use]
+    pub fn served(&self) -> &BTreeMap<String, Vec<String>> {
+        &self.served
     }
 
     #[must_use]
@@ -383,6 +395,23 @@ impl Snapshot {
             EventKind::ProviderDegraded => self.provider = ProviderHealth::Degraded,
             EventKind::EndpointLost => self.provider = ProviderHealth::Lost,
             EventKind::EndpointAttached => self.provider = ProviderHealth::Healthy,
+            EventKind::EndpointProbed => {
+                let data = event.data();
+                let map = data.as_map();
+                if let Some(base_url) = map.get("base_url").and_then(serde_json::Value::as_str) {
+                    let models = map
+                        .get("models")
+                        .and_then(serde_json::Value::as_array)
+                        .map(|list| {
+                            list.iter()
+                                .filter_map(serde_json::Value::as_str)
+                                .map(str::to_owned)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    self.served.insert(base_url.to_owned(), models);
+                }
+            }
             // Skipped on purpose - see the module note. A view models what
             // it can show; the Ledger keeps everything either way.
             _ => {}
@@ -1090,6 +1119,7 @@ pub fn Root(
                         crate::settings::Settings {
                             answer: endpoints.clone(),
                             login_url: snapshot.login_url().map(str::to_owned),
+                            served: snapshot.served().clone(),
                             live,
                             on_frame,
                         }

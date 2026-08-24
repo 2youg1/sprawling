@@ -128,6 +128,7 @@ pub fn web::Snapshot::provider(&self) -> web::ProviderHealth
 pub fn web::Snapshot::resume_from(&self) -> core::option::Option<kernel::event::Seq>
 pub fn web::Snapshot::run(&self, &kernel::event::RunId) -> core::option::Option<&web::RunRow>
 pub fn web::Snapshot::runs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&kernel::event::RunId, &web::RunRow)>
+pub fn web::Snapshot::served(&self) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<alloc::string::String>>
 pub fn web::Snapshot::signals_seen(&self) -> u64
 pub fn web::Snapshot::spent(&self) -> kernel::budget::UsdMicros
 pub fn web::Snapshot::unreadable_approvals(&self) -> u32
@@ -268,6 +269,7 @@ pub web::AlertKind::AwaitingApproval
 pub web::AlertKind::ProviderTrouble
 pub web::AlertKind::Refused
 pub web::AlertKind::RunFrozen
+pub web::AttachForm::admit: alloc::vec::Vec<alloc::string::String>
 pub web::AttachForm::base_url: alloc::string::String
 pub web::AttachForm::dialect: core::option::Option<kernel::model::DialectKind>
 pub web::AttachForm::name: alloc::string::String
@@ -574,6 +576,8 @@ pub web::Msg::ReadIt
 pub web::Msg::ReleaseCity
 pub web::Msg::RouteNoSuchPage
 pub web::Msg::RouteNoSuchPageRecovery
+pub web::Msg::SettingsAdmitAll
+pub web::Msg::SettingsAskWhatItServes
 pub web::Msg::SettingsAsking
 pub web::Msg::SettingsAskingWhat
 pub web::Msg::SettingsAttachIt
@@ -617,6 +621,7 @@ pub web::Msg::SettingsProvider
 pub web::Msg::SettingsPutKeyInVault
 pub web::Msg::SettingsReadItAgain
 pub web::Msg::SettingsScope
+pub web::Msg::SettingsServes
 pub web::Msg::SettingsSignIn
 pub web::Msg::SettingsSource
 pub web::Msg::SettingsStartLogin

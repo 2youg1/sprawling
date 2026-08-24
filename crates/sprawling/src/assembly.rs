@@ -1633,6 +1633,7 @@ impl RunWorker {
                     dialect_of(provider)?,
                     Some(access.to_string()),
                     None,
+                    &[],
                 )
             }
         }
@@ -1706,7 +1707,13 @@ impl RunWorker {
     /// it serves. The probe happens before the record: an endpoint that
     /// cannot be reached is not attached, so the book never advertises a
     /// model nobody can call.
-    fn attach_endpoint(
+    /// Asks a base URL what it serves, and attaches nothing.
+    ///
+    /// The list is recorded rather than returned: a query would have to
+    /// make this blocking call on the socket's own task, and the answer
+    /// is a fact about what this city can reach - which is the kind of
+    /// thing the ledger holds.
+    fn probe_endpoint(
         &mut self,
         name: String,
         base_url: String,
@@ -1714,6 +1721,41 @@ impl RunWorker {
         secret: Option<String>,
         auth_header: Option<String>,
     ) -> Result<(), AxError> {
+        let endpoint = self.endpoint_of(name, base_url, dialect, secret, auth_header)?;
+        let models = self.probe(&endpoint)?;
+        let mut map = serde_json::Map::new();
+        map.insert(
+            "name".to_owned(),
+            serde_json::Value::String(endpoint.name.clone()),
+        );
+        map.insert(
+            "base_url".to_owned(),
+            serde_json::Value::String(endpoint.base_url.clone()),
+        );
+        map.insert(
+            "models".to_owned(),
+            serde_json::Value::Array(
+                models
+                    .iter()
+                    .map(|id| serde_json::Value::String(id.clone()))
+                    .collect(),
+            ),
+        );
+        self.record(EventKind::EndpointProbed, Payload::new(map)?)
+    }
+
+    /// The endpoint a form describes, before anybody has asked it
+    /// anything. One reading of the four fields, so a probe and the
+    /// attachment that follows it cannot disagree about what they are
+    /// talking to.
+    fn endpoint_of(
+        &self,
+        name: String,
+        base_url: String,
+        dialect: kernel::DialectKind,
+        secret: Option<String>,
+        auth_header: Option<String>,
+    ) -> Result<gateway::AttachedEndpoint, AxError> {
         let auth = match secret {
             None => gateway::AuthSpec::None,
             Some(raw) => {
@@ -1727,14 +1769,45 @@ impl RunWorker {
                 }
             }
         };
-        let mut endpoint = gateway::AttachedEndpoint {
+        Ok(gateway::AttachedEndpoint {
             name,
             base_url,
             dialect,
             auth,
             models: Vec::new(),
+        })
+    }
+
+    /// Registers what the person entered, after asking the endpoint what
+    /// it serves. The probe happens before the record: an endpoint that
+    /// cannot be reached is not attached, so the book never advertises a
+    /// model nobody can call.
+    ///
+    /// `admit` narrows what is registered to the models the person
+    /// ticked. An empty list admits everything the endpoint serves,
+    /// which is what somebody who never asked for the list meant; a name
+    /// on the list that the endpoint does not serve is left out rather
+    /// than promised, the same answer a reading room gives a skill that
+    /// is not on the shelves.
+    fn attach_endpoint(
+        &mut self,
+        name: String,
+        base_url: String,
+        dialect: kernel::DialectKind,
+        secret: Option<String>,
+        auth_header: Option<String>,
+        admit: &[String],
+    ) -> Result<(), AxError> {
+        let mut endpoint = self.endpoint_of(name, base_url, dialect, secret, auth_header)?;
+        let served = self.probe(&endpoint)?;
+        endpoint.models = if admit.is_empty() {
+            served
+        } else {
+            served
+                .into_iter()
+                .filter(|id| admit.iter().any(|wanted| wanted == id))
+                .collect()
         };
-        endpoint.models = self.probe(&endpoint)?;
         self.note(
             runtime::diagnostics::Level::Effect,
             "gateway::router",
@@ -1919,6 +1992,7 @@ impl RunWorker {
             kernel::DialectKind::OpenAi,
             None,
             None,
+            &[],
         )?;
         self.select_model(
             ENVIRONMENT_ENDPOINT.to_owned(),
@@ -2056,12 +2130,27 @@ impl RunWorker {
                 body,
                 ..
             } => self.wake(&source, &subject, &body),
+            channels::Command::ProbeEndpoint {
+                name,
+                base_url,
+                dialect,
+                secret,
+                auth_header,
+                ..
+            } => self.probe_endpoint(
+                name.as_str().to_owned(),
+                base_url,
+                dialect,
+                secret,
+                auth_header,
+            ),
             channels::Command::AttachEndpoint {
                 name,
                 base_url,
                 dialect,
                 secret,
                 auth_header,
+                admit,
                 ..
             } => self.attach_endpoint(
                 name.as_str().to_owned(),
@@ -2069,6 +2158,7 @@ impl RunWorker {
                 dialect,
                 secret,
                 auth_header,
+                &admit,
             ),
             channels::Command::SelectModel {
                 endpoint,
@@ -4446,6 +4536,7 @@ mod tests {
             dialect: kernel::DialectKind::OpenAi,
             secret: None,
             auth_header: None,
+            admit: Vec::new(),
             idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"attach"),
         })?;
         worker.handle(channels::Command::SelectModel {
@@ -4548,6 +4639,7 @@ mod tests {
                     dialect: kernel::DialectKind::OpenAi,
                     secret: None,
                     auth_header: None,
+                    admit: Vec::new(),
                     idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"attach"),
                 })
                 .unwrap();
@@ -6915,6 +7007,68 @@ addr = \"gone/room1\"
         );
     }
 
+    /// A person could not see what a key bought until they had already
+    /// registered it, and could not register part of what it bought.
+    #[test]
+    fn a_provider_can_be_asked_what_it_serves_and_only_part_of_it_admitted() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let (base_url, _provider) = fake_openai(&["m-small", "m-large"], Vec::new());
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+
+        worker
+            .handle(channels::Command::ProbeEndpoint {
+                name: channels::ProviderName::parse("house").unwrap(),
+                base_url: base_url.clone(),
+                dialect: kernel::DialectKind::OpenAi,
+                secret: None,
+                auth_header: None,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"probe"),
+            })
+            .unwrap();
+        let after_probe = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+        let probed: String = after_probe
+            .raw_lines()
+            .iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(probed.contains("endpoint_probed"), "{probed}");
+        assert!(probed.contains("m-small") && probed.contains("m-large"));
+        assert!(
+            !probed.contains("endpoint_attached"),
+            "asking what a provider serves attached it anyway"
+        );
+
+        worker
+            .handle(channels::Command::AttachEndpoint {
+                name: channels::ProviderName::parse("house").unwrap(),
+                base_url,
+                dialect: kernel::DialectKind::OpenAi,
+                secret: None,
+                auth_header: None,
+                admit: vec!["m-large".to_owned()],
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"attach"),
+            })
+            .unwrap();
+        let channels::Answer::Endpoints(book) = rebuild_views(&report.ledger_dir)
+            .unwrap()
+            .answer(&channels::Query::EndpointView)
+        else {
+            panic!("the settings page reads the endpoint book");
+        };
+        assert_eq!(
+            book.endpoints[0].models,
+            vec!["m-large".to_owned()],
+            "a subset was ticked and the whole list was registered anyway"
+        );
+    }
+
     /// A building's rules are a governance document, and asking a
     /// person to type one by hand is the wrong door. An agent drafts
     /// them; the person is shown the proposal and allows it; the file
@@ -7604,6 +7758,7 @@ addr = \"gone/room1\"
                 dialect: kernel::DialectKind::OpenAi,
                 secret: Some("secret:proxy/key".to_owned()),
                 auth_header: None,
+                admit: Vec::new(),
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"attach"),
             })
             .unwrap();

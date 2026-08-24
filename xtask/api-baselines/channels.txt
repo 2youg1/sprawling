@@ -89,6 +89,7 @@ pub channels::Command::Attach::idem: kernel::idem::IdemKey
 pub channels::Command::Attach::notify: alloc::vec::Vec<kernel::event::RunId>
 pub channels::Command::Attach::upload: channels::UploadId
 pub channels::Command::AttachEndpoint
+pub channels::Command::AttachEndpoint::admit: alloc::vec::Vec<alloc::string::String>
 pub channels::Command::AttachEndpoint::auth_header: core::option::Option<alloc::string::String>
 pub channels::Command::AttachEndpoint::base_url: alloc::string::String
 pub channels::Command::AttachEndpoint::dialect: kernel::model::DialectKind
@@ -131,6 +132,13 @@ pub channels::Command::Login
 pub channels::Command::Login::idem: kernel::idem::IdemKey
 pub channels::Command::Login::provider: channels::ProviderName
 pub channels::Command::Login::step: channels::LoginStep
+pub channels::Command::ProbeEndpoint
+pub channels::Command::ProbeEndpoint::auth_header: core::option::Option<alloc::string::String>
+pub channels::Command::ProbeEndpoint::base_url: alloc::string::String
+pub channels::Command::ProbeEndpoint::dialect: kernel::model::DialectKind
+pub channels::Command::ProbeEndpoint::idem: kernel::idem::IdemKey
+pub channels::Command::ProbeEndpoint::name: channels::ProviderName
+pub channels::Command::ProbeEndpoint::secret: core::option::Option<alloc::string::String>
 pub channels::Command::PutSecret
 pub channels::Command::PutSecret::name: alloc::string::String
 pub channels::Command::PutSecret::realm: alloc::string::String
@@ -282,7 +290,7 @@ pub channels::Welcome::city: core::option::Option<kernel::address::Address>
 pub channels::Welcome::resume_from: core::option::Option<kernel::event::Seq>
 pub channels::Welcome::schema: kernel::locator::B3Hash
 pub channels::Welcome::wire_v: u32
-pub const channels::COMMAND_NAMES: [&str; 20]
+pub const channels::COMMAND_NAMES: [&str; 21]
 pub const channels::QUERY_NAMES: [&str; 11]
 pub const channels::WIRE_V: u32
 pub enum channels::Answer

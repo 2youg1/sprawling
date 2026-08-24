@@ -34,6 +34,10 @@ pub struct AttachForm {
     /// The reference returned by the enrolment route, not the key. A
     /// local server that asks for nothing leaves it empty.
     pub secret: Option<String>,
+    /// The models the person ticked after asking what this base URL
+    /// serves. Empty admits everything, which is what somebody who
+    /// never asked meant.
+    pub admit: Vec<String>,
 }
 
 /// Why a form cannot be submitted yet, or that it can. Exhaustive, so
@@ -227,6 +231,37 @@ pub fn attach_command(form: &AttachForm) -> Option<WireCommand> {
         dialect: form.dialect?,
         secret: form.secret.clone(),
         auth_header: None,
+        admit: form.admit.clone(),
+    })
+}
+
+/// The command that asks a base URL what it serves, without attaching
+/// anything.
+///
+/// It needs the same filled form an attachment does, because a probe
+/// that guessed the dialect would be asking a different question from
+/// the one the attachment will ask.
+#[must_use]
+pub fn probe_command(form: &AttachForm) -> Option<WireCommand> {
+    if ready(form) != AttachReadiness::Ready {
+        return None;
+    }
+    let name = ProviderName::parse(form.name.trim()).ok()?;
+    let base_url = form.base_url.trim().to_owned();
+    Some(WireCommand::ProbeEndpoint {
+        name,
+        // Distinct from the attach key on the same URL: asking and
+        // registering are two acts, and one must not deduplicate the
+        // other away.
+        idem: IdemKey::derive(
+            &RunId::CITY,
+            Seq::FIRST,
+            format!("probe:{base_url}").as_bytes(),
+        ),
+        base_url,
+        dialect: form.dialect?,
+        secret: form.secret.clone(),
+        auth_header: None,
     })
 }
 
@@ -378,6 +413,10 @@ pub fn Settings(
     /// Where a person must go to finish a login this session began, from
     /// `app::Snapshot`. Absent means no login is waiting on anybody.
     login_url: Option<String>,
+    /// What each base URL answered when it was asked what it serves,
+    /// folded from `endpoint_probed`. A person cannot tick a list they
+    /// have not seen.
+    served: std::collections::BTreeMap<String, Vec<String>>,
     /// Whether the socket is live; see `app::Root`.
     live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
@@ -526,6 +565,50 @@ pub fn Settings(
                 }
                 if let Some(said) = enrolment.read().clone() {
                     p { class: "enrolment", "{said}" }
+                }
+                // Asking is free and attaching is not, so the order on
+                // screen is the order of the decision: see what a key
+                // buys, tick what this city may use, then register it.
+                div { class: "field wide",
+                    button {
+                        r#type: "button",
+                        class: "probe",
+                        disabled: ready(&form.read()) != AttachReadiness::Ready,
+                        onclick: move |_| {
+                            let filled = form.read().clone();
+                            if let Some(command) = probe_command(&filled) {
+                                on_frame.call(ClientFrame::Command(Box::new(command)));
+                            }
+                        },
+                        "{word(Msg::SettingsAskWhatItServes)}"
+                    }
+                }
+                if let Some(models) = served.get(form.read().base_url.trim()) {
+                    fieldset { class: "admit",
+                        legend { "{word(Msg::SettingsServes)}" }
+                        for model in models.clone() {
+                            label { class: "admit-row", key: "{model}",
+                                input {
+                                    r#type: "checkbox",
+                                    name: "admit",
+                                    value: "{model}",
+                                    checked: form.read().admit.iter().any(|held| held == &model),
+                                    onchange: {
+                                        let model = model.clone();
+                                        move |event: Event<FormData>| {
+                                            let mut held = form.write();
+                                            held.admit.retain(|kept| kept != &model);
+                                            if event.checked() {
+                                                held.admit.push(model.clone());
+                                            }
+                                        }
+                                    },
+                                }
+                                span { "{model}" }
+                            }
+                        }
+                        span { class: "hint", "{word(Msg::SettingsAdmitAll)}" }
+                    }
                 }
                 div { class: "field wide submit",
                     button {
@@ -870,6 +953,7 @@ mod tests {
             base_url: "http://api.example.test/v1".to_owned(),
             dialect: Some(DialectKind::OpenAi),
             secret: Some("secret:house/key".to_owned()),
+            admit: Vec::new(),
         };
         assert_eq!(ready(&form), AttachReadiness::UrlNotSafe);
         assert!(
@@ -910,6 +994,7 @@ mod tests {
             base_url: "http://api.example.test/v1".to_owned(),
             dialect: Some(DialectKind::OpenAi),
             secret: None,
+            admit: Vec::new(),
         };
         assert!(
             attach_command(&form).is_none(),

@@ -35,15 +35,18 @@ use serde::{Deserialize, Serialize};
 ///
 /// 5: `Dispatch` carries the name of the session it starts (F2.11).
 /// 6: and how hard that session thinks (F2.16).
-pub const WIRE_V: u32 = 6;
+/// 7: a provider can be asked what it serves before it is attached, and
+///    an attachment names which of those models it admits (P3.01).
+pub const WIRE_V: u32 = 7;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
 /// different hash is refused rather than served a half-understood protocol.
-pub const COMMAND_NAMES: [&str; 20] = [
+pub const COMMAND_NAMES: [&str; 21] = [
     "Dispatch",
     "Wake",
     "Login",
+    "ProbeEndpoint",
     "AttachEndpoint",
     "SelectModel",
     "Fork",
@@ -220,6 +223,21 @@ pub enum Command<Secret = Sealed<String>> {
     /// already in the vault by the time this frame exists: what travels
     /// here is the reference to it, which is why this command has a byte
     /// form and `PutSecret` does not.
+    /// Asks a base URL what it serves, and attaches nothing.
+    ///
+    /// A person cannot choose from a list they have not seen, and the
+    /// list used to arrive only as a side effect of attaching - so
+    /// looking at what a key buys meant registering it first. The answer
+    /// lands as `endpoint_probed`, which the page folds like any other
+    /// fact about this city.
+    ProbeEndpoint {
+        name: ProviderName,
+        base_url: String,
+        dialect: DialectKind,
+        secret: Option<String>,
+        auth_header: Option<String>,
+        idem: IdemKey,
+    },
     AttachEndpoint {
         name: ProviderName,
         /// The base URL as a provider's documentation prints it; the
@@ -231,6 +249,10 @@ pub enum Command<Secret = Sealed<String>> {
         secret: Option<String>,
         /// Header name for providers that do not take a bearer token.
         auth_header: Option<String>,
+        /// Which of the models this endpoint serves the city admits. An
+        /// empty list admits everything it serves, which is what a
+        /// person who did not look at the list meant.
+        admit: Vec<String>,
         idem: IdemKey,
     },
     /// Point one tag at one model of an attached endpoint, with the two
@@ -345,6 +367,7 @@ impl<Secret> Command<Secret> {
             Self::Dispatch { .. } => "Dispatch",
             Self::Wake { .. } => "Wake",
             Self::Login { .. } => "Login",
+            Self::ProbeEndpoint { .. } => "ProbeEndpoint",
             Self::AttachEndpoint { .. } => "AttachEndpoint",
             Self::SelectModel { .. } => "SelectModel",
             Self::Fork { .. } => "Fork",
@@ -374,6 +397,7 @@ impl<Secret> Command<Secret> {
             | Self::Wake { ref idem, .. }
             | Self::Login { ref idem, .. }
             | Self::Fork { ref idem, .. }
+            | Self::ProbeEndpoint { ref idem, .. }
             | Self::Attach { ref idem, .. }
             | Self::CreateBuilding { ref idem, .. }
             | Self::Steer { ref idem, .. }
@@ -437,12 +461,28 @@ impl From<WireCommand> for Command {
                 step,
                 idem,
             },
+            Command::ProbeEndpoint {
+                name,
+                base_url,
+                dialect,
+                secret,
+                auth_header,
+                idem,
+            } => Self::ProbeEndpoint {
+                name,
+                base_url,
+                dialect,
+                secret,
+                auth_header,
+                idem,
+            },
             Command::AttachEndpoint {
                 name,
                 base_url,
                 dialect,
                 secret,
                 auth_header,
+                admit,
                 idem,
             } => Self::AttachEndpoint {
                 name,
@@ -450,6 +490,7 @@ impl From<WireCommand> for Command {
                 dialect,
                 secret,
                 auth_header,
+                admit,
                 idem,
             },
             Command::SelectModel {
