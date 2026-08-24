@@ -24,6 +24,7 @@
 
 use crate::lang::{Msg, fill, say};
 use channels::{Address, BuildingAnswer, ClientFrame, InboxAnswer, Query};
+use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 
 /// Which of a building's faces is showing. The documents are named by the
@@ -40,6 +41,23 @@ pub enum Leaf {
     /// What this building's runs may reach: the only face on this page
     /// a person writes through, and the only one no agent can.
     Reach,
+}
+
+/// What a browser will say about a drop, without reading a byte.
+///
+/// The names and the text are all this build takes: a file dropped on a
+/// city formed around somebody's own folder is already inside that city,
+/// and staging a copy would be a second authority for one file.
+fn dropped_from(event: &Event<DragData>) -> crate::drop::Dropped {
+    let names: Vec<String> = event
+        .files()
+        .iter()
+        .map(dioxus::html::FileData::name)
+        .collect();
+    if names.is_empty() {
+        return crate::drop::Dropped::Unreadable;
+    }
+    crate::drop::Dropped::Files(names)
 }
 
 /// The address of one room of this building.
@@ -120,6 +138,9 @@ pub fn BuildingView(
     /// Points the control surface at this building, so the one form
     /// that starts work is the one form that starts work.
     on_select: EventHandler<Option<String>>,
+    /// Where a gesture goes. The page reads no drag itself: what one
+    /// means is `web::drop`'s answer, and where it goes is the root's.
+    on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
 ) -> Element {
     let lang = use_context::<Signal<crate::lang::Lang>>();
     let word = move |msg: Msg| say(lang(), msg);
@@ -186,7 +207,26 @@ pub fn BuildingView(
                 scope: word(Msg::BuildingScope).to_owned(),
                 source: word(Msg::BuildingSource).to_owned(),
             header { class: "building-head",
-                h2 { "{answer.addr.as_str()}" }
+                // A drop zone rather than a decoration: work aimed by
+                // dragging lands on a place, and this header is the
+                // building. What the drop means is decided in one
+                // function; this only says where it landed.
+                h2 {
+                    class: "drop-zone",
+                    title: "{word(Msg::DropHere)}",
+                    ondragover: move |event| event.prevent_default(),
+                    ondrop: {
+                        let here = answer.addr.clone();
+                        move |event: Event<DragData>| {
+                            event.prevent_default();
+                            on_drop.call((
+                                crate::drop::Target::Place(here.clone()),
+                                dropped_from(&event),
+                            ));
+                        }
+                    },
+                    "{answer.addr.as_str()}"
+                }
                 // Not a fourth dispatch form: this fills the bar at the
                 // bottom of the window, which is where work is started
                 // from every page and where a person looks for it next
@@ -247,11 +287,29 @@ pub fn BuildingView(
                 for room in answer.rooms.clone() {
                     button {
                         key: "room-{room}",
-                        class: "tab room",
+                        class: "tab room drop-zone",
+                        title: "{word(Msg::DropHere)}",
                         "aria-current": if showing == Leaf::Room(room.clone()) { "true" } else { "false" },
                         onclick: {
                             let name = room.clone();
                             move |_| leaf.set(Some(Leaf::Room(name.clone())))
+                        },
+                        ondragover: move |event| event.prevent_default(),
+                        ondrop: {
+                            let landed = room_addr(&answer.addr, &room);
+                            move |event: Event<DragData>| {
+                                event.prevent_default();
+                                // A room name this city cannot address
+                                // is not a place; the same function that
+                                // refuses a run refuses it, with its own
+                                // words rather than a second wording
+                                // here.
+                                let target = match landed.clone() {
+                                    Some(addr) => crate::drop::Target::Place(addr),
+                                    None => crate::drop::Target::Run,
+                                };
+                                on_drop.call((target, dropped_from(&event)));
+                            }
                         },
                         "{room}/"
                     }

@@ -398,6 +398,11 @@ pub enum Msg {
     SettingsKeyHint,
     SettingsPutKeyInVault,
     SettingsAttachThisProvider,
+    DropAction,
+    DropRecovery,
+    DropNotAPlace,
+    DropUnreadable,
+    DropHere,
     BuildingReachTab,
     BuildingShell,
     BuildingFuel,
@@ -1465,6 +1470,26 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "attach this provider",
             zh: "接上这个 provider",
         },
+        Msg::DropAction => Phrase {
+            en: "read what was dropped",
+            zh: "读懂被拖进来的东西",
+        },
+        Msg::DropRecovery => Phrase {
+            en: "drop it on a building or a room; work is aimed at a place, and the button below still starts it",
+            zh: "把它放到一栋楼或一个房间上；活是派往一个地方的，而下面那个按钮仍然是启动它的地方",
+        },
+        Msg::DropNotAPlace => Phrase {
+            en: "a run is something that happened at an address, not a place work can be put",
+            zh: "一个 Run 是在某个地址上发生过的事，不是一个可以放活进去的地方",
+        },
+        Msg::DropUnreadable => Phrase {
+            en: "this build could not read anything in what was dropped",
+            zh: "这一版读不出被拖进来的东西里的任何内容",
+        },
+        Msg::DropHere => Phrase {
+            en: "drop work here",
+            zh: "把活拖到这里",
+        },
         Msg::BuildingReachTab => Phrase {
             en: "what it may reach",
             zh: "它够得到什么",
@@ -1914,6 +1939,11 @@ mod tests {
             Msg::SettingsKeyHint,
             Msg::SettingsPutKeyInVault,
             Msg::SettingsAttachThisProvider,
+            Msg::DropAction,
+            Msg::DropRecovery,
+            Msg::DropNotAPlace,
+            Msg::DropUnreadable,
+            Msg::DropHere,
             Msg::BuildingReachTab,
             Msg::BuildingShell,
             Msg::BuildingFuel,
@@ -2205,6 +2235,11 @@ mod tests {
                 | Msg::SettingsKeyHint
                 | Msg::SettingsPutKeyInVault
                 | Msg::SettingsAttachThisProvider
+                | Msg::DropAction
+                | Msg::DropRecovery
+                | Msg::DropNotAPlace
+                | Msg::DropUnreadable
+                | Msg::DropHere
                 | Msg::BuildingReachTab
                 | Msg::BuildingShell
                 | Msg::BuildingFuel

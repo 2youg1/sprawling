@@ -35,6 +35,7 @@ pub const web::L_CEILING: u16
 pub const web::L_FLOOR: u16
 pub const web::Lang::ALL: [web::Lang; 2]
 pub const web::MARGIN: i32
+pub const web::NAMED_FILES: usize
 pub const web::PAGE_ROWS: usize
 pub const web::PROGRESS_DONE: (&str, &str)
 pub const web::SERIES_DASHES: [&str; 4]
@@ -48,12 +49,14 @@ pub enum web::AttachReadiness
 pub enum web::Backfill
 pub enum web::BarState
 pub enum web::CostDimension
+pub enum web::Dropped
 pub enum web::Enrolment
 pub enum web::Lang
 pub enum web::Leaf
 pub enum web::LinkAction
 pub enum web::LinkEvent
 pub enum web::LinkState
+pub enum web::Meaning
 pub enum web::Msg
 pub enum web::ProviderHealth
 pub enum web::Raise
@@ -61,6 +64,7 @@ pub enum web::ReturnPath
 pub enum web::RoomQueue
 pub enum web::RunPhase
 pub enum web::Subject
+pub enum web::Target
 pub enum web::Trend
 pub enum web::View
 pub fn web::AlertKind::interrupts(self) -> bool
@@ -189,12 +193,14 @@ pub fn web::phrase(web::Msg) -> web::Phrase
 pub fn web::place(&str, u32) -> (i32, i32)
 pub fn web::points_attr(&[(i32, i32); 4]) -> alloc::string::String
 pub fn web::policy_admits(&kernel::approval::ApprovalItem) -> bool
+pub fn web::read(&web::Target, &web::Dropped) -> web::Meaning
 pub fn web::read_frame(&str) -> web::LinkEvent
 pub fn web::read_mounts(&str) -> (alloc::vec::Vec<kernel::address::Address>, alloc::vec::Vec<alloc::string::String>)
 pub fn web::read_servers(&str) -> (alloc::vec::Vec<kernel::config::McpServer>, alloc::vec::Vec<alloc::string::String>)
 pub fn web::ready(&web::AttachForm) -> web::AttachReadiness
 pub fn web::rebuild<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> web::Snapshot
 pub fn web::recycle_bin(alloc::vec::Vec<web::BinRow>) -> alloc::vec::Vec<web::BinRow>
+pub fn web::refusal(web::Lang, web::Msg) -> kernel::error::AxError
 pub fn web::refused(web::Lang, &kernel::error::AxError) -> web::Refused
 pub fn web::render_tokens(kernel::budget::Tokens) -> alloc::string::String
 pub fn web::render_usd(kernel::budget::UsdMicros) -> alloc::string::String
@@ -326,6 +332,9 @@ pub web::DisplayList::faces: alloc::vec::Vec<web::Face>
 pub web::DisplayList::ground: alloc::vec::Vec<web::Face>
 pub web::DisplayList::labels: alloc::vec::Vec<web::city_view::Label>
 pub web::DisplayList::outline: core::option::Option<[(i32, i32); 4]>
+pub web::Dropped::Files(alloc::vec::Vec<alloc::string::String>)
+pub web::Dropped::Text(alloc::string::String)
+pub web::Dropped::Unreadable
 pub web::EndpointRow::base_url: alloc::string::String
 pub web::EndpointRow::credential: web::Msg
 pub web::EndpointRow::dialect: kernel::model::DialectKind
@@ -382,6 +391,11 @@ pub web::LinkState::Opening
 pub web::LinkState::Refused(alloc::boxed::Box<kernel::error::AxError>)
 pub web::LinkState::Suspended
 pub web::LinkState::Suspended::resume_from: core::option::Option<kernel::event::Seq>
+pub web::Meaning::Aim
+pub web::Meaning::Aim::addr: kernel::address::Address
+pub web::Meaning::Aim::task: alloc::string::String
+pub web::Meaning::Refused
+pub web::Meaning::Refused::because: web::Msg
 pub web::Msg::AlertAwaitingApproval
 pub web::Msg::AlertNoRecovery
 pub web::Msg::AlertProviderNotAnswering
@@ -497,6 +511,11 @@ pub web::Msg::DispatchRoomHint
 pub web::Msg::DispatchSend
 pub web::Msg::DispatchTask
 pub web::Msg::DispatchTaskHint
+pub web::Msg::DropAction
+pub web::Msg::DropHere
+pub web::Msg::DropNotAPlace
+pub web::Msg::DropRecovery
+pub web::Msg::DropUnreadable
 pub web::Msg::EffortHigh
 pub web::Msg::EffortInherited
 pub web::Msg::EffortLow
@@ -728,6 +747,8 @@ pub web::Subject::Run
 pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>
 pub web::TagRow::consequence: web::Msg
 pub web::TagRow::tag: kernel::model::ModelTag
+pub web::Target::Place(kernel::address::Address)
+pub web::Target::Run
 pub web::Trend::Falling
 pub web::Trend::Rising
 pub web::Trend::Steady

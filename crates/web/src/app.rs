@@ -989,6 +989,11 @@ pub fn Root(
     refused: Option<crate::alert::Refused>,
     records: Vec<EventRecord>,
     selected: Option<String>,
+    /// What a drop wrote into the control surface. Held beside
+    /// `selected` because a drop aims and describes in one gesture, and
+    /// the two halves must arrive together or the bar shows an address
+    /// with somebody else's task under it.
+    dropped: Option<String>,
     following: bool,
     /// Whether frames are flowing yet.
     ///
@@ -1002,6 +1007,9 @@ pub fn Root(
     live: Signal<bool>,
     on_frame: EventHandler<channels::ClientFrame>,
     on_select: EventHandler<Option<String>>,
+    /// Where a gesture goes. One handler for every drop zone, so what a
+    /// drag means is answered once.
+    on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
     on_view: EventHandler<View>,
     on_follow: EventHandler<bool>,
     on_dismiss: EventHandler<()>,
@@ -1143,6 +1151,7 @@ pub fn Root(
                             live,
                             on_frame,
                             on_select,
+                            on_drop,
                         }
                     },
                     View::Settings => rsx! {
@@ -1167,7 +1176,7 @@ pub fn Root(
                 crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
             }
             footer { class: "control-surface",
-                DispatchBar { addr: selected.clone(), on_frame, on_view }
+                DispatchBar { addr: selected.clone(), dropped: dropped.clone(), on_frame, on_view }
                 button {
                     class: "halt",
                     onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
@@ -1199,6 +1208,10 @@ pub fn Root(
 #[component]
 fn DispatchBar(
     addr: Option<String>,
+    /// A task line a drop wrote. It fills the box the person would have
+    /// typed into and stops there: a gesture that also pressed the
+    /// button would spend money nobody agreed to spend.
+    dropped: Option<String>,
     on_frame: EventHandler<channels::ClientFrame>,
     /// Where the person is taken once the frame is away. A control that
     /// leaves the page exactly as it found it cannot be told apart from
@@ -1221,6 +1234,17 @@ fn DispatchBar(
         }
     }));
     let mut task = use_signal(String::new);
+    // Reactive for the same reason the address is: a line written by a
+    // drop after the first render would otherwise never reach the box.
+    let written = dropped.clone();
+    use_effect(use_reactive!(|written| {
+        let mut task = task;
+        if let Some(ref line) = written
+            && !line.is_empty()
+        {
+            task.set(line.clone());
+        }
+    }));
     let mut goal = use_signal(String::new);
     let mut mode = use_signal(|| "plan".to_owned());
     let mut session = use_signal(String::new);
@@ -1413,6 +1437,7 @@ pub fn App() -> Element {
     // becomes a refusal rather than a silent landing on the first page.
     follow_the_address_bar(view, refused, lang);
     let mut selected = use_signal(|| None::<String>);
+    let mut dropped = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
     // The room the last dispatch asked for, so its run can be opened
@@ -1456,6 +1481,7 @@ pub fn App() -> Element {
             refused: refused(),
             records: records(),
             selected: selected(),
+            dropped: dropped(),
             following: following(),
             live,
             on_frame: move |frame: channels::ClientFrame| {
@@ -1465,6 +1491,24 @@ pub fn App() -> Element {
                 outbound.call(frame);
             },
             on_select: move |id| selected.set(id),
+            // One place answers what a drag meant, whichever zone it
+            // landed on. A refusal takes the same route every other
+            // refusal takes, so a gesture with no meaning reads like
+            // everything else the city would not do.
+            on_drop: move |(target, what): (crate::drop::Target, crate::drop::Dropped)| {
+                match crate::drop::read(&target, &what) {
+                    crate::drop::Meaning::Aim { addr, task } => {
+                        selected.set(Some(addr.as_str().to_owned()));
+                        dropped.set(Some(task));
+                    }
+                    crate::drop::Meaning::Refused { because } => {
+                        refused.set(Some(crate::alert::refused(
+                            lang(),
+                            &crate::drop::refusal(lang(), because),
+                        )));
+                    }
+                }
+            },
             on_view: move |next: View| {
                 #[cfg(target_arch = "wasm32")]
                 crate::route::go(&next);
@@ -2219,9 +2263,11 @@ mod tests {
                 refused,
                 records,
                 selected: None,
+                dropped: None,
                 following: true,
                 on_frame: move |_| {},
                 on_select: move |_| {},
+                on_drop: move |_| {},
                 on_view: move |_| {},
                 on_follow: move |_| {},
                 on_dismiss: move |()| {},

@@ -436,6 +436,10 @@
          padding: 7px var(--space-base); }
   .tab:hover { color: var(--G10); }
   .tab[aria-current="true"] { color: var(--G10); border-bottom-color: var(--ACCENT); }
+  /* A drop zone says so while a drag is over it and stays quiet
+     otherwise: a target that is always outlined teaches nothing. */
+  .drop-zone { border-radius: var(--corner-card); corner-shape: var(--corner-card-shape); }
+  .drop-zone:hover { outline: 1px dashed var(--G5); outline-offset: 2px; }
   .doc-text { background: var(--G1); border: 1px solid var(--G3);
               border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
               padding: var(--space-pane); white-space: pre-wrap; color: var(--G8);

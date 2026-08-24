@@ -717,6 +717,22 @@ fn live::named(runs: &[(RunId, String)], run: RunId) -> String;
 - **Run 标识符不从页面上拿掉**，只是变安静：人读名字，而 `sprawling fork` 与账本寻址用的是它。
 - **标题与按钮同源**：`named()` 从 picker 的同一份列表里取字，于是两处不会对不上。
 
+### 8-38 拖进来的东西意味着什么（P0.02；形状 1 判定）
+
+```rust
+pub enum Dropped { Files(Vec<String>), Text(String), Unreadable }
+pub enum Target  { Place(Address), Run }
+pub enum Meaning { Aim { addr: Address, task: String }, Refused { because: Msg } }
+pub fn read(target: &Target, dropped: &Dropped) -> Meaning;
+pub fn refusal(lang: Lang, because: Msg) -> AxError;    // 与其他拒绝同一三段式
+```
+
+- **拖动瞄准，不启动**：每一种意义都止于控制条——地址填好、任务写好，按钮仍归人按。一个会花钱的手势是收不回来的手势。**这条规则是上面那几个臂之所以能这么少的原因。**
+- **不复制字节**：在一座围绕人已有文件夹形成的城里，被拖进来的文件本就在城内；再暂存一份就是同一个文件的第二个权威。手势提供的是人本来要打的那两样东西：活派往哪里，活是关于什么的。
+- **Run 不是地方**：一个 Run 是在某个地址上发生过的事。拖到它上面没有本版能执行的含义，故**拒**，并说明理由——没有一个臂是靠猜的。
+- **读不懂就是读不懂**：跨标签页拖过来的图片既不是文件也不是文本；把它读成「空」是界面在编造事实。
+- **判定是纯函数，组件只说落在哪里**：本仓库没有任何门会去驱一个真浏览器，纯函数是这件事唯一可测的形状。
+
 ### 8-37 页面折得进它没连上时发生的事（P3.04）
 
 ```rust
