@@ -4308,12 +4308,13 @@ pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
         ),
         events,
         city: city_name,
-        secrets: Arc::new(move |command: channels::Command| {
-            // Known gap, recorded in channels-SPEC section 8: the
-            // enrolment route answers 201 before the worker has taken
-            // the credential, so a refusal here still reaches nobody.
-            // Bounding that wait is P3's, with `sprawling enrol`.
-            secrets_desk.post(command, channels::Reply::nowhere());
+        secrets: Arc::new(move |command: channels::Command, reply: channels::Reply| {
+            // The route waits for whichever comes first, so the
+            // reply address is the credential's own request rather
+            // than nowhere: a vault that refuses is a fact the
+            // person typing the key needs, and it used to reach
+            // nobody at all.
+            secrets_desk.post(command, reply);
             Ok(())
         }),
         queries: Arc::new(move |query: channels::Query| {

@@ -269,7 +269,7 @@ pub channels::ServeConfig::client: alloc::sync::Arc<channels::ClientAssets>
 pub channels::ServeConfig::commands: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::WireCommand, channels::Reply) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServeConfig::events: tokio::sync::broadcast::Sender<kernel::event::EventRecord>
 pub channels::ServeConfig::queries: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Query) -> core::result::Result<channels::Answer, kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
-pub channels::ServeConfig::secrets: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Command<kernel::secret::Sealed<alloc::string::String>>) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
+pub channels::ServeConfig::secrets: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Command<kernel::secret::Sealed<alloc::string::String>>, channels::Reply) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServeConfig::token_digest: core::option::Option<kernel::locator::B3Hash>
 pub channels::ServeConfig::upload_sink: alloc::sync::Arc<(dyn core::ops::function::Fn(alloc::vec::Vec<u8>) -> core::result::Result<channels::UploadId, kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServerFrame::Answer(alloc::boxed::Box<channels::Answer>)

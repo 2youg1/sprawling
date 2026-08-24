@@ -28,7 +28,7 @@ use axum::extract::{ConnectInfo, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use kernel::{Address, AxCode, AxError, B3Hash, EventRecord, Sealed};
+use kernel::{Address, AxCode, AxError, B3Hash, EventKind, EventRecord, Sealed};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
@@ -81,7 +81,22 @@ pub fn decide_bind(addr: &SocketAddr, token_configured: bool) -> BindVerdict {
 
 /// Where an enrolled credential goes. Named because the sink's own
 /// shape is the point: it takes the Command set that has no byte form.
-pub type SecretSink = Arc<dyn Fn(Command<Sealed<String>>) -> Result<(), AxError> + Send + Sync>;
+///
+/// It carries a [`Reply`] for the same reason every other command does:
+/// the worker refuses minutes later on another thread, and a refusal
+/// with no address reaches nobody.
+pub type SecretSink =
+    Arc<dyn Fn(Command<Sealed<String>>, Reply) -> Result<(), AxError> + Send + Sync>;
+
+/// How long the enrolment route waits for the worker to say what
+/// happened.
+///
+/// Bounded because the worker may be inside a dispatch that runs for
+/// minutes, and an HTTP request that waited for it would look like a
+/// hang. Waiting longer would not help in that case and hurts in every
+/// other: what is being waited for is a queue hop and a vault write,
+/// both of which are milliseconds.
+const ENROLMENT_PATIENCE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// One file of the embedded client: the path a browser requests and the
 /// gzip bytes the build wrote into the binary.
@@ -531,10 +546,79 @@ async fn accept_enrolment(
         name,
         value: Sealed::new(Box::new(value)),
     };
-    match (state.secrets)(command) {
-        Ok(()) => (StatusCode::CREATED, reference).into_response(),
-        Err(err) => (StatusCode::UNPROCESSABLE_ENTITY, refusal_text(&err)).into_response(),
+    // Subscribed before the command is posted: a worker that finished
+    // while this task was still setting up would otherwise write the one
+    // record this request is waiting for into a stream nobody is reading.
+    let mut records = state.events.subscribe();
+    let (refused, mut refusals) = tokio::sync::mpsc::unbounded_channel::<AxError>();
+    let reply = Reply::to(move |err: AxError| match refused.send(err) {
+        Ok(()) => Delivered::ToThePeer,
+        Err(_) => Delivered::PeerGone,
+    });
+    if let Err(err) = (state.secrets)(command, reply) {
+        return (StatusCode::UNPROCESSABLE_ENTITY, refusal_text(&err)).into_response();
     }
+    let wanted = reference.clone();
+    let waited = tokio::time::timeout(ENROLMENT_PATIENCE, async move {
+        // The reply address is dropped when the worker finishes without
+        // refusing, so a closed refusal channel says only that no
+        // refusal is coming - never that the credential was stored. The
+        // guard stops the closed branch from spinning; the event is
+        // still what a 201 waits for.
+        let mut refusal_possible = true;
+        loop {
+            tokio::select! {
+                refusal = refusals.recv(), if refusal_possible => match refusal {
+                    Some(err) => return Some(Enrolled::Refused(err)),
+                    None => refusal_possible = false,
+                },
+                record = records.recv() => match record {
+                    Ok(record) => {
+                        if record.kind() == EventKind::SecretCaptured
+                            && record
+                                .data()
+                                .as_map()
+                                .get("ref")
+                                .and_then(serde_json::Value::as_str)
+                                == Some(wanted.as_str())
+                        {
+                            return Some(Enrolled::Stored);
+                        }
+                    }
+                    // Lagged means this task missed records, not that the
+                    // enrolment failed; the loop keeps waiting and the
+                    // timeout below is what ends it.
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => return None,
+                },
+            }
+        }
+    })
+    .await;
+    match waited {
+        Ok(Some(Enrolled::Stored)) => (StatusCode::CREATED, reference).into_response(),
+        Ok(Some(Enrolled::Refused(err))) => {
+            (StatusCode::UNPROCESSABLE_ENTITY, refusal_text(&err)).into_response()
+        }
+        // Neither arrived. Two-oh-two says so in the one word HTTP has
+        // for it, and the body says why rather than leaving the caller
+        // to read a status code as an outcome.
+        Ok(None) | Err(_) => (
+            StatusCode::ACCEPTED,
+            format!(
+                "{reference} was handed to the city and it has not answered within {}s; the                  worker may be inside a dispatch. Check whether the reference resolves before                  sending the credential again",
+                ENROLMENT_PATIENCE.as_secs()
+            ),
+        )
+            .into_response(),
+    }
+}
+
+/// What the city said about one enrolment. Two arms and a timeout, which
+/// is three answers, and the route gives each of them its own status.
+enum Enrolled {
+    Stored,
+    Refused(AxError),
 }
 
 fn refusal_text(err: &AxError) -> String {

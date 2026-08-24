@@ -220,15 +220,24 @@ pub(crate) fn enrol(at: &str, realm: &str, name: &str, value: &str) -> Result<St
     // The reply body is this city's own text, so quoting it is quoting
     // ourselves rather than a stranger's error page.
     let said = answer.text().unwrap_or_default();
-    if status.as_u16() == 201 {
-        return Ok(said);
+    match status.as_u16() {
+        201 => Ok(said),
+        // The city took it and has not said what became of it. Reported
+        // as a failure because the caller must not go on as though the
+        // reference resolves - but with the city's own words, which say
+        // what to check rather than what went wrong.
+        202 => Err(
+            AxError::failure(AxCode::CredentialMissing, "enrol a credential", said).with_recovery(
+                "the city is busy; ask it again once the run it is inside has finished",
+            ),
+        ),
+        code => Err(AxError::failure(
+            AxCode::CredentialMissing,
+            "enrol a credential",
+            format!("the city answered {code}: {said}"),
+        )
+        .with_recovery("enrolment is refused for any peer that is not on this machine")),
     }
-    Err(AxError::failure(
-        AxCode::CredentialMissing,
-        "enrol a credential",
-        format!("the city answered {}: {said}", status.as_u16()),
-    )
-    .with_recovery("enrolment is refused for any peer that is not on this machine"))
 }
 
 #[cfg(test)]
