@@ -4356,6 +4356,26 @@ pub(crate) struct Serving {
     pub(crate) console: Option<crate::console::Terminal>,
 }
 
+/// Waits for the person to stop the city from the keyboard.
+///
+/// A Windows console delivers two of these - Ctrl-C and Ctrl-Break - and
+/// a city that closed on one and died on the other would be two
+/// behaviours for one gesture, decided by which key a person happened to
+/// press. Elsewhere there is one.
+#[cfg(windows)]
+async fn closed_by_hand() -> std::io::Result<()> {
+    let mut broken = tokio::signal::windows::ctrl_break()?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result,
+        _ = broken.recv() => Ok(()),
+    }
+}
+
+#[cfg(not(windows))]
+async fn closed_by_hand() -> std::io::Result<()> {
+    tokio::signal::ctrl_c().await
+}
+
 pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
     let Serving {
         city_root,
@@ -4559,7 +4579,7 @@ pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
     // last line rather than a line in the middle of one.
     let served = tokio::select! {
         result = channels::serve(config) => result,
-        signal = tokio::signal::ctrl_c() => {
+        signal = closed_by_hand() => {
             // A signal handler that cannot be installed is worth saying
             // out loud: the city keeps serving, and the person now knows
             // that Ctrl-C will be the hard stop it always was.
