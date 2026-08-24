@@ -447,7 +447,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | collab::workshop_tool | crates/collab/src/workshop_tool.rs | the face a workshop shows a model: lay out, ask the join, judge it | adapter | P1 | built |
 | collab::triage | crates/collab/src/triage.rs | where something from outside lands, and whether it starts work | decision | P3 | built |
 
-### city (11) — space, identity, and the documents a building keeps
+### city (12) — space, identity, and the documents a building keeps
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -458,6 +458,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | city::library | crates/city/src/library.rs | the city's stock of settled work, and the reading room each building admits | decision | P3 | built |
 | city::config_layers | crates/city/src/config_layers.rs | the three configuration files a run is governed by | decision | P2 | built |
 | city::policy | crates/city/src/policy.rs | `BUILDING.md` evaluated into rules a machine can hold | decision | P1 | built |
+| city::rules_tool | crates/city/src/rules_tool.rs | the face a building's rules show a model: read them, propose the whole of them | adapter | P2 | built |
 | city::schedule | crates/city/src/schedule.rs | work that starts by itself, counted in whole minutes | decision | P2 | built |
 | city::room | crates/city/src/room.rs | which room a named session works in, and how a new one comes into being | decision | F2 | built |
 | city::watch | crates/city/src/watch.rs | what the city is listening to, and which building answers | value | P4 | built |

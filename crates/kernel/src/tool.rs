@@ -151,6 +151,11 @@ pub enum Effect {
     /// bounded by anything the calling run's other gates check, and the
     /// only thing that bounds it is the person.
     Spawn,
+    /// Changes what governs a scope - the rules its own runs are judged
+    /// by. Deliberately not a `Write`: the reserved subtree is outside
+    /// every write domain, so the write door would refuse it, and the
+    /// reason it refuses is that this decision is the person's.
+    Govern,
     Spend,
 }
 

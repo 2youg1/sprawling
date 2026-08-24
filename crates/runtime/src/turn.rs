@@ -1300,6 +1300,47 @@ impl ToolBench {
                     }
                 }
             }
+            Effect::Govern => {
+                let (Some(asking), Some(job)) = (self.asking.as_ref(), self.job.as_ref()) else {
+                    return Err(AxError::failure(
+                        AxCode::ToolUnavailable,
+                        "invoke tool",
+                        format!("`{name}` declares Govern and this bench was built without a job"),
+                    )
+                    .with_recovery(
+                        "build the bench with `for_job`; a rule change a person cannot be asked \
+                         about is a rule change nobody allowed",
+                    ));
+                };
+                let scope = call
+                    .args
+                    .as_map()
+                    .get("scope")
+                    .and_then(Value::as_str)
+                    .and_then(|raw| Address::parse(raw).ok())
+                    .unwrap_or_else(|| asking.clone());
+                // What the person is being asked to allow, in their own
+                // reading rather than as a category name.
+                let proposal = call
+                    .args
+                    .as_map()
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                match kernel::govern(ctx, asking, &scope, proposal, job, &self.taint) {
+                    GateOutcome::Allow => {}
+                    GateOutcome::Deny { refusal } => {
+                        return Ok(BenchOutcome::Refused { refusal });
+                    }
+                    GateOutcome::Escalate { item } => {
+                        if !self.granted.contains(&item.cluster_key) {
+                            return Ok(BenchOutcome::Pending {
+                                item: Box::new(item),
+                            });
+                        }
+                    }
+                }
+            }
             Effect::Spend => {
                 // No Spend tool instance exists until the egress proxy
                 // lands (P1); the door is wired so the first one meets it.

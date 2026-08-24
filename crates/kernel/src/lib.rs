@@ -87,7 +87,7 @@ mod gate;
 pub use gate::{CommitmentDecision, DedupVerdict, EgressAllowlist, EgressOutcome, EgressTarget};
 pub use gate::{GateContext, egress_target};
 pub use gate::{GateOutcome, commitment, dedup, discard as gate_discard, domain, egress};
-pub use gate::{delegation, spawn, spend};
+pub use gate::{delegation, govern, spawn, spend};
 
 mod config;
 

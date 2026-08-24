@@ -499,6 +499,7 @@ impl ToolBench {
     /// exec 先 forecast（Suspected → **强制 checkpoint 先行**，见下）；Write → domain 门；
     /// Egress → egress 门（target 由调用自报 host，不自报即 E_INVALID_ARGS）；Spend → 门已接但 P1 前无实例；
     /// Spawn → delegation 门（恒 Escalate；granted 命中即放行，未命中即 Pending）；
+    /// Govern → govern 门（同形；提案正文由调用的 `text` 参数取，进 action_desc 供人过目）；
     /// Deny → 以 refusal 作 tool_result 回流（不吞掉回合）；Escalate → BenchOutcome::Pending 回流（S3 无应答面）。
     pub fn invoke(&mut self, call: &ToolCall, key: &IdemKey, ctx: &GateContext)
         -> Result<BenchOutcome, AxError>;

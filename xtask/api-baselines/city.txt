@@ -10,10 +10,12 @@ impl city::Identity
 impl city::Library
 impl city::Link
 impl city::Resident
+impl city::RulesTool
 impl city::RunBrief
 impl city::Schedule
 impl city::Source
 impl city::Watch
+impl kernel::tool::Tool for city::RulesTool
 pub city::ArchiveEntry::at: std::path::PathBuf
 pub city::ArchiveEntry::day: u64
 pub city::ArchiveEntry::kind: city::ArchiveKind
@@ -119,6 +121,9 @@ pub fn city::Link::is_live(&self) -> bool
 pub fn city::Link::since(&self) -> kernel::event::TimeMs
 pub fn city::Resident::addr(&self) -> &kernel::address::Address
 pub fn city::Resident::digest(&self) -> kernel::locator::B3Hash
+pub fn city::RulesTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
+pub fn city::RulesTool::meta(&self) -> &kernel::tool::ToolMeta
+pub fn city::RulesTool::new(&std::path::Path, kernel::address::Address) -> core::result::Result<city::RulesTool, kernel::error::AxError>
 pub fn city::RunBrief::segment_text(&self) -> &str
 pub fn city::Schedule::due(&self, kernel::event::TimeMs, kernel::event::TimeMs) -> alloc::vec::Vec<&city::Entry>
 pub fn city::Schedule::entries(&self) -> &[city::Entry]
@@ -156,6 +161,7 @@ pub fn city::watch_path(&std::path::Path) -> std::path::PathBuf
 pub fn city::write_brief(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<city::RunBrief, kernel::error::AxError>
 pub fn city::write_effort(&std::path::Path, &kernel::address::Address, kernel::model::Effort) -> core::result::Result<(), kernel::error::AxError>
 pub fn city::write_job(&std::path::Path, &kernel::address::Address, &city::JobBrief<'_>) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn city::write_rules(&std::path::Path, &kernel::address::Address, &str) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub mod city
 pub struct city::ArchiveEntry
 pub struct city::Building
@@ -169,6 +175,7 @@ pub struct city::JobBrief<'a>
 pub struct city::Library
 pub struct city::Relocation
 pub struct city::Resident
+pub struct city::RulesTool
 pub struct city::Schedule
 pub struct city::Source
 pub struct city::Watch

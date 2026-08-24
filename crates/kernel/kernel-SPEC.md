@@ -741,7 +741,9 @@ pub struct UnplannedProgress { pub steps: u32, pub budget: BudgetUse }   // 无 
 pub struct ApprovalId(String);               // 非空；uuid v7 由效果层发，kernel 不生成
 #[non_exhaustive] pub enum ApprovalSource { Gate, Agent }
 #[non_exhaustive] pub enum ApprovalClass { Commitment, BudgetLimit, DiscardEscalate, AgentQuestion,
-                                           Delegation }   // P1.04：第一次派生要人点头
+                                           Delegation, Governance }
+// Delegation（P1.04）：第一次派生要人点头。Governance（P2.01）：改写一个 scope 的规则要人点头。
+// 两者都无对应 PolicyClass variant——一条「豁免改规则」的常设规则会把自己废掉。
 pub struct ClusterKey { pub class: ApprovalClass, pub detail: String }
 pub struct ApprovalItem { pub id: ApprovalId, pub source: ApprovalSource, pub actor: String,
                           pub action_desc: String, pub artifact: Locator, pub cluster_key: ClusterKey,
@@ -803,9 +805,12 @@ pub struct ToolName(String);        // 非空；ascii 小写/数字/下划线（
 pub struct ServerLabel(String);     // 非空；ascii 小写/数字，恒不含下划线（R1.13；见下）
 pub struct TimeoutMs(u64);          // 声明即承诺可协作取消
 #[non_exhaustive] pub enum Effect { Read, Write { domain: Address }, Egress,
-                                    Connector { label: ServerLabel }, Spawn, Spend }   // 决定过哪道门
+                                    Connector { label: ServerLabel }, Spawn, Govern, Spend }   // 决定过哪道门
 // Spawn（P1.04）：起第二个 Agent。不归 Read——一次派生能花多少、能碰什么，调用方自己的任何一道门都不管；
 // 管得住它的只有人。故它自成一类，`kernel::gate::delegation` 恒 Escalate，是否已获准由调用方的 granted 集回答。
+// Govern（P2.01）：改写一个 scope 被判的规则。刻意不归 Write——保留子树在每个写域之外，写门本就会拒；
+// 而它拒的理由正是「这件事归人」。`kernel::gate::govern` 恒 Escalate，且把提案正文截前 600 字进 action_desc：
+// 一个只被告知「要改规则」的人是在猜。
 #[non_exhaustive] pub enum Temporal { Timeless, Timestamped }
 #[non_exhaustive] pub enum CostTier { Free, Light, Heavy }        // 三档起步，对扩展开放；路由/预算消费在 S3
 #[non_exhaustive] pub enum RenderIntent { Generic, Terminal, Diff { locations: Vec<Address> } }

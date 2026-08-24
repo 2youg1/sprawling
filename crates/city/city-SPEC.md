@@ -83,6 +83,7 @@ impl BuildingRules {
 }
 pub fn load(city_root: &Path, addr: &Address) -> Result<BuildingRules, AxError>;
 pub fn evaluate(addr: &Address, text: &str) -> Result<BuildingRules, AxError>;
+pub fn write_rules(city_root: &Path, addr: &Address, text: &str) -> Result<BuildingRules, AxError>;
 pub fn building_path(city_root: &Path, addr: &Address) -> PathBuf;
 ```
 
@@ -93,6 +94,19 @@ pub fn building_path(city_root: &Path, addr: &Address) -> PathBuf;
 - **`review: true` 是楼级开关（P3.02）**：开则每个 Run 得一棵自己的 worktree，写的东西在别人检查并 merge 之前对楼不可见。**默认关**，与 confidential 的「不声明即错」相反——隐私的默认值不得惄悄取宽，而审查纪律的默认值不得惄悄取严：一个人派一个 Agent 去改一行字并盯着看，应当看得到文件变化。拼写不是 `true`／`false` 同样拒。
 - **`## Egress` 列可达域名（P1.09）**：`BuildingRules::egress()` 交 `kernel::egress_target` 判定。**confidential 楼同时列域名＝矛盾，拒**——「数据可入不可出」是那个设置的含义，域名表写在它下面会逼读者自己去调和两句话。
 - **今天的执行点与仍缺的执行点要分清**：provider 路径已被 `endpoint` 的 confidential 拒守住；Agent 自己发起的出网（exec 的 Program／Shell 臂、P4 浏览器）**没有可拦截处**，因为拦截需要 OS sandbox。判定已就位，拦截随 P4 落地——在那之前不要说「出网已管住」。
+- **`write_rules` 先求值再落盘（P2.01）**：一份写到一半就不再求值的治理文档会把它那栋楼一起带走。且**整份文档才是单位**：confidential 楼不得列域名，故两行可以各自合法而合在一起非法。
+
+### 8-2b city::rules_tool（P2.01；形状 4 适配器）
+
+```rust
+pub struct RulesTool { /* city_root、building、meta —— 私有；op ∈ {read, propose} */ }
+impl RulesTool { pub fn new(city_root: &Path, building: Address) -> Result<RulesTool, AxError>; }
+// meta.effect = Effect::Govern
+```
+
+- **为什么不是 `edit`**：`BUILDING.md` 住在楼的保留子树，没有任何写域到得了那里——这不是一个要绕过的障碍，它就是规则本身。故另开一道门（`Effect::Govern`），而那道门的守卫是人。
+- **楼是携入的而不是参数**：工具持调用方自己那栋楼的地址，于是一个 Run 无法靠填另一个名字去改别人的规则。
+- **人看得到自己在批什么**：`kernel::gate::govern` 把提案正文截前 600 字写进 `action_desc`。
 
 ### 8-3 city::building（P2.01；形状 2 值类型＋一个实例化动作）
 

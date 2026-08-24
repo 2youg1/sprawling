@@ -6,10 +6,6 @@ Where a row says **needs a ruling**, it touches something in the `guard` row of 
 
 Where a row says **evidence**, the claim was checked by running something or by a search whose empty result is the finding. Rows without it are judgements, and are marked as such.
 
-## P2 — A building's rules are drafted by an agent, not typed by a person
-
-`BUILDING.md` is a governance document with six sections, and asking a person to write one by hand is the wrong door. The reserved-subtree rule is not in the way: it says **no write domain** reaches `.sprawling/`, and `city::write_effort` (F2.16) already writes there through a validated path that no write domain touches. Give `BUILDING.md` the same kind of door — draft, `evaluate` into `BuildingRules`, refuse what does not evaluate — **and put an approval in front of it**, because a building rewriting its own rules mid-run is what the reserved subtree exists to prevent. Judgement, not evidence: the approval is my reading of the rule, not something the rule states.
-
 ## P3 — What the last run left unfinished
 
 1. **Ask a provider what it serves before attaching it.** The model list arrives only as a side effect of `AttachEndpoint`, so a person cannot see what a key buys until it is registered, and cannot choose a subset. Needs a `Query` that probes a base URL and returns model ids, and a settings form that ticks the ones to admit. `gateway::endpoint` already does the probing; the wire has no way to ask for it.

@@ -53,6 +53,10 @@ pub enum ApprovalClass {
     BudgetLimit,
     DiscardEscalate,
     AgentQuestion,
+    /// Rewriting the rules a scope's own runs are judged by. Like
+    /// `Delegation`, no `PolicyClass` variant: a standing rule that
+    /// waives changes to the rules is a rule that repeals itself.
+    Governance,
     /// Handing work to a second agent. No `PolicyClass` variant, which
     /// is the type-level half of "a standing rule never grants this":
     /// the answer holds for the cluster the person was shown and

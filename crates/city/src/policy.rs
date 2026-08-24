@@ -209,6 +209,46 @@ pub fn load(city_root: &Path, addr: &Address) -> Result<BuildingRules, AxError> 
     }
 }
 
+/// Replaces a building's rules with a proposal that evaluates.
+///
+/// The evaluation comes first and the write only follows it, so the file
+/// on disk is always one this build can read: a governance document that
+/// stopped parsing halfway through a rewrite would take its building
+/// with it. What comes back is what the next run will be governed by,
+/// read from the proposal rather than from the file, because those two
+/// are the same bytes and only one of them can be returned.
+///
+/// The path is inside the scope's reserved subtree, which no write
+/// domain reaches - which is exactly why this is a door of its own and
+/// not an `edit`.
+///
+/// # Errors
+/// Propagates the evaluation's refusal, and a directory or file that
+/// cannot be written.
+pub fn write_rules(city_root: &Path, addr: &Address, text: &str) -> Result<BuildingRules, AxError> {
+    let rules = evaluate(addr, text)?;
+    let path = building_path(city_root, addr);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|err| {
+            AxError::failure(
+                AxCode::StorageFatal,
+                "write a building's rules",
+                format!("{}: {err}", dir.display()),
+            )
+            .with_recovery("fix the directory's permissions")
+        })?;
+    }
+    std::fs::write(&path, text).map_err(|err| {
+        AxError::failure(
+            AxCode::StorageFatal,
+            "write a building's rules",
+            format!("{}: {err}", path.display()),
+        )
+        .with_recovery("fix the file's permissions")
+    })?;
+    Ok(rules)
+}
+
 /// Evaluates the text of a `BUILDING.md`.
 ///
 /// # Errors

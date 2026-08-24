@@ -383,6 +383,7 @@ pub fn kernel::egress_target(&kernel::EgressAllowlist, &kernel::EgressTarget) ->
 pub fn kernel::forecast(&kernel::ExecArm) -> kernel::DiscardForecast
 pub fn kernel::freeze(&kernel::LayeredValue<kernel::ClockStampGranularity>, &kernel::LayeredValue<alloc::vec::Vec<kernel::ClockZone>>, &kernel::LayeredValue<kernel::Effort>, &kernel::LayeredValue<kernel::SandboxLimits>, &kernel::LayeredValue<alloc::vec::Vec<kernel::McpServer>>) -> kernel::FrozenConfig
 pub fn kernel::gate_discard(&kernel::DiscardRequest, &kernel::Registry, &kernel::GateContext, &str, &kernel::Locator) -> kernel::GateOutcome
+pub fn kernel::govern(&kernel::GateContext, &kernel::Address, &kernel::Address, &str, &kernel::Locator, &kernel::TaintSet) -> kernel::GateOutcome
 pub fn kernel::match_item(&kernel::Policy, &kernel::ApprovalItem) -> kernel::PolicyApplication
 pub fn kernel::may_answer(&kernel::Autonomy, &kernel::ApprovalItem, &kernel::Answerer) -> kernel::AnswerVerdict
 pub fn kernel::message_payload(&[kernel::ContentBlock]) -> core::result::Result<kernel::Payload, kernel::AxError>
@@ -411,6 +412,7 @@ pub kernel::ApprovalClass::BudgetLimit
 pub kernel::ApprovalClass::Commitment
 pub kernel::ApprovalClass::Delegation
 pub kernel::ApprovalClass::DiscardEscalate
+pub kernel::ApprovalClass::Governance
 pub kernel::ApprovalItem::action_desc: alloc::string::String
 pub kernel::ApprovalItem::actor: alloc::string::String
 pub kernel::ApprovalItem::artifact: kernel::Locator
@@ -555,6 +557,7 @@ pub kernel::EditWarVerdict::Freeze::addr: kernel::Address
 pub kernel::Effect::Connector
 pub kernel::Effect::Connector::label: kernel::ServerLabel
 pub kernel::Effect::Egress
+pub kernel::Effect::Govern
 pub kernel::Effect::Read
 pub kernel::Effect::Spawn
 pub kernel::Effect::Spend

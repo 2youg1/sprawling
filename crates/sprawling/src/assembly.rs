@@ -2972,6 +2972,10 @@ impl RunWorker {
             std::rc::Rc::clone(&delegates),
         )?;
         let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
+        // The one door into the building's own governance. It reaches
+        // the reserved subtree, which no write domain does, so it goes
+        // through the person rather than through the write gate.
+        let rules_tool = city::RulesTool::new(&self.city_root, building.addr().clone())?;
         catalog
             .borrow_mut()
             .admit_tool(kernel::Tool::meta(&archive_tool))?;
@@ -3017,6 +3021,9 @@ impl RunWorker {
         catalog
             .borrow_mut()
             .admit_tool(kernel::Tool::meta(&workshop_tool))?;
+        catalog
+            .borrow_mut()
+            .admit_tool(kernel::Tool::meta(&rules_tool))?;
         // The one tool that reads, and the only caller of the catalog's
         // second-level disclosure: without it a building's reading room
         // could name a skill and never hand it over. It holds the
@@ -3044,6 +3051,7 @@ impl RunWorker {
         bench.register(Box::new(claim_tool))?;
         bench.register(Box::new(delegate_tool))?;
         bench.register(Box::new(workshop_tool))?;
+        bench.register(Box::new(rules_tool))?;
         bench.register(Box::new(archive_tool))?;
         bench.register(Box::new(exec))?;
         bench.register(Box::new(read))?;
@@ -6904,6 +6912,81 @@ addr = \"gone/room1\"
         assert!(
             body["at"].as_str().unwrap().starts_with("cas:b3-"),
             "the account is pinned before it is judged"
+        );
+    }
+
+    /// A building's rules are a governance document, and asking a
+    /// person to type one by hand is the wrong door. An agent drafts
+    /// them; the person is shown the proposal and allows it; the file
+    /// lands in the reserved subtree that no write domain reaches.
+    #[test]
+    fn a_building_can_be_asked_to_rewrite_its_own_rules_and_the_person_decides() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let proposal = serde_json::json!({
+            "op": "propose",
+            "text": "# lab\n\nconfidential: false\nreview: true\n\n## Write domain\n\n- lab\n",
+        });
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                completion_with("drafting the rules", "rules", "tu_1", proposal.clone()),
+                completion("waiting on a person", None),
+                completion_with("drafting the rules", "rules", "tu_2", proposal),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        let before = city::load(dir.path(), &Address::parse("lab").unwrap()).unwrap();
+        assert!(!before.review(), "the template does not ask for review");
+
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("lab/room1").unwrap(),
+                task: "this building's work needs checking before it lands".to_owned(),
+                goal: "the rules say so, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+        assert!(
+            !city::load(dir.path(), &Address::parse("lab").unwrap())
+                .unwrap()
+                .review(),
+            "a building rewrote its own rules without anybody being asked"
+        );
+
+        let waiting = worker
+            .pending
+            .values()
+            .next()
+            .cloned()
+            .expect("the person was never asked");
+        assert_eq!(waiting.cluster_key.class, kernel::ApprovalClass::Governance);
+        assert!(
+            waiting.action_desc.contains("review: true"),
+            "the person is shown what they are allowing: {}",
+            waiting.action_desc
+        );
+        allow_the_one_pending_item(&mut worker);
+
+        let after = city::load(dir.path(), &Address::parse("lab").unwrap()).unwrap();
+        assert!(after.review(), "the allowed proposal never landed");
+        assert!(
+            city::building_path(dir.path(), &Address::parse("lab").unwrap())
+                .to_string_lossy()
+                .contains(".sprawling"),
+            "the rules live where no write domain reaches"
         );
     }
 

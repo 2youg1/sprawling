@@ -443,6 +443,50 @@ pub fn delegation(
     }
 }
 
+/// The Governance door: what governs a scope changes because a person
+/// changed it.
+///
+/// Always escalates, for the same reason `delegation` does, and the
+/// description carries a bounded excerpt of the proposal - a person
+/// asked to allow a rewrite of the rules and shown only the word
+/// "rewrite" is being asked to guess.
+pub fn govern(
+    ctx: &GateContext,
+    asking: &Address,
+    scope: &Address,
+    proposal: &str,
+    artifact: &Locator,
+    taint: &TaintSet,
+) -> GateOutcome {
+    let excerpt: String = proposal.chars().take(PROPOSAL_EXCERPT).collect();
+    let ellipsis = if proposal.chars().count() > PROPOSAL_EXCERPT {
+        " ..."
+    } else {
+        ""
+    };
+    GateOutcome::Escalate {
+        item: item(
+            ctx,
+            ApprovalClass::Governance,
+            asking.as_str().to_owned(),
+            format!(
+                "{} wants to rewrite the rules of {}:
+{excerpt}{ellipsis}",
+                asking.as_str(),
+                scope.as_str()
+            ),
+            artifact.clone(),
+            !taint.is_empty(),
+        ),
+    }
+}
+
+/// How much of a proposed governance document a person is shown in the
+/// approvals list. Long enough to read the declarations that matter,
+/// short enough that the list stays a list; the whole text is in the
+/// `tool_called` line either way.
+const PROPOSAL_EXCERPT: usize = 600;
+
 /// The spawn admission: delegates do not delegate (10.1). The refusal
 /// teaches the alternative instead of hiding the tool.
 pub fn spawn(parent: Depth, kind: &DelegateKind) -> GateOutcome {
