@@ -59,6 +59,7 @@ pub use digest_cache::DigestCache;
 
 mod worktree;
 
+pub use worktree::PlannedMerge;
 pub use worktree::WorktreeLease;
 pub use worktree::WorktreeName;
 pub use worktree::Worktrees;

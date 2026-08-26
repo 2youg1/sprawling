@@ -1,5 +1,6 @@
 #[non_exhaustive] pub enum memory::QueueLane
 #[non_exhaustive] pub enum memory::RunPhase
+impl core::fmt::Debug for memory::PlannedMerge<'_>
 impl core::fmt::Debug for memory::Worktrees
 impl kernel::ledger::Ledger for memory::JsonlLedger
 impl memory::Attribution
@@ -13,6 +14,7 @@ impl memory::JsonlLedger
 impl memory::LedgerIndex
 impl memory::Manifest
 impl memory::MemoryError
+impl memory::PlannedMerge<'_>
 impl memory::Projection
 impl memory::QueueLane
 impl memory::WorktreeLease
@@ -72,6 +74,9 @@ pub fn memory::Manifest::files(&self) -> u64
 pub fn memory::Manifest::head(&self) -> &str
 pub fn memory::Manifest::records(&self) -> u64
 pub fn memory::MemoryError::into_ax(self) -> kernel::error::AxError
+pub fn memory::PlannedMerge<'_>::apply(self) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::PlannedMerge<'_>::commit(&self) -> alloc::string::String
+pub fn memory::PlannedMerge<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn memory::Projection::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::Projection::apply_all<'a>(&mut self, impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::Projection::export_canonical(&self) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
@@ -89,8 +94,8 @@ pub fn memory::WorktreeName::parse(&str) -> core::result::Result<memory::Worktre
 pub fn memory::Worktrees::claim(&self, &memory::WorktreeName) -> core::result::Result<memory::WorktreeLease, memory::MemoryError>
 pub fn memory::Worktrees::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn memory::Worktrees::live(&self) -> core::result::Result<alloc::vec::Vec<memory::WorktreeName>, memory::MemoryError>
-pub fn memory::Worktrees::merge(&self, &memory::WorktreeName) -> core::result::Result<alloc::string::String, memory::MemoryError>
 pub fn memory::Worktrees::open(&std::path::Path) -> core::result::Result<memory::Worktrees, memory::MemoryError>
+pub fn memory::Worktrees::plan_merge(&self, &memory::WorktreeName) -> core::result::Result<memory::PlannedMerge<'_>, memory::MemoryError>
 pub fn memory::Worktrees::release(&self, memory::WorktreeLease) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::open_restored(&std::path::Path, kernel::event::TimeMs) -> core::result::Result<std::path::PathBuf, memory::MemoryError>
 pub fn memory::read_raw_lines_at(&std::path::Path) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, memory::MemoryError>
@@ -180,6 +185,7 @@ pub struct memory::JsonlLedger
 pub struct memory::LedgerIndex
 pub struct memory::Manifest
 pub struct memory::OpenReport
+pub struct memory::PlannedMerge<'a>
 pub struct memory::Projection
 pub struct memory::ProjectionOpenReport
 pub struct memory::QueueItem

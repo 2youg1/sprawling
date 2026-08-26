@@ -73,9 +73,11 @@ fn a_node_reaches_the_building_only_through_someone_elses_verification() {
     assert_eq!(verified.verified_by(), "lab/tests");
 
     // Only now does anything move, and the record says who checked it.
-    let commit = trees
-        .merge(&WorktreeName::parse(verified.branch()).unwrap())
+    let planned = trees
+        .plan_merge(&WorktreeName::parse(verified.branch()).unwrap())
         .unwrap();
+    let commit = planned.commit();
+    planned.apply().unwrap();
     let merged = verified.merged(commit);
     assert_eq!(
         std::fs::read_to_string(dir.path().join("lab").join("notes.md")).unwrap(),

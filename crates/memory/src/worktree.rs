@@ -137,6 +137,47 @@ impl std::fmt::Debug for Worktrees {
     }
 }
 
+/// A merge that has been decided and not yet made.
+///
+/// The commit the trunk will land on is settled at construction, and
+/// every refusal has already happened, so the line announcing this merge
+/// can be written before the trunk moves. [`PlannedMerge::apply`] is the
+/// only way to move it, and this value has no other source than
+/// [`Worktrees::plan_merge`] - writing the two in the wrong order means
+/// obtaining something that cannot be obtained.
+pub struct PlannedMerge<'a> {
+    trees: &'a Worktrees,
+    target: git2::Oid,
+}
+
+/// Names the decision, not the repository holding it: a `Worktrees` has
+/// no useful `Debug` and printing one would say nothing about which
+/// merge this is.
+impl std::fmt::Debug for PlannedMerge<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PlannedMerge")
+            .field("commit", &self.target)
+            .finish()
+    }
+}
+
+impl PlannedMerge<'_> {
+    /// The commit the city trunk will point at, for the line that says so.
+    pub fn commit(&self) -> String {
+        self.target.to_string()
+    }
+
+    /// Brings a node's committed work into the city's own trunk.
+    ///
+    /// # Errors
+    /// Propagates a trunk that cannot be moved or checked out. The
+    /// fast-forward judgement is not repeated: it was made, and refused
+    /// if it had to be, before this value existed.
+    pub fn apply(self) -> Result<(), MemoryError> {
+        self.trees.fast_forward(self.target)
+    }
+}
+
 impl Worktrees {
     /// Opens the city's repository as the source every tree branches
     /// from.
@@ -221,7 +262,7 @@ impl Worktrees {
         })
     }
 
-    /// Brings a node's committed work into the city's own trunk.
+    /// Decides a merge without making it.
     ///
     /// Fast-forward only. A node whose trunk moved underneath it does
     /// not get its work merged on top of somebody else's by a machine:
@@ -230,10 +271,15 @@ impl Worktrees {
     /// moved, and for the same reason - the party who knows whether the
     /// work is still right is the one who did it.
     ///
+    /// Every refusal happens here, before anything moves, and the commit
+    /// the trunk will point at is already known - so a caller can write
+    /// the line that announces the merge before the merge exists, and
+    /// still never announce one that was going to be refused.
+    ///
     /// # Errors
     /// Refuses an unknown branch, a repository with no commit, and a
     /// merge that is not a fast-forward.
-    pub fn merge(&self, name: &WorktreeName) -> Result<String, MemoryError> {
+    pub fn plan_merge(&self, name: &WorktreeName) -> Result<PlannedMerge<'_>, MemoryError> {
         let refuse = |op: &'static str, detail: String| MemoryError::Worktree { op, detail };
         let branch = self
             .repo
@@ -243,7 +289,7 @@ impl Worktrees {
             .get()
             .peel_to_commit()
             .map_err(|err| refuse("read a node branch", err.to_string()))?;
-        let mut head = self
+        let head = self
             .repo
             .head()
             .map_err(|err| refuse("read the city trunk", err.to_string()))?;
@@ -261,14 +307,27 @@ impl Worktrees {
                 detail: format!("the trunk moved to {} after this node branched", ours.id()),
             });
         }
-        head.set_target(theirs.id(), "sprawling: merge a verified node")
+        Ok(PlannedMerge {
+            trees: self,
+            target: theirs.id(),
+        })
+    }
+
+    /// Moves the trunk to a commit [`Worktrees::plan_merge`] settled on.
+    fn fast_forward(&self, target: git2::Oid) -> Result<(), MemoryError> {
+        let refuse = |op: &'static str, detail: String| MemoryError::Worktree { op, detail };
+        let mut head = self
+            .repo
+            .head()
+            .map_err(|err| refuse("read the city trunk", err.to_string()))?;
+        head.set_target(target, "sprawling: merge a verified node")
             .map_err(|err| refuse("move the city trunk", err.to_string()))?;
         let mut checkout = git2::build::CheckoutBuilder::new();
         checkout.force();
         self.repo
             .checkout_head(Some(&mut checkout))
             .map_err(|err| refuse("check out the merged trunk", err.to_string()))?;
-        Ok(theirs.id().to_string())
+        Ok(())
     }
 
     /// Gives a tree back: the files go, then the repository forgets it.
@@ -512,7 +571,7 @@ mod tests {
             .wave_pre("lab", TimeMs::new(2_000), "node-1")
             .unwrap();
 
-        trees.merge(lease.name()).unwrap();
+        trees.plan_merge(lease.name()).unwrap().apply().unwrap();
         assert_eq!(
             std::fs::read_to_string(dir.path().join("lab").join("notes.md")).unwrap(),
             "from the node\n",
@@ -532,7 +591,7 @@ mod tests {
             .wave_pre("lab", TimeMs::new(4_000), "node-2")
             .unwrap();
 
-        let err = trees.merge(stale.name()).unwrap_err().into_ax();
+        let err = trees.plan_merge(stale.name()).unwrap_err().into_ax();
         assert_eq!(err.code(), &kernel::AxCode::VersionConflict);
         assert!(err.recovery().contains("verified again"));
         assert_eq!(

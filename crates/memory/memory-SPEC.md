@@ -167,6 +167,24 @@ impl JsonlLedger {
 
 **断电点阵初版**：以 `cut_at_op` 扫描 1..=N 全部注入点各跑一遍「写入→断电→重开→断言」；断言两条：链恒可验，**已返回 Ok 的波恒存活**（append_all 耐久契约的机器面）。S1.08 落 A3 点 1（EventRecord 落账），点 2（CAS rename）的终断言随 S1.09 cas 卡；git commit／projection 写两点随其模块（S3）接入同一点阵。
 
+**合并拆成决定与动作（整修卡 R2.18）**：
+
+```rust
+impl Worktrees {
+    pub fn plan_merge(&self, name: &WorktreeName) -> Result<PlannedMerge<'_>, MemoryError>;  // 只读；全部拒绝在此
+}
+pub struct PlannedMerge<'a> { /* 私有：trees、target */ }
+impl PlannedMerge<'_> {
+    pub fn commit(&self) -> String;               // 干线将指向的 commit，供那条行写
+    pub fn apply(self) -> Result<(), MemoryError>; // 移动干线；`PlannedMerge` 无第二来源
+}
+// 旧 `merge` 已删（读者写者全部迁完：assembly 一处、本模块自测两处、collab/tests/pr_flow 一处）
+```
+
+原 `merge` 一次做了三件事：判快进、移干线、检出。**判定的输入在动世界之前就全部齐了**——`theirs` 就是分支尖，`ours` 就是干线尖，两者都读得到，所以「这一合并会落在哪个 commit」与「它可不可以合」都能先答。拆开之后，装配层得以按 §8-24 的规矩落行在前、动世界在后，而 §8-24 当初担心的那件事——「先落账就是把一句谎写进历史里的可达路径，因为 `merge` 有一条可达的失败臂 `MergeStale`」——**不再可达**：那条失败臂现在住在 `plan_merge` 里，早于任何一行。两头因此同时成立。
+
+形制与 `bin::effect` 的 `Landing`／`Then` 同源：动作只能从决定里拿到，写反顺序等于去取一个取不到的值。
+
 ### 8-3 memory::cas（S1.09）
 
 ```rust
