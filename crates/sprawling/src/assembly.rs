@@ -218,16 +218,24 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
     if !root.is_dir() {
         return None;
     }
-    let text = std::fs::read_to_string(root.join(city::ROADMAP_FILE)).unwrap_or_default();
-    let (progress, problems) = match kernel::check_roadmap_shape(&text) {
-        kernel::RoadmapShape::WellFormed { rows } => (kernel::tally(&rows), Vec::new()),
-        kernel::RoadmapShape::Malformed { problems } => (
-            kernel::Progress::Unplanned(kernel::UnplannedProgress {
-                steps: 0,
-                budget: kernel::BudgetUse::default(),
-            }),
-            problems,
-        ),
+    let unplanned = || {
+        kernel::Progress::Unplanned(kernel::UnplannedProgress {
+            steps: 0,
+            budget: kernel::BudgetUse::default(),
+        })
+    };
+    // A plan that cannot be opened is not a plan somebody wrote badly.
+    // Read as an empty document it would go through the shape check and
+    // come back as `no four-column table found`, which sends a person to
+    // edit a table when the file will not open. `problems` is where the
+    // page already says what is wrong with a building's plan, so the
+    // reason goes there rather than into a shape nobody derived.
+    let (progress, problems) = match city::roadmap(city_root, addr) {
+        Err(err) => (unplanned(), vec![err.to_string()]),
+        Ok(text) => match kernel::check_roadmap_shape(&text) {
+            kernel::RoadmapShape::WellFormed { rows } => (kernel::tally(&rows), Vec::new()),
+            kernel::RoadmapShape::Malformed { problems } => (unplanned(), problems),
+        },
     };
     // What counts as a room is `city::rooms`, which the model-facing
     // roster reads too: a page and an agent disagreeing about which
@@ -340,8 +348,33 @@ fn city_address(city_root: &Path) -> Option<Address> {
 
 /// The city segment as this city has it: the file the person may edit,
 /// falling back to the built-in copy when a city predates it.
-fn city_segment(city_root: &Path) -> Vec<u8> {
-    std::fs::read(city_root.join(city::CITY_FILE)).unwrap_or_else(|_| CITY_MD.as_bytes().to_vec())
+///
+/// The fallback is for one condition only. A city written before the
+/// file existed does not have it, and the built-in copy is the right
+/// answer there. Every other failure - a directory in its place, a
+/// permission this process does not have - would have this hand a run
+/// the built-in norms while the person's own edited norms sat unread on
+/// the disk, and the run would obey the wrong document without anyone
+/// being told.
+///
+/// # Errors
+/// `E_STORAGE_FATAL` naming the path, for every failure except a file
+/// that is not there.
+fn city_segment(city_root: &Path) -> Result<Vec<u8>, AxError> {
+    let path = city_root.join(city::CITY_FILE);
+    match std::fs::read(&path) {
+        Ok(bytes) => Ok(bytes),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(CITY_MD.as_bytes().to_vec()),
+        Err(err) => Err(AxError::failure(
+            AxCode::StorageFatal,
+            "read the city's norms",
+            format!("{}: {err}", path.display()),
+        )
+        .with_recovery(
+            "every run in this city is governed by that file; make it readable, \
+             or take it away to fall back on the copy this build carries",
+        )),
+    }
 }
 
 /// The building slot: where this run stands, then the rules it stands
@@ -2212,9 +2245,12 @@ impl RunWorker {
     pub(crate) fn close_city(&mut self) -> Result<(), AxError> {
         // The city's own norm, not a building's: `city::norms` answers
         // for a run at an address, and this line belongs to the city.
+        // Through the same reader the prefix uses. What this city's
+        // norms are has one answer, and hashing zero bytes here made the
+        // must-read locator point at nothing while the handoff went on
+        // saying the next session must read them.
         let mut must_read = Vec::new();
-        let city_file = self.city_root.join(city::CITY_FILE);
-        let bytes = std::fs::read(&city_file).unwrap_or_default();
+        let bytes = city_segment(&self.city_root)?;
         let hash = self.cas.put(&bytes).map_err(memory::MemoryError::into_ax)?;
         must_read.push(Locator::parse(&format!("cas:b3-{hash}"))?);
         let standing = self.ledger.position();
@@ -3776,7 +3812,7 @@ impl RunWorker {
         resident.push(NEWLINE);
         resident.extend_from_slice(catalog.borrow().render().as_bytes());
         let prefix = FrozenPrefix::assemble(
-            FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)),
+            FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)?),
             FrozenSegment::new(
                 SegmentSlot::Building,
                 building_segment(&self.city_root, &addr, building.addr()),
@@ -5065,6 +5101,66 @@ mod tests {
             !answer.rooms.iter().any(|room| room.starts_with('.')),
             "a reserved subtree is not a room: {:?}",
             answer.rooms
+        );
+    }
+
+    /// A plan nobody can open and a plan somebody wrote badly are two
+    /// different facts, and the page used to state the second one.
+    ///
+    /// Reading the file as empty runs it through `check_roadmap_shape`,
+    /// which finds no header row and answers `no four-column table
+    /// found`. That sends a person to edit a table when what they have
+    /// to fix is a file that will not open - the same misreport R2.06
+    /// removed from the dispatch path, still standing on the page.
+    #[test]
+    fn a_building_page_says_the_plan_cannot_be_read_rather_than_that_it_is_malformed() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let lab = Address::parse("lab").unwrap();
+        city::create_building(dir.path(), &lab, city::BuildingTemplate::Minimal).unwrap();
+        // A directory where the plan belongs, so the read fails for a
+        // reason that is not "it is not there yet".
+        let plan = city::roadmap_path(dir.path(), &lab);
+        let _ = std::fs::remove_file(&plan);
+        std::fs::create_dir_all(&plan).unwrap();
+
+        let answer = read_building(dir.path(), &lab).expect("the building is still a building");
+        assert!(
+            answer
+                .problems
+                .iter()
+                .any(|problem| problem.contains(city::ROADMAP_FILE)),
+            "the page has to name the file a person must fix: {:?}",
+            answer.problems
+        );
+    }
+
+    /// The city's norms are what a closing city tells the next session
+    /// to read, so a close that cannot read them has nothing to say.
+    ///
+    /// `unwrap_or_default` made the must-read locator the hash of zero
+    /// bytes: the handoff still claimed the next session must read the
+    /// city's norms, and pointed at nothing.
+    #[test]
+    fn a_city_whose_norms_cannot_be_read_refuses_to_say_it_wrote_them_down() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        let norms = dir.path().join(city::CITY_FILE);
+        std::fs::remove_file(&norms).unwrap();
+        std::fs::create_dir_all(&norms).unwrap();
+
+        let err = worker
+            .close_city()
+            .expect_err("a close that cannot name the norms is not an orderly close");
+        assert!(
+            err.to_string().contains(city::CITY_FILE),
+            "the refusal has to name the file a person must fix: {err}"
         );
     }
 
