@@ -5810,14 +5810,28 @@ mod tests {
             // turns are, not how many turns the loop will take.
             let mut chats = replies.into_iter().peekable();
             let mut last = String::new();
+            // One bad socket ends that socket, not the server. A client
+            // is free to reset a connection at any point, including
+            // before the accept completes, and a server that returns on
+            // it takes every later turn of the script with it. The bound
+            // is there so a listener that is genuinely gone stops rather
+            // than spins.
+            let mut refused = 0_u32;
             for stream in listener.incoming() {
-                let Ok(mut stream) = stream else { return };
+                let Ok(mut stream) = stream else {
+                    refused = refused.saturating_add(1);
+                    if refused > 64 {
+                        return;
+                    }
+                    continue;
+                };
+                refused = 0;
                 let mut head = String::new();
                 let mut buf = [0u8; 4096];
-                loop {
-                    let Ok(n) = std::io::Read::read(&mut stream, &mut buf) else {
-                        return;
-                    };
+                let mut whole = false;
+                // A read that errors ends this request, not the loop
+                // that serves the next one.
+                while let Ok(n) = std::io::Read::read(&mut stream, &mut buf) {
                     if n == 0 {
                         break;
                     }
@@ -5833,15 +5847,24 @@ mod tests {
                             .unwrap_or(0);
                         let body_seen = head.len().saturating_sub(end.saturating_add(4));
                         if body_seen >= want {
+                            whole = true;
                             break;
                         }
                     }
                 }
-                if head.split_once("\r\n\r\n").is_some() {
-                    // The whole exchange, headers included: a test about
-                    // what went out on the wire needs the headers too.
-                    recorder.lock().unwrap().push(head.clone());
+                // What counts as a request is settled here and nowhere
+                // else. It used to be settled twice - the record asked
+                // for a header terminator and the reply asked for
+                // nothing at all - so a socket that carried no request
+                // stayed off the record and still spent a scripted
+                // reply, and every turn after it answered the question
+                // before it.
+                if !whole {
+                    continue;
                 }
+                // The whole exchange, headers included: a test about
+                // what went out on the wire needs the headers too.
+                recorder.lock().unwrap().push(head.clone());
                 let body = if head.starts_with("GET ") {
                     list.clone()
                 } else {
@@ -5949,6 +5972,66 @@ mod tests {
             idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"select"),
         })?;
         Ok(worker)
+    }
+
+    /// The fake provider hands out its scripted replies in order, so
+    /// whatever decides that a turn happened decides what every later
+    /// turn answers. A client may open a socket and write nothing, or
+    /// stop halfway through a body; neither asked anything, and neither
+    /// may spend a reply the next question needs. This arrived as a run
+    /// that never opened the request its script told it to, three turns
+    /// downstream, in a saturated workspace run and never alone.
+    #[test]
+    fn a_socket_that_carried_no_request_spends_no_scripted_reply() {
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                completion("the first turn", None),
+                completion("the second turn", None),
+            ],
+        );
+        let addr = base_url
+            .trim_start_matches("http://")
+            .trim_end_matches("/v1")
+            .to_owned();
+
+        // Opened and abandoned: a pooled socket nobody wrote to.
+        drop(std::net::TcpStream::connect(&addr).unwrap());
+
+        // Opened and cut short: a body that stops before content-length.
+        let mut cut = std::net::TcpStream::connect(&addr).unwrap();
+        std::io::Write::write_all(
+            &mut cut,
+            b"POST /v1/chat/completions HTTP/1.1\r\ncontent-length: 64\r\n\r\n{\"cut\":",
+        )
+        .unwrap();
+        drop(cut);
+
+        // The first socket that actually asked gets the first reply.
+        let body = "{\"model\":\"m-local\"}";
+        let mut asking = std::net::TcpStream::connect(&addr).unwrap();
+        std::io::Write::write_all(
+            &mut asking,
+            format!(
+                "POST /v1/chat/completions HTTP/1.1\r\ncontent-length: {}\r\n\r\n{body}",
+                body.len()
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        let mut answered = String::new();
+        std::io::Read::read_to_string(&mut asking, &mut answered).unwrap();
+
+        assert!(
+            answered.contains("the first turn"),
+            "a socket that asked nothing spent the first reply: {answered}"
+        );
+        assert_eq!(
+            provider.exchanges().len(),
+            1,
+            "only what arrived whole is on the record: {:?}",
+            provider.exchanges()
+        );
     }
 
     #[test]
