@@ -571,9 +571,16 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
     let console = wanted.then(|| console::Terminal {
         url: firstrun::local_url(bind),
         token: token.clone(),
+        // The three facts the banner above just printed. `/serving`
+        // reprints them on demand, because the event stream scrolls
+        // them away within seconds of a city getting busy.
+        city: city.display().to_string(),
+        client: client_line.clone(),
+        bind,
     });
     if console.is_some() {
-        println!("  This terminal is the console. `/help` lists what it takes.");
+        println!("  This terminal is the console. `/help` lists what it takes,");
+        println!("  and `/serving` says where this city listens and what is running in it.");
         println!();
     }
     let (vault, vault_notice) = assembly::open_vault();

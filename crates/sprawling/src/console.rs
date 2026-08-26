@@ -16,6 +16,7 @@
 
 use kernel::Address;
 use std::io::{BufRead, Write};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// What a console needs from the process that started it.
@@ -23,16 +24,42 @@ use std::sync::Arc;
 /// The pairing token arrives as a copy of the one `serve` already read,
 /// so `/web` can carry it and nobody has to transcribe a secret. It is
 /// not re-read from the environment here: one read, one authority.
+///
+/// The other three are what the startup banner printed and the event
+/// stream then scrolled away. A person watching a city from somewhere
+/// else needs them back on demand, and this process is the only thing
+/// that knows them - they are facts about a listener, not about a
+/// history, so no query can answer them.
 pub struct Terminal {
     pub url: String,
     pub token: Option<String>,
+    /// The city directory being served, as a person would type it.
+    pub city: String,
+    /// Where the client bundle comes from: embedded, or a directory read
+    /// per request.
+    pub client: String,
+    /// The address actually bound, which `url` cannot recover: a city on
+    /// `0.0.0.0` is opened at `127.0.0.1` and the difference is exactly
+    /// what decides whether strangers can reach it.
+    pub bind: SocketAddr,
 }
+
+/// The one function that turns a question into an answer, shared with
+/// the socket rather than reimplemented beside it.
+///
+/// `assembly::serve` builds it once and hands the same `Arc` to both
+/// surfaces, so a number this console prints and a number a browser
+/// draws cannot disagree: they are one call.
+pub(crate) type Answering =
+    Arc<dyn Fn(channels::Query) -> Result<channels::Answer, kernel::AxError> + Send + Sync>;
 
 /// The console's own verbs, which are not on the wire.
 ///
 /// Exhaustive, and checked against the wire's vocabulary so a name can
-/// never mean two things.
-const CONTROL: [&str; 4] = ["help", "web", "at", "quit"];
+/// never mean two things. `serving` rather than `status`: the glossary
+/// already gives `status` to the tool that answers what one run's
+/// situation is, and one name per concept is a gate.
+const CONTROL: [&str; 5] = ["help", "web", "at", "quit", "serving"];
 
 /// What one line asked for.
 #[derive(Debug, PartialEq)]
@@ -41,6 +68,9 @@ pub(crate) enum Line {
     Nothing,
     Help,
     OpenWeb,
+    /// What this process is doing: where it listens, what guards it, and
+    /// the city's own counts beside it.
+    Serving,
     Select(Address),
     Quit,
     /// A wire verb, already built into the frame it names.
@@ -135,6 +165,7 @@ pub(crate) fn parse(line: &str, selected: Option<&Address>) -> Line {
     match verb {
         "help" | "?" => Line::Help,
         "web" => Line::OpenWeb,
+        "serving" => Line::Serving,
         "quit" | "exit" => Line::Quit,
         "at" => match Address::parse(tail) {
             Ok(addr) => Line::Select(addr),
@@ -205,6 +236,7 @@ pub(crate) fn help(selected: Option<&Address>) -> String {
         "\n  {room}\n\n  \
          /help                     this\n  \
          /at <building>/<room>     choose where plain lines go\n  \
+         /serving                  where this city listens, and what is running in it\n  \
          /web                      open the WebUI, token included\n  \
          /quit                     close this console; the city stops\n\n  \
          anything else             work, dispatched to the chosen room\n\n  \
@@ -212,6 +244,71 @@ pub(crate) fn help(selected: Option<&Address>) -> String {
          /<command> <json>         {}\n",
         queries.join(", "),
         commands.join(", ")
+    )
+}
+
+/// What this process is doing, in one screen.
+///
+/// Pure: the listener's own facts come from [`Terminal`], the city's
+/// counts come from a `MetricsAnswer` the caller already obtained, and
+/// the process identifier arrives as a parameter. Nothing here reads a
+/// clock, a socket or a disk, so the whole readout is one comparison in
+/// a test.
+///
+/// **Resident memory is deliberately absent.** What "resident" means
+/// differs per platform, and `xtask::mem` is the one authority that says
+/// so: `smaps_rollup` Pss on Linux, `ps rss` on macOS, `WorkingSet64` on
+/// Windows. A second table here would be the third authority that
+/// module's own documentation warns about, so this prints the process
+/// identifier and the measurement stays one paste away.
+pub(crate) fn serving(
+    terminal: &Terminal,
+    vitals: Option<&channels::MetricsAnswer>,
+    pid: u32,
+) -> String {
+    let reach = if terminal.bind.ip().is_loopback() {
+        "this machine only"
+    } else if terminal.bind.ip().is_unspecified() {
+        "every interface on this machine"
+    } else {
+        "one interface, reachable from the network"
+    };
+    let door = match (terminal.token.is_some(), terminal.bind.ip().is_loopback()) {
+        (true, _) => "a pairing key is required",
+        (false, true) => "none - a loopback listener asks for nothing",
+        // Worth saying plainly rather than leaving to be discovered: an
+        // unkeyed listener beyond loopback is a city that anyone able to
+        // route to it may drive.
+        (false, false) => "NONE - anyone who can reach this address can drive this city",
+    };
+    let counts = match vitals {
+        Some(v) => format!(
+            "    runs      {} active, {} frozen\n    \
+             waiting   {} approval(s), {} signal(s)\n    \
+             holds     {} building(s), {} event(s), {} discard(s) outstanding\n",
+            v.runs_active,
+            v.runs_frozen,
+            v.approvals_waiting,
+            v.signals_waiting,
+            v.buildings,
+            v.events,
+            v.discards_outstanding
+        ),
+        // The listener's half is still true and still worth having:
+        // printing nothing because one of two sources was quiet would
+        // lose the half that answers "which port".
+        None => "    runs      the city did not answer; its views may be rebuilding\n".to_owned(),
+    };
+    format!(
+        "\n  sprawling is serving.\n\n    \
+         city      {}\n    \
+         WebUI     {}\n    \
+         bound     {}, {reach}\n    \
+         door      {door}\n    \
+         client    {}\n    \
+         process   pid {pid} - `cargo xtask mem {pid}` weighs it\n\n\
+         {counts}",
+        terminal.city, terminal.url, terminal.bind, terminal.client
     )
 }
 
@@ -237,6 +334,7 @@ pub(crate) fn web_url(terminal: &Terminal) -> String {
 pub(crate) fn start(
     terminal: Terminal,
     desk: Arc<crate::assembly::CommandDesk>,
+    answering: Answering,
     mut watching: tokio::sync::broadcast::Receiver<kernel::EventRecord>,
 ) {
     // What happened, printed as it happens, one JSON object per line -
@@ -251,7 +349,13 @@ pub(crate) fn start(
     });
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
-        drive(&terminal, &desk, &mut stdin.lock(), &mut std::io::stdout());
+        drive(
+            &terminal,
+            &desk,
+            &answering,
+            &mut stdin.lock(),
+            &mut std::io::stdout(),
+        );
     });
 }
 
@@ -259,6 +363,7 @@ pub(crate) fn start(
 fn drive<R: BufRead, W: Write>(
     terminal: &Terminal,
     desk: &crate::assembly::CommandDesk,
+    answering: &Answering,
     input: &mut R,
     out: &mut W,
 ) {
@@ -286,6 +391,20 @@ fn drive<R: BufRead, W: Write>(
                 // Never fatal: the URL is on the screen either way.
                 let _ = crate::firstrun::open_in_browser(&url);
             }
+            Line::Serving => {
+                // The counts come from the one question that already
+                // owns them, so this screen renders a number it never
+                // computes. A city too busy to answer still has a port.
+                let vitals = match answering(channels::Query::Metrics) {
+                    Ok(channels::Answer::Metrics(vitals)) => Some(*vitals),
+                    Ok(_) | Err(_) => None,
+                };
+                let _ = writeln!(
+                    out,
+                    "{}",
+                    serving(terminal, vitals.as_ref(), std::process::id())
+                );
+            }
             Line::Select(addr) => {
                 let _ = writeln!(out, "  work goes to {}", addr.as_str());
                 selected = Some(addr);
@@ -300,13 +419,13 @@ fn drive<R: BufRead, W: Write>(
                     let _ = writeln!(out, "  did you mean: {}", nearest.join(", "));
                 }
             }
-            Line::Frame(frame) => post(desk, *frame, out),
+            Line::Frame(frame) => post(desk, answering, *frame, out),
             Line::Work(task) => {
                 let Some(addr) = selected.clone() else {
                     continue;
                 };
                 match dispatch(&addr, &task) {
-                    Ok(frame) => post(desk, frame, out),
+                    Ok(frame) => post(desk, answering, frame, out),
                     Err(err) => {
                         let _ = writeln!(out, "  {err}");
                     }
@@ -316,8 +435,14 @@ fn drive<R: BufRead, W: Write>(
     }
 }
 
-/// One frame, onto the same desk a browser's frames land on.
-fn post<W: Write>(desk: &crate::assembly::CommandDesk, frame: channels::ClientFrame, out: &mut W) {
+/// One frame, onto the same desk a browser's frames land on, or into the
+/// same answering function a browser's questions reach.
+fn post<W: Write>(
+    desk: &crate::assembly::CommandDesk,
+    answering: &Answering,
+    frame: channels::ClientFrame,
+    out: &mut W,
+) {
     match frame {
         channels::ClientFrame::Command(command) => {
             // A refusal comes back here rather than into a log file, over
@@ -331,17 +456,39 @@ fn post<W: Write>(desk: &crate::assembly::CommandDesk, frame: channels::ClientFr
                 }),
             );
         }
-        // A question has an answer and a desk has no answer to give, so
-        // it is redirected rather than posted and forgotten. The wire
-        // client is the surface that answers questions.
-        channels::ClientFrame::Query(query) => {
-            let asked =
-                serde_json::to_string(&channels::ClientFrame::Query(query)).unwrap_or_default();
-            let _ = writeln!(out, "  a question is answered over the wire:");
-            let _ = writeln!(out, "      sprawling call '{asked}'");
-        }
+        // A question is not desk work: nothing is queued and nothing is
+        // refused later. It goes to the same function the socket calls,
+        // so a person inside a city stops being told to open a second
+        // terminal and ask it from outside.
+        channels::ClientFrame::Query(query) => answer(answering, query, out),
         channels::ClientFrame::Hello(_) => {
             let _ = writeln!(out, "  this console is already inside the city");
+        }
+    }
+}
+
+/// One question, answered where it was asked.
+///
+/// JSONL, one object per line - the shape `sprawling call` prints and
+/// the shape the event stream above already uses. Tables and diagrams
+/// belong to the browser; a console that drew them would be serving two
+/// masters at once.
+fn answer<W: Write>(answering: &Answering, query: channels::Query, out: &mut W) {
+    match answering(query) {
+        Ok(answer) => match serde_json::to_string(&answer) {
+            Ok(text) => {
+                let _ = writeln!(out, "{text}");
+            }
+            // An answer this build can produce but not spell is a defect
+            // in the wire type, and hiding it would make the console
+            // silently lossy about the one thing it exists to show.
+            Err(err) => {
+                let _ = writeln!(out, "  the answer could not be rendered: {err}");
+            }
+        },
+        Err(error) => {
+            let _ = writeln!(out, "  {error}");
+            let _ = writeln!(out, "  {}", error.recovery());
         }
     }
 }
@@ -382,11 +529,134 @@ fn dispatch(addr: &Address, task: &str) -> Result<channels::ClientFrame, kernel:
     reason = "test code"
 )]
 mod tests {
-    use super::{CONTROL, Line, help, parse, snake, verbs};
+    use super::{Answering, CONTROL, Line, Terminal, drive, help, parse, serving, snake, verbs};
     use kernel::Address;
+    use std::sync::Arc;
 
     fn room() -> Address {
         Address::parse("lab/room1").unwrap()
+    }
+
+    /// A terminal whose facts are synthetic on purpose: nothing here may
+    /// name a real machine's directories, which `xtask release` refuses.
+    fn terminal(bind: &str, token: Option<&str>) -> Terminal {
+        Terminal {
+            url: "http://127.0.0.1:8787".to_owned(),
+            token: token.map(str::to_owned),
+            city: "/tmp/a-city".to_owned(),
+            client: "embedded, 3 file(s), 558419 gzipped byte(s)".to_owned(),
+            bind: bind.parse().unwrap(),
+        }
+    }
+
+    fn vitals() -> channels::MetricsAnswer {
+        channels::MetricsAnswer {
+            events: 12_043,
+            runs_active: 2,
+            runs_frozen: 41,
+            buildings: 7,
+            approvals_waiting: 3,
+            signals_waiting: 0,
+            discards_outstanding: 1,
+        }
+    }
+
+    /// The one function the socket calls, standing in for the views.
+    fn answering() -> Answering {
+        Arc::new(|query: channels::Query| match query {
+            channels::Query::Metrics => Ok(channels::Answer::Metrics(Box::new(vitals()))),
+            other => Err(kernel::AxError::failure(
+                kernel::AxCode::ConfigInvalid,
+                "answer a question",
+                format!("{} is not scripted here", other.name()),
+            )),
+        })
+    }
+
+    /// Runs the console loop over a scripted script and returns what a
+    /// person would have seen.
+    fn typed(script: &str, terminal: &Terminal) -> String {
+        let desk = crate::assembly::CommandDesk::new();
+        let mut out: Vec<u8> = Vec::new();
+        drive(
+            terminal,
+            &desk,
+            &answering(),
+            &mut std::io::Cursor::new(script.as_bytes().to_vec()),
+            &mut out,
+        );
+        String::from_utf8(out).unwrap()
+    }
+
+    /// **The defect this card closes.** The console holds the same desk
+    /// the socket posts to, and until now it had no read path at all: a
+    /// question got an instruction to open a second terminal and ask the
+    /// city from outside, while the city was right here.
+    #[test]
+    fn a_question_is_answered_here_rather_than_sent_to_another_terminal() {
+        let seen = typed("/metrics\n/quit\n", &terminal("127.0.0.1:8787", None));
+        assert!(
+            seen.contains("\"runs_active\":2"),
+            "the answer itself is printed: {seen}"
+        );
+        assert!(
+            !seen.contains("sprawling call"),
+            "nobody is sent to a second terminal: {seen}"
+        );
+    }
+
+    /// A refusal is the answer to some questions, and it reaches the
+    /// person who asked rather than a log file.
+    #[test]
+    fn a_question_this_city_refuses_comes_back_with_its_recovery() {
+        let seen = typed("/cost_view\n/quit\n", &terminal("127.0.0.1:8787", None));
+        assert!(seen.contains("CostView is not scripted here"), "{seen}");
+    }
+
+    /// The readout the person asked for: which port, how much is
+    /// running, and the one identifier that makes the memory
+    /// measurement a paste rather than a hunt.
+    #[test]
+    fn the_serving_screen_names_the_port_what_runs_and_this_process() {
+        let screen = serving(&terminal("127.0.0.1:8787", None), Some(&vitals()), 24_188);
+        assert!(screen.contains("127.0.0.1:8787"), "{screen}");
+        assert!(screen.contains("this machine only"), "{screen}");
+        assert!(screen.contains("2 active, 41 frozen"), "{screen}");
+        assert!(screen.contains("3 approval(s)"), "{screen}");
+        assert!(screen.contains("pid 24188"), "{screen}");
+        assert!(screen.contains("cargo xtask mem 24188"), "{screen}");
+    }
+
+    /// Reach and key are two facts, and the dangerous cell is the one
+    /// worth shouting about: reachable from the network, nothing asked
+    /// of whoever arrives.
+    #[test]
+    fn the_door_line_tells_the_four_cells_apart() {
+        let door = |bind: &str, token: Option<&str>| {
+            serving(&terminal(bind, token), Some(&vitals()), 1)
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("door      ").map(str::to_owned))
+                .expect("every screen states its door")
+        };
+        assert!(door("127.0.0.1:8787", None).starts_with("none"));
+        assert_eq!(
+            door("127.0.0.1:8787", Some("k")),
+            "a pairing key is required"
+        );
+        assert_eq!(door("0.0.0.0:8787", Some("k")), "a pairing key is required");
+        assert!(
+            door("0.0.0.0:8787", None).starts_with("NONE"),
+            "an unkeyed listener beyond loopback is the cell to shout about"
+        );
+    }
+
+    /// A city too busy to answer still has a port, and that half is the
+    /// half somebody locked out of the WebUI came for.
+    #[test]
+    fn the_screen_keeps_the_listener_half_when_the_city_does_not_answer() {
+        let screen = serving(&terminal("127.0.0.1:8787", None), None, 1);
+        assert!(screen.contains("127.0.0.1:8787"), "{screen}");
+        assert!(screen.contains("views may be rebuilding"), "{screen}");
     }
 
     /// The load-bearing property of this whole module: the verb table is
@@ -448,9 +718,10 @@ mod tests {
     }
 
     #[test]
-    fn the_control_verbs_are_the_four_it_owns() {
+    fn the_control_verbs_are_the_five_it_owns() {
         assert_eq!(parse("/help", None), Line::Help);
         assert_eq!(parse("/web", None), Line::OpenWeb);
+        assert_eq!(parse("/serving", None), Line::Serving);
         assert_eq!(parse("/quit", None), Line::Quit);
         assert_eq!(parse("/at lab/room1", None), Line::Select(room()));
     }

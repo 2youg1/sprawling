@@ -37,6 +37,9 @@ pub sprawling::assembly::Serving::log: runtime::diagnostics::Diagnostics
 pub sprawling::assembly::Serving::token: core::option::Option<alloc::string::String>
 pub sprawling::assembly::Serving::vault: gateway::credential::Custodian
 pub sprawling::assembly::Serving::vault_notice: core::option::Option<kernel::event::Payload>
+pub sprawling::console::Terminal::bind: core::net::socket_addr::SocketAddr
+pub sprawling::console::Terminal::city: alloc::string::String
+pub sprawling::console::Terminal::client: alloc::string::String
 pub sprawling::console::Terminal::token: core::option::Option<alloc::string::String>
 pub sprawling::console::Terminal::url: alloc::string::String
 pub sprawling::firstrun::FirstScreen::Quit

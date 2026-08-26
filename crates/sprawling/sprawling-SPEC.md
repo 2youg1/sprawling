@@ -492,6 +492,40 @@ ARCHITECTURE.md §2 把 wasmtime 列进技术栈并声明了代价（「Cost: an
 
 **红**：向一栋 `Handoff.md` 是目录的楼派活，`expect_err` 撞上 `Ok(())`。`city` 侧另加一条单测，把三件事排成三行断言。
 
+## 8-21 控制台读得到它身处的那座城（整修卡 R2.07）
+
+**病灶（两处，同一个不对称）**：控制台与 socket 拿的是同一张桌子（`CommandDesk`）与同一条事件流，唯独**读**这一路没接上。
+
+1. `console::post` 对 `ClientFrame::Query` 只印一句「a question is answered over the wire: `sprawling call '…'`」——它请人开第二个终端，去问一座人已经身处其中的城。而 `assembly::serve` 早已构造出 `queries: Arc<dyn Fn(Query) -> Result<Answer, AxError>>` 并只交给 socket。§8-11 自述「查询的答案在控制台以 JSONL 逐行输出，与 `sprawling call` 同形」——**这句话今天是假的**，本卡使它为真。
+2. `serve_city` 起城时印的四行（city／WebUI／client）随事件流滚走。一个远程盯着城的人于是再也看不到自己开在哪个端口、有几条 run 在跑。
+
+```rust
+// bin::console（形状仍为 1 decision；渲染是纯函数，I/O 仍在壳里）
+pub struct Terminal {
+    pub url: String,
+    pub token: Option<String>,
+    pub city: String,     // 新增：城在磁盘上的位置
+    pub client: String,   // 新增：客户端从哪来（嵌入／目录）
+    pub bind: SocketAddr, // 新增：真正绑住的那个地址
+}
+
+/// socket 用的那一个答询函数，控制台拿到的是它的副本。
+pub(crate) type Answering =
+    Arc<dyn Fn(channels::Query) -> Result<channels::Answer, AxError> + Send + Sync>;
+
+pub(crate) enum Line { …, Serving }   // 控制动词从四个变五个
+
+/// 进程自己知道的事实 ⊕ 一次 Metrics 的答案 → 一屏。纯。
+pub(crate) fn serving(terminal: &Terminal, vitals: &channels::MetricsAnswer, pid: u32) -> String;
+```
+
+- **答询走同一个函数，不是第二个权威**。`post` 的 Query 臂改调 `Answering`，与 `channels::server` 的 `SessionStep::Answer` 是同一个 `Arc`；控制台答出来的数字与浏览器看到的数字不可能不同，因为它们是同一次调用。
+- **`/serving` 是渲染，不是来源**。城侧那几个数（几条 run 在跑、几件事等人、几栋楼）全部来自一次 `Query::Metrics`；`/metrics` 仍印它的 JSONL 原样，与 `sprawling call` 同形。两个动词，两个问题，无重叠：`/serving` 答「这个进程开在哪、门朝谁开」，`/metrics` 答「这座城里有多少什么」。
+- **动词名不与既有概念撞车**。`status` 在 `docs/glossary.md` 里已经是**工具**的名字（「答一次 run 自己的处境」），一名一义是门禁事项，故控制台这个动词叫 `serving`——它印的正是 `assembly::Serving` 持有的那几样东西，沿用已在库内的词。
+- **常驻内存不进这一屏，理由记在这里**。「resident 在本平台叫什么」的唯一权威是 `xtask::mem`（Linux `smaps_rollup` Pss／macOS `ps rss`／Windows `WorkingSet64`），而 `xtask` 只依赖 `kernel`——让它依赖产品会使每次门禁编译整个 workspace。在 bin 里再抄一张三平台表，正是那个模块自己的 doc comment 警告的「三份权威」。`/serving` 因此印出本进程 **pid**，`cargo xtask mem <pid>` 只差一次粘贴。**翻案条件**：人裁定新增第十三个 unit 承载这一个计数器（ARCHITECTURE.md §3 的拓扑是 add-only 且需裁决），届时两个调用方共用一份定义。
+
+**红**：一条测试把 `Line::Serving` 之外的路径全部钉住不动，另一条驱动 `drive` 读入 `/metrics`，断言输出里有 `MetricsAnswer` 的 JSON 而**不含** `sprawling call`——本卡之前它撞上那句转介。第三条断言 `serving()` 的那一屏同时含端口、`runs`、与 pid。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。

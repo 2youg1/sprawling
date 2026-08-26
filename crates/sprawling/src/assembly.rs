@@ -4426,7 +4426,10 @@ enum DeskWait {
 const SCHEDULE_TICK: std::time::Duration = std::time::Duration::from_secs(20);
 
 impl CommandDesk {
-    fn new() -> CommandDesk {
+    /// Visible to the crate so the console loop can be driven in a test
+    /// through the door production uses, rather than through a second
+    /// one opened for testing.
+    pub(crate) fn new() -> CommandDesk {
         CommandDesk {
             queue: std::sync::Mutex::new(std::collections::VecDeque::new()),
             arrived: std::sync::Condvar::new(),
@@ -4716,6 +4719,20 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
         city_root,
     ))?));
     let query_views = Arc::clone(&views);
+    // Built once and handed to both surfaces below. The socket and the
+    // terminal are two ways into one city, and this is the read half of
+    // what makes that literally true rather than a claim.
+    let answering: crate::console::Answering = Arc::new(move |query: channels::Query| {
+        let views = query_views.lock().map_err(|_| {
+            AxError::failure(
+                AxCode::StorageFatal,
+                "read the city views",
+                "the view lock is poisoned",
+            )
+            .with_recovery("restart the server; its views rebuild from the ledger")
+        })?;
+        Ok(views.answer(&query))
+    });
     // Read once, at startup, from the views the ledger just rebuilt.
     let city_name = views.lock().ok().and_then(|views| views.city());
     // The in-process Command set, not the wire one: the enrolment
@@ -4829,17 +4846,7 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
             secrets_desk.post(command, reply);
             Ok(())
         }),
-        queries: Arc::new(move |query: channels::Query| {
-            let views = query_views.lock().map_err(|_| {
-                AxError::failure(
-                    AxCode::StorageFatal,
-                    "read the city views",
-                    "the view lock is poisoned",
-                )
-                .with_recovery("restart the server; its views rebuild from the ledger")
-            })?;
-            Ok(views.answer(&query))
-        }),
+        queries: Arc::clone(&answering),
         // An outside editor's request becomes an ordinary Dispatch on
         // the same desk a person's does. It is not a second control
         // surface: the admission decides what a stranger may learn, and
@@ -4870,7 +4877,10 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
     if let Some(terminal) = console {
         let console_desk = Arc::clone(&desk);
         let watching = config.events.subscribe();
-        crate::console::start(terminal, console_desk, watching);
+        // The same answering function the socket was given, not a second
+        // one built beside it: a count this terminal prints and a count
+        // a browser draws are one call, so they cannot disagree.
+        crate::console::start(terminal, console_desk, Arc::clone(&answering), watching);
     }
     // Ctrl-C used to be a process death: `sprawling resume` recovered
     // it, and a stop somebody chose and a stop that was a crash left the

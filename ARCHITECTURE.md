@@ -512,7 +512,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::panel | crates/web/src/panel.rs | the one version of a centre panel: conclusion, scope, body, and where the numbers came from | decision | F2 | built |
 | web::overview | crates/web/src/overview.rs | the first screen: how much of this city is working, on what, and what waits on a person | decision | F2 | built |
 
-### browser (6), protocol (2), bin (5)
+### browser (6), protocol (2), bin (8)
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
