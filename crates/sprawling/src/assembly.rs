@@ -1810,6 +1810,32 @@ impl RunWorker {
         vault: gateway::Custodian,
         log: runtime::diagnostics::Diagnostics,
     ) -> Result<Self, AxError> {
+        let dir = ledger_dir(city_root);
+        let (ledger, _report) =
+            JsonlLedger::open(&dir, now_ms()?).map_err(memory::MemoryError::into_ax)?;
+        RunWorker::over(city_root, vault, log, ledger)
+    }
+
+    /// Builds a worker around a ledger somebody else opened.
+    ///
+    /// Where the history comes from is not this worker's decision to
+    /// make, and taking it as a parameter is the same correction
+    /// ARCHITECTURE.md section 3 already asks for on the model adapter:
+    /// a component that builds its own dependency cannot be driven
+    /// against a second one. The ledger is a concrete `JsonlLedger` on
+    /// both paths - the `Vfs` underneath it is what differs - so nothing
+    /// here becomes a seam and no `pub trait` moves.
+    ///
+    /// # Errors
+    /// Propagates whatever opening the store reports, and whatever the
+    /// ledger says about its own chain: a worker that cannot read the
+    /// city's history cannot know what is attached.
+    pub(crate) fn over(
+        city_root: &Path,
+        vault: gateway::Custodian,
+        log: runtime::diagnostics::Diagnostics,
+        ledger: JsonlLedger,
+    ) -> Result<Self, AxError> {
         let now = now_ms()?;
         let dir = ledger_dir(city_root);
         let Standing {
@@ -1817,8 +1843,6 @@ impl RunWorker {
             governance,
             collaboration,
         } = Standing::fold(&dir)?;
-        let (ledger, _report) =
-            JsonlLedger::open(&dir, now).map_err(memory::MemoryError::into_ax)?;
         let cas = Cas::open(&city_root.join(".sprawling").join("cas"))
             .map_err(memory::MemoryError::into_ax)?;
         Ok(RunWorker {
@@ -7913,6 +7937,100 @@ addr = \"gone/room1\"
         "|---|---|---|---|\n",
         "| 1 | wire the kiln | In progress | |\n",
     );
+
+    /// R2.10's other half: not only "the line comes before the change",
+    /// but "no line, no change".
+    ///
+    /// The ledger here is the real `JsonlLedger` over the deterministic
+    /// power-loss model, told to lose exactly the write carrying
+    /// `roadmap_claimed`. Everything else in the city is on a real disk,
+    /// which is the point: the plan the run wanted to rewrite is a file
+    /// somebody could go and read afterwards.
+    #[test]
+    fn a_line_the_history_refused_is_a_change_the_city_never_made() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let plan = dir.path().join("lab").join(city::ROADMAP_FILE);
+        std::fs::create_dir_all(dir.path().join("lab")).unwrap();
+        std::fs::write(&plan, PLAN_TWO_FREE_ROWS).unwrap();
+
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion(
+                    "taking a row",
+                    "tu_1",
+                    "plan",
+                    serde_json::json!({ "action": "claim", "row": 1 }),
+                ),
+                completion("took it", None),
+            ],
+        );
+
+        // The one write that dies. Named by what it carries rather than
+        // by an ordinal: how many filesystem operations run before it is
+        // not something a caller up here knows, and any number written
+        // here would stop meaning this line the moment anything upstream
+        // read one more file.
+        let fs = memory::FaultFs::new(memory::FaultPlan {
+            cut_at_op: None,
+            cut_on_write: Some("roadmap_claimed"),
+            torn_tail: memory::TornTail::None,
+        });
+        let (ledger, _report) =
+            memory::JsonlLedger::open_faulty(fs, &ledger_dir(dir.path()), now_ms().unwrap())
+                .unwrap();
+        let mut worker = RunWorker::over(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+            ledger,
+        )
+        .unwrap();
+        worker
+            .handle(channels::Command::AttachEndpoint {
+                name: channels::ProviderName::parse("house").unwrap(),
+                base_url,
+                dialect: kernel::DialectKind::OpenAi,
+                secret: None,
+                auth_header: None,
+                admit: Vec::new(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"attach"),
+            })
+            .unwrap();
+        worker
+            .handle(channels::Command::SelectModel {
+                endpoint: channels::ProviderName::parse("house").unwrap(),
+                model: "m-local".to_owned(),
+                tag: kernel::ModelTag::Main,
+                context_tokens: 32_768,
+                max_output_tokens: 4_096,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"select"),
+            })
+            .unwrap();
+
+        let outcome = worker.handle(channels::Command::Dispatch {
+            addr: Address::parse("lab/room1").unwrap(),
+            task: "take one row".to_owned(),
+            goal: "one claim".to_owned(),
+            mode: channels::ModeTag::parse("plan").unwrap(),
+            budget: kernel::BudgetCap::default(),
+            idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"lost"),
+            session: None,
+            effort: None,
+        });
+        drop(provider);
+
+        let after = std::fs::read_to_string(&plan).unwrap();
+        assert_eq!(
+            after, PLAN_TWO_FREE_ROWS,
+            "the line never landed, so the plan on disk must stand exactly as it was"
+        );
+        assert!(
+            outcome.is_err(),
+            "a dispatch whose line the history refused must not report success"
+        );
+    }
 
     #[test]
     fn a_run_takes_a_row_from_the_plan_and_the_next_run_cannot_take_the_same_one() {

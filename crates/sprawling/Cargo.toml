@@ -33,6 +33,10 @@ flate2 = { workspace = true }
 
 [dev-dependencies]
 tempfile.workspace = true
+# The deterministic power-loss model, so a test above the ledger can lose
+# one named line and assert the city did not move. Kept to dev only: a
+# release build of this binary never carries FaultFs.
+memory = { path = "../memory", features = ["fault"] }
 
 [lints]
 workspace = true

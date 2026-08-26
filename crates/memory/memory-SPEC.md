@@ -136,7 +136,8 @@ impl MemoryError { pub fn into_ax(self) -> AxError; }   // 跨 crate 边界的�
 #[cfg(any(test, feature = "fault"))]        // 测试与 citysim（S4 故障面）两个消费者
 #[derive(Clone)]                            // 句柄共享状态（Rc<RefCell>）：断电后以同一实例重开
 pub struct FaultFs { /* files: BTreeMap<路径, FileState{durable, live, durable_entry}>、op 计数、FaultPlan */ }
-pub struct FaultPlan { pub cut_at_op: Option<u64>, pub torn_tail: TornTail }
+pub struct FaultPlan { pub cut_at_op: Option<u64>, pub cut_on_write: Option<&'static str>, pub torn_tail: TornTail }
+                                            // cut_on_write（整修卡 R2.17 增）：首个字节含该串的 append 断电，一次即消费
 pub enum TornTail { None, KeepBytes(u64) }  // 撕裂写：每文件未同步增量保留前 k 字节；全显式即全确定，不需种子
 
 impl FaultFs {
@@ -150,6 +151,20 @@ impl Vfs for FaultFs { /* 每 op 自增计数；append 先落 live 再判 cut（
 ```
 
 **模型三则**（比真实平台严格，故纪律跨平台成立）：①`sync_data` 前的字节不存活：durable/live 两平面，断电即 live 回落 durable，撕裂按 `TornTail` 多留未同步增量前缀；②新建文件在 `sync_dir` 前目录项不存活，断电即消失（含已 sync_data 者——比 POSIX 更严，使建段后必 sync_dir 的纪律跨平台承重）；③rename 自身原子——恒不出现半个目标文件（rename 随 S1.09 入 Vfs 与本模型）。
+**第二个旋钮 `cut_on_write`，与两个入口（整修卡 R2.17）**：
+
+```rust
+impl JsonlLedger {
+    #[cfg(any(test, feature = "fault"))]
+    /// 收具体 FaultFs，故 Vfs 缝不出门（缝表不动，depmap 不动）
+    pub fn open_faulty(fs: FaultFs, dir: &Path, now: TimeMs) -> Result<(Self, OpenReport), MemoryError>;
+}
+```
+
+`open_with` 的 doc 此前写着「the `fault` feature adds a public constructor at S1.08」，而**那个构造子从未被写出来**——本文 §7 的接线图与上面那句都记着它，代码里没有。本卡把它补上：它返回的就是生产用的同一个 `JsonlLedger`，于是 crate 之外的调用方跑的是真代码，只丢掉它点名的那一次写。
+
+**为什么按内容而不只按序号**：`cut_at_op` 在本 crate 内部好用，因为操作序就在眼前。**在装配层它是一个注定碎掉的数字**：要正好落在 `roadmap_claimed` 那一次 append 上得数一个魔术数，而上游任何一处多读一个文件就全盘失效。`cut_on_write` 让调用方用自己的词汇点名那一行——**它仍然完全显式、完全确定**（本模块自述「Everything is explicit… there is no randomness」，这条不破它），并且直接表达要问的那件事：假如这一行没落下。取 `&'static str` 是为了让 `FaultPlan` 保持 `Copy`；点名一条账本行用的是字面量。
+
 **断电点阵初版**：以 `cut_at_op` 扫描 1..=N 全部注入点各跑一遍「写入→断电→重开→断言」；断言两条：链恒可验，**已返回 Ok 的波恒存活**（append_all 耐久契约的机器面）。S1.08 落 A3 点 1（EventRecord 落账），点 2（CAS rename）的终断言随 S1.09 cas 卡；git commit／projection 写两点随其模块（S3）接入同一点阵。
 
 ### 8-3 memory::cas（S1.09）

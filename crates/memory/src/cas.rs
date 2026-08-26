@@ -266,6 +266,7 @@ mod tests {
         // Baseline op count.
         let fs0 = FaultFs::new(FaultPlan {
             cut_at_op: None,
+            cut_on_write: None,
             torn_tail: TornTail::None,
         });
         let mut cas = Cas::open_with(Box::new(fs0.clone()), std::path::Path::new("c")).unwrap();
@@ -276,6 +277,7 @@ mod tests {
             for cut in 1..=total_ops {
                 let fs = FaultFs::new(FaultPlan {
                     cut_at_op: Some(cut),
+                    cut_on_write: None,
                     torn_tail: torn,
                 });
                 let dir = std::path::Path::new("c");

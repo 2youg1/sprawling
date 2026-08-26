@@ -367,8 +367,29 @@ impl JsonlLedger {
         JsonlLedger::open_with(Box::new(RealFs), dir, now)
     }
 
-    /// Injection point for the second Vfs adapter (tests; the `fault`
-    /// feature adds a public constructor at S1.08).
+    /// The `fault` entrance: the same ledger, over the deterministic
+    /// power-loss model, for a caller that needs one named write to fail.
+    ///
+    /// Takes the concrete adapter rather than the trait, so the `Vfs`
+    /// seam stays inner (memory-SPEC 8-1) and no `pub trait` leaves this
+    /// crate. What comes back is the same `JsonlLedger` production uses -
+    /// a caller above this crate exercises its real code and loses only
+    /// the write it named.
+    ///
+    /// # Errors
+    /// Propagates whatever [`JsonlLedger::open`] would, and the power
+    /// loss itself when the plan cuts during the open.
+    #[cfg(any(test, feature = "fault"))]
+    pub fn open_faulty(
+        fs: crate::fault_fs::FaultFs,
+        dir: &Path,
+        now: TimeMs,
+    ) -> Result<(Self, OpenReport), MemoryError> {
+        JsonlLedger::open_with(Box::new(fs), dir, now)
+    }
+
+    /// Injection point for the second Vfs adapter; [`JsonlLedger::open`]
+    /// and `open_faulty` are its two entrances.
     pub(crate) fn open_with(
         mut vfs: Box<dyn Vfs>,
         dir: &Path,

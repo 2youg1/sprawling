@@ -37,6 +37,18 @@ use crate::jsonl::Vfs;
 pub struct FaultPlan {
     /// 1-based op number that dies with "power lost"; `None` = never.
     pub cut_at_op: Option<u64>,
+    /// The first append whose bytes contain this needle dies with "power
+    /// lost"; `None` = never. Like `cut_at_op` it fires once and is then
+    /// spent, so the same instance serves the powered reopen.
+    ///
+    /// This exists because an ordinal cannot name a write from outside
+    /// this crate. A caller above the ledger knows *which line* it wants
+    /// to lose, not how many filesystem operations precede it - and that
+    /// count changes whenever anything upstream reads one more file, so
+    /// an ordinal written there is a number that silently stops meaning
+    /// what it meant. Content is the caller's own vocabulary, and it
+    /// stays as explicit and as deterministic as the ordinal is.
+    pub cut_on_write: Option<&'static str>,
     pub torn_tail: TornTail,
 }
 
@@ -118,6 +130,15 @@ fn cut(state: &mut State) {
     }
 }
 
+/// Substring search over raw bytes: the ledger line is UTF-8 JSON, but a
+/// `Vfs` sees bytes and must not assume otherwise.
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
 fn not_found(path: &Path) -> io::Error {
     io::Error::new(
         io::ErrorKind::NotFound,
@@ -180,8 +201,22 @@ impl Vfs for FaultFs {
             });
             file.live.extend_from_slice(bytes);
         }
-        // Bytes are on the live plane before the charge: the tear model
+        // Bytes are on the live plane before either check: the tear model
         // can bite exactly this write.
+        {
+            let mut state = self.0.borrow_mut();
+            if let Some(needle) = state.plan.cut_on_write
+                && contains(bytes, needle.as_bytes())
+            {
+                state.plan.cut_on_write = None;
+                state.op = state.op.saturating_add(1);
+                cut(&mut state);
+                return Err(io::Error::other(format!(
+                    "power lost during append carrying `{needle}` (op {})",
+                    state.op
+                )));
+            }
+        }
         self.charge("append")
     }
 
@@ -266,6 +301,7 @@ mod tests {
     fn plain() -> FaultPlan {
         FaultPlan {
             cut_at_op: None,
+            cut_on_write: None,
             torn_tail: TornTail::None,
         }
     }
@@ -273,8 +309,31 @@ mod tests {
     fn cut_at(op: u64, torn: TornTail) -> FaultPlan {
         FaultPlan {
             cut_at_op: Some(op),
+            cut_on_write: None,
             torn_tail: torn,
         }
+    }
+
+    #[test]
+    fn a_named_write_is_the_one_that_dies_and_only_once() {
+        let fs = FaultFs::new(FaultPlan {
+            cut_at_op: None,
+            cut_on_write: Some("needle"),
+            torn_tail: TornTail::None,
+        });
+        let mut v: Box<dyn Vfs> = Box::new(fs.clone());
+        let dir = PathBuf::from("d");
+        let file = dir.join("f");
+        v.create_dir_all(&dir).unwrap();
+        v.append(&file, b"safe").unwrap();
+        v.sync_data(&file).unwrap();
+        v.sync_dir(&dir).unwrap();
+        // Ops before it are untouched, whatever their number.
+        assert!(v.append(&file, b"carrying a needle here").is_err());
+        // Spent: the same needle rides the next write and it lands.
+        v.append(&file, b"needle again").unwrap();
+        v.sync_data(&file).unwrap();
+        assert_eq!(v.read(&file).unwrap(), b"safeneedle again");
     }
 
     #[test]
@@ -296,6 +355,7 @@ mod tests {
     fn torn_tail_keeps_a_prefix_of_the_unsynced_delta() {
         let fs = FaultFs::new(FaultPlan {
             cut_at_op: None,
+            cut_on_write: None,
             torn_tail: TornTail::KeepBytes(3),
         });
         let mut v: Box<dyn Vfs> = Box::new(fs.clone());
