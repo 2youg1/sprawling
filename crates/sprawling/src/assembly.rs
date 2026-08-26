@@ -4945,12 +4945,62 @@ fn local_model_facts(model: &str) -> Result<gateway::ModelEntry, AxError> {
 /// cancels is not a Cancel. The desk keeps arrival order, and the run
 /// looks at it only at its own safe points.
 pub(crate) struct CommandDesk {
-    queue: std::sync::Mutex<std::collections::VecDeque<Posted>>,
+    waiting: std::sync::Mutex<Waiting>,
     arrived: std::sync::Condvar,
     /// Set once, by whoever decided the city stops. Read at the same
     /// point the queue is read, so a close lands between commands and
     /// never inside one.
     closing: std::sync::atomic::AtomicBool,
+}
+
+/// What the desk holds, under one lock.
+///
+/// The queue and the keys are read together and must agree: a key that
+/// left the queue between two locks would let the same ask through
+/// twice, which is the whole of what this pair prevents.
+struct Waiting {
+    queue: std::collections::VecDeque<Posted>,
+    /// Every key that is either still in `queue` or being carried out.
+    /// `kernel::gate` says the seen set belongs to the caller and it
+    /// only judges membership; this is that set for commands, as
+    /// `ToolBench::seen` is that set for tool calls.
+    keys: std::collections::BTreeSet<kernel::IdemKey>,
+}
+
+/// The key of the command somebody took off the desk, held until the
+/// work is over.
+///
+/// A guard rather than a call the drainer has to remember: the key is in
+/// flight for exactly as long as this value lives, including when the
+/// loop that took it leaves early.
+struct Underway<'desk> {
+    desk: &'desk CommandDesk,
+    key: Option<kernel::IdemKey>,
+}
+
+impl Drop for Underway<'_> {
+    fn drop(&mut self) {
+        let Some(key) = self.key else { return };
+        if let Ok(mut waiting) = self.desk.waiting.lock() {
+            waiting.keys.remove(&key);
+        }
+    }
+}
+
+impl Waiting {
+    /// Takes the command at `at` out of the line and releases its key.
+    ///
+    /// A command consumed as an interrupt is over the moment it is
+    /// taken, and every client mints one key per run for cancelling, so
+    /// a key left behind here would make a second Cancel unspeakable
+    /// for the life of the city.
+    fn forget(&mut self, at: usize) -> Option<Posted> {
+        let posted = self.queue.remove(at)?;
+        if let Some(key) = posted.command.idem() {
+            self.keys.remove(key);
+        }
+        Some(posted)
+    }
 }
 
 /// A command and the address its refusal goes back to.
@@ -4966,8 +5016,11 @@ struct Posted {
 /// What the worker found when it looked at the desk. Exhaustive, because
 /// "nothing arrived" and "nobody will ever arrive again" are different
 /// facts and the loop does different things about them.
-enum DeskWait {
-    Command(Posted),
+enum DeskWait<'desk> {
+    /// Boxed because this variant is the only one that carries
+    /// anything: a `Posted` holds a whole `Command`, and an enum shaped
+    /// like this one is returned by every idle tick as well.
+    Command(Box<Posted>, Underway<'desk>),
     Idle,
     /// A person chose to stop. Distinct from `Gone`, which is the desk
     /// itself breaking: one of these deserves a handoff and the other is
@@ -4987,7 +5040,10 @@ impl CommandDesk {
     /// one opened for testing.
     pub(crate) fn new() -> CommandDesk {
         CommandDesk {
-            queue: std::sync::Mutex::new(std::collections::VecDeque::new()),
+            waiting: std::sync::Mutex::new(Waiting {
+                queue: std::collections::VecDeque::new(),
+                keys: std::collections::BTreeSet::new(),
+            }),
             arrived: std::sync::Condvar::new(),
             closing: std::sync::atomic::AtomicBool::new(false),
         }
@@ -5006,9 +5062,27 @@ impl CommandDesk {
         self.arrived.notify_all();
     }
 
+    /// Puts a command in line, unless the same one is already being
+    /// dealt with.
+    ///
+    /// A key is in flight from here until the command it belongs to has
+    /// been carried out, and a second frame carrying that key is
+    /// dropped: the sender asked for one thing and one thing is
+    /// happening. Every client mints the key from what the person
+    /// entered, so a double-click, a transport that resent a frame and
+    /// an editor retrying after a timeout all arrive as one ask - and
+    /// each of them used to be a second run against a paid provider.
+    /// Once the work is over the key is forgotten, so asking for the
+    /// same work again is a second piece of work rather than silence.
     pub(crate) fn post(&self, command: channels::Command, reply: channels::Reply) {
-        if let Ok(mut queue) = self.queue.lock() {
-            queue.push_back(Posted { command, reply });
+        if let Ok(mut waiting) = self.waiting.lock() {
+            if let Some(key) = command.idem() {
+                if kernel::dedup(&waiting.keys, key) == kernel::DedupVerdict::Duplicate {
+                    return;
+                }
+                waiting.keys.insert(*key);
+            }
+            waiting.queue.push_back(Posted { command, reply });
             self.arrived.notify_one();
         }
     }
@@ -5018,22 +5092,22 @@ impl CommandDesk {
     /// The wait has an end so that the worker gets its own idle moment:
     /// a city whose schedule says something starts at nine cannot depend
     /// on somebody clicking at nine.
-    fn wait(&self, patience: std::time::Duration) -> DeskWait {
-        let Ok(mut queue) = self.queue.lock() else {
+    fn wait(&self, patience: std::time::Duration) -> DeskWait<'_> {
+        let Ok(mut waiting) = self.waiting.lock() else {
             return DeskWait::Gone;
         };
         // Work already accepted is finished first: a close that dropped
         // a queued command would make "stopped" and "lost" the same
         // thing in the record.
-        if let Some(command) = queue.pop_front() {
-            return DeskWait::Command(command);
+        if let Some(posted) = waiting.queue.pop_front() {
+            return self.carrying(posted);
         }
         if self.closing.load(std::sync::atomic::Ordering::Acquire) {
             return DeskWait::Close;
         }
-        match self.arrived.wait_timeout(queue, patience) {
-            Ok((mut queue, _)) => match queue.pop_front() {
-                Some(command) => DeskWait::Command(command),
+        match self.arrived.wait_timeout(waiting, patience) {
+            Ok((mut waiting, _)) => match waiting.queue.pop_front() {
+                Some(posted) => self.carrying(posted),
                 None if self.closing.load(std::sync::atomic::Ordering::Acquire) => DeskWait::Close,
                 None => DeskWait::Idle,
             },
@@ -5041,11 +5115,23 @@ impl CommandDesk {
         }
     }
 
+    /// Hands out one command together with the guard that keeps its key
+    /// in flight until whoever took it is done.
+    fn carrying(&self, posted: Posted) -> DeskWait<'_> {
+        let key = posted.command.idem().copied();
+        DeskWait::Command(Box::new(posted), Underway { desk: self, key })
+    }
+
     /// Takes one command if any is waiting, without waiting for one.
     /// Used where a test drives the desk directly; the worker loop waits.
     #[cfg(test)]
     fn take(&self) -> Option<channels::Command> {
-        self.queue.lock().ok()?.pop_front().map(|it| it.command)
+        let mut waiting = self.waiting.lock().ok()?;
+        let posted = waiting.queue.pop_front()?;
+        if let Some(key) = posted.command.idem() {
+            waiting.keys.remove(key);
+        }
+        Some(posted.command)
     }
 
     /// What the run at `run` should do at this safe point, if anything.
@@ -5054,17 +5140,17 @@ impl CommandDesk {
     /// course are mutually exclusive, and stopping is the one that cannot
     /// be taken back. Commands for other runs keep their place in line.
     fn interrupt_for(&self, run: RunId) -> Interrupt {
-        let Ok(mut queue) = self.queue.lock() else {
+        let Ok(mut waiting) = self.waiting.lock() else {
             return Interrupt::None;
         };
-        let cancel = queue.iter().position(
+        let cancel = waiting.queue.iter().position(
             |posted| matches!(&posted.command, channels::Command::Cancel { run: r, .. } if *r == run),
         );
         if let Some(at) = cancel {
-            queue.remove(at);
+            waiting.forget(at);
             return Interrupt::Cancel;
         }
-        let steer = queue.iter().position(
+        let steer = waiting.queue.iter().position(
             |posted| matches!(&posted.command, channels::Command::Steer { run: r, .. } if *r == run),
         );
         let Some(at) = steer else {
@@ -5073,7 +5159,7 @@ impl CommandDesk {
         let Some(Posted {
             command: channels::Command::Steer { text, .. },
             ..
-        }) = queue.remove(at)
+        }) = waiting.forget(at)
         else {
             return Interrupt::None;
         };
@@ -5266,7 +5352,13 @@ fn spawn_worker(
             }));
             loop {
                 match worker_desk.wait(SCHEDULE_TICK) {
-                    DeskWait::Command(posted) => worker.serve_one(posted),
+                    // `carrying` holds this command's key in flight for
+                    // the length of the arm, so a frame that repeats it
+                    // while the work is going adds no second run.
+                    DeskWait::Command(posted, carrying) => {
+                        worker.serve_one(*posted);
+                        drop(carrying);
+                    }
                     // The refusal is written inside `tick`; a schedule
                     // that cannot be read must not stop the city from
                     // answering the person.
@@ -7358,14 +7450,18 @@ mod tests {
         let desk = CommandDesk::new();
         let mine = RunId::CITY;
         let other = kernel::RunId::from_bytes([7u8; 16]);
-        let idem = kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"i");
+        // One key per ask, the way every client mints them: the desk
+        // now reads the key, so three commands sharing one would be one
+        // command repeated twice (section 8-33).
+        let key =
+            |material: &[u8]| kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, material);
 
         let nobody = || channels::Reply::nowhere();
         desk.post(
             channels::Command::Steer {
                 run: other,
                 text: "not for me".to_owned(),
-                idem,
+                idem: key(b"not for me"),
             },
             nobody(),
         );
@@ -7373,11 +7469,17 @@ mod tests {
             channels::Command::Steer {
                 run: mine,
                 text: "  measure it in metres  ".to_owned(),
-                idem,
+                idem: key(b"measure it in metres"),
             },
             nobody(),
         );
-        desk.post(channels::Command::Cancel { run: mine, idem }, nobody());
+        desk.post(
+            channels::Command::Cancel {
+                run: mine,
+                idem: key(b"cancel"),
+            },
+            nobody(),
+        );
 
         // Cancel outranks a steer that arrived first: stopping and
         // changing course are exclusive, and stopping cannot be undone.
@@ -9686,6 +9788,59 @@ addr = \"gone/room1\"
         );
     }
 
+    /// The wire promises that "double-clicking twice opens two Runs" is
+    /// not reachable, and every client mints its key from what the
+    /// person entered, so the same request twice is the same key twice.
+    /// Nothing read that key until this desk did.
+    #[test]
+    fn a_repeat_of_a_command_already_underway_is_not_a_second_piece_of_work() {
+        let desk = CommandDesk::new();
+        let moment = std::time::Duration::from_millis(1);
+        let asked = || channels::Command::Dispatch {
+            addr: Address::parse("lab/room1").unwrap(),
+            task: "read the plan".to_owned(),
+            goal: "one answer".to_owned(),
+            mode: channels::ModeTag::parse("plan").unwrap(),
+            budget: kernel::BudgetCap::default(),
+            idem: kernel::IdemKey::derive(
+                &RunId::CITY,
+                kernel::Seq::FIRST,
+                b"lab/room1|read the plan",
+            ),
+            session: None,
+            effort: None,
+        };
+
+        desk.post(asked(), channels::Reply::nowhere());
+        desk.post(asked(), channels::Reply::nowhere());
+        let carrying = desk.wait(moment);
+        assert!(
+            matches!(carrying, DeskWait::Command(..)),
+            "the first ask is taken off the desk"
+        );
+        assert!(
+            matches!(desk.wait(moment), DeskWait::Idle),
+            "a second frame of the same ask is a second bill, not a second piece of work"
+        );
+
+        // A repeat that arrives while the work is going is the same ask
+        // once more: the run it wants is already running.
+        desk.post(asked(), channels::Reply::nowhere());
+        assert!(
+            matches!(desk.wait(moment), DeskWait::Idle),
+            "the ask is still being carried out; a repeat adds nothing"
+        );
+
+        // ...and once it is over, asking again is asking for a second
+        // run, which is a thing a person is allowed to want.
+        drop(carrying);
+        desk.post(asked(), channels::Reply::nowhere());
+        assert!(
+            matches!(desk.wait(moment), DeskWait::Command(..)),
+            "the same work asked for again after it finished is work"
+        );
+    }
+
     /// Work already accepted finishes first: a close that dropped a
     /// queued command would make "stopped" and "lost" the same thing in
     /// the record.
@@ -9705,7 +9860,7 @@ addr = \"gone/room1\"
         assert!(
             matches!(
                 desk.wait(std::time::Duration::from_millis(1)),
-                DeskWait::Command(_)
+                DeskWait::Command(..)
             ),
             "the queued command was dropped by the close"
         );
