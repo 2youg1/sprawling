@@ -1255,6 +1255,34 @@ impl protocol::Outbound for McpLink {
     }
 }
 
+/// The engine `exec` runs a program in.
+///
+/// One place decides this, and it decides by what the build carries.
+/// `AbsentSandbox` refuses in three parts and tells the reader to
+/// install a build with the engine; until this function existed there
+/// was no such build, because the absent one was written here as a
+/// literal and no feature of this crate reached `runtime/wasm`.
+///
+/// # Errors
+/// Propagates what starting the engine reports. A build that says it
+/// carries one and cannot start it refuses the dispatch rather than
+/// falling back: falling back is how a run that a person believed was
+/// sandboxed turns out not to have been.
+#[cfg(feature = "sandbox")]
+fn execution_engine() -> Result<Box<dyn runtime::Sandbox>, AxError> {
+    Ok(Box::new(runtime::WasmtimeSandbox::new()?))
+}
+
+/// The engine `exec` runs a program in: none, in a build without one.
+///
+/// # Errors
+/// None today; the signature matches the arm that can fail so the call
+/// site does not change shape with the feature.
+#[cfg(not(feature = "sandbox"))]
+fn execution_engine() -> Result<Box<dyn runtime::Sandbox>, AxError> {
+    Ok(Box::new(runtime::AbsentSandbox))
+}
+
 fn host_shell() -> Option<std::path::PathBuf> {
     let named = if cfg!(windows) { "COMSPEC" } else { "SHELL" };
     if let Ok(path) = std::env::var(named)
@@ -3469,7 +3497,7 @@ impl RunWorker {
             std::env::var(PYTHON_WASM_ENV)
                 .ok()
                 .map(std::path::PathBuf::from),
-            Box::new(runtime::AbsentSandbox),
+            execution_engine()?,
             if config.sandbox.shell {
                 host_shell()
             } else {
@@ -6896,6 +6924,36 @@ mod tests {
                     .unwrap_or(false)
             })
             .count()
+    }
+
+    /// A build that says it carries an execution engine carries one.
+    ///
+    /// `AbsentSandbox` refuses with `this build carries no execution
+    /// engine` and tells the reader to install a build with the `wasm`
+    /// feature. Until the feature and this selection existed there was
+    /// no such build: the absent engine was written into `dispatch_in`
+    /// as a literal, so the sentence named an action nobody could take
+    /// and `runtime::WasmtimeSandbox` had no caller outside its own
+    /// tests.
+    #[cfg(feature = "sandbox")]
+    #[test]
+    fn a_build_with_the_engine_feature_carries_one() {
+        let mut engine = execution_engine().expect("a build with the feature starts its engine");
+        // A module that is not there: whatever this reports, it is the
+        // engine reporting it rather than the absence of one.
+        let job = runtime::SandboxJob {
+            wasm: std::path::PathBuf::from("no-such-module.wasm"),
+            argv: Vec::new(),
+            env: Vec::new(),
+            stdin: Vec::new(),
+            mounts: Vec::new(),
+            fuel: runtime::Fuel(1_000),
+        };
+        let said = format!("{:?}", engine.run(&job));
+        assert!(
+            !said.contains("this build carries no execution engine"),
+            "the feature is on and the run still met the absent engine: {said}"
+        );
     }
 
     /// A building under review lends every run its own tree so that
