@@ -2293,6 +2293,121 @@ impl RunWorker {
     /// Propagates the first line the ledger refuses, in which case
     /// nothing changes; then whatever delivering, writing the plan or
     /// filing an entry reports.
+    /// Freezes what this run is: the plan it drives on, and the handoff
+    /// that says what to read to pick it up again.
+    ///
+    /// One phase because the two are one decision. The prefix is
+    /// assembled for this plan and frozen with it, the handoff quotes
+    /// the plan's own task line, and the job locator ends up in both -
+    /// pinned in the store, so what a resumed run reads is the bytes the
+    /// run segment carried rather than a file somebody edited since.
+    ///
+    /// # Errors
+    /// Propagates a city or run segment that will not read, a norm on
+    /// the must-read list that will not open, a store that will not take
+    /// the bytes, and a handoff the runtime refuses.
+    #[expect(clippy::too_many_arguments, reason = "the assembly point's own wiring")]
+    fn freeze_plan(
+        &mut self,
+        site: &Site,
+        workbench: &Workbench,
+        addr: &Address,
+        brief: &city::RunBrief,
+        task: String,
+        goal: String,
+        job: Locator,
+        parent: Option<RunId>,
+        budget: kernel::BudgetCap,
+    ) -> Result<(RunPlan, runtime::handoff::Handoff), AxError> {
+        let tools = workbench.catalog.borrow().tool_defs();
+        // The catalog is part of the resident segment, not a fifth slot:
+        // what a resident may reach is as much a standing fact about it
+        // as who it is, and both are frozen for the whole run so the
+        // prefix stays cacheable across the run's life. Assembled here
+        // rather than earlier because the catalog does not exist until
+        // the tools, the reading room and the mode are known.
+        // The name a person typed when they started this session, which
+        // is the last segment of the address they started it at. It
+        // opens the resident slot rather than the city one: the city
+        // segment is identical for every agent in the city and is
+        // cached as such, and a name in it would make one copy per
+        // agent of the largest stable block in the prompt.
+        let mut resident = format!("Your name: {}\n\n", name_of(addr)).into_bytes();
+        resident.extend_from_slice(&site.identity.segment_bytes());
+        resident.push(NEWLINE);
+        resident.extend_from_slice(workbench.catalog.borrow().render().as_bytes());
+        let prefix = FrozenPrefix::assemble(
+            FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)?),
+            FrozenSegment::new(
+                SegmentSlot::Building,
+                building_segment(&self.city_root, addr, site.building.addr()),
+            ),
+            FrozenSegment::new(SegmentSlot::Resident, resident),
+            FrozenSegment::new(
+                SegmentSlot::Run,
+                run_segment(&self.city_root, site.building.addr(), brief)?,
+            ),
+        )?;
+
+        let plan = RunPlan {
+            run: site.run_id,
+            who: site.who.clone(),
+            addr: addr.clone(),
+            task,
+            goal,
+            // The city decided this when it laid the brief down; the
+            // window and the run segment read the one decision.
+            opening: match brief {
+                city::RunBrief::Job { .. } => runtime::Opening::FromJob,
+                city::RunBrief::Principal => runtime::Opening::WithPerson,
+            },
+            job: job.clone(),
+            parent,
+            budget_turns: DISPATCH_TURN_BUDGET,
+            budget,
+            shape: CallShape {
+                model: site.model.id.clone(),
+                // The model's own ceiling, not a number chosen here.
+                // With thinking enabled this budget covers reasoning and
+                // answer together, so a hand-picked value truncates runs
+                // for a reason that appears nowhere in the account.
+                max_tokens: site.model.max_output_tokens,
+                // Stated in CONFIG.toml, resolved down the three-layer
+                // ladder, and frozen with the run.
+                effort: site.config.effort,
+            },
+            prefix,
+            policy: site.rules.policy().clone(),
+            tools,
+        };
+
+        // The norms are filled by the machine: their addresses are known
+        // when the building is laid out, and a model asked to recite the
+        // list from memory gets one entry wrong eventually.
+        let mut must_read = Vec::new();
+        for norm in city::norms(&self.city_root, addr)? {
+            let bytes = std::fs::read(&norm).map_err(|err| {
+                AxError::failure(
+                    AxCode::StorageFatal,
+                    "read a norm document for the must-read list",
+                    format!("{}: {err}", norm.display()),
+                )
+                .with_recovery("fix the file's permissions, or remove it from the building")
+            })?;
+            let hash = self.cas.put(&bytes).map_err(memory::MemoryError::into_ax)?;
+            must_read.push(Locator::parse(&format!("cas:b3-{hash}"))?);
+        }
+        must_read.push(job);
+        let handoff = runtime::handoff::Handoff::new(
+            must_read,
+            task_line(&plan),
+            "see the city roadmap".to_owned(),
+            "dispatched from the control surface".to_owned(),
+            "resume from the job locator".to_owned(),
+        )?;
+        Ok((plan, handoff))
+    }
+
     /// Builds the one tool that answers what this run is, to itself.
     ///
     /// Everything a `status` answer holds is read here, at dispatch, and
@@ -4623,91 +4738,12 @@ impl RunWorker {
         // who it may hand work down to: one phase, one value.
         let mut workbench =
             self.lay_out_workbench(&site, &desks, &addr, depth, mode, budget, &job_locator)?;
-        let tools = workbench.catalog.borrow().tool_defs();
-        // The catalog is part of the resident segment, not a fifth slot:
-        // what a resident may reach is as much a standing fact about it
-        // as who it is, and both are frozen for the whole run so the
-        // prefix stays cacheable across the run's life. Assembled here
-        // rather than earlier because the catalog does not exist until
-        // the tools, the reading room and the mode are known.
-        // The name a person typed when they started this session, which
-        // is the last segment of the address they started it at. It
-        // opens the resident slot rather than the city one: the city
-        // segment is identical for every agent in the city and is
-        // cached as such, and a name in it would make one copy per
-        // agent of the largest stable block in the prompt.
-        let mut resident = format!("Your name: {}\n\n", name_of(&addr)).into_bytes();
-        resident.extend_from_slice(&site.identity.segment_bytes());
-        resident.push(NEWLINE);
-        resident.extend_from_slice(workbench.catalog.borrow().render().as_bytes());
-        let prefix = FrozenPrefix::assemble(
-            FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)?),
-            FrozenSegment::new(
-                SegmentSlot::Building,
-                building_segment(&self.city_root, &addr, site.building.addr()),
-            ),
-            FrozenSegment::new(SegmentSlot::Resident, resident),
-            FrozenSegment::new(
-                SegmentSlot::Run,
-                run_segment(&self.city_root, site.building.addr(), &brief)?,
-            ),
-        )?;
-
-        let plan = RunPlan {
-            run: site.run_id,
-            who: site.who.clone(),
-            addr: addr.clone(),
-            task,
-            goal,
-            // The city decided this when it laid the brief down; the
-            // window and the run segment read the one decision.
-            opening: match &brief {
-                city::RunBrief::Job { .. } => runtime::Opening::FromJob,
-                city::RunBrief::Principal => runtime::Opening::WithPerson,
-            },
-            job: job.clone(),
-            parent,
-            budget_turns: DISPATCH_TURN_BUDGET,
-            budget,
-            shape: CallShape {
-                model: site.model.id.clone(),
-                // The model's own ceiling, not a number chosen here.
-                // With thinking enabled this budget covers reasoning and
-                // answer together, so a hand-picked value truncates runs
-                // for a reason that appears nowhere in the account.
-                max_tokens: site.model.max_output_tokens,
-                // Stated in CONFIG.toml, resolved down the three-layer
-                // ladder, and frozen with the run.
-                effort: site.config.effort,
-            },
-            prefix,
-            policy: site.rules.policy().clone(),
-            tools,
-        };
-
-        // The norms are filled by the machine: their addresses are known
-        // when the building is laid out, and a model asked to recite the
-        // list from memory gets one entry wrong eventually.
-        let mut must_read = Vec::new();
-        for norm in city::norms(&self.city_root, &addr)? {
-            let bytes = std::fs::read(&norm).map_err(|err| {
-                AxError::failure(
-                    AxCode::StorageFatal,
-                    "read a norm document for the must-read list",
-                    format!("{}: {err}", norm.display()),
-                )
-                .with_recovery("fix the file's permissions, or remove it from the building")
-            })?;
-            let hash = self.cas.put(&bytes).map_err(memory::MemoryError::into_ax)?;
-            must_read.push(Locator::parse(&format!("cas:b3-{hash}"))?);
-        }
-        must_read.push(job);
-        let handoff = runtime::handoff::Handoff::new(
-            must_read,
-            task_line(&plan),
-            "see the city roadmap".to_owned(),
-            "dispatched from the control surface".to_owned(),
-            "resume from the job locator".to_owned(),
+        // The plan this run is frozen with, and the handoff that says
+        // what to read to pick it up again: one phase, because the
+        // handoff quotes the plan and the plan is what the prefix was
+        // assembled for.
+        let (plan, handoff) = self.freeze_plan(
+            &site, &workbench, &addr, &brief, task, goal, job, parent, budget,
         )?;
 
         // Under review the worktree is this run's alone, so everything

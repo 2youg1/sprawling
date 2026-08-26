@@ -802,7 +802,7 @@ impl RunWorker {
 
 `dispatch_in` 今为 **833** 行（@3611），相位实测如下。目标 <200；每刀都是同一个形制：相位成为 `RunWorker` 的一个方法，多个活值归并为一个归位值类型（如 `Driven`），而不是一排得保持同步的局部变量。
 
-已切八刀（R2.19a–g），**975 → 237**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起收回的五张桌子）与 `Site`（一次跑站在哪儿）。
+已切九刀（R2.19a–h），**975 → 158**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起收回的五张桌子）与 `Site`（一次跑站在哪儿）。
 
 **第七刀：桌子（§5 步 3–4，整修卡 R2.19f）。**
 
@@ -845,6 +845,19 @@ impl RunWorker {
 **尺寸**：`dispatch_in` 423 → **237**；`lay_out_workbench` 164；`status_tool` 51。
 
 **它以什么收口**：纯结构，无可咬的红。十三件工具的**构造顺序与登记顺序逐字不变**——而登记顺序是缓存面的一部分（§8-27），prefix 字节一变即有测试当场发作，这正是 143 条全绿在本卡的分量。
+
+**第九刀：冻结（§5 步 5，整修卡 R2.19h）。**
+
+```rust
+fn freeze_plan(&mut self, site, workbench, addr, brief, task, goal, job, parent, budget)
+    -> Result<(RunPlan, runtime::handoff::Handoff), AxError>;
+```
+
+**两个值而不是一个新类型**：`RunPlan` 与 `Handoff` 类型不同、谁也不会认错，再包一层只是给元组取个名字。它们同属一相位的理由是读一遍就看得见的：prefix 为这份 plan 而装配并与它一同冻结，handoff 引的是 plan 自己的 `task_line`，而 job locator 两边都在。
+
+**尺寸**：`dispatch_in` 237 → **158**；`freeze_plan` 100。至此 `dispatch_in` 不再是本文件最长的函数（`drive_dispatch` 171 是），九刀合计 **975 → 158**。
+
+**它以什么收口**：纯结构，无可咬的红。prefix 四段的装配顺序、must-read 的入列顺序（先 norms 后 job）均逐字不变；两者一变即有多条盯 prefix 字节与交接件内容的测试发作。143 条全绿。
 
 **剩下四刀**（目标 <200，预计落在 ~160）。上一版此处写「三刀」而表里四行，是笔误：四个相位都还在 `dispatch_in` 里，四刀都要切。
 
