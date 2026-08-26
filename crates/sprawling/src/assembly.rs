@@ -942,10 +942,16 @@ fn read_autonomy(name: &str) -> kernel::Autonomy {
 /// and it is the same answer a fresh city would reach from the same
 /// lines.
 /// The work an answered item was holding up.
+///
+/// The ceiling travels with it because the answer resumes the same piece
+/// of work: a run that stopped to ask and was told yes is not a new run
+/// that happens to be at the same address.
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct BlockedJob {
     addr: Address,
     task: String,
     goal: String,
+    budget: kernel::BudgetCap,
 }
 
 /// The three registers a run's collaboration tools read from.
@@ -1421,7 +1427,24 @@ fn new_inbox() -> collab::Inbox {
     collab::Inbox::new(INBOX_CAPACITY, SIGNAL_BANDWIDTH)
 }
 
-/// Who may answer, what is waiting, and what has already been allowed.
+/// What a run was sent out to do, and what it was allowed to spend
+/// doing it. Read back from `run_started`, which is the only record
+/// that carries all three.
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct Sent {
+    task: String,
+    goal: String,
+    budget: kernel::BudgetCap,
+}
+
+/// Who may answer, what is waiting, what has already been allowed, and
+/// what each waiting item is holding up.
+///
+/// One fold, two readers. `Standing::fold` shows it every line of a
+/// history it did not write; `RunWorker::govern` shows it every line the
+/// running city writes. Until R2.11 those were two implementations that
+/// happened to agree, and `set_admission` and `answer_approval` each
+/// held a third by writing a field directly.
 struct Governance {
     pending: std::collections::BTreeMap<String, kernel::ApprovalItem>,
     autonomy: kernel::Autonomy,
@@ -1430,6 +1453,18 @@ struct Governance {
     /// them. Folded from the ledger like everything else the panel
     /// shows, so a restarted city is still halted.
     halted: std::collections::BTreeSet<String>,
+    /// What each run was sent to do, by run.
+    ///
+    /// Never pruned, and one short entry per run - the same growth class
+    /// as `memory::HotView`, which is also one entry per run. It cannot
+    /// be pruned on `run_frozen`: `freeze` writes inside the drive while
+    /// the assembly records waiting items after it, so the ledger order
+    /// is `run_started … run_frozen … approval_requested` and pruning
+    /// there would drop the entry one line before it is read.
+    sent: std::collections::BTreeMap<RunId, Sent>,
+    /// What each waiting item is holding up, by approval id. Pruned when
+    /// the item is answered, because an answered item holds nothing up.
+    origins: std::collections::BTreeMap<String, BlockedJob>,
 }
 
 impl Governance {
@@ -1440,24 +1475,85 @@ impl Governance {
             autonomy: kernel::consts_policy::AUTONOMY_DEFAULT,
             granted: Vec::new(),
             halted: std::collections::BTreeSet::new(),
+            sent: std::collections::BTreeMap::new(),
+            origins: std::collections::BTreeMap::new(),
         }
     }
 
-    /// Folds one record in.
-    fn absorb(&mut self, record: &EventRecord) {
-        let (pending, granted, halted) = (&mut self.pending, &mut self.granted, &mut self.halted);
-        let data = record.data().as_map();
-        match record.kind() {
+    /// Registers what a run was sent to do.
+    ///
+    /// Two callers, one shape: the dispatch that is about to build the
+    /// `RunPlan` out of these very values, and `absorb` reading them back
+    /// out of `run_started`. `what_a_worker_holds_is_what_a_restart_rebuilds`
+    /// is what holds the two to the same answer.
+    fn sent(&mut self, run: RunId, task: &str, goal: &str, budget: kernel::BudgetCap) {
+        self.sent.insert(
+            run,
+            Sent {
+                task: task.to_owned(),
+                goal: goal.to_owned(),
+                budget,
+            },
+        );
+    }
+
+    /// Folds one line in, from whichever of the two directions it came.
+    ///
+    /// The envelope arrives beside the payload because two of these arms
+    /// need it: a run is named by the record it started, and a waiting
+    /// item is held against the room that raised it.
+    fn absorb(&mut self, kind: EventKind, run: RunId, addr: Option<&Address>, payload: &Payload) {
+        let data = payload.as_map();
+        let text = |key: &str| {
+            data.get(key)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let count = |key: &str| {
+            data.get(key)
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or_default()
+        };
+        match kind {
+            EventKind::RunStarted => {
+                self.sent(
+                    run,
+                    &text("task"),
+                    &text("goal"),
+                    kernel::BudgetCap {
+                        usd: kernel::UsdMicros::new(count("usd_micros")),
+                        tokens: kernel::Tokens::new(count("tokens")),
+                    },
+                );
+            }
             EventKind::ApprovalRequested => {
-                if let Ok(item) = serde_json::from_value::<kernel::ApprovalItem>(
+                let Ok(item) = serde_json::from_value::<kernel::ApprovalItem>(
                     serde_json::Value::Object(data.clone()),
-                ) {
-                    pending.insert(item.id.as_str().to_owned(), item);
+                ) else {
+                    return;
+                };
+                // What this item is holding up, joined here rather than
+                // hunted for later. Both halves come from the history:
+                // the room from this record's envelope, the work from
+                // the `run_started` of the run that raised it.
+                if let (Some(addr), Some(sent)) = (addr, self.sent.get(&run)) {
+                    self.origins.insert(
+                        item.id.as_str().to_owned(),
+                        BlockedJob {
+                            addr: addr.clone(),
+                            task: sent.task.clone(),
+                            goal: sent.goal.clone(),
+                            budget: sent.budget,
+                        },
+                    );
                 }
+                self.pending.insert(item.id.as_str().to_owned(), item);
             }
             EventKind::ApprovalResolved => {
                 if let Some(id) = data.get("id").and_then(serde_json::Value::as_str) {
-                    pending.remove(id);
+                    self.pending.remove(id);
+                    self.origins.remove(id);
                 }
                 let allowed =
                     data.get("verdict").and_then(serde_json::Value::as_str) == Some("allow");
@@ -1465,7 +1561,7 @@ impl Governance {
                     && let Some(cluster) = data.get("cluster")
                     && let Ok(key) = serde_json::from_value::<kernel::ClusterKey>(cluster.clone())
                 {
-                    granted.push(key);
+                    self.granted.push(key);
                 }
             }
             EventKind::AutonomyChanged => {
@@ -1481,9 +1577,9 @@ impl Governance {
                     return;
                 };
                 if data.get("state").and_then(serde_json::Value::as_str) == Some(HALTED) {
-                    halted.insert(scope.to_owned());
+                    self.halted.insert(scope.to_owned());
                 } else {
-                    halted.remove(scope);
+                    self.halted.remove(scope);
                 }
             }
             _ => {}
@@ -1529,7 +1625,7 @@ impl Standing {
             for line in verified.raw_lines() {
                 let record = EventRecord::parse_line(line)?;
                 book.apply(&record)?;
-                governance.absorb(&record);
+                governance.absorb(record.kind(), record.run(), record.addr(), record.data());
                 collaboration.absorb(&record)?;
             }
         }
@@ -1603,20 +1699,12 @@ pub struct RunWorker {
     /// worker driven one command at a time, which is every worker except
     /// the one behind a live control surface.
     interrupts: Option<Box<dyn FnMut(RunId) -> Interrupt + Send>>,
-    /// Approval items still waiting, folded from the ledger. The worker
-    /// keeps its own copy for the same reason it keeps the endpoint
-    /// book: an answer is decided synchronously, before the record it
-    /// just wrote has reached any observer.
-    pending: std::collections::BTreeMap<String, kernel::ApprovalItem>,
-    /// Who may answer. Folded from `autonomy_changed`, never mirrored:
-    /// the panel shows what a replay can verify.
-    autonomy: kernel::Autonomy,
-    /// The scopes work is not admitted into, folded from `city_halted`.
-    halted: std::collections::BTreeSet<String>,
-    /// Clusters the person has allowed, folded from the answers. A
-    /// resumed run carries them so it does not stop at a door that was
-    /// just opened for it.
-    granted: Vec<kernel::ClusterKey>,
+    /// What waits for a person, who may answer it, what has been
+    /// allowed, which scopes are shut, and what each waiting item is
+    /// holding up. The worker keeps its own copy for the same reason it
+    /// keeps the endpoint book: an answer is decided synchronously,
+    /// before the record it just wrote has reached any observer.
+    governance: Governance,
     /// What is waiting for each room, folded from the signal records.
     /// A dispatch lends its room's queue to the signal tool and takes it
     /// back when the drive ends, so exactly one queue exists per room.
@@ -1707,10 +1795,7 @@ impl RunWorker {
             book,
             vault: Arc::new(std::sync::Mutex::new(vault)),
             interrupts: None,
-            pending: governance.pending,
-            autonomy: governance.autonomy,
-            granted: governance.granted,
-            halted: governance.halted,
+            governance,
             inboxes: collaboration.inboxes,
             joins: collaboration.joins,
             goals: collaboration.goals,
@@ -2044,7 +2129,7 @@ impl RunWorker {
             run,
             t: now_ms()?,
             who: who.to_owned(),
-            addr: Some(addr),
+            addr: Some(addr.clone()),
             kind,
             data: data.clone(),
             ig: false,
@@ -2052,8 +2137,9 @@ impl RunWorker {
         // The book states what the history says, whoever wrote the line.
         // Without this an approval a run raised was on the ledger and
         // absent from `pending`, so the person could not answer it until
-        // the process restarted and folded the ledger again.
-        self.govern(kind, &data);
+        // the process restarted and folded the ledger again. It is the
+        // same fold a restart runs, shown the line this process wrote.
+        self.governance.absorb(kind, run, Some(&addr), &data);
         Ok(())
     }
 
@@ -2161,7 +2247,7 @@ impl RunWorker {
             ig: false,
         };
         self.ledger.append(draft)?;
-        self.govern(kind, &data);
+        self.governance.absorb(kind, RunId::CITY, None, &data);
         self.book.apply_payload(kind, &data)
     }
 
@@ -2806,7 +2892,7 @@ impl RunWorker {
         Ok(ScanReport {
             lines: verified.raw_lines().len(),
             closed_calls: closed,
-            waiting_approvals: self.pending.len(),
+            waiting_approvals: self.governance.pending.len(),
         })
     }
 
@@ -2918,37 +3004,6 @@ impl RunWorker {
         Ok(started)
     }
 
-    /// Folds one record into what the worker must answer from: the items
-    /// still waiting, and who may answer them. Both are read from the
-    /// ledger rather than kept beside it, so throwing this state away
-    /// and replaying rebuilds the same answers.
-    fn govern(&mut self, kind: EventKind, data: &Payload) {
-        match kind {
-            EventKind::ApprovalRequested => {
-                if let Ok(item) = serde_json::from_value::<kernel::ApprovalItem>(
-                    serde_json::Value::Object(data.as_map().clone()),
-                ) {
-                    self.pending.insert(item.id.as_str().to_owned(), item);
-                }
-            }
-            EventKind::ApprovalResolved => {
-                if let Some(id) = data.as_map().get("id").and_then(serde_json::Value::as_str) {
-                    self.pending.remove(id);
-                }
-            }
-            EventKind::AutonomyChanged => {
-                if let Some(name) = data
-                    .as_map()
-                    .get("autonomy")
-                    .and_then(serde_json::Value::as_str)
-                {
-                    self.autonomy = read_autonomy(name);
-                }
-            }
-            _ => {}
-        }
-    }
-
     /// Answers one approval item.
     ///
     /// The rule lives in `kernel::approval`: humans answer everything, a
@@ -2963,15 +3018,20 @@ impl RunWorker {
         verdict: kernel::PolicyVerdict,
         answerer: &kernel::Answerer,
     ) -> Result<(), AxError> {
-        let pending = self.pending.get(item.as_str()).cloned().ok_or_else(|| {
-            AxError::failure(
-                AxCode::InvalidArgs,
-                "answer an approval",
-                item.as_str().to_owned(),
-            )
-            .with_recovery("this item is not waiting; the inbox lists the ones that are")
-        })?;
-        match kernel::may_answer(&self.autonomy, &pending, answerer) {
+        let pending = self
+            .governance
+            .pending
+            .get(item.as_str())
+            .cloned()
+            .ok_or_else(|| {
+                AxError::failure(
+                    AxCode::InvalidArgs,
+                    "answer an approval",
+                    item.as_str().to_owned(),
+                )
+                .with_recovery("this item is not waiting; the inbox lists the ones that are")
+            })?;
+        match kernel::may_answer(&self.governance.autonomy, &pending, answerer) {
             kernel::AnswerVerdict::May => {}
             refused => {
                 return Err(AxError::failure(
@@ -3005,68 +3065,36 @@ impl RunWorker {
                 AxError::failure(AxCode::InvalidArgs, "record an answer", err.to_string())
             })?,
         );
-        self.pending.remove(item.as_str());
+        // Read before the answer is recorded, because recording it is
+        // what closes the item: the fold drops the origin along with the
+        // pending entry, and carrying the work on is this method's job
+        // rather than the record's.
+        let blocked = self.governance.origins.get(item.as_str()).cloned();
         self.record(EventKind::ApprovalResolved, Payload::new(map)?)?;
-        if verdict == kernel::PolicyVerdict::Allow {
-            self.granted.push(pending.cluster_key.clone());
+        // The cluster the person allowed and the closing of the item are
+        // both folded from the line just written. Setting either field
+        // here as well would be a second authority for a rule the fold
+        // already holds.
+        if verdict == kernel::PolicyVerdict::Allow
+            && let Some(job) = blocked
+        {
             // The work the person just unblocked carries on without
             // them: an answer that still needed the same command typed
             // again would make the inbox a place to acknowledge things
-            // rather than a place to decide them.
-            if let Some(job) = self.blocked_job(item)? {
-                self.dispatch(job.addr, job.task, job.goal)?;
-            }
+            // rather than a place to decide them. Under the ceiling it
+            // was sent with, for the reason `knock` gives beside its own
+            // budget - this is the same piece of work, interrupted.
+            self.dispatch_in(
+                job.addr,
+                job.task,
+                job.goal,
+                runtime::Mode::PlanGoal,
+                job.budget,
+                None,
+            )
+            .map(drop)?;
         }
         Ok(())
-    }
-
-    /// What a waiting item was blocking: the address it was raised in,
-    /// and the task and goal of the run that raised it.
-    ///
-    /// Read from the ledger rather than remembered, so an answer given
-    /// after a restart resumes the same work as one given before it.
-    fn blocked_job(&self, item: &kernel::ApprovalId) -> Result<Option<BlockedJob>, AxError> {
-        let dir = ledger_dir(&self.city_root);
-        if !dir.exists() {
-            return Ok(None);
-        }
-        let verified = runtime::replay::verify_ledger_dir(&dir)?;
-        let mut raised_in: Option<(RunId, Address)> = None;
-        for line in verified.raw_lines() {
-            let record = EventRecord::parse_line(line)?;
-            if record.kind() == EventKind::ApprovalRequested
-                && record
-                    .data()
-                    .as_map()
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    == Some(item.as_str())
-                && let Some(addr) = record.addr()
-            {
-                raised_in = Some((record.run(), addr.clone()));
-            }
-        }
-        let Some((run, addr)) = raised_in else {
-            return Ok(None);
-        };
-        for line in verified.raw_lines() {
-            let record = EventRecord::parse_line(line)?;
-            if record.kind() == EventKind::RunStarted && record.run() == run {
-                let data = record.data();
-                let map = data.as_map();
-                let text = |key: &str| {
-                    map.get(key)
-                        .and_then(serde_json::Value::as_str)
-                        .unwrap_or_default()
-                };
-                return Ok(Some(BlockedJob {
-                    addr,
-                    task: text("task").to_owned(),
-                    goal: text("goal").to_owned(),
-                }));
-            }
-        }
-        Ok(None)
     }
 
     /// Shuts a scope to new work, or opens it again.
@@ -3084,13 +3112,9 @@ impl RunWorker {
             "state".to_owned(),
             serde_json::Value::String(state.to_owned()),
         );
-        self.record(EventKind::CityHalted, Payload::new(map)?)?;
-        if state == HALTED {
-            self.halted.insert(name);
-        } else {
-            self.halted.remove(&name);
-        }
-        Ok(())
+        // Recorded and nothing else: the fold reads `city_halted` and
+        // sets the scope, in the one place a restart reads it too.
+        self.record(EventKind::CityHalted, Payload::new(map)?)
     }
 
     /// Which shut scope covers this address, if one does.
@@ -3099,10 +3123,11 @@ impl RunWorker {
     /// is inside it, by the same containment `WriteDomain` uses, so
     /// "inside" means one thing in this city rather than two.
     fn halted_by(&self, addr: &Address) -> Option<String> {
-        if self.halted.contains("city") {
+        if self.governance.halted.contains("city") {
             return Some("city".to_owned());
         }
-        self.halted
+        self.governance
+            .halted
             .iter()
             .find(|name| {
                 name.split_once(':')
@@ -3403,6 +3428,12 @@ impl RunWorker {
         // of them mint ids from it, and an id minted from a run that did
         // not exist yet would not be the same id on a replay.
         let run_id = run_id_for(&job, &addr, now_ms()?);
+        // What this run was sent to do, held for as long as anything it
+        // raises is still waiting. `run_started` carries the same three
+        // facts and a restarted worker folds them from there; this is the
+        // live half, registered out of the values the plan below is built
+        // from so the two cannot say different things.
+        self.governance.sent(run_id, &task, &goal, budget);
 
         // A building under review gives every run its own tree, and the
         // run writes there instead of in the city. Nothing it writes is
@@ -3548,7 +3579,7 @@ impl RunWorker {
                 mode,
                 write_domain: &writable,
                 worktree: &write_root,
-                trust: &self.autonomy,
+                trust: &self.governance.autonomy,
                 context_tokens: model.context_tokens,
                 budget,
                 neighbours,
@@ -3694,7 +3725,7 @@ impl RunWorker {
         bench.register(Box::new(archive_tool))?;
         bench.register(Box::new(exec))?;
         bench.register(Box::new(read))?;
-        for cluster in &self.granted {
+        for cluster in &self.governance.granted {
             bench.grant(cluster.clone());
         }
         // External tools, for a building whose configuration names a
@@ -3772,6 +3803,7 @@ impl RunWorker {
             job: job.clone(),
             parent,
             budget_turns: DISPATCH_TURN_BUDGET,
+            budget,
             shape: CallShape {
                 model: model.id.clone(),
                 // The model's own ceiling, not a number chosen here.
@@ -6725,9 +6757,9 @@ mod tests {
             runtime::diagnostics::Diagnostics::off(),
         )
         .unwrap();
-        assert!(restarted.pending.is_empty());
+        assert!(restarted.governance.pending.is_empty());
         assert_eq!(
-            restarted.autonomy,
+            restarted.governance.autonomy,
             kernel::Autonomy::Delegate(kernel::ResidentId::new("lab/room1").unwrap())
         );
     }
@@ -6984,7 +7016,7 @@ mod tests {
                 Payload::new(value.as_object().cloned().unwrap()).unwrap(),
             )
             .unwrap();
-        worker.pending.insert("item-1".to_owned(), item);
+        worker.governance.pending.insert("item-1".to_owned(), item);
 
         let before = started_runs(&report.ledger_dir);
         worker
@@ -7282,6 +7314,70 @@ mod tests {
             worker.requests.len(),
             rebuilt.requests.len(),
             "the register of open requests is folded from one rule"
+        );
+
+        // What each waiting item is holding up. This is the half the
+        // handoff left open: the origin is process memory, and a
+        // restarted worker rebuilds from the ledger, so an item raised
+        // before a restart and answered after it has to find the same
+        // work. It does, because the origin is folded by `absorb` out of
+        // the same two lines a restart reads.
+        let item = kernel::ApprovalItem {
+            id: kernel::ApprovalId::new("item-held").unwrap(),
+            source: kernel::ApprovalSource::Gate,
+            actor: "market/ito".to_owned(),
+            action_desc: "ask hana what she charges".to_owned(),
+            artifact: Locator::parse("file:market/ito@0000000000000000000000000000000000000000")
+                .unwrap(),
+            cluster_key: kernel::ClusterKey {
+                class: kernel::ApprovalClass::DiscardEscalate,
+                detail: "market/ito".to_owned(),
+            },
+            created: TimeMs::new(1),
+            tainted: false,
+        };
+        let started = {
+            let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+            let mut first = None;
+            for line in verified.raw_lines() {
+                let record = EventRecord::parse_line(line).unwrap();
+                if record.kind() == EventKind::RunStarted && first.is_none() {
+                    first = Some(record.run());
+                }
+            }
+            first.expect("a dispatch starts a run")
+        };
+        worker
+            .record_for(
+                started,
+                "market/ito",
+                Address::parse("market/ito").unwrap(),
+                EventKind::ApprovalRequested,
+                Payload::new(
+                    serde_json::to_value(&item)
+                        .unwrap()
+                        .as_object()
+                        .cloned()
+                        .unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let refolded = Standing::fold(&report.ledger_dir).unwrap().governance;
+        assert_eq!(
+            worker.governance.origins, refolded.origins,
+            "what a waiting item is holding up is folded from one rule, so an answer after a \
+             restart resumes the work an answer before it would have"
+        );
+        assert_eq!(
+            worker.governance.origins.get("item-held"),
+            Some(&BlockedJob {
+                addr: Address::parse("market/ito").unwrap(),
+                task: "ask hana what she charges".to_owned(),
+                goal: "a price".to_owned(),
+                budget: kernel::BudgetCap::default(),
+            }),
+            "and the comparison above is not two empty maps agreeing"
         );
     }
 
@@ -8212,6 +8308,7 @@ addr = \"gone/room1\"
     /// delegate has to say yes first - which is the point of the door.
     fn allow_the_one_pending_item(worker: &mut RunWorker) -> kernel::ClusterKey {
         let item = worker
+            .governance
             .pending
             .values()
             .next()
@@ -8319,33 +8416,6 @@ addr = \"gone/room1\"
         allow_the_one_pending_item(&mut worker);
         send(&mut worker, ceiling, b"under-a-real-ceiling");
 
-        // Whose reading is whose. A conversation carries its earlier
-        // turns, so one run's status answer appears in every later
-        // request of that same run - counting bodies would have counted
-        // the parent twice and passed without the fix. What tells the two
-        // apart is the address inside the status block itself.
-        fn ceiling_read_by(bodies: &[String], room: &str) -> Vec<String> {
-            let mut readings = Vec::new();
-            for body in bodies {
-                // The status text is a JSON string inside a JSON string,
-                // so one newline arrives as two backslashes and an `n`.
-                for (at, _) in body.match_indices(&format!("addr: {room}\\\\n")) {
-                    let window = body
-                        .get(at..body.len().min(at.saturating_add(240)))
-                        .unwrap_or_default();
-                    let Some(from) = window.find("budget: ") else {
-                        continue;
-                    };
-                    let tail = window.get(from..).unwrap_or_default();
-                    let line = tail.split("\\\\n").next().unwrap_or_default();
-                    readings.push(line.to_owned());
-                }
-            }
-            readings.sort_unstable();
-            readings.dedup();
-            readings
-        }
-
         let stated = "budget: 250000 usd_micros, 4000 tokens".to_owned();
         let asked = provider.bodies();
 
@@ -8363,6 +8433,135 @@ addr = \"gone/room1\"
             ceiling_read_by(&asked, "lab/helper"),
             vec![stated],
             "work handed down is done under the ceiling that sent it"
+        );
+    }
+
+    /// Whose reading is whose. A conversation carries its earlier turns,
+    /// so one run's status answer appears in every later request of that
+    /// same run - counting bodies counts one run many times and passes
+    /// without a fix. What tells readings apart is the address inside
+    /// the status block itself, and the answer is the set of distinct
+    /// ceilings read at that address rather than how many times.
+    fn ceiling_read_by(bodies: &[String], room: &str) -> Vec<String> {
+        let mut readings = Vec::new();
+        for body in bodies {
+            // The status text is a JSON string inside a JSON string, so
+            // one newline arrives as two backslashes and an `n`.
+            for (at, _) in body.match_indices(&format!("addr: {room}\\\\n")) {
+                let window = body
+                    .get(at..body.len().min(at.saturating_add(240)))
+                    .unwrap_or_default();
+                let Some(from) = window.find("budget: ") else {
+                    continue;
+                };
+                let tail = window.get(from..).unwrap_or_default();
+                let line = tail.split("\\\\n").next().unwrap_or_default();
+                readings.push(line.to_owned());
+            }
+        }
+        readings.sort_unstable();
+        readings.dedup();
+        readings
+    }
+
+    /// An answer carries the work on, and the work it carries on is the
+    /// same work - so it runs under the ceiling that sent it.
+    ///
+    /// The resumption path went through `fn dispatch`, which writes
+    /// `BudgetCap::default()`, and no word could fix that: `BlockedJob`
+    /// was rebuilt out of `run_started`, and that record did not carry a
+    /// ceiling for it to be rebuilt from. Both runs here stand at the
+    /// same address, so the discriminator is not `addr:` but the set of
+    /// distinct ceilings read there: two values before this card, one
+    /// after.
+    #[test]
+    fn work_resumed_by_an_answer_is_done_under_the_ceiling_that_sent_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let read_situation =
+            |id: &str| completion_with("what am I under", "status", id, serde_json::json!({}));
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                read_situation("tu_1"),
+                completion("stopping here", None),
+                // The run the answer carries on: it reads its own
+                // situation, which is the arm this card is about.
+                read_situation("tu_2"),
+                completion("carried on", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        let addr = Address::parse("lab/room1").unwrap();
+        let ceiling = kernel::BudgetCap {
+            usd: kernel::UsdMicros::new(250_000),
+            tokens: kernel::Tokens::new(4_000),
+        };
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: addr.clone(),
+                task: "empty the archive".to_owned(),
+                goal: "one sweep, then stop".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: ceiling,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"under-a-cap"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        // The item that run left waiting, recorded the way the bench
+        // records one: against the run and the address, because
+        // answering it later has to find the work it was holding up.
+        let run = {
+            let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
+            let mut found = None;
+            for line in verified.raw_lines() {
+                let record = EventRecord::parse_line(line).unwrap();
+                if record.kind() == EventKind::RunStarted {
+                    found = Some(record.run());
+                }
+            }
+            found.expect("a dispatch starts a run")
+        };
+        let item = kernel::ApprovalItem {
+            id: kernel::ApprovalId::new("item-1").unwrap(),
+            source: kernel::ApprovalSource::Gate,
+            actor: "lab/room1".to_owned(),
+            action_desc: "empty the archive".to_owned(),
+            artifact: Locator::parse("file:lab/room1@0000000000000000000000000000000000000000")
+                .unwrap(),
+            cluster_key: kernel::ClusterKey {
+                class: kernel::ApprovalClass::DiscardEscalate,
+                detail: "lab/room1".to_owned(),
+            },
+            created: TimeMs::new(1),
+            tainted: false,
+        };
+        let value = serde_json::to_value(&item).unwrap();
+        worker
+            .record_for(
+                run,
+                "lab/room1",
+                addr,
+                EventKind::ApprovalRequested,
+                Payload::new(value.as_object().cloned().unwrap()).unwrap(),
+            )
+            .unwrap();
+
+        worker
+            .handle(channels::Command::Approve {
+                item: kernel::ApprovalId::new("item-1").unwrap(),
+                verdict: kernel::PolicyVerdict::Allow,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"approve"),
+            })
+            .unwrap();
+
+        assert_eq!(
+            ceiling_read_by(&provider.bodies(), "lab/room1"),
+            vec!["budget: 250000 usd_micros, 4000 tokens".to_owned()],
+            "both the run the person sent and the run their answer carried on read one ceiling, \
+             the one that was sent"
         );
     }
 
@@ -8908,6 +9107,7 @@ addr = \"gone/room1\"
         );
 
         let waiting = worker
+            .governance
             .pending
             .values()
             .next()

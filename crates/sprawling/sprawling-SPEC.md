@@ -643,6 +643,48 @@ self.record_for(…, EventKind::AssetArchived, …)?;          // 后落账
 
 **尺寸**：`dispatch_in` 1069 → 983 行。搬走的结结实实是五段共 ≈150 行，其中 60 行以 `RunWorker::settle` 的形式回到本文件——那是五张桌子共用的那一扇门，不是 `dispatch_in` 的一段。**尺寸门要等这个数字降到门限以下才能开，本卡只是第一刀**；剩下最大的两块是驱动块（≈150）与目录及工具准入（≈120）。
 
+## 8-25 一个答复接上的活，不靠重读全部历史找到，也不丢掉它的天花板（整修卡 R2.11）
+
+```rust
+// Governance —— 现在是 RunWorker 的一个字段，而不是四个散字段加一份重写
+struct Governance {
+    pending: BTreeMap<String, ApprovalItem>, autonomy: Autonomy,
+    granted: Vec<ClusterKey>, halted: BTreeSet<String>,
+    sent: BTreeMap<RunId, Sent>,          // 从 run_started 折；task、goal、budget
+    origins: BTreeMap<String, BlockedJob>, // 从 approval_requested 折；答复时 O(log n)
+}
+impl Governance {
+    fn sent(&mut self, RunId, task: &str, goal: &str, BudgetCap);   // 两个调用方，一个形状
+    fn absorb(&mut self, EventKind, RunId, Option<&Address>, &Payload);
+}
+struct BlockedJob { addr: Address, task: String, goal: String, budget: BudgetCap }
+```
+
+**三个病灶，一个改动**（交接件第 4 项与§8-23 留下的那一半）：
+
+1. **`blocked_job` 扫全史**。每次审批应答都 `verify_ledger_dir` 一遍再解析两遍，只为找 `(addr, task, goal)`，随历史线性增长。（量级取自 R2.02 在本机留下的同类读数：`verify_ledger_dir` 约 215k 记录/秒，于是 50k 的历史光验链就是百毫秒量级；本卡没有重测。）
+2. **天花板归零**。`fn dispatch` 写死 `BudgetCap::default()`，而它正是审批应答后续活走的那条路。一跑带着天花板派出、因待批停下、被批准后续上的那一跑，向模型报 `0 usd_micros, 0 tokens`。
+3. **`self.pending.remove(item)` 先于落账**，与 `set_admission` 相反，且是冗余的——`record → govern(ApprovalResolved)` 本就移除它。`self.granted.push(…)` 同理。
+
+**为什么三件一起改**：它们是同一个结构问题的三个面。治理状态本来有两份实现：`Governance::absorb`（重启折）与 `RunWorker::govern` 加上 `set_admission`／`answer_approval` 里直改字段的几行（活折）。R2.02 测过两者不漂移，但那只是当时恰好相等；**再加一份 origins 折就是第三份**。本卡把四个散字段换成 `RunWorker.governance`，`govern` 就是 `absorb`，于是新的两张表只有一个折法。
+
+**选甲而不选乙，理由比交接件写的强**。乙案是让 `approval_requested` 的 payload 自述所阻之活；但那份 payload 就是 `ApprovalItem` 本体，改它得改 `kernel::ApprovalItem` 的公开面与每一个构造点。更重要的是：**账本已经说得出一项是哪一跑提的**（envelope 的 `run`），它没说的是那一跑被派去做什么、在什么天花板下。那是 `run_started` 的事，不是每一项待批的事。
+
+**交接件那个未决问题，用测试回答了**。它问：甲案是进程内存，重启后的 worker 从账本重建，那「重启前提出、重启后才批」的项接不接得上活？答：接得上，因为 `origins` 就在 `Governance` 里，而 `Standing::fold` 对每一行调的正是 `absorb`——与 `pending` 同一折、同一遍。`what_a_worker_holds_is_what_a_restart_rebuilds` 本卡增一条断言盯住它。
+
+**不裁剪 `sent`，写明代价**。每跑一条（两个短字串加 16 字节），与 `memory::HotView` 同一增长级。**不能按 `RunFrozen` 裁**：`freeze` 在 drive 内落账，而装配层的待批项清扫在 drive 之后，账本顺序是 `RunStarted … RunFrozen … ApprovalRequested`，按 freeze 裁会先删掉待用条目。`origins` 则在 `ApprovalResolved` 上裁，因为答过的项不再阻着任何东西。
+
+**读在落账之前，派活在落账之后**：`answer_approval` 先取一份 `origins`（读，不是变化），再落 `approval_resolved`（它自身就是关闭动作，`absorb` 随之丢掉 pending 与 origin），最后才派活。与 §8-24 同一条规矩。
+
+**红（两条）**：
+
+- `work_resumed_by_an_answer_is_done_under_the_ceiling_that_sent_it`：以 `BudgetCap { usd: 250_000, tokens: 4_000 }` 派一跑，它读一次 `status`（对照组），然后提一项待批；批准后续上的那一跑再读一次。**两跑同地址**，所以判据不是 `addr:` 而是该地址上读到的天花板去重后的**集合**：本卡之前是两个值（`0 …` 与 `250000 …`），之后是一个。数请求体不能作判据（§8-23 已记）。
+- `what_a_worker_holds_is_what_a_restart_rebuilds` 增一条：活 worker 的 `origins` 与 `Standing::fold` 重建的逐项相等。本卡之前 `origins` 不存在，是编译红。
+
+**性能以结构收口而不以计时收口**：一次审批应答从「验链一遍加解析两遍全史」变为一次 `BTreeMap` 查找；`blocked_job` 连同它的两个循环一并删除，因此这不是一个快了多少的问题——那条路径不存在了。
+
+**影面**：`runtime` 公开面增一字段（`RunPlan.budget`），基线与 runtime-SPEC 同提交；`RunPlan` 的三个构造点（assembly、citysim、runtime 集成测）各加一行；`fixtures/golden-p0` 重生。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。

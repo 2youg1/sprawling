@@ -42,6 +42,13 @@ pub struct RunPlan {
     /// be next to each other.
     pub parent: Option<RunId>,
     pub budget_turns: u32,
+    /// What this run was allowed to spend. Written into `run_started`
+    /// beside `parent` and for the same reason: once the process that
+    /// knew it is gone, the ledger is the only thing that can still say
+    /// what ceiling a run was sent out under - and something as ordinary
+    /// as answering an approval hours later has to send the work on
+    /// under that same ceiling.
+    pub budget: kernel::BudgetCap,
     pub shape: CallShape,
     pub prefix: FrozenPrefix,
     pub policy: BuildingPolicy,
@@ -165,6 +172,18 @@ impl Run<Active> {
         if let Some(parent) = plan.parent {
             started.insert("parent".to_owned(), Value::String(parent.to_string()));
         }
+        // Integers, like every quantity on the ledger (determinism rule
+        // 6). Unconditional rather than omitted when zero: "no ceiling"
+        // and "a ceiling of nothing" are the same fact here, and a key
+        // that comes and goes is a shape a reader has to guess at.
+        started.insert(
+            "usd_micros".to_owned(),
+            Value::Number(plan.budget.usd.get().into()),
+        );
+        started.insert(
+            "tokens".to_owned(),
+            Value::Number(plan.budget.tokens.get().into()),
+        );
         ledger.append(EventDraft {
             run: plan.run,
             t: start_t,

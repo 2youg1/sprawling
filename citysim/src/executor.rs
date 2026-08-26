@@ -178,6 +178,7 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
         job,
         parent: None,
         budget_turns,
+        budget: kernel::BudgetCap::default(),
         shape: CallShape {
             model: "script".to_owned(),
             max_tokens: 4096,

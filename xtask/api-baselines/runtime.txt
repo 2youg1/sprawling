@@ -444,6 +444,7 @@ pub runtime::RunHooks::interrupt: &'a mut dyn core::ops::function::FnMut(runtime
 pub runtime::RunHooks::invoke: &'a mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall, kernel::event::TimeMs) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub runtime::RunHooks::now: &'a mut dyn core::ops::function::FnMut() -> core::result::Result<kernel::event::TimeMs, kernel::error::AxError>
 pub runtime::RunPlan::addr: kernel::address::Address
+pub runtime::RunPlan::budget: kernel::budget::BudgetCap
 pub runtime::RunPlan::budget_turns: u32
 pub runtime::RunPlan::goal: alloc::string::String
 pub runtime::RunPlan::job: kernel::locator::Locator
@@ -616,6 +617,7 @@ pub runtime::run::RunHooks::interrupt: &'a mut dyn core::ops::function::FnMut(ru
 pub runtime::run::RunHooks::invoke: &'a mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall, kernel::event::TimeMs) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub runtime::run::RunHooks::now: &'a mut dyn core::ops::function::FnMut() -> core::result::Result<kernel::event::TimeMs, kernel::error::AxError>
 pub runtime::run::RunPlan::addr: kernel::address::Address
+pub runtime::run::RunPlan::budget: kernel::budget::BudgetCap
 pub runtime::run::RunPlan::budget_turns: u32
 pub runtime::run::RunPlan::goal: alloc::string::String
 pub runtime::run::RunPlan::job: kernel::locator::Locator

@@ -126,6 +126,7 @@ fn plan(budget_turns: u32) -> RunPlan {
         job: Locator::parse(&format!("file:{}/JOB.md@{}", addr.as_str(), "a".repeat(40))).unwrap(),
         parent: None,
         budget_turns,
+        budget: kernel::BudgetCap::default(),
         shape: CallShape {
             model: "script".to_owned(),
             max_tokens: 4096,
