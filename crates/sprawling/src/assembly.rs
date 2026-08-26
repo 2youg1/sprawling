@@ -2830,6 +2830,49 @@ impl RunWorker {
         Ok(())
     }
 
+    /// Admits the skills this building's own file names, and says which
+    /// of them are not on the shelves.
+    ///
+    /// The city's shelves may hold a thousand; what costs resident bytes
+    /// is the list this building admits. A name on that list which is not
+    /// on the shelves is left out rather than promised, and noted so the
+    /// person who wrote the name can see it went nowhere.
+    ///
+    /// # Errors
+    /// Propagates a shelf that cannot be read and an entry the catalog
+    /// refuses.
+    fn admit_reading_room(
+        &mut self,
+        catalog: &std::rc::Rc<std::cell::RefCell<runtime::Catalog>>,
+        rules: &city::BuildingRules,
+        building: &city::Building,
+        addr: &Address,
+    ) -> Result<(), AxError> {
+        // The reading room, and only it. The city's shelves may hold a
+        // thousand skills; what costs resident bytes is the list this
+        // building's own file admits, and a name on that list which is
+        // not on the shelves is left out rather than promised.
+        let shelves = city::Library::scan(&self.city_root, Some(building.addr()))?;
+        for holding in shelves.reading_room(rules.reading_room()) {
+            catalog.borrow_mut().admit_skill(runtime::CatalogEntry {
+                name: holding.name.clone(),
+                disclosure: holding.disclosure.clone(),
+                expansion: holding.addr.as_str().to_owned(),
+            })?;
+        }
+        for absent in shelves.missing(rules.reading_room()) {
+            self.note(
+                runtime::diagnostics::Level::Effect,
+                "city::library",
+                &format!(
+                    "{} admits `{absent}`, which is not on the shelves",
+                    addr.as_str()
+                ),
+            );
+        }
+        Ok(())
+    }
+
     fn settle(
         &mut self,
         run: RunId,
@@ -4395,28 +4438,7 @@ impl RunWorker {
             catalog.borrow_mut().admit_tool(tool.meta())?;
             bench.register(tool)?;
         }
-        // The reading room, and only it. The city's shelves may hold a
-        // thousand skills; what costs resident bytes is the list this
-        // building's own file admits, and a name on that list which is
-        // not on the shelves is left out rather than promised.
-        let shelves = city::Library::scan(&self.city_root, Some(building.addr()))?;
-        for holding in shelves.reading_room(rules.reading_room()) {
-            catalog.borrow_mut().admit_skill(runtime::CatalogEntry {
-                name: holding.name.clone(),
-                disclosure: holding.disclosure.clone(),
-                expansion: holding.addr.as_str().to_owned(),
-            })?;
-        }
-        for absent in shelves.missing(rules.reading_room()) {
-            self.note(
-                runtime::diagnostics::Level::Effect,
-                "city::library",
-                &format!(
-                    "{} admits `{absent}`, which is not on the shelves",
-                    addr.as_str()
-                ),
-            );
-        }
+        self.admit_reading_room(&catalog, &rules, &building, &addr)?;
         let tools = catalog.borrow().tool_defs();
         // The catalog is part of the resident segment, not a fifth slot:
         // what a resident may reach is as much a standing fact about it
