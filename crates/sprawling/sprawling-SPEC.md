@@ -802,7 +802,24 @@ impl RunWorker {
 
 `dispatch_in` 今为 **833** 行（@3611），相位实测如下。目标 <200；每刀都是同一个形制：相位成为 `RunWorker` 的一个方法，多个活值归并为一个归位值类型（如 `Driven`），而不是一排得保持同步的局部变量。
 
-已切六刀（R2.19a–e），**975 → 495**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起结算的桌子）与 `Site`（一次跑站在哪儿）。
+已切七刀（R2.19a–f），**975 → 423**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起收回的五张桌子）与 `Site`（一次跑站在哪儿）。
+
+**第七刀：桌子（§5 步 3–4，整修卡 R2.19f）。**
+
+```rust
+struct Desks { signals, goals, plan, shelf, pr, plan_path: PathBuf, waiting: u32 }
+impl RunWorker {
+    fn open_desks(&mut self, site: &Site, addr: &Address) -> Result<Desks, AxError>;
+}
+```
+
+**`pr` 与 `waiting` 入伙，`Desks` 的理由随之改写**。R2.19c 建 `Desks` 时写的理由是「一起结算」，而 `pr` 不与它们一起结（它等 `produced`，在 `settle_requests` 里）。但五张桌子**一起出借、一起收回**，而这正是它自己标题已经写着的那一句。理由换成出借，`pr` 于是入伙；否则它就是唯一一个被抛在值外面、靠人记得的桌子。`waiting`（`lent.pending()`，`u32`）同理：它只能在队列交给桌子**之前**数，数不到就永远数不到了。
+
+**一个名字在相位内改了**：原来的局部 `shelf`（`Vec<Held>`）与 `memory_desk` 在归位值里叫 `shelf`，于是前者改叫 `held`——一个名字对一个东西，而“书架”指的是那张桌子。
+
+**尺寸**：`dispatch_in` 495 → **423**；`open_desks` 76。十行的 `Desks` 手工构造（原在驱动之前）随之消失：归位值由相位自己交出来，不再由调用方拼。
+
+**它以什么收口**：纯结构，无可咬的红。五张桌子的构造顺序、`now_ms()` 的采样位置、`inboxes.remove` 与 `pending()` 的先后均逐字不变。143 条 `sprawling` 测试全绿，其中 `a_signal_one_run_sends_is_read_by_the_run_that_pulls_it` 与 `a_signal_wakes_the_resident_it_was_sent_to_and_says_who_spoke` 走的就是“队列借出去、再收回”这一支。
 
 **剩下四刀**（目标 <200，预计落在 ~160）。上一版此处写「三刀」而表里四行，是笔误：四个相位都还在 `dispatch_in` 里，四刀都要切。
 
@@ -834,7 +851,7 @@ impl RunWorker {
 
 **`Site` 不收 `addr`**：`Address` 是 `dispatch_in` 的形参，它在相位之前就在，放进去就是同一个值的第二份。上一版草案把 `addr` 列在字段里，按这条删。
 
-**归位值在调用点拆开，与 `Driven` 同形**：`let Site { building, rules, … } = self.stand_up(…)?;`。值类型的职责是让十一件东西**跨过相位边界时保持同步**，不是让它们一路顶着 `site.` 前缀走完剩下的四百行；R2.19a 对 `Driven` 就是这么写的。副作用是本卡的 diff 只有两块：搬走的七十行与接替它的十七行解构，**其余四百多行逐字未动**——一张纯结构卡能拿出的最强证据就是这个。
+**归位值先在调用点拆开，下一卡改回整值——记在这里以免重走**。本卡初版写的是 `let Site { building, rules, … } = self.stand_up(…)?;`，理由是 diff 最小（搬走七十行、接替十七行、其余四百行逐字未动）。R2.19f 将它改成 `let mut site = …`，理由是量出来的：拆开之后，剩下三个相位要从调用点接过去的名字共 **102 处引用、十一个名字**（`building` 23、`model` 18、`who` 17、`write_root` 11 …），即每个相位方法都得排一列十五个形参——而那正是归位值要消掉的东西。`Driven` 可以拆，因为它四个字段只在驱动之后被读一次；`Site` 不行，因为它要穿过剩下每一个相位。
 
 **尺寸**：`dispatch_in` 548 → **495**；`stand_up` 92。
 

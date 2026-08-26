@@ -1829,16 +1829,25 @@ struct Site {
 
 /// The desks one dispatch lends out, and takes back when the drive ends.
 ///
-/// Grouped because they are settled together and in one order: four
-/// handles passed side by side are four chances to settle three of them.
+/// Grouped because they are lent and taken back together: five handles
+/// passed side by side are five chances to take four of them back. Four
+/// of them settle in one order in `settle_desks`; `pr` settles after,
+/// once the run has something to show for itself, and it belongs here
+/// all the same - what makes them one value is the lending, not the
+/// settling.
 struct Desks {
     signals: std::rc::Rc<std::cell::RefCell<collab::SignalDesk>>,
     goals: std::rc::Rc<std::cell::RefCell<collab::GoalDesk>>,
     plan: std::rc::Rc<std::cell::RefCell<collab::ClaimDesk>>,
     shelf: std::rc::Rc<std::cell::RefCell<collab::ArchiveDesk>>,
+    pr: std::rc::Rc<std::cell::RefCell<collab::PrDesk>>,
     /// Where the shared plan lives, so the claims that survive are
     /// written back to the file they were checked against.
     plan_path: PathBuf,
+    /// What was already in the room's queue when it was lent out, which
+    /// is what `status` reports as waiting. Read before the queue goes
+    /// to the desk, so it is counted here or not at all.
+    waiting: u32,
 }
 
 /// What one drive left behind, beside the run it froze.
@@ -2270,6 +2279,96 @@ impl RunWorker {
     /// Propagates the first line the ledger refuses, in which case
     /// nothing changes; then whatever delivering, writing the plan or
     /// filing an entry reports.
+    /// Opens the desks this run works at, and lends them what they hold.
+    ///
+    /// Every desk is a place a tool writes to and the settlement reads
+    /// back, so they open together and come back as one value. The
+    /// room's queue moves into the signal desk rather than being copied
+    /// there: one queue per room at all times, and a copy would be a
+    /// second answer to what arrived first.
+    ///
+    /// # Errors
+    /// Propagates a plan that cannot be read and a shelf that cannot be
+    /// indexed - both before a model is called, since a run built on
+    /// either would spend a call to produce claims the city was always
+    /// going to drop.
+    fn open_desks(&mut self, site: &Site, addr: &Address) -> Result<Desks, AxError> {
+        let pr = std::rc::Rc::new(std::cell::RefCell::new(collab::PrDesk::new(
+            site.who.clone(),
+            addr.clone(),
+            site.branch.clone(),
+            site.branch
+                .as_deref()
+                .and_then(|name| collab::NodeId::parse(name).ok()),
+            self.requests.clone(),
+        )));
+
+        // The room's queue is lent to the desk for the length of the
+        // drive and taken back below. One queue exists per room at all
+        // times; a copy would be a second answer to "what arrived first".
+        let lent = self.inboxes.remove(addr).unwrap_or_else(new_inbox);
+        let waiting = lent.pending();
+        let signals = std::rc::Rc::new(std::cell::RefCell::new(collab::SignalDesk::new(
+            site.run_id,
+            addr.clone(),
+            site.who.clone(),
+            site.building.addr().clone(),
+            now_ms()?,
+            lent,
+        )));
+        let goals = std::rc::Rc::new(std::cell::RefCell::new(collab::GoalDesk::new(
+            site.run_id,
+            site.who.clone(),
+            self.goals.clone(),
+        )));
+
+        // The plan is shared ground, so it is read from and written back
+        // to the city even when the run writes everywhere else in its
+        // own tree. A claim nobody else can see is not a claim; the work
+        // stays private until it is checked, the fact that somebody is
+        // doing it does not.
+        let plan_path = city::roadmap_path(&self.city_root, site.building.addr());
+        // A plan that is not there yet reads as empty; every other reason
+        // this file cannot be read is reported here, before a model is
+        // called. Reading them as empty spent a call to produce claims
+        // that the compare-and-swap below was always going to drop, and
+        // told the person a neighbour had moved their row.
+        let plan_text = city::roadmap(&self.city_root, site.building.addr())?;
+        let plan = std::rc::Rc::new(std::cell::RefCell::new(collab::ClaimDesk::new(
+            site.who.clone(),
+            addr.clone(),
+            plan_text,
+        )));
+
+        // What the building already knows, computed from the shelf
+        // rather than kept beside it. An index that was stored would be
+        // a second copy of what the files say, and the files are the
+        // ones that are true.
+        // `archive_index` already answers `Ok(empty)` for a building with
+        // no shelf, so anything it reports is a real failure and telling
+        // the model this building knows nothing would be a lie about it.
+        let held: Vec<collab::Held> = city::archive_index(&self.city_root, site.building.addr())?
+            .into_iter()
+            .map(|entry| collab::Held {
+                kind: entry.kind.as_str().to_owned(),
+                text: entry.subject,
+            })
+            .collect();
+        let shelf = std::rc::Rc::new(std::cell::RefCell::new(collab::ArchiveDesk::new(
+            addr.clone(),
+            held,
+        )));
+        Ok(Desks {
+            signals,
+            goals,
+            plan,
+            shelf,
+            pr,
+            plan_path,
+            waiting,
+        })
+    }
+
     /// Settles where this run stands, before anything is built for it.
     ///
     /// The building's rules, the model behind them, who the run is, and
@@ -4253,88 +4352,12 @@ impl RunWorker {
         // interrupted, and by then the plan has consumed the original.
         let job_locator = job.clone();
 
-        // Where this run stands, settled in one phase and taken apart
-        // here: the fields are read all over what follows, and a value
-        // whose parts stay in step across the boundary is what the phase
-        // owes its caller. Same form as `Driven` below.
-        let Site {
-            building,
-            rules,
-            config,
-            model,
-            mut adapter,
-            identity,
-            who,
-            run_id,
-            lease,
-            write_root,
-            branch,
-        } = self.stand_up(&addr, &job, &task, &goal, budget)?;
-        let pr = std::rc::Rc::new(std::cell::RefCell::new(collab::PrDesk::new(
-            who.clone(),
-            addr.clone(),
-            branch.clone(),
-            branch
-                .as_deref()
-                .and_then(|name| collab::NodeId::parse(name).ok()),
-            self.requests.clone(),
-        )));
-
-        // The room's queue is lent to the desk for the length of the
-        // drive and taken back below. One queue exists per room at all
-        // times; a copy would be a second answer to "what arrived first".
-        let lent = self.inboxes.remove(&addr).unwrap_or_else(new_inbox);
-        let waiting = lent.pending();
-        let signals = std::rc::Rc::new(std::cell::RefCell::new(collab::SignalDesk::new(
-            run_id,
-            addr.clone(),
-            who.clone(),
-            building.addr().clone(),
-            now_ms()?,
-            lent,
-        )));
-        let goals = std::rc::Rc::new(std::cell::RefCell::new(collab::GoalDesk::new(
-            run_id,
-            who.clone(),
-            self.goals.clone(),
-        )));
-
-        // The plan is shared ground, so it is read from and written back
-        // to the city even when the run writes everywhere else in its
-        // own tree. A claim nobody else can see is not a claim; the work
-        // stays private until it is checked, the fact that somebody is
-        // doing it does not.
-        let plan_path = city::roadmap_path(&self.city_root, building.addr());
-        // A plan that is not there yet reads as empty; every other reason
-        // this file cannot be read is reported here, before a model is
-        // called. Reading them as empty spent a call to produce claims
-        // that the compare-and-swap below was always going to drop, and
-        // told the person a neighbour had moved their row.
-        let plan_text = city::roadmap(&self.city_root, building.addr())?;
-        let plan_desk = std::rc::Rc::new(std::cell::RefCell::new(collab::ClaimDesk::new(
-            who.clone(),
-            addr.clone(),
-            plan_text,
-        )));
-
-        // What the building already knows, computed from the shelf
-        // rather than kept beside it. An index that was stored would be
-        // a second copy of what the files say, and the files are the
-        // ones that are true.
-        // `archive_index` already answers `Ok(empty)` for a building with
-        // no shelf, so anything it reports is a real failure and telling
-        // the model this building knows nothing would be a lie about it.
-        let shelf: Vec<collab::Held> = city::archive_index(&self.city_root, building.addr())?
-            .into_iter()
-            .map(|entry| collab::Held {
-                kind: entry.kind.as_str().to_owned(),
-                text: entry.subject,
-            })
-            .collect();
-        let memory_desk = std::rc::Rc::new(std::cell::RefCell::new(collab::ArchiveDesk::new(
-            addr.clone(),
-            shelf,
-        )));
+        // Where this run stands, and the desks it works at: two phases,
+        // two values, both carried whole rather than taken apart into a
+        // row of locals every phase below would then have to be handed
+        // one at a time.
+        let mut site = self.stand_up(&addr, &job, &task, &goal, budget)?;
+        let desks = self.open_desks(&site, &addr)?;
 
         // The catalog is the single source of `ChatRequest.tools`: the
         // bench routes a call, the catalog is what the model was told
@@ -4350,24 +4373,25 @@ impl RunWorker {
         // what this run admits, and until it was set here the mode's own
         // catalog entry reached no model.
         catalog.borrow_mut().set_mode(mode);
-        let edit = EditTool::new(&write_root, addr.clone(), rules.write_domain()?)?;
-        let writable = rules.write_domain()?;
+        let edit = EditTool::new(&site.write_root, addr.clone(), site.rules.write_domain()?)?;
+        let writable = site.rules.write_domain()?;
         // Who this run can reach, read once at dispatch and frozen with
         // it. Nothing here can move under the run: the assembly is
         // single-threaded, so no second run executes while this one
         // drives, and a signal this run sends is delivered after the
         // drive returns. The same value answers the `neighbours` tool
         // and the count `status` reports.
-        let seen = city::Neighbourhood::scan(&self.city_root, building.addr(), &addr, &|room| {
-            self.inboxes.get(room).map_or(0, collab::Inbox::pending)
-        })?;
+        let seen =
+            city::Neighbourhood::scan(&self.city_root, site.building.addr(), &addr, &|room| {
+                self.inboxes.get(room).map_or(0, collab::Inbox::pending)
+            })?;
         let neighbours = seen.residents();
         // Where this run stands, carried rather than worked out: a run
         // that inferred its own depth would be one wrong answer away
         // from a delegate that delegates.
         let delegates = std::rc::Rc::new(std::cell::RefCell::new(collab::DelegateDesk::new(
             depth,
-            building.addr().clone(),
+            site.building.addr().clone(),
         )));
         // What `status.children` reads. A borrowed desk answers nothing
         // rather than refusing: `status` reporting its own plumbing to a
@@ -4376,13 +4400,13 @@ impl RunWorker {
         let status = StatusTool::watching(
             status_snapshot(Situation {
                 addr: &addr,
-                who: &who,
-                signals_pending: waiting,
+                who: &site.who,
+                signals_pending: desks.waiting,
                 mode,
                 write_domain: &writable,
-                worktree: &write_root,
+                worktree: &site.write_root,
                 trust: &self.governance.autonomy,
-                context_tokens: model.context_tokens,
+                context_tokens: site.model.context_tokens,
                 budget,
                 neighbours,
                 // What this resident already holds, so a model asking
@@ -4391,7 +4415,7 @@ impl RunWorker {
                 locks: self
                     .goals
                     .iter()
-                    .filter(|entry| entry.owner == who)
+                    .filter(|entry| entry.owner == site.who)
                     .map(|entry| entry.statement.clone())
                     .collect(),
             }),
@@ -4410,10 +4434,10 @@ impl RunWorker {
                 )
             }),
         )?;
-        let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&signals))?;
-        let goal_tool = collab::GoalTool::new(addr.clone(), std::rc::Rc::clone(&goals))?;
-        let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&pr))?;
-        let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&plan_desk))?;
+        let signal_tool = collab::SignalTool::new(std::rc::Rc::clone(&desks.signals))?;
+        let goal_tool = collab::GoalTool::new(addr.clone(), std::rc::Rc::clone(&desks.goals))?;
+        let pr_tool = collab::PrTool::new(addr.clone(), std::rc::Rc::clone(&desks.pr))?;
+        let claim_tool = collab::ClaimTool::new(std::rc::Rc::clone(&desks.plan))?;
         let delegate_tool = collab::DelegateTool::new(std::rc::Rc::clone(&delegates))?;
         // What this room already got back. Copied rather than lent: the
         // authority is `self.joins`, which is folded from the ledger's
@@ -4426,35 +4450,35 @@ impl RunWorker {
             }
         }
         let workshop = std::rc::Rc::new(std::cell::RefCell::new(collab::WorkshopDesk::new(
-            who.clone(),
+            site.who.clone(),
             held,
         )));
         let workshop_tool = collab::WorkshopTool::new(
             std::rc::Rc::clone(&workshop),
             std::rc::Rc::clone(&delegates),
         )?;
-        let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&memory_desk))?;
+        let archive_tool = collab::ArchiveTool::new(std::rc::Rc::clone(&desks.shelf))?;
         // The one door into the building's own governance. It reaches
         // the reserved subtree, which no write domain does, so it goes
         // through the person rather than through the write gate.
-        let rules_tool = city::RulesTool::new(&self.city_root, building.addr().clone())?;
+        let rules_tool = city::RulesTool::new(&self.city_root, site.building.addr().clone())?;
         // The execution boundary. What the run may reach is the frozen
         // config's answer; where the engine and the interpreter live is
         // the machine's, so a city carried elsewhere does not carry this
         // machine's paths with it.
         let exec = ExecTool::new(
-            write_root.join(addr.as_str()),
-            mounts_under(&write_root, &config.sandbox.mounts),
+            site.write_root.join(addr.as_str()),
+            mounts_under(&site.write_root, &site.config.sandbox.mounts),
             std::env::var(PYTHON_WASM_ENV)
                 .ok()
                 .map(std::path::PathBuf::from),
             execution_engine()?,
-            if config.sandbox.shell {
+            if site.config.sandbox.shell {
                 host_shell()
             } else {
                 None
             },
-            runtime::Fuel(config.sandbox.fuel),
+            runtime::Fuel(site.config.sandbox.fuel),
             addr.clone(),
         )?;
         // The one door onto the rest of the city. It is registered
@@ -4468,16 +4492,16 @@ impl RunWorker {
         // could name a skill and never hand it over. It holds the
         // catalog rather than a copy of what is in it, so a skill
         // admitted below this line is still reachable by name.
-        let read = runtime::ReadTool::new(&write_root, std::rc::Rc::clone(&catalog))?;
+        let read = runtime::ReadTool::new(&site.write_root, std::rc::Rc::clone(&catalog))?;
         // The net, not the forecast, is the defence (semantic authority
         // 4.4). Two handles on one repository: the bench fences a
         // command its forecast suspects, and the driver fences every
         // wave, so whatever a wave deletes has a commit to come back
         // from. Both stand where the run writes, which is its own tree
         // when the building asks for review.
-        let mut bench = ToolBench::new(rules.write_domain()?)
+        let mut bench = ToolBench::new(site.rules.write_domain()?)
             .with_checkpoint(
-                memory::Checkpoint::open(&write_root).map_err(memory::MemoryError::into_ax)?,
+                memory::Checkpoint::open(&site.write_root).map_err(memory::MemoryError::into_ax)?,
                 addr.as_str(),
             )
             .for_job(addr.clone(), job_locator.clone());
@@ -4512,7 +4536,11 @@ impl RunWorker {
         // server. They join the table here, before the catalogue is
         // rendered, because the tool table is frozen with the run: what
         // the model is told exists is decided once.
-        for server in self.mcp_tools(&config, &write_root, rules.policy().confidential) {
+        for server in self.mcp_tools(
+            &site.config,
+            &site.write_root,
+            site.rules.policy().confidential,
+        ) {
             let tool: Box<dyn kernel::Tool> = Box::new(server);
             admitted.push(tool);
         }
@@ -4520,7 +4548,7 @@ impl RunWorker {
             catalog.borrow_mut().admit_tool(tool.meta())?;
             bench.register(tool)?;
         }
-        self.admit_reading_room(&catalog, &rules, &building, &addr)?;
+        self.admit_reading_room(&catalog, &site.rules, &site.building, &addr)?;
         let tools = catalog.borrow().tool_defs();
         // The catalog is part of the resident segment, not a fifth slot:
         // what a resident may reach is as much a standing fact about it
@@ -4535,25 +4563,25 @@ impl RunWorker {
         // cached as such, and a name in it would make one copy per
         // agent of the largest stable block in the prompt.
         let mut resident = format!("Your name: {}\n\n", name_of(&addr)).into_bytes();
-        resident.extend_from_slice(&identity.segment_bytes());
+        resident.extend_from_slice(&site.identity.segment_bytes());
         resident.push(NEWLINE);
         resident.extend_from_slice(catalog.borrow().render().as_bytes());
         let prefix = FrozenPrefix::assemble(
             FrozenSegment::new(SegmentSlot::City, city_segment(&self.city_root)?),
             FrozenSegment::new(
                 SegmentSlot::Building,
-                building_segment(&self.city_root, &addr, building.addr()),
+                building_segment(&self.city_root, &addr, site.building.addr()),
             ),
             FrozenSegment::new(SegmentSlot::Resident, resident),
             FrozenSegment::new(
                 SegmentSlot::Run,
-                run_segment(&self.city_root, building.addr(), &brief)?,
+                run_segment(&self.city_root, site.building.addr(), &brief)?,
             ),
         )?;
 
         let plan = RunPlan {
-            run: run_id,
-            who: who.clone(),
+            run: site.run_id,
+            who: site.who.clone(),
             addr: addr.clone(),
             task,
             goal,
@@ -4568,18 +4596,18 @@ impl RunWorker {
             budget_turns: DISPATCH_TURN_BUDGET,
             budget,
             shape: CallShape {
-                model: model.id.clone(),
+                model: site.model.id.clone(),
                 // The model's own ceiling, not a number chosen here.
                 // With thinking enabled this budget covers reasoning and
                 // answer together, so a hand-picked value truncates runs
                 // for a reason that appears nowhere in the account.
-                max_tokens: model.max_output_tokens,
+                max_tokens: site.model.max_output_tokens,
                 // Stated in CONFIG.toml, resolved down the three-layer
                 // ladder, and frozen with the run.
-                effort: config.effort,
+                effort: site.config.effort,
             },
             prefix,
-            policy: rules.policy().clone(),
+            policy: site.rules.policy().clone(),
             tools,
         };
 
@@ -4613,18 +4641,8 @@ impl RunWorker {
         // entries it filed included, which sit at the building rather
         // than in the room. Without a lease the fence stays on the room,
         // which is the only place a run may write in the city itself.
-        // Handed to the settlement as one value: they are settled
-        // together and in one order, and four handles side by side are
-        // four chances to settle three of them.
-        let desks = Desks {
-            signals: std::rc::Rc::clone(&signals),
-            goals: std::rc::Rc::clone(&goals),
-            plan: std::rc::Rc::clone(&plan_desk),
-            shelf: std::rc::Rc::clone(&memory_desk),
-            plan_path,
-        };
-        let fence_scope = if lease.is_some() {
-            building.addr().as_str().to_owned()
+        let fence_scope = if site.lease.is_some() {
+            site.building.addr().as_str().to_owned()
         } else {
             addr.as_str().to_owned()
         };
@@ -4636,26 +4654,26 @@ impl RunWorker {
         } = self.drive_dispatch(
             plan,
             &handoff,
-            adapter.as_mut(),
+            site.adapter.as_mut(),
             &mut bench,
-            &signals,
-            &write_root,
+            &desks.signals,
+            &site.write_root,
             fence_scope.clone(),
-            &who,
-            run_id,
+            &site.who,
+            site.run_id,
         )?;
         self.settle_desks(
             &desks,
             &fenced,
             &mut raised,
             &job_locator,
-            &write_root,
-            &building,
+            &site.write_root,
+            &site.building,
             &addr,
-            &who,
+            &site.who,
             mode,
             budget,
-            run_id,
+            site.run_id,
         )?;
         // What the run can show for itself. `None` is not `Some(false)`:
         // "nothing ran" and "something ran and failed" are different
@@ -4677,17 +4695,26 @@ impl RunWorker {
             }
         };
         self.settle_requests(
-            &pr,
+            &desks.pr,
             &produced,
-            &write_root,
+            &site.write_root,
             &fence_scope,
             &addr,
-            &who,
+            &site.who,
             mode,
-            run_id,
+            site.run_id,
         )?;
         self.conclude(
-            driven, raised, lease, &delegates, addr, who, &model.id, mode, budget, run_id,
+            driven,
+            raised,
+            site.lease,
+            &delegates,
+            addr,
+            site.who,
+            &site.model.id,
+            mode,
+            budget,
+            site.run_id,
         )
     }
 
