@@ -1800,6 +1800,20 @@ struct Knock {
     budget: kernel::BudgetCap,
 }
 
+/// The desks one dispatch lends out, and takes back when the drive ends.
+///
+/// Grouped because they are settled together and in one order: four
+/// handles passed side by side are four chances to settle three of them.
+struct Desks {
+    signals: std::rc::Rc<std::cell::RefCell<collab::SignalDesk>>,
+    goals: std::rc::Rc<std::cell::RefCell<collab::GoalDesk>>,
+    plan: std::rc::Rc<std::cell::RefCell<collab::ClaimDesk>>,
+    shelf: std::rc::Rc<std::cell::RefCell<collab::ArchiveDesk>>,
+    /// Where the shared plan lives, so the claims that survive are
+    /// written back to the file they were checked against.
+    plan_path: PathBuf,
+}
+
 /// What one drive left behind, beside the run it froze.
 ///
 /// Every field is written by a hook while the driver owns the ledger and
@@ -2673,6 +2687,146 @@ impl RunWorker {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Settles the four desks that leave lines behind, in the order the
+    /// history takes them.
+    ///
+    /// Each one goes through `RunWorker::settle`, which appends before it
+    /// changes anything: `effect::Then` has no source but
+    /// `Landing::record`, so a change that outran its own line cannot be
+    /// written from here (section 8-24).
+    ///
+    /// The room's queue comes home first and on both paths - an inbox
+    /// left in a dropped desk is a queue the city forgot it had.
+    ///
+    /// # Errors
+    /// Propagates a payload that will not build, any line the ledger
+    /// refuses, and a shared plan that cannot be read or written.
+    #[expect(clippy::too_many_arguments, reason = "the assembly point's own wiring")]
+    fn settle_desks(
+        &mut self,
+        desks: &Desks,
+        fenced: &[String],
+        raised: &mut Vec<kernel::ApprovalItem>,
+        job_locator: &Locator,
+        write_root: &Path,
+        building: &city::Building,
+        addr: &Address,
+        who: &str,
+        mode: runtime::Mode,
+        budget: kernel::BudgetCap,
+        run_id: RunId,
+    ) -> Result<(), AxError> {
+        // The lent queue comes home first, and on both paths: an inbox
+        // left in a dropped desk is a queue the city forgot it had.
+        let (signal_effects, returned) = {
+            let mut desk = desks.signals.borrow_mut();
+            (desk.take_effects(), desk.take_inbox())
+        };
+        self.inboxes.insert(addr.clone(), returned);
+        // Every desk below settles through one door, and that door
+        // appends before it changes anything: `effect::Then` has no
+        // other source than `Landing::record`, so a change that outran
+        // its own line cannot be written here.
+        let spoken = effect::Landing::signals(signal_effects, addr, who)?;
+        self.settle(run_id, addr, mode, budget, spoken)?;
+        let ground = effect::Landing::goals(desks.goals.borrow_mut().take_effects(), addr, who)?;
+        self.settle(run_id, addr, mode, budget, ground)?;
+        // The sweep the forecast cannot replace. A command can be
+        // obfuscated past a text prediction; what is missing from the
+        // working tree cannot be talked out of. The base is the first
+        // fence of this drive, so everything the whole drive deleted is
+        // reported once rather than once per wave.
+        let sweep_base = fenced.first().cloned();
+        if let Some(base) = sweep_base {
+            let discarded = memory::Checkpoint::open(write_root)
+                .map_err(memory::MemoryError::into_ax)?
+                .wave_post(&base)
+                .map_err(memory::MemoryError::into_ax)?;
+            let swept = discarded.len();
+            let lost = effect::Landing::discards(discarded, addr, who);
+            self.settle(run_id, addr, mode, budget, lost)?;
+            // Over the threshold a person is told, and the class is one
+            // no policy can waive. Each file is restorable on its own;
+            // what the count says is that nobody meant this.
+            if swept
+                > usize::try_from(kernel::consts_policy::DISCARD_FILES_MAX).unwrap_or(usize::MAX)
+            {
+                let item = kernel::ApprovalItem {
+                    id: kernel::ApprovalId::new(format!("discard-{run_id}")).ok_or_else(|| {
+                        AxError::failure(AxCode::InvalidArgs, "mint approval id", "empty id")
+                    })?,
+                    source: kernel::ApprovalSource::Gate,
+                    actor: who.to_owned(),
+                    artifact: job_locator.clone(),
+                    action_desc: format!("{swept} files were deleted in one dispatch"),
+                    cluster_key: kernel::ClusterKey {
+                        class: kernel::ApprovalClass::DiscardEscalate,
+                        detail: addr.as_str().to_owned(),
+                    },
+                    created: now_ms()?,
+                    tainted: false,
+                };
+                raised.push(item);
+                self.note(
+                    runtime::diagnostics::Level::Refuse,
+                    "memory::checkpoint",
+                    &format!(
+                        "{swept} files deleted under {}; each one can be restored from {base}",
+                        addr.as_str()
+                    ),
+                );
+            }
+        }
+        // What the run did to the plan.
+        let (claim_effects, plan_after) = {
+            let mut desk = desks.plan.borrow_mut();
+            (desk.take_effects(), desk.roadmap().map(str::to_owned))
+        };
+        if let Some(text) = plan_after {
+            let on_disk = city::roadmap(&self.city_root, building.addr())?;
+            match effect::Claims::of(
+                &claim_effects,
+                &on_disk,
+                text,
+                desks.plan_path.clone(),
+                addr,
+                who,
+            )? {
+                effect::Claims::Landed(taken) => {
+                    self.settle(run_id, addr, mode, budget, *taken)?;
+                }
+                effect::Claims::Stale(rows) => {
+                    for row in rows {
+                        self.note(
+                            runtime::diagnostics::Level::Refuse,
+                            "collab::claim_tool",
+                            &format!(
+                                "row {row} moved before this run's claim landed; nothing was \
+                                 written"
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        // What the run asked the building to remember, filed after the
+        // drive like every other effect - and inside the fence. A
+        // building under review is not the owner of what a run decided
+        // until somebody checks it, and a shelf entry is exactly the
+        // kind of thing a later run reads as the building's settled
+        // knowledge.
+        let remembered = effect::Landing::shelf(
+            desks.shelf.borrow_mut().take_effects(),
+            write_root,
+            building.addr(),
+            now_ms()?,
+            addr,
+            who,
+        )?;
+        self.settle(run_id, addr, mode, budget, remembered)?;
         Ok(())
     }
 
@@ -4355,6 +4509,16 @@ impl RunWorker {
         // entries it filed included, which sit at the building rather
         // than in the room. Without a lease the fence stays on the room,
         // which is the only place a run may write in the city itself.
+        // Handed to the settlement as one value: they are settled
+        // together and in one order, and four handles side by side are
+        // four chances to settle three of them.
+        let desks = Desks {
+            signals: std::rc::Rc::clone(&signals),
+            goals: std::rc::Rc::clone(&goals),
+            plan: std::rc::Rc::clone(&plan_desk),
+            shelf: std::rc::Rc::clone(&memory_desk),
+            plan_path,
+        };
         let fence_scope = if lease.is_some() {
             building.addr().as_str().to_owned()
         } else {
@@ -4376,107 +4540,19 @@ impl RunWorker {
             &who,
             run_id,
         )?;
-        // The lent queue comes home first, and on both paths: an inbox
-        // left in a dropped desk is a queue the city forgot it had.
-        let (signal_effects, returned) = {
-            let mut desk = signals.borrow_mut();
-            (desk.take_effects(), desk.take_inbox())
-        };
-        self.inboxes.insert(addr.clone(), returned);
-        // Every desk below settles through one door, and that door
-        // appends before it changes anything: `effect::Then` has no
-        // other source than `Landing::record`, so a change that outran
-        // its own line cannot be written here.
-        let spoken = effect::Landing::signals(signal_effects, &addr, &who)?;
-        self.settle(run_id, &addr, mode, budget, spoken)?;
-        let ground = effect::Landing::goals(goals.borrow_mut().take_effects(), &addr, &who)?;
-        self.settle(run_id, &addr, mode, budget, ground)?;
-        // The sweep the forecast cannot replace. A command can be
-        // obfuscated past a text prediction; what is missing from the
-        // working tree cannot be talked out of. The base is the first
-        // fence of this drive, so everything the whole drive deleted is
-        // reported once rather than once per wave.
-        let sweep_base = fenced.first().cloned();
-        if let Some(base) = sweep_base {
-            let discarded = memory::Checkpoint::open(&write_root)
-                .map_err(memory::MemoryError::into_ax)?
-                .wave_post(&base)
-                .map_err(memory::MemoryError::into_ax)?;
-            let swept = discarded.len();
-            let lost = effect::Landing::discards(discarded, &addr, &who);
-            self.settle(run_id, &addr, mode, budget, lost)?;
-            // Over the threshold a person is told, and the class is one
-            // no policy can waive. Each file is restorable on its own;
-            // what the count says is that nobody meant this.
-            if swept
-                > usize::try_from(kernel::consts_policy::DISCARD_FILES_MAX).unwrap_or(usize::MAX)
-            {
-                let item = kernel::ApprovalItem {
-                    id: kernel::ApprovalId::new(format!("discard-{run_id}")).ok_or_else(|| {
-                        AxError::failure(AxCode::InvalidArgs, "mint approval id", "empty id")
-                    })?,
-                    source: kernel::ApprovalSource::Gate,
-                    actor: who.clone(),
-                    artifact: job_locator.clone(),
-                    action_desc: format!("{swept} files were deleted in one dispatch"),
-                    cluster_key: kernel::ClusterKey {
-                        class: kernel::ApprovalClass::DiscardEscalate,
-                        detail: addr.as_str().to_owned(),
-                    },
-                    created: now_ms()?,
-                    tainted: false,
-                };
-                raised.push(item);
-                self.note(
-                    runtime::diagnostics::Level::Refuse,
-                    "memory::checkpoint",
-                    &format!(
-                        "{swept} files deleted under {}; each one can be restored from {base}",
-                        addr.as_str()
-                    ),
-                );
-            }
-        }
-        // What the run did to the plan.
-        let (claim_effects, plan_after) = {
-            let mut desk = plan_desk.borrow_mut();
-            (desk.take_effects(), desk.roadmap().map(str::to_owned))
-        };
-        if let Some(text) = plan_after {
-            let on_disk = city::roadmap(&self.city_root, building.addr())?;
-            match effect::Claims::of(&claim_effects, &on_disk, text, plan_path, &addr, &who)? {
-                effect::Claims::Landed(taken) => {
-                    self.settle(run_id, &addr, mode, budget, *taken)?;
-                }
-                effect::Claims::Stale(rows) => {
-                    for row in rows {
-                        self.note(
-                            runtime::diagnostics::Level::Refuse,
-                            "collab::claim_tool",
-                            &format!(
-                                "row {row} moved before this run's claim landed; nothing was \
-                                 written"
-                            ),
-                        );
-                    }
-                }
-            }
-        }
-        // What the run asked the building to remember, filed after the
-        // drive like every other effect - and inside the fence. A
-        // building under review is not the owner of what a run decided
-        // until somebody checks it, and a shelf entry is exactly the
-        // kind of thing a later run reads as the building's settled
-        // knowledge.
-        let remembered = effect::Landing::shelf(
-            memory_desk.borrow_mut().take_effects(),
+        self.settle_desks(
+            &desks,
+            &fenced,
+            &mut raised,
+            &job_locator,
             &write_root,
-            building.addr(),
-            now_ms()?,
+            &building,
             &addr,
             &who,
+            mode,
+            budget,
+            run_id,
         )?;
-        self.settle(run_id, &addr, mode, budget, remembered)?;
         // What the run can show for itself. `None` is not `Some(false)`:
         // "nothing ran" and "something ran and failed" are different
         // facts, and the modes that care refuse them differently.
