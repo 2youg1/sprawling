@@ -5205,6 +5205,109 @@ pub struct Serving {
     pub console: Option<crate::console::Terminal>,
 }
 
+/// Starts the city's one writer, and returns once it is running.
+///
+/// The ledger is opened *inside* this thread and never leaves it: a city
+/// has one writer, and the type never has to cross a thread boundary to
+/// prove it. The handshake is part of the contract - a thread that comes
+/// back from this function has already opened the history and said so,
+/// so a caller never serves a socket over a city that failed to open.
+///
+/// # Errors
+/// Propagates whatever opening the history reports, a thread the
+/// platform will not start, and a worker that ended before reporting.
+fn spawn_worker(
+    city_root: &Path,
+    vault: gateway::Custodian,
+    vault_notice: Option<Payload>,
+    log: runtime::diagnostics::Diagnostics,
+    views: Arc<std::sync::Mutex<Views>>,
+    to_clients: tokio::sync::broadcast::Sender<EventRecord>,
+    worker_desk: Arc<CommandDesk>,
+) -> Result<std::thread::JoinHandle<()>, AxError> {
+    let (ready_tx, ready_rx) = mpsc::sync_channel::<Result<(), AxError>>(0);
+    let worker_root = city_root.to_path_buf();
+    // The one sanctioned thread besides the runtime's own. The ledger is
+    // opened *inside* it and never leaves: a city has one writer, and the
+    // type never has to cross a thread boundary to prove it.
+    let worker_thread = std::thread::Builder::new()
+        .name("sprawling-runs".to_owned())
+        .spawn(move || {
+            let mut worker = match RunWorker::new(&worker_root, vault, log) {
+                Ok(mut worker) => {
+                    worker.open_for_service(vault_notice);
+                    let _ = ready_tx.send(Ok(()));
+                    worker
+                }
+                Err(err) => {
+                    let _ = ready_tx.send(Err(err));
+                    return;
+                }
+            };
+            worker.observe(Box::new(move |record: &EventRecord| {
+                if let Ok(mut views) = views.lock() {
+                    // A record the views refuse to fold is reported and
+                    // skipped: the ledger already has it, and a view that
+                    // crashed the writer would make history hostage to a
+                    // projection.
+                    if let Err(err) = views.apply(record) {
+                        eprintln!("view fold refused {}: {err}", record.seq().value());
+                    }
+                }
+                // A send with no subscribers is not a failure: a city with
+                // no browser open is a city doing its work.
+                let _ = to_clients.send(record.clone());
+            }));
+            // A run in progress asks the same desk what arrived, so a
+            // Cancel does not have to wait for the run it cancels.
+            let interrupt_desk = Arc::clone(&worker_desk);
+            worker.attach_interrupts(Box::new(move |run: RunId| {
+                interrupt_desk.interrupt_for(run)
+            }));
+            loop {
+                match worker_desk.wait(SCHEDULE_TICK) {
+                    DeskWait::Command(posted) => worker.serve_one(posted),
+                    // The refusal is written inside `tick`; a schedule
+                    // that cannot be read must not stop the city from
+                    // answering the person.
+                    DeskWait::Idle => {
+                        if let Ok(now) = now_ms() {
+                            let _ = worker.tick(now);
+                        }
+                    }
+                    DeskWait::Close => {
+                        if let Err(err) = worker.close_city() {
+                            eprintln!("the city could not write its handoff: {err}");
+                        }
+                        break;
+                    }
+                    DeskWait::Gone => break,
+                }
+            }
+        })
+        .map_err(|source| {
+            AxError::failure(
+                AxCode::StorageFatal,
+                "start the run worker",
+                source.to_string(),
+            )
+            .with_recovery("check process thread limits")
+        })?;
+    match ready_rx.recv() {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => return Err(err),
+        Err(_) => {
+            return Err(AxError::failure(
+                AxCode::StorageFatal,
+                "start the run worker",
+                "the worker ended before reporting",
+            )
+            .with_recovery("check the city directory and rerun"));
+        }
+    }
+    Ok(worker_thread)
+}
+
 /// Waits for the person to stop the city from the keyboard.
 ///
 /// A Windows console delivers two of these - Ctrl-C and Ctrl-Break - and
@@ -5297,88 +5400,17 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
     let commands_desk = Arc::clone(&desk);
     let secrets_desk = Arc::clone(&desk);
     let acp_desk = Arc::clone(&desk);
-    let worker_desk = Arc::clone(&desk);
-    // The one sanctioned thread besides the runtime's own. The ledger is
-    // opened *inside* it and never leaves: a city has one writer, and the
-    // type never has to cross a thread boundary to prove it.
-    let (ready_tx, ready_rx) = mpsc::sync_channel::<Result<(), AxError>>(0);
-    let worker_root = city_root.to_path_buf();
-    let to_clients = events.clone();
-    let worker_thread = std::thread::Builder::new()
-        .name("sprawling-runs".to_owned())
-        .spawn(move || {
-            let mut worker = match RunWorker::new(&worker_root, vault, log) {
-                Ok(mut worker) => {
-                    worker.open_for_service(vault_notice);
-                    let _ = ready_tx.send(Ok(()));
-                    worker
-                }
-                Err(err) => {
-                    let _ = ready_tx.send(Err(err));
-                    return;
-                }
-            };
-            worker.observe(Box::new(move |record: &EventRecord| {
-                if let Ok(mut views) = views.lock() {
-                    // A record the views refuse to fold is reported and
-                    // skipped: the ledger already has it, and a view that
-                    // crashed the writer would make history hostage to a
-                    // projection.
-                    if let Err(err) = views.apply(record) {
-                        eprintln!("view fold refused {}: {err}", record.seq().value());
-                    }
-                }
-                // A send with no subscribers is not a failure: a city with
-                // no browser open is a city doing its work.
-                let _ = to_clients.send(record.clone());
-            }));
-            // A run in progress asks the same desk what arrived, so a
-            // Cancel does not have to wait for the run it cancels.
-            let interrupt_desk = Arc::clone(&worker_desk);
-            worker.attach_interrupts(Box::new(move |run: RunId| {
-                interrupt_desk.interrupt_for(run)
-            }));
-            loop {
-                match worker_desk.wait(SCHEDULE_TICK) {
-                    DeskWait::Command(posted) => worker.serve_one(posted),
-                    // The refusal is written inside `tick`; a schedule
-                    // that cannot be read must not stop the city from
-                    // answering the person.
-                    DeskWait::Idle => {
-                        if let Ok(now) = now_ms() {
-                            let _ = worker.tick(now);
-                        }
-                    }
-                    DeskWait::Close => {
-                        if let Err(err) = worker.close_city() {
-                            eprintln!("the city could not write its handoff: {err}");
-                        }
-                        break;
-                    }
-                    DeskWait::Gone => break,
-                }
-            }
-        })
-        .map_err(|source| {
-            AxError::failure(
-                AxCode::StorageFatal,
-                "start the run worker",
-                source.to_string(),
-            )
-            .with_recovery("check process thread limits")
-        })?;
-    match ready_rx.recv() {
-        Ok(Ok(())) => {}
-        Ok(Err(err)) => return Err(err),
-        Err(_) => {
-            return Err(AxError::failure(
-                AxCode::StorageFatal,
-                "start the run worker",
-                "the worker ended before reporting",
-            )
-            .with_recovery("check the city directory and rerun"));
-        }
-    }
+    // The one sanctioned thread besides the runtime's own, running by
+    // the time this returns.
+    let worker_thread = spawn_worker(
+        city_root,
+        vault,
+        vault_notice,
+        log,
+        Arc::clone(&views),
+        events.clone(),
+        Arc::clone(&desk),
+    )?;
 
     let sink_root = cas_root.clone();
     let config = channels::ServeConfig {
