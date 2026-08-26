@@ -12,19 +12,21 @@ use std::process::ExitCode;
 use crate::report::{self, Violation, XtaskError};
 use crate::zerojs;
 use crate::{
-    apisync, budget, color, depmap, guard, header, lexicon, modmap, release, secret, specalign,
+    apisync, budget, color, depmap, guard, header, length, lexicon, modmap, release, secret,
+    specalign,
 };
 
 /// How many gates run. The array below is typed by it, so the number and
 /// the list are one token apart and cannot disagree; `vocabulary` reads
 /// it so no document has to hold a copy.
-pub(crate) const COUNT: usize = 12;
+pub(crate) const COUNT: usize = 13;
 
 pub(crate) fn run(root: &Path, range: Option<&str>) -> ExitCode {
     let results: [(&str, Result<Vec<Violation>, XtaskError>); COUNT] = [
         ("header", header::check(root)),
         ("lexicon", lexicon::check(root)),
         ("modmap", modmap::check(root)),
+        ("length", length::check(root)),
         ("depmap", depmap::check(root)),
         ("zerojs", zerojs::check(root)),
         ("secret", secret::check(root)),

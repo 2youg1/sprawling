@@ -20,6 +20,7 @@
 | specalign（S2.12 上线） | kernel 枚举 ↔ kernel-SPEC §8-1／§8-4 表逐 variant：消费真 enum（AxCode::ALL／EventKind::ALL）对表作证，计数、归属、carrier／窗类逐项同 |
 | apisync（S2.12 上线） | 双断言：①基线新鲜——`cargo public-api` 实时面与已提交基线逐行同；②同集变更——基线文件变即要求同 crate SPEC 同集被触 |
 | badge（P5 上线） | 体积徽章由 `budget` 的读数渲染成 `docs/badges/*.svg`；徽章陈旧＝`budget` 门红（不新增门） |
+| length（R2.20 上线） | 一个生产函数不得长过 `budgets.toml` 的 `function_length`（今为 200 行）；尺寸以 `syn` 解析后的 span 量得 |
 | gates | 顺序跑全部门，聚合报告，任一违规即退出码 1 |
 
 ### 门禁针对的 LLM 失效模式（本 crate 存在的理由）
@@ -36,6 +37,7 @@
 | 忘记许可头 | header | 三行逐字节比对 |
 | 引入 JS/TS 或 node 构建步 | zerojs | 扩展名扫描＋命令面 token 扫描（C1） |
 | stub／todo!／unwrap 蒙混 | （不在本 crate）workspace lints | clippy deny 已覆盖，本 crate 不重复 |
+| 一个函数里塞进整条流程（模型最常见的结构失效） | length | 超过行数预算即红，报出函数名、行数与预算 |
 
 ## 2 验收标准
 
@@ -65,7 +67,9 @@ gate／Violation／rule／violation／alternative（three-part refusal 的施工
 
 ## 7 模块边界
 
-一门一文件：`main`（分发）｜`report`（Violation 与渲染）｜`walk`（确定性文件遍历）｜`header`｜`lexicon`｜`modmap`｜`depmap`｜`guard`｜`zerojs`｜`secret`｜`specalign`｜`apisync`｜`spec`｜`badge`（渲染与陈旧判定，被 `budget` 调用）。
+一门一文件：`main`（分发）｜`report`（Violation 与渲染）｜`walk`（确定性文件遍历）｜`header`｜`lexicon`｜`modmap`｜`length`｜`depmap`｜`guard`｜`zerojs`｜`secret`｜`specalign`｜`apisync`｜`spec`｜`badge`（渲染与陈旧判定，被 `budget` 调用）。
+
+**length 门的形状属于 modmap 而不属于自己**：形状列的解析只住 `modmap::shapes`，因为模块表只应有一个读者——列格式一变，只有一处要改。
 
 **本模块不做什么（否定式三条）**：不做 color（S4 随 web::theme 启用，届时增列）；不修改任何被检文件（门只判不改；唯二例外＝spec 只新建不覆盖、`apisync --write` 只重写基线文件）；不缓存扫描结果（每次全量重扫——确定性优于速度）。
 
@@ -117,7 +121,8 @@ pub(crate) struct Violation {
 5. **vocabulary（R1.15，挂在 lexicon 门下）**：两条断言，各修一种第二权威。①**退役词必须指向被定义过的词**——`lexicon.toml` 说哪种说法作废，`docs/glossary.md` 说该用哪个词，此前无人让二者对账，于是一条退役词可以指向一个词汇表从未定义的名字，而照门的建议改词的人会落到一个没有释义的词上。判据宽一格：replacement 命中任一词汇表**粗体词**或含 `.md`（指向一份文件也是一种定义）。②**能被机器数出来的数不由文档手写**——产品面文档里每一处手写门数都至少陈旧过一次（四份文档写「ten gates」而实际跑十二道）。故读 `gates::COUNT` 与文档对账，中英两种写法（`ten gates`／`十二门`）各认一组，且**刻意只认已经烂过的那几种形状**：一条会猜的规则就是一条会在别的正文上乱咬的规则。
 6. **release（P4.14 上线，P5.05 增第三条断言）**：公开树**由过滤生成**而不由手工挑选，分类是一条**封闭的前缀规则**（`is_scaffolding`）；未被规则点名的一律归产品面——**失败方向是故意的**：未分类的文件出现在产物里会被人看见，反过来则悤声消失。三条断言：①公开树上零脚手架路径；②产品文档不得链向或在正文里点名脚手架（无链的「去看 SPEC」最好写也最难发现，故扫全文而不只扫链接）；③**任何发布文件不得携家目录路径**（`machine_path`）。第三条的口径是**隐私而非整洁**：`/tmp`、`/etc`、`C:/windows` 是关于一类机器的事实，而且「绝对路径被拒」那三条测试必须写出一个绝对路径——典型反例先咬住的正是它们，故规则收窄到家目录形状（`:\users\`／`:/users/`／`/home/`／`/root/` 等七种，大小写不计）。扫描面是**全部可读成文本的发布文件**，不只 `.md`：源码与清单里的硬编码家目录更坏而不是更好。报告只截二十字符，因为把整行引进 CI 日志就是把它再公开一次；文件自豁免（同 secret／color 两门的先例：写不出不包含待检形状的检测器）。
 7. **badge（P5）**：读数与 `budget` 同源（同一 `measure()`），故不存在第二个数字权威。每个可称重的 gated 行若在 `budgets.toml` 里带 `badge_label`，即渲染一张 `docs/badges/<行名>.svg`。三条纪律：①**颜色不自选**——灰阶取自 `crates/web/src/theme.rs` 的 `GRAY_RAMP`（复用 color 门已有的解析器），OKLCH→sRGB 的换算在此一次算清，因为 SVG 要被任意浏览器渲染，而 `oklch()` 的支持面不覆盖旧版；墨色恒不低于 `INFORMATION_FLOOR`，一条断言钉住。②**平台自报**——二进制体积逐平台不同，故 `badge_platform` 指名哪台机器有权刷新它，别的平台既不写也不判，否则三个平台会互相覆盖同一个文件。③**陈旧即红**——`budget` 门在能称重时比对已提交的 SVG 与当场渲染的 SVG，不同即红并给出 `cargo xtask badge --write`；称不出（本机没构建产物）则沉默，与该门既有的沉默口径一致。`just dist` 末尾调用它，于是发一次 release 就刷新一次，没有人需要去改一个数字。
-8. **报告**：three-part 渲染，与产品的 Gate 拒绝同构——施工者被拒时拿到的也是「规则｜违反点｜替代」，不是一句 fail。
+9. **length（R2.20）**：尺寸的单位是**生产函数**，不是文件——按文件计的任何诚实阀值会在四个 crate 里同时点燃八处，那是一个工程而不是一道门。**扫描面**：`crates/*/src`、`xtask/src`、`citysim/src`；`tests/` 与 `benches/` 不在内，因为测试代码本就允许放松约束（AGENTS.md）。**三类不量**：① 带 `#[cfg(test)]` 的项（它标的是**一个项**而不是文件剩下的部分）；② 带 `#[component]` 的函数（Dioxus 组件，函数体即标记，没有可跟的步骤）；③ 模块表形状列为 `data` 的文件（ARCH §9 形状 6：数据而无分支）。**三类豁免都取自已有权威**（属性、模块表），而不是新建一张名单——一张名单就是一个可以您您变长的豁免口。形状列由 `modmap::shapes` 交出，与 modmap 共用同一个表解析器。
+10. **报告**：three-part 渲染，与产品的 Gate 拒绝同构——施工者被拒时拿到的也是「规则｜违反点｜替代」，不是一句 fail。
 
 ## 11 边界枚举
 
@@ -131,9 +136,13 @@ pub(crate) struct Violation {
 
 serde＋serde_json（cargo metadata 解析；工作区已钉）；toml（lexicon 数据面；xtask 独用，不入产品面）；thiserror（工作区已钉）；kernel（S2.12 起：secret 门复用 `kernel::secret::scan`，一个判定一个家）。不引 walkdir/regex/clap：手写遍历十几行；判定用子串与前缀即可（C12 对 regex 的敏感面在 kernel，此处一并回避）；子命令分发一个 match 足矣。
 
+**syn 与 proc-macro2**（R2.20，`syn` 开 `full`，`proc-macro2` 开 `span-locations`）：**量一个 Rust 函数从哪行到哪行是一个解析问题，不是一个数括号问题**。本卡先写了一个按行数括号的探针，一小时内撞上三个计数错误，**每一个都产出了一张错的违规名单**：① `#[cfg(test)]` 被当成文件截断点，于是 `assembly.rs` 第 5046 行一个测试助手以下的函数全部隐形（`pub async fn serve` 就在里面）；② `'{'` 这样的字符字面量被当成开括号，`detect` 于是从 43 行变成 266 行；③ 跨行字符串（`"… \` 换行 `…"`）同理，`malformed` 从 6 行变成 230 行。一道量错的门比没有门更坏：它会把人送去拆一个不需要拆的函数。替代方案是手写一个状态扫描器（行注释、可嵌套块注释、转义与跨行字符串、raw string 的 `#` 计数、以及 `'a` 生命期与 `'x'` 字符的区分）——八十行代码养一个第四个计数错误的地方。`syn` 是编译器旁的那个解析器，且已因每一个 derive 宏而在 `Cargo.lock` 里。维护成本：仅工作区工具链，恒不入产品二进制（同 flate2／zip 先例）。
+
 **zip**（P7.02，`default-features = false, features = ["deflate-flate2"]`，净增两个包）：复用 xtask 已有的 flate2 做压缩后端。替代方案是在 justfile 与 CI 里按平台分支调 `Compress-Archive`／`zip`／`tar`，已验证否决：git-bash 携的是 GNU tar，不产 zip，三个平台因此需三段 shell，且本机与 CI 的产物不同源——那正是本轮要关掉的那类差异。维护成本：仅工作区工具链，恒不入产品二进制。
 
 ## 14 硬编码声明
+
+行数预算 200 **不**硬编码在门里，它是 `xtask/budgets.toml` 的一行（`[function_length]`）——那份登记表自述是「设计所声明的每一项预算」，而它已经持着非字节的预算（`kernel_mutation` 的百分比、`ledger_append` 的毫秒）。数字的来历写在那一行的注释里，改它受 guard 看守。
 
 MPL 头三行；保护路径清单（xtask/、.github/、deny.toml、Cargo.toml、rust-toolchain.toml、clippy.toml、justfile）；状态枚举四值；JS 扩展名族与 node 命令族。各随其权威变更而改，改动本身受 guard 看守。
 

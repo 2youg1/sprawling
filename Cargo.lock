@@ -5067,8 +5067,10 @@ version = "0.0.1"
 dependencies = [
  "flate2",
  "kernel",
+ "proc-macro2",
  "serde",
  "serde_json",
+ "syn 2.0.119",
  "thiserror 2.0.20",
  "toml 0.8.23",
  "zip",

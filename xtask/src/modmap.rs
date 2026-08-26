@@ -37,8 +37,24 @@ const INDEX_PREFIXES: [&str; 8] = [
 
 struct Row {
     path: String,
+    shape: String,
     status: String,
     line: usize,
+}
+
+/// The shape each registered module states, by file path.
+///
+/// Read by `length`, which does not measure a module whose shape is
+/// `data`. It comes from this parser rather than a second one: the
+/// module table has one reader, so a change to its columns breaks one
+/// place.
+pub(crate) fn shapes(root: &Path) -> Result<BTreeMap<String, String>, XtaskError> {
+    let text = walk::read_text(&root.join(ARCH))?;
+    let mut ignored = Vec::new();
+    Ok(parse_rows(&text, &mut ignored)
+        .into_iter()
+        .map(|row| (row.path, row.shape))
+        .collect())
 }
 
 pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
@@ -124,10 +140,11 @@ fn parse_rows(text: &str, violations: &mut Vec<Violation>) -> Vec<Row> {
         if cells.len() != 8 {
             continue;
         }
-        let (module, path, status) = match (cells.get(1), cells.get(2), cells.get(6)) {
-            (Some(m), Some(p), Some(s)) => (*m, *p, *s),
-            _ => continue,
-        };
+        let (module, path, shape, status) =
+            match (cells.get(1), cells.get(2), cells.get(4), cells.get(6)) {
+                (Some(m), Some(p), Some(h), Some(s)) => (*m, *p, *h, *s),
+                _ => continue,
+            };
         if !module.contains("::") || !path.starts_with("crates/") || !path.ends_with(".rs") {
             continue;
         }
@@ -156,6 +173,7 @@ fn parse_rows(text: &str, violations: &mut Vec<Violation>) -> Vec<Row> {
         seen.insert(path.to_owned(), line_no);
         rows.push(Row {
             path: path.to_owned(),
+            shape: shape.to_owned(),
             status: status.to_owned(),
             line: line_no,
         });

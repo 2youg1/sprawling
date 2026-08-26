@@ -15,6 +15,7 @@ mod depmap;
 mod gates;
 mod guard;
 mod header;
+mod length;
 mod lexicon;
 mod mem;
 mod modmap;
@@ -97,6 +98,7 @@ fn main() -> ExitCode {
         Some("apisync") => report::finish("apisync", apisync::check(&root, range.as_deref())),
         Some("header") => report::finish("header", header::check(&root)),
         Some("lexicon") => report::finish("lexicon", lexicon::check(&root)),
+        Some("length") => report::finish("length", length::check(&root)),
         Some("modmap") => report::finish("modmap", modmap::check(&root)),
         Some("depmap") => report::finish("depmap", depmap::check(&root)),
         Some("zerojs") => report::finish("zerojs", zerojs::check(&root)),

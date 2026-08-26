@@ -16,6 +16,12 @@ toml.workspace = true
 # on the path; this lands in workspace tooling only, never in the
 # product binary.
 flate2 = "1"
+# Measuring where a function begins and ends is a parsing problem: a
+# brace counter gets `'{'`, a line-continued string and `#[cfg(test)]`
+# wrong, and each mistake produces a wrong list of offenders. Workspace
+# tooling only, never the product binary (xtask-SPEC.md section 13).
+syn = { version = "2", features = ["full", "parsing", "printing"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
 
 [lints]

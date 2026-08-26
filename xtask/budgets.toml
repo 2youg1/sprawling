@@ -95,6 +95,24 @@ status = "gated"
 badge_label = "binary · windows-x86_64"
 badge_platform = "windows-x86_64"
 
+# The unit is a production function because the alternative was measured:
+# any honest file threshold lights up eight files across four crates at
+# once, which is a project rather than a gate. Across 1,800 production
+# functions the median is 9 lines, p90 is 39 and p99 is 145, so 200 sits
+# well above where the repository actually writes; what it catches is a
+# whole flow of control written into one body. `dispatch_in` was 1,069
+# lines when R2 opened and is 158 now, in nine cuts.
+#
+# Not measured, each read from an authority that already exists rather
+# than from a list kept beside the gate: an item marked `#[cfg(test)]`,
+# a function marked `#[component]` (a Dioxus component's body is markup),
+# and a file whose module-map row states the shape `data`.
+[function_length]
+what = "one production function, from its `fn` to its closing brace"
+budget_lines = 200
+measured_by = "cargo xtask length (syn spans, not brace counting)"
+status = "gated"
+
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"
 budget_bytes = 31457280

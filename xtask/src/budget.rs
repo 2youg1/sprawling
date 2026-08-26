@@ -125,16 +125,24 @@ pub(crate) fn report(root: &Path) -> Result<String, XtaskError> {
         return Ok(out);
     };
     for (name, value) in table {
+        if value.get("budget_bytes").is_some() {
+            continue; // already weighed in the table above
+        }
         let status = value
             .get("status")
             .and_then(toml::Value::as_str)
             .unwrap_or("");
-        if !status.starts_with("gated") {
-            out.push_str(&format!(
-                "{name}: {status}
+        // A budget stated in something other than bytes still belongs in
+        // the report: one that only the gate can see is one nobody
+        // remembers is there.
+        let stated = value
+            .get("budget_lines")
+            .and_then(toml::Value::as_integer)
+            .map_or_else(String::new, |lines| format!("{lines} lines, "));
+        out.push_str(&format!(
+            "{name}: {stated}{status}
 "
-            ));
-        }
+        ));
     }
     Ok(out)
 }
@@ -306,7 +314,7 @@ mod tests {
         let text = std::fs::read_to_string(root.join("xtask").join("budgets.toml")).unwrap();
         let register: toml::Value = toml::from_str(&text).unwrap();
         let table = register.as_table().unwrap();
-        assert_eq!(table.len(), 7, "the design states seven budgets");
+        assert_eq!(table.len(), 8, "the design states eight budgets");
         for (name, row) in table {
             assert!(
                 row.get("status").and_then(toml::Value::as_str).is_some(),
