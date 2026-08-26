@@ -193,7 +193,7 @@ fn projection_rebuild(scratch: &std::path::Path) -> Result<(), String> {
         .collect::<Result<_, _>>()?;
 
     let store = scratch.join("projection.redb");
-    let mut projection =
+    let (mut projection, _) =
         memory::Projection::open(&store).map_err(|e| format!("{}", e.into_ax()))?;
     let t0 = stamp();
     projection

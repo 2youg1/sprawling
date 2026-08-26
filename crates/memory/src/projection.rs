@@ -53,6 +53,21 @@ pub struct Projection {
     last_applied: Option<Seq>,
 }
 
+/// What open found and repaired.
+pub struct ProjectionOpenReport {
+    pub rebuilt: Option<ViewRebuilt>,
+}
+
+/// The stored view could not be read, so open removed it and started an
+/// empty one. `last_applied` is `None` in consequence, and that is the
+/// whole instruction to the caller: replay from the start.
+pub struct ViewRebuilt {
+    /// What the store said before the file went. Removing the file
+    /// destroys the only other copy of this sentence, and a view that
+    /// resets without saying why teaches nobody anything.
+    pub reason: String,
+}
+
 fn db_err(op: &'static str) -> impl FnOnce(String) -> MemoryError {
     move |detail| MemoryError::Projection {
         op,
@@ -159,7 +174,42 @@ fn fold_record(
 }
 
 impl Projection {
-    pub fn open(path: &Path) -> Result<Projection, MemoryError> {
+    /// Always hands back a usable view.
+    ///
+    /// A stored view that cannot be read is removed and started again,
+    /// because this view is derived and its recorded recovery is to
+    /// delete the file and replay. The caller needs no new branch for
+    /// that case: the fresh view reports `last_applied() == None`, which
+    /// it must already handle as an ordinary first run.
+    ///
+    /// The removal is attempted once. A file that is merely corrupt heals
+    /// on the second open; a directory that cannot be written fails the
+    /// second open too and reports, so no error variant has to be told
+    /// apart from another.
+    pub fn open(path: &Path) -> Result<(Projection, ProjectionOpenReport), MemoryError> {
+        let unreadable = match Self::open_once(path) {
+            Ok(projection) => {
+                return Ok((projection, ProjectionOpenReport { rebuilt: None }));
+            }
+            Err(failure) => failure.to_string(),
+        };
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(db_err("remove unreadable projection")(err.to_string()));
+            }
+        }
+        let projection = Self::open_once(path)?;
+        Ok((
+            projection,
+            ProjectionOpenReport {
+                rebuilt: Some(ViewRebuilt { reason: unreadable }),
+            },
+        ))
+    }
+
+    fn open_once(path: &Path) -> Result<Projection, MemoryError> {
         let db =
             redb::Database::create(path).map_err(|e| db_err("open projection")(e.to_string()))?;
         // Creating the tables at open time means every later read finds
@@ -442,7 +492,7 @@ mod tests {
         let run = RunId::from_bytes([5u8; 16]);
         let records = script(run);
 
-        let mut first = Projection::open(&tmp.path().join("a.redb")).unwrap();
+        let (mut first, _) = Projection::open(&tmp.path().join("a.redb")).unwrap();
         for r in &records {
             first.apply(r).unwrap();
         }
@@ -450,7 +500,7 @@ mod tests {
 
         // A second projection, built from the same ledger in the same
         // order, is indistinguishable at the logical level.
-        let mut second = Projection::open(&tmp.path().join("b.redb")).unwrap();
+        let (mut second, _) = Projection::open(&tmp.path().join("b.redb")).unwrap();
         for r in &records {
             second.apply(r).unwrap();
         }
@@ -475,7 +525,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let run = RunId::from_bytes([6u8; 16]);
         let records = script(run);
-        let mut projection = Projection::open(&tmp.path().join("p.redb")).unwrap();
+        let (mut projection, _) = Projection::open(&tmp.path().join("p.redb")).unwrap();
         for r in &records {
             projection.apply(r).unwrap();
         }
@@ -494,13 +544,13 @@ mod tests {
         let run = RunId::from_bytes([7u8; 16]);
         let records = script(run);
         {
-            let mut projection = Projection::open(&path).unwrap();
+            let (mut projection, _) = Projection::open(&path).unwrap();
             for r in records.iter().take(3) {
                 projection.apply(r).unwrap();
             }
             assert_eq!(projection.last_applied(), Some(Seq::new(2)));
         }
-        let mut reopened = Projection::open(&path).unwrap();
+        let (mut reopened, _) = Projection::open(&path).unwrap();
         assert_eq!(
             reopened.last_applied(),
             Some(Seq::new(2)),
@@ -513,7 +563,7 @@ mod tests {
 
         // Deleting the file and replaying everything gives the same view.
         let fresh_path = tmp.path().join("fresh.redb");
-        let mut fresh = Projection::open(&fresh_path).unwrap();
+        let (mut fresh, _) = Projection::open(&fresh_path).unwrap();
         for r in &records {
             fresh.apply(r).unwrap();
         }
@@ -524,11 +574,59 @@ mod tests {
         );
     }
 
+    /// The SPEC states this view's recovery as "delete the file and
+    /// replay", and the whole argument for keeping a young store here is
+    /// that its failure costs a rebuild rather than data. That argument
+    /// is worth nothing while no code performs the rebuild: the first
+    /// caller to meet a file it cannot read would have met an error
+    /// instead.
+    #[test]
+    fn an_unreadable_view_is_rebuilt_rather_than_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("garbled.redb");
+        std::fs::write(&path, b"this is not a redb file, and never was").unwrap();
+
+        let (mut projection, report) =
+            Projection::open(&path).expect("a derived view opens even when its file does not");
+        let rebuilt = report
+            .rebuilt
+            .expect("open must say that it reset the view, not reset it in silence");
+        assert!(
+            !rebuilt.reason.is_empty(),
+            "removing the file destroys the only other copy of this sentence"
+        );
+        assert_eq!(
+            projection.last_applied(),
+            None,
+            "an empty view is the instruction to replay from the start"
+        );
+
+        let run = RunId::from_bytes([9u8; 16]);
+        let records = script(run);
+        for r in &records {
+            projection.apply(r).unwrap();
+        }
+        let fresh_path = tmp.path().join("fresh-after-garble.redb");
+        let (mut fresh, fresh_report) = Projection::open(&fresh_path).unwrap();
+        assert!(
+            fresh_report.rebuilt.is_none(),
+            "a path with no file is the ordinary first run, not a repair"
+        );
+        for r in &records {
+            fresh.apply(r).unwrap();
+        }
+        assert_eq!(
+            projection.export_canonical().unwrap(),
+            fresh.export_canonical().unwrap(),
+            "the rebuilt view is the view"
+        );
+    }
+
     #[test]
     fn a_restore_naming_no_discard_is_dropped_not_invented() {
         let tmp = tempfile::tempdir().unwrap();
         let run = RunId::from_bytes([8u8; 16]);
-        let mut projection = Projection::open(&tmp.path().join("q.redb")).unwrap();
+        let (mut projection, _) = Projection::open(&tmp.path().join("q.redb")).unwrap();
         projection
             .apply(&record(
                 run,

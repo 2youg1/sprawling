@@ -37,8 +37,10 @@ pub use hot::RunPhase;
 mod projection;
 
 pub use projection::Projection;
+pub use projection::ProjectionOpenReport;
 pub use projection::RecycleEntry;
 pub use projection::RunRow;
+pub use projection::ViewRebuilt;
 
 mod attribution;
 

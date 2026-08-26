@@ -212,8 +212,11 @@ impl HotView {
 
 ```rust
 pub struct Projection { /* db: redb::Database、last_applied: Option<Seq> —— 私有 */ }
+pub struct ProjectionOpenReport { pub rebuilt: Option<ViewRebuilt> }  // 存盘视图读不开与否
+pub struct ViewRebuilt { pub reason: String }                         // 删档之前，store 说了什么
 impl Projection {
-    pub fn open(path: &Path) -> Result<Projection, MemoryError>;
+    /// 恒返回一个可用视图：读不开就删档重来，故不存在「打开失败于派生物」这一态。
+    pub fn open(path: &Path) -> Result<(Projection, ProjectionOpenReport), MemoryError>;
     /// Idempotent by seq: records at or below last_applied are skipped.
     pub fn apply(&mut self, record: &EventRecord) -> Result<(), MemoryError>;
     /// One transaction per batch — the rebuild path (整修卡 R1.04).
@@ -231,6 +234,9 @@ pub struct RunRow { pub run: String, pub started_t: TimeMs, pub frozen: Option<S
 ```
 
 - 三表：`meta`（last_applied）、`runs`、`recycle`；键全为定序编码（seq 大端字节／run 字串）。重建＝删文件重放；导出字节同（验收 §2）。崩溃安全委托 redb 事务（不入缝，只测重建）。
+- P4.03 自愈：`open` 读不开存盘视图时**自己删档重开**，而不是把错误抛给调用方。理由是这条 recovery 本来就写在下一段里（`E_STORAGE_FATAL` ⇒「删文件重放」），却没有任何一处代码执行它——一条只写在文档里的 recovery 等于没有 recovery，而它偏偏是「选 redb 无妨、派生物可丢」这个论证的全部承重点。删档后 `last_applied` 自然为 `None`，调用方**不需要新接口**：它本来就得处理首次运行的 `None`，重放从头开始正是要它做的事。
+  与 `index::load_or_rebuild` 同一条反射（「存疑即重建，而非报告」），但**不静默**：`ProjectionOpenReport` 照 `JsonlLedger::open` 的既有形状回报，`ViewRebuilt.reason` 留住 store 原话——删档销毁的正是这句话的唯一另一份拷贝，一个重置了却说不出为什么的视图谁也教不会。自愈只试一次：删档后第二次仍失败就照实抛错，于是「文件坏了」自己好，「盘满／无权限」照旧报告，无需辨认错误变体。
+  用词：视图档是**删档重建**，不是 Discard——Discard 是产品概念（携 Restoration 的删除，glossary §4），不借给派生物的清扫。
 - S3.05 载荷读取契约（本模块定义，S3.13 生产端照此写）：`file_discarded` 携 `paths: [string]`（Address 字串形）与 `restoration`（`Restoration` 的 serde 外标形，冷视图只留变体名——完整 Locator 住 Ledger，列表渲染不需要它）；`discard_restored` 携 `discard_seq: u64` 指向它撤销的那条。指不到任何 discard 的 restore **丢弃而非臆造行**（Recycle Bin 是历史不是待办队列，restored 项恒留列）。
 - S3.05 落地记录：行值以 JSON 字串入表（无第二编码权威，导出即可读）；一次 apply ＝ 一个事务，`last_applied` 与行同事务落，故崩溃点恒在两态之一。新增 `MemoryError::Projection{op,detail}`（→ `E_STORAGE_FATAL`，recovery ＝「删文件重放」）：派生物的失败不像 Ledger 写失败那样必须停机。
 - R1.04 批折叠：bench 夹具抓到逐条事务重建只有 ≈ 1.1k records/s（每条事件一个磁盘屏障，预算 50k/s 的 1/44）。`apply_all` 把屏障移到批上：一批一事务，折叠逻辑住 `fold_record` 唯一定义，`apply` 委派之；幂等不变（seq 门恩在批内逐条判），空批 abort 不提交，故字节不动。重建读数 ≈ 493k records/s（windows-x86_64，2026-08-22）。

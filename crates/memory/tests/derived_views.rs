@@ -155,7 +155,7 @@ proptest! {
             &records,
             |records, nonce| {
                 let path = root.path().join(format!("proj-{nonce}.redb"));
-                let mut projection = Projection::open(&path).expect("open");
+                let (mut projection, _) = Projection::open(&path).expect("open");
                 for r in records {
                     projection.apply(r).expect("apply");
                 }
@@ -185,7 +185,7 @@ fn hot_and_cold_agree_where_they_overlap() {
     let tmp = tempfile::tempdir().expect("tempdir");
 
     let mut hot = HotView::new();
-    let mut cold = Projection::open(&tmp.path().join("overlap.redb")).expect("open");
+    let (mut cold, _) = Projection::open(&tmp.path().join("overlap.redb")).expect("open");
     for r in &records {
         hot.apply(r).expect("hot");
         cold.apply(r).expect("cold");

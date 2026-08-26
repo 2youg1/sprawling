@@ -76,7 +76,7 @@ pub fn memory::Projection::apply(&mut self, &kernel::event::EventRecord) -> core
 pub fn memory::Projection::apply_all<'a>(&mut self, impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::Projection::export_canonical(&self) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
 pub fn memory::Projection::last_applied(&self) -> core::option::Option<kernel::event::Seq>
-pub fn memory::Projection::open(&std::path::Path) -> core::result::Result<memory::Projection, memory::MemoryError>
+pub fn memory::Projection::open(&std::path::Path) -> core::result::Result<(memory::Projection, memory::ProjectionOpenReport), memory::MemoryError>
 pub fn memory::Projection::recycle_bin(&self) -> core::result::Result<alloc::vec::Vec<memory::RecycleEntry>, memory::MemoryError>
 pub fn memory::Projection::run_rows(&self) -> core::result::Result<alloc::vec::Vec<memory::RunRow>, memory::MemoryError>
 pub fn memory::QueueLane::as_str(self) -> &'static str
@@ -143,6 +143,7 @@ pub memory::MemoryError::WorktreeBusy
 pub memory::MemoryError::WorktreeBusy::detail: alloc::string::String
 pub memory::MemoryError::WorktreeBusy::name: alloc::string::String
 pub memory::OpenReport::recovered: core::option::Option<memory::TailTruncation>
+pub memory::ProjectionOpenReport::rebuilt: core::option::Option<memory::ViewRebuilt>
 pub memory::QueueItem::enqueued_t: kernel::event::TimeMs
 pub memory::QueueItem::id: u64
 pub memory::QueueItem::key: kernel::idem::IdemKey
@@ -165,6 +166,7 @@ pub memory::RunRow::frozen: core::option::Option<alloc::string::String>
 pub memory::RunRow::run: alloc::string::String
 pub memory::RunRow::started_t: kernel::event::TimeMs
 pub memory::TailTruncation::dropped_bytes: u64
+pub memory::ViewRebuilt::reason: alloc::string::String
 pub mod memory
 pub struct memory::Attribution
 pub struct memory::AttributionReport
@@ -179,11 +181,13 @@ pub struct memory::LedgerIndex
 pub struct memory::Manifest
 pub struct memory::OpenReport
 pub struct memory::Projection
+pub struct memory::ProjectionOpenReport
 pub struct memory::QueueItem
 pub struct memory::RecycleEntry
 pub struct memory::RunHot
 pub struct memory::RunRow
 pub struct memory::TailTruncation
+pub struct memory::ViewRebuilt
 pub struct memory::WorktreeLease
 pub struct memory::WorktreeName(_)
 pub struct memory::Worktrees
