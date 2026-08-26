@@ -34,7 +34,7 @@ pub use alert::{Alert, AlertKind, Alerts, Raise, Refused, absorb, alert_for, cle
 pub use app::watchable;
 pub use app::{App, Backfill, Destination, HELD_RECORDS, NavGroup, Root, Usage};
 pub use app::{ProviderHealth, RunPhase, RunRow, Snapshot, View};
-pub use app::{destinations, dispatch_command, invalidated_by};
+pub use app::{destinations, dispatch_command, hold, invalidated_by};
 pub use app::{latest_run, opened_building, rebuild};
 pub use app::{render_tokens, render_usd, spend_line, status_line, waiting_line};
 pub use app::{room_asked_for, started_here};

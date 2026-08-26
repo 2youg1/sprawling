@@ -906,6 +906,24 @@ pub fn invalidated_by(kind: EventKind) -> Option<channels::Query> {
 /// everything.
 pub const HELD_RECORDS: usize = 2_000;
 
+/// Puts arriving records into the one bounded store a tab holds.
+///
+/// Records reach a page two ways - one at a time from the live stream,
+/// and in a batch when a page that has just opened asks what happened
+/// before it - and both land here, because how much history a tab holds
+/// has one answer. Kept in `seq` order, one record per `seq`, never
+/// more than [`HELD_RECORDS`] of them, and the oldest are the ones that
+/// go: what falls out is still in the Ledger.
+pub fn hold(held: &mut Vec<EventRecord>, arriving: impl IntoIterator<Item = EventRecord>) {
+    held.extend(arriving);
+    held.sort_by_key(EventRecord::seq);
+    held.dedup_by_key(|record| record.seq());
+    let excess = held.len().saturating_sub(HELD_RECORDS);
+    if excess > 0 {
+        held.drain(..excess);
+    }
+}
+
 /// Builds one Dispatch. The only place in the client that does.
 ///
 /// No budget travels from a person: `BudgetCap::default()` is what the
@@ -1765,15 +1783,9 @@ fn connect(wiring: Wiring) -> Outbound {
                         }
                         if snapshot.write().apply(&event) {
                             // Kept once, read by every page that reads
-                            // history. Bounded here rather than in each
-                            // page, so "how much does a tab hold" has one
-                            // answer.
-                            let mut held = records.write();
-                            held.push(*event);
-                            let excess = held.len().saturating_sub(HELD_RECORDS);
-                            if excess > 0 {
-                                held.drain(..excess);
-                            }
+                            // history, and bounded by the one function
+                            // that answers "how much does a tab hold".
+                            hold(&mut records.write(), [*event]);
                         }
                     }
                     // An answer reaches the view that asked for it. It
@@ -1796,16 +1808,7 @@ fn connect(wiring: Wiring) -> Outbound {
                         // does a tab hold".
                         channels::Answer::History(view) => {
                             snapshot.write().backfill(&view.records);
-                            let mut held = records.write();
-                            for record in view.records {
-                                held.push(record);
-                            }
-                            held.sort_by_key(channels::EventRecord::seq);
-                            held.dedup_by_key(|record| record.seq());
-                            let excess = held.len().saturating_sub(HELD_RECORDS);
-                            if excess > 0 {
-                                held.drain(..excess);
-                            }
+                            hold(&mut records.write(), view.records);
                         }
                         // What was already waiting when this page
                         // connected. The stream carries what happens
@@ -1955,6 +1958,48 @@ mod tests {
             data: Payload::empty(),
             ig: false,
         }
+    }
+
+    /// Section 8-37 promises a tab has one answer to how much history
+    /// it holds. That answer used to be written twice, both times
+    /// inside a function only a browser could reach.
+    #[test]
+    fn what_a_tab_holds_has_one_answer_on_both_roads() {
+        let bound = u64::try_from(HELD_RECORDS).unwrap();
+        let mut held = Vec::new();
+
+        // The live road brings one record at a time.
+        hold(&mut held, [record(2, EventKind::RunStarted, [1u8; 16])]);
+        // The backfill road brings a batch, in whatever order the
+        // answer came back, overlapping what is already held.
+        hold(
+            &mut held,
+            [
+                record(3, EventKind::RunFrozen, [1u8; 16]),
+                record(1, EventKind::CityInitialized, [0u8; 16]),
+                record(2, EventKind::RunStarted, [1u8; 16]),
+            ],
+        );
+
+        let seqs: Vec<u64> = held.iter().map(|record| record.seq().value()).collect();
+        assert_eq!(seqs, vec![1, 2, 3], "one record per seq, in seq order");
+
+        // Past the bound, the oldest are the ones that go.
+        hold(
+            &mut held,
+            (4..=bound + 8).map(|seq| record(seq, EventKind::RunStarted, [1u8; 16])),
+        );
+        assert_eq!(held.len(), HELD_RECORDS, "a tab that grows all night dies");
+        assert_eq!(
+            held.first().map(|record| record.seq().value()),
+            Some(9),
+            "what fell out is the oldest, and it is still in the Ledger"
+        );
+        assert_eq!(
+            held.last().map(|record| record.seq().value()),
+            Some(bound + 8),
+            "the newest record is the one a page needs most"
+        );
     }
 
     #[test]

@@ -789,6 +789,23 @@ pub fn pairing_token() -> Option<String>;             // 只多一次 location.s
 
 **本章测试**：`token_in` 对 `?token=…`／`?view=city&token=…`／`token=…`／`?token=`／空串／`?tokenish=…` 六个答案；以及一条握手断言——`Link::new(token_in("?token=…"))` 发出的 `Hello.token` 非空，本卡之前 `Link::new(None)` 使它恒 `None`。真浏览器对真暴露端口那一段属 V9，是人跑的命令而非门禁。
 
+## 8-16 一个标签页持有多少历史，只写一遍（整修卡 R2.22）
+
+```rust
+// web::app（形状 7 projection 的一小块）
+pub fn hold(held: &mut Vec<EventRecord>, arriving: impl IntoIterator<Item = EventRecord>);
+```
+
+**为什么是 `pub` 而不是 `pub(crate)`**：`lib.rs` 开头写着「除传输外壳外本 crate 全部在宿主上编译」，而 `connect` 调用的每一个判断——`dispatch_command`、`invalidated_by`、`started_here`、`room_asked_for`——都是 `pub` 并从 crate 根再导出。`hold` 是同一类东西（逻辑，不是壳），按同一条约定处理；定成 `pub(crate)` 则它在宿主目标上只被测试调用，`--all-targets` 的 `dead_code` 当场报错，而拿 `expect(dead_code)` 压下去是绕过约定而不是遵守它。公开面因此多一行，`xtask/api-baselines/web.txt` 同提交重算。
+
+**病灶**：§8-37 写着「一个标签页持有多少历史只有一个答案」，而代码里这个答案写了**两遍**：直播那一条是 `push` 后 `drain(..excess)`，回填那一批是 `push` 循环后 `sort_by_key` → `dedup_by_key` → `drain(..excess)`。两处均在 `connect` 内部，而 `connect` 是 `#[cfg(target_arch = "wasm32")]`——于是这条规则**没有任何测试能够到**，两份写法要分开只需有人改其中一处。两处权威写一条规则，是 AGENTS 第一条禁止的形。
+
+**交接件问的是另一件事：`connect` 198 行，它该不该拆。读完答不该**，理由不是行数而是读完看见的东西：除了上面那一块，`connect` 里剩下的全是**接线**——判断早已各就各位且各自有测试：`alert::absorb`／`alert_for`、`invalidated_by`、`started_here`、`Snapshot::apply`／`backfill`、`socket::Link::advance`。把 `Deliver` 与 `Answered` 两条臂切成两个函数，只会得到两个只被一处调用、各需十一个 signal 形参的半截——那正是 sprawling-SPEC §8-31 里 R2.19f **量完否决**的那个形（102 处引用、十一个名字，改回整值传递）。`connect` 不因行数而被拆；它不到 200，且本卡之后更短。
+
+**一个函数，两个来源**：直播一条一条到，刚开的页一批回填，两边都进 `hold`。它的契约：按 `seq` 排序、一个 `seq` 只留一条、总数不超 `HELD_RECORDS`、溢出时最早的先走。直播路今天不去重也不排序，因为 `Snapshot::apply` 已经把重发的帧答成 `false`；把两条路合到同一份契约下，多出来的只是一道不会错的防御，而不是第二种行为。
+
+**它以什么收口**：一条会咬的红。`what_a_tab_holds_has_one_answer_on_both_roads` 在实现前跑不起来（`hold` 不存在）；它断言回填与直播混到一起时同一个 `seq` 只留一条、超过 `HELD_RECORDS` 时最早的先走、且留下的那一段按 `seq` 递增。把 `drain` 改成从尾部删，它当场红在「最新的那条还在」这句上。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

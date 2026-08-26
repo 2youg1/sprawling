@@ -177,6 +177,7 @@ pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
 pub fn web::headline(&web::Working) -> (web::Msg, alloc::vec::Vec<(&'static str, alloc::string::String)>)
+pub fn web::hold(&mut alloc::vec::Vec<kernel::event::EventRecord>, impl core::iter::traits::collect::IntoIterator<Item = kernel::event::EventRecord>)
 pub fn web::inbox(alloc::vec::Vec<kernel::approval::ApprovalItem>) -> alloc::vec::Vec<web::Cluster>
 pub fn web::invalidated_by(kernel::event::EventKind) -> core::option::Option<channels::wire::Query>
 pub fn web::kind_name(kernel::event::EventKind) -> alloc::string::String
