@@ -424,6 +424,32 @@ let on_disk = std::fs::read_to_string(&plan_path).unwrap_or_default();          
 
 **影响面**：`city` 公开面增两项（基线同提交更新）。正常楼不受影响——`spine_files::lay_out` 给每栋新楼都铺了 `Roadmap.md`，而未铺的情形仍走 `NotFound` 答空串这条。`assembly.rs:219`（楼页读 Roadmap）同属一族但爆炸半径不同——那里读不到只是页上少一块，不会变成误报——本卡不动。
 
+## 8-17 一次验证遍历，三个折叠（整修卡 R2.02）
+
+```rust
+pub(crate) struct Standing { pub(crate) book: gateway::EndpointBook, governance: Governance, collaboration: Collaboration }
+impl Standing { pub(crate) fn fold(ledger_dir: &Path) -> Result<Standing, AxError>; }
+
+impl Governance { fn empty() -> Governance; fn absorb(&mut self, record: &EventRecord); }
+struct CollaborationFold { … }   // 暂存 enqueued／consumed，`settle` 产 Collaboration
+```
+
+`rebuild_book`／`rebuild_governance`／`rebuild_collaboration` 三个函数删除。
+
+- **这张卡不是缺陷修复，我测过了**。我原本怀疑三处实现会漂移（`rebuild_governance` 管 `granted` 与 `CityHalted`，`govern` 不管，`answer_approval`／`set_admission` 各自直改字段）。新测试 `what_a_worker_holds_is_what_a_restart_rebuilds` 实验否定了它：派一次活、发一条信号之后，活 worker 与重建结果逐项相等。那条测试因此不是本卡的红，而是让合并安全的护栏；它同时把一条四处代码都依赖、却从未被断言过的形状-7 性质变成了可红的。
+- **本卡以测量收口而非以红转绿收口**，理由写在上一条：没有可咬的红，因为没有缺陷。本机实测（windows-x86_64, 16 core，release，外部探针经 `sprawling` 的 lib 门驱动 `RunWorker::new`）：
+
+  | 记录数 | 改前 | 改后 |
+  |---:|---:|---:|
+  | 5,000 | 136.6 ms | 44.6 ms |
+  | 20,000 | 538.7 ms | 175.6 ms |
+  | 50,000 | 1856.1 ms | 436.2 ms |
+
+  这是每一次 `serve`、`resume`、`fork`、`adopt` 都要付的钱。
+- **为何不是 4 → 1 而是 4 → 2**：`RunWorker::new` 自己还要 `JsonlLedger::open`（尾部恢复）读一遍，而 `serve` 另走 `rebuild_views` 一遍。把 `Views` 也并进来要改 `serve` 的所有权形状（它住在 `Arc<Mutex<_>>` 里与查询侧共享，而 worker 在自己线程上）——那属于 `dispatch_in` 拆分那张卡，不在本卡内顺手做。
+- **暂存只给真需要的一项**：`CollaborationFold` 只暂存 signals，因为队列是 `enqueued` 减 `consumed` 而两者到达顺序任意；book、governance、goals、requests 都是逐条即结的，所以不暂存。
+- **验证不动位**：链验仍在折叠之前。一部不能自证的历史，不是这三个视图中任何一个可以建在上面的历史。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。

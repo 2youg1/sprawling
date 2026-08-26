@@ -951,29 +951,26 @@ struct Collaboration {
     requests: Vec<collab::OpenRequest>,
 }
 
-fn rebuild_collaboration(ledger_dir: &Path) -> Result<Collaboration, AxError> {
-    let mut inboxes = std::collections::BTreeMap::new();
-    let mut joins: std::collections::BTreeMap<Address, collab::FanIn> =
-        std::collections::BTreeMap::new();
-    let mut goals = Vec::new();
-    let mut requests: Vec<collab::OpenRequest> = Vec::new();
-    if !ledger_dir.exists() {
-        return Ok(Collaboration {
-            inboxes,
-            joins,
-            goals,
-            requests,
-        });
-    }
-    let mut enqueued: Vec<collab::Signal> = Vec::new();
-    let mut consumed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let verified = runtime::replay::verify_ledger_dir(ledger_dir)?;
-    for line in verified.raw_lines() {
-        let record = EventRecord::parse_line(line)?;
+/// `Collaboration` while it is still being read out of a history.
+///
+/// Signals are held aside until the last line has been seen, because a
+/// queue is `enqueued` minus `consumed` and the two arrive in whatever
+/// order the work happened in. Nothing else here needs a second look, so
+/// nothing else is staged.
+#[derive(Default)]
+struct CollaborationFold {
+    goals: Vec<kernel::GoalEntry>,
+    requests: Vec<collab::OpenRequest>,
+    enqueued: Vec<collab::Signal>,
+    consumed: std::collections::BTreeSet<String>,
+}
+
+impl CollaborationFold {
+    fn absorb(&mut self, record: &EventRecord) -> Result<(), AxError> {
         match record.kind() {
-            EventKind::SignalEnqueued => {
-                enqueued.push(collab::Signal::from_payload(record.data())?)
-            }
+            EventKind::SignalEnqueued => self
+                .enqueued
+                .push(collab::Signal::from_payload(record.data())?),
             EventKind::SignalConsumed => {
                 if let Some(id) = record
                     .data()
@@ -981,11 +978,13 @@ fn rebuild_collaboration(ledger_dir: &Path) -> Result<Collaboration, AxError> {
                     .get("id")
                     .and_then(serde_json::Value::as_str)
                 {
-                    consumed.insert(id.to_owned());
+                    self.consumed.insert(id.to_owned());
                 }
             }
-            EventKind::GoalRegistered => goals.push(goal_from_payload(record.data())?),
-            EventKind::PrOpened => requests.push(collab::OpenRequest::from_payload(record.data())?),
+            EventKind::GoalRegistered => self.goals.push(goal_from_payload(record.data())?),
+            EventKind::PrOpened => self
+                .requests
+                .push(collab::OpenRequest::from_payload(record.data())?),
             // A request leaves the register whichever way it ended: a
             // merged one is done, and a rejected one goes back to the
             // resident who wrote it rather than sitting in a queue
@@ -997,36 +996,45 @@ fn rebuild_collaboration(ledger_dir: &Path) -> Result<Collaboration, AxError> {
                     .get("branch")
                     .and_then(serde_json::Value::as_str)
                 {
-                    requests.retain(|held| held.branch != branch);
+                    self.requests.retain(|held| held.branch != branch);
                 }
             }
             _ => {}
         }
+        Ok(())
     }
-    for signal in enqueued {
-        // A join is folded from every handback the room ever received,
-        // whether or not the signal announcing it has been read: reading
-        // a notice and holding a result are different facts.
-        if let Some(artifact) = artifact_of(&signal) {
-            joins
+
+    fn settle(self) -> Result<Collaboration, AxError> {
+        let mut inboxes = std::collections::BTreeMap::new();
+        let mut joins: std::collections::BTreeMap<Address, collab::FanIn> =
+            std::collections::BTreeMap::new();
+        let (goals, requests, consumed) = (self.goals, self.requests, self.consumed);
+        for signal in self.enqueued {
+            // A join is folded from every handback the room ever
+            // received, whether or not the signal announcing it has been
+            // read: reading a notice and holding a result are different
+            // facts.
+            if let Some(artifact) = artifact_of(&signal) {
+                joins
+                    .entry(signal.room().clone())
+                    .or_default()
+                    .accept(artifact);
+            }
+            if consumed.contains(signal.id().as_str()) {
+                continue;
+            }
+            let inbox = inboxes
                 .entry(signal.room().clone())
-                .or_default()
-                .accept(artifact);
+                .or_insert_with(new_inbox);
+            inbox.deliver(&signal)?;
         }
-        if consumed.contains(signal.id().as_str()) {
-            continue;
-        }
-        let inbox = inboxes
-            .entry(signal.room().clone())
-            .or_insert_with(new_inbox);
-        inbox.deliver(&signal)?;
+        Ok(Collaboration {
+            inboxes,
+            joins,
+            goals,
+            requests,
+        })
     }
-    Ok(Collaboration {
-        inboxes,
-        joins,
-        goals,
-        requests,
-    })
 }
 
 /// The verified result a handback signal reports, when it reports one.
@@ -1328,22 +1336,20 @@ struct Governance {
     halted: std::collections::BTreeSet<String>,
 }
 
-fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
-    let mut pending = std::collections::BTreeMap::new();
-    let mut autonomy = kernel::consts_policy::AUTONOMY_DEFAULT;
-    let mut granted: Vec<kernel::ClusterKey> = Vec::new();
-    let mut halted: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    if !ledger_dir.exists() {
-        return Ok(Governance {
-            pending,
-            autonomy,
-            granted,
-            halted,
-        });
+impl Governance {
+    /// A city nobody has governed yet.
+    fn empty() -> Governance {
+        Governance {
+            pending: std::collections::BTreeMap::new(),
+            autonomy: kernel::consts_policy::AUTONOMY_DEFAULT,
+            granted: Vec::new(),
+            halted: std::collections::BTreeSet::new(),
+        }
     }
-    let verified = runtime::replay::verify_ledger_dir(ledger_dir)?;
-    for line in verified.raw_lines() {
-        let record = EventRecord::parse_line(line)?;
+
+    /// Folds one record in.
+    fn absorb(&mut self, record: &EventRecord) {
+        let (pending, granted, halted) = (&mut self.pending, &mut self.granted, &mut self.halted);
         let data = record.data().as_map();
         match record.kind() {
             EventKind::ApprovalRequested => {
@@ -1368,7 +1374,7 @@ fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
             }
             EventKind::AutonomyChanged => {
                 if let Some(name) = data.get("autonomy").and_then(serde_json::Value::as_str) {
-                    autonomy = read_autonomy(name);
+                    self.autonomy = read_autonomy(name);
                 }
             }
             // One kind for both directions: halting and releasing are
@@ -1376,7 +1382,7 @@ fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
             // reader see a release with no halt before it.
             EventKind::CityHalted => {
                 let Some(scope) = data.get("scope").and_then(serde_json::Value::as_str) else {
-                    continue;
+                    return;
                 };
                 if data.get("state").and_then(serde_json::Value::as_str) == Some(HALTED) {
                     halted.insert(scope.to_owned());
@@ -1387,12 +1393,6 @@ fn rebuild_governance(ledger_dir: &Path) -> Result<Governance, AxError> {
             _ => {}
         }
     }
-    Ok(Governance {
-        pending,
-        autonomy,
-        granted,
-        halted,
-    })
 }
 
 /// The value of a halt record's `state` field when the scope is shut.
@@ -1400,16 +1400,49 @@ const HALTED: &str = "halted";
 /// And when it is open again.
 const RELEASED: &str = "released";
 
-pub(crate) fn rebuild_book(ledger_dir: &Path) -> Result<gateway::EndpointBook, AxError> {
-    let mut book = gateway::EndpointBook::new();
-    if !ledger_dir.exists() {
-        return Ok(book);
+/// Everything a worker inherits from a history it did not write.
+pub(crate) struct Standing {
+    pub(crate) book: gateway::EndpointBook,
+    governance: Governance,
+    collaboration: Collaboration,
+}
+
+impl Standing {
+    /// One verified pass, three folds.
+    ///
+    /// Until this existed the three were three functions, and opening a
+    /// worker read, parsed and chain-verified the same bytes three times
+    /// over to answer three questions about them. The answers never
+    /// disagreed, which `what_a_worker_holds_is_what_a_restart_rebuilds`
+    /// is what now holds, so the two extra passes bought nothing but the
+    /// time and the memory of reading a whole history twice more.
+    ///
+    /// A line is parsed once here and shown to each fold. Verification
+    /// stays where it was: a history that does not verify is not one any
+    /// of these three views may be built from.
+    ///
+    /// # Errors
+    /// Propagates chain verification and whatever a fold says about a
+    /// payload it cannot read.
+    pub(crate) fn fold(ledger_dir: &Path) -> Result<Standing, AxError> {
+        let mut book = gateway::EndpointBook::new();
+        let mut governance = Governance::empty();
+        let mut collaboration = CollaborationFold::default();
+        if ledger_dir.exists() {
+            let verified = runtime::replay::verify_ledger_dir(ledger_dir)?;
+            for line in verified.raw_lines() {
+                let record = EventRecord::parse_line(line)?;
+                book.apply(&record)?;
+                governance.absorb(&record);
+                collaboration.absorb(&record)?;
+            }
+        }
+        Ok(Standing {
+            book,
+            governance,
+            collaboration: collaboration.settle()?,
+        })
     }
-    let verified = runtime::replay::verify_ledger_dir(ledger_dir)?;
-    for line in verified.raw_lines() {
-        book.apply(&EventRecord::parse_line(line)?)?;
-    }
-    Ok(book)
 }
 
 /// Rebuilds the views from the ledger on disk. This is the disposability
@@ -1562,9 +1595,11 @@ impl RunWorker {
     ) -> Result<Self, AxError> {
         let now = now_ms()?;
         let dir = ledger_dir(city_root);
-        let book = rebuild_book(&dir)?;
-        let governance = rebuild_governance(&dir)?;
-        let collaboration = rebuild_collaboration(&dir)?;
+        let Standing {
+            book,
+            governance,
+            collaboration,
+        } = Standing::fold(&dir)?;
         let (ledger, _report) =
             JsonlLedger::open(&dir, now).map_err(memory::MemoryError::into_ax)?;
         let cas = Cas::open(&city_root.join(".sprawling").join("cas"))
@@ -5229,7 +5264,7 @@ mod tests {
         // The book is a projection: throwing it away and rebuilding from
         // the ledger has to produce the same answer, or what the city
         // can call depends on a process that has already exited.
-        let rebuilt = rebuild_book(&ledger_dir(dir.path())).unwrap();
+        let rebuilt = Standing::fold(&ledger_dir(dir.path())).unwrap().book;
         let live = worker
             .book
             .select(kernel::ModelTag::Main, &kernel::BuildingPolicy::default())
@@ -6848,6 +6883,81 @@ mod tests {
                     .unwrap_or(false)
             })
             .count()
+    }
+
+    /// What a working worker holds and what a restarted one rebuilds are
+    /// one thing folded by one rule, or they are two things that happen
+    /// to agree. This asks which.
+    #[test]
+    fn what_a_worker_holds_is_what_a_restart_rebuilds() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        std::fs::create_dir_all(dir.path().join("market").join("ito")).unwrap();
+        std::fs::create_dir_all(dir.path().join("market").join("hana")).unwrap();
+        lay_rules(
+            dir.path(),
+            "market",
+            "# BUILDING.md\n\n`confidential: false`\n",
+        );
+
+        let (base_url, _provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion(
+                    "asking hana",
+                    "tu_1",
+                    "signal",
+                    serde_json::json!({
+                        "action": "send",
+                        "to": "market/hana",
+                        "text": "what is your rate?",
+                    }),
+                ),
+                completion("asked", None),
+                completion("nothing to add", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("market/ito").unwrap(),
+                task: "ask hana what she charges".to_owned(),
+                goal: "a price".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+
+        let rebuilt = Standing::fold(&report.ledger_dir).unwrap().collaboration;
+        let live_queues: std::collections::BTreeMap<String, u32> = worker
+            .inboxes
+            .iter()
+            .filter(|(_, queue)| queue.pending() > 0)
+            .map(|(room, queue)| (room.as_str().to_owned(), queue.pending()))
+            .collect();
+        let rebuilt_queues: std::collections::BTreeMap<String, u32> = rebuilt
+            .inboxes
+            .iter()
+            .filter(|(_, queue)| queue.pending() > 0)
+            .map(|(room, queue)| (room.as_str().to_owned(), queue.pending()))
+            .collect();
+        assert_eq!(
+            live_queues, rebuilt_queues,
+            "a queue the working city holds is a queue a restart finds"
+        );
+        assert_eq!(
+            worker.goals.len(),
+            rebuilt.goals.len(),
+            "the ground claimed is folded from one rule"
+        );
+        assert_eq!(
+            worker.requests.len(),
+            rebuilt.requests.len(),
+            "the register of open requests is folded from one rule"
+        );
     }
 
     /// A plan nobody could read and a plan somebody else changed are two
@@ -8491,7 +8601,7 @@ addr = \"gone/room1\"
 
         // The posture is history, not a field: a second worker over the
         // same ledger knows the building is open again.
-        let restarted = rebuild_governance(&ledger_dir(dir.path())).unwrap();
+        let restarted = Standing::fold(&ledger_dir(dir.path())).unwrap().governance;
         assert!(restarted.halted.is_empty());
     }
 
