@@ -566,6 +566,24 @@ pub fn key_for(bind: SocketAddr, configured: Option<String>) -> Result<Keyed, Ax
 
 **红（三条，每条咬住一段）**：`Keying::decide` 对四格（回环／暴露 × 配置过／没有）给出的枚举——本卡之前 `keying` 不存在，是编译红；`token_in` 对 `?token=abc`、`?a=1&token=abc`、`?token=`、空串的四个答案；以及 `web::socket` 那条握手测试，断言 `Link::new(token_in(...))` 发出的 `Hello.token` 非空——本卡之前 `Link::new(None)` 使它恒 `None`。端到端那一段（真浏览器对真暴露端口）落在 V9，是人跑的命令而非门禁，如 ARCHITECTURE.md §11 所记。
 
+## 8-23 委派下去的活带着派它的那份预算（整修卡 R2.09）
+
+**病灶**：`knock` 携父 run 的 `budget`，其注释明写「Carried rather than defaulted: an answer belongs to the same piece of work as the question, and a run with no ceiling is the one failure with no floor under it」；而同一个文件里 `dispatch_in` 的**委派**分支写 `kernel::BudgetCap::default()`。委派比敲门更是同一件活——一个 delegate 就是替父 run 做事的——却是唯一被清零的那条路。
+
+**它今天可达，不是潜在的**。`channels::WireCommand::Dispatch` 带 `budget` 字段，`sprawling call` 与 `protocol::acp` 都能填。人在页面上填不了（ARCHITECTURE.md §5 步 1：「The frame carries no budget」），但**页面不是唯一的客户端**，而 wire 就是全部 API。
+
+**危害的形状是「对模型说假话」，不是超支**。`BudgetCap` 今天没有执行者：`kernel::budget` 的 ladder 与 `SpendVerdict` 只有 `kernel::gate` 自己的测试在走，它在本 crate 里唯一的消费者是 `StatusTool`。所以一个 delegate 向模型报告自己预算为零，而它的父 run 报告的是真数。这与 §8-12 记下的那一类同族：「City.md 让模型调 `status` 问这些，而一个照做的模型拿到一排零，于是学会不再问」。修它不是为了今天省钱，是为了那一行不再是假的。
+
+**修**：`dispatch_in` 的委派把 `budget` 传下去，与 `knock` 同形。`BudgetCap` 是 `Copy`，所以是一个词。
+
+**红**：以 `BudgetCap { usd: 250_000, tokens: 4_000 }` 派一次会委派的活，父子两个 run 各调一次 `status`，按**状态块里的 `addr:`** 分辨谁读的哪一行。父为对照组（两边都绿），子为受试组（本卡之前是 `0 usd_micros, 0 tokens`）。
+
+——**数个请求体里包含那串字」不能作判据**：对话携带自己的历史，同一个 run 的 status 答案会出现在它之后每一次请求里，数体等于把父数了两遍。我的首版测试就是这么写的，**未改代码即绿**，记在这里以免重踩。
+
+**本卡另查出一处更深的，归入待办**：`fn dispatch(addr, task, goal)`（审批应答后续活的那条路）同样写死 `BudgetCap::default()`，而它**无法只靠改一个词修好**：`BlockedJob { addr, task, goal }` 没有装天花板的字段，而 `blocked_job` 是从 `run_started` 的账本记录重建它的——那条记录里没有预算。于是一个带天花板派出、因委派而停下来等人批的 run，被批准后续上的那一跑天花板归零。
+
+**它与交接件上的第 4 项（`blocked_job` 不再扫全史）是同一个改动**：甲案（`Governance` 加 `origins: BTreeMap<RunId, BlockedJob>`）一并解开两者——内存里的 `BlockedJob` 想带几个字段就带几个，不动账本 payload，也不需核黄金账本；乙案（改 `approval_requested` payload）则要把预算一并写进去。**未定事项**：甲案是进程内存，而重启后的 worker 从账本重建；若 origins 不重建，重启前提出、重启后才被批的项就接不上活。这一点在选定甲案前必须先用测试回答（现行全史扫描没有这个问题，这是它唯一的优点）。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。

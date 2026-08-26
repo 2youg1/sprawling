@@ -4335,14 +4335,13 @@ impl RunWorker {
                 "collab::delegate",
                 &format!("{} handed work to {}", addr.as_str(), work.room.as_str()),
             );
-            let child = self.dispatch_in(
-                work.room,
-                work.task,
-                work.goal,
-                mode,
-                kernel::BudgetCap::default(),
-                Some(run_id),
-            )?;
+            // Carried rather than defaulted, for the reason `knock`
+            // states next to its own `budget`: work handed down is the
+            // same piece of work, so it is done under the same ceiling.
+            // Defaulting here told a delegate its budget was zero while
+            // its parent had been told the truth.
+            let child =
+                self.dispatch_in(work.room, work.task, work.goal, mode, budget, Some(run_id))?;
             self.deliver_handback(&addr, &child)?;
         }
         Ok(Dispatched {
@@ -8164,6 +8163,145 @@ addr = \"gone/room1\"
             })
             .unwrap();
         item.cluster_key
+    }
+
+    /// Work handed down is the same work, so it is done under the same
+    /// ceiling.
+    ///
+    /// `knock` already carries the speaker's `BudgetCap` and says why in
+    /// its own comment; delegation is the stronger case of the same
+    /// thing and was the one path that zeroed it. What that costs today
+    /// is not overspending - nothing enforces a cap yet, and `StatusTool`
+    /// is its only reader - but a delegate telling a model its budget is
+    /// zero while its parent was told the truth. That is the defect
+    /// section 8-12 already named: a model that calls `status` and gets a
+    /// row of noughts learns not to ask again.
+    ///
+    /// Both halves are asserted, so the test cannot pass by carrying
+    /// nothing anywhere.
+    #[test]
+    fn work_handed_down_is_done_under_the_ceiling_that_sent_it() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let hand_down = |id: &str| {
+            completion_with(
+                "handing it down",
+                "delegate",
+                id,
+                serde_json::json!({
+                    "room": "lab/helper",
+                    "task": "measure the thing",
+                    "goal": "a number, then stop",
+                }),
+            )
+        };
+        let read_situation =
+            |id: &str| completion_with("what am I under", "status", id, serde_json::json!({}));
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                // First dispatch, on the default ceiling. Its only job is
+                // to get the person's answer on record, which settles the
+                // Policy that lets the second dispatch delegate without
+                // stopping - so the run under test never goes near the
+                // approval resumption path.
+                hand_down("tu_1"),
+                completion("waiting on a person", None),
+                hand_down("tu_2"),
+                completion("parent done", None),
+                completion("child done", None),
+                // Second dispatch, carrying a real ceiling. The parent
+                // reads its situation first - that reading is the control
+                // arm, green before this card and after it - then hands
+                // the work down.
+                read_situation("tu_3"),
+                hand_down("tu_4"),
+                completion("parent done", None),
+                // The child reads its own. This is the arm the card is
+                // about, and it said zero.
+                read_situation("tu_5"),
+                completion("child done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        worker
+            .handle(channels::Command::CreateBuilding {
+                addr: Address::parse("lab").unwrap(),
+                template: channels::TemplateName::parse("minimal").unwrap(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"create"),
+            })
+            .unwrap();
+        let ceiling = kernel::BudgetCap {
+            usd: kernel::UsdMicros::new(250_000),
+            tokens: kernel::Tokens::new(4_000),
+        };
+        fn send(worker: &mut RunWorker, budget: kernel::BudgetCap, tag: &[u8]) {
+            worker
+                .handle(channels::Command::Dispatch {
+                    addr: Address::parse("lab/room1").unwrap(),
+                    task: "get it measured".to_owned(),
+                    goal: "the number is written down, then stop".to_owned(),
+                    mode: channels::ModeTag::parse("plan").unwrap(),
+                    budget,
+                    idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, tag),
+                    session: None,
+                    effort: None,
+                })
+                .unwrap();
+        }
+        send(
+            &mut worker,
+            kernel::BudgetCap::default(),
+            b"settle-the-policy",
+        );
+        allow_the_one_pending_item(&mut worker);
+        send(&mut worker, ceiling, b"under-a-real-ceiling");
+
+        // Whose reading is whose. A conversation carries its earlier
+        // turns, so one run's status answer appears in every later
+        // request of that same run - counting bodies would have counted
+        // the parent twice and passed without the fix. What tells the two
+        // apart is the address inside the status block itself.
+        fn ceiling_read_by(bodies: &[String], room: &str) -> Vec<String> {
+            let mut readings = Vec::new();
+            for body in bodies {
+                // The status text is a JSON string inside a JSON string,
+                // so one newline arrives as two backslashes and an `n`.
+                for (at, _) in body.match_indices(&format!("addr: {room}\\\\n")) {
+                    let window = body
+                        .get(at..body.len().min(at.saturating_add(240)))
+                        .unwrap_or_default();
+                    let Some(from) = window.find("budget: ") else {
+                        continue;
+                    };
+                    let tail = window.get(from..).unwrap_or_default();
+                    let line = tail.split("\\\\n").next().unwrap_or_default();
+                    readings.push(line.to_owned());
+                }
+            }
+            readings.sort_unstable();
+            readings.dedup();
+            readings
+        }
+
+        let stated = "budget: 250000 usd_micros, 4000 tokens".to_owned();
+        let asked = provider.bodies();
+
+        // The control arm: the run the person dispatched was already told
+        // the truth, so this stays green on both sides of the fix and a
+        // regression here means the test stopped reaching the code.
+        assert_eq!(
+            ceiling_read_by(&asked, "lab/room1"),
+            vec![stated.clone()],
+            "the dispatched run reads the ceiling it was sent with"
+        );
+        // The arm this card is about. Before the fix it read
+        // "budget: 0 usd_micros, 0 tokens".
+        assert_eq!(
+            ceiling_read_by(&asked, "lab/helper"),
+            vec![stated],
+            "work handed down is done under the ceiling that sent it"
+        );
     }
 
     /// A run that hands work down starts a real second run, and that
