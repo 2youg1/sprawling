@@ -773,6 +773,31 @@ planned.apply()?;                           // 才是变化
 
 **影面**：`memory` 公开面去 `Worktrees::merge`、增 `plan_merge` 与 `PlannedMerge`（基线与 memory-SPEC 同提交）；四个读写方全部迁完后旧入口删除，不留适配。`sprawling` 公开面不变。
 
+## 8-31 dispatch_in 向 ARCH §5 的十二步靠拢（整修卡 R2.19，逐刀）
+
+**目标不是「把某一段搬走」，是「让 `dispatch_in` 成为 ARCHITECTURE.md §5 已经写好的那个序列」**。两者的区别是形状问题的生死：按行号切出来的一块叫不出 §9 的名字，而一个相位叫得出来——§5 已经给了它名字。
+
+**第一刀：驱动（§5 步 7–11）。**
+
+```rust
+struct Driven {
+    outcome: Result<runtime::Run<runtime::run::Frozen>, AxError>,   // 仍是 Result：跑败也要结桌子
+    fenced: Vec<String>, ran: (u32, u32), raised: Vec<ApprovalItem>,
+}
+impl RunWorker {
+    fn drive_dispatch(&mut self, plan, handoff, adapter, bench, signals,
+                      write_root, fence_scope, who, run_id) -> Result<Driven, AxError>;
+}
+```
+
+三个钩子住在一起，理由不是它们相邻，而是**它们是唯一在驱动器持有账本期间碰账本的代码**（`invoke` 里那句自述：「the ledger is the driver's for the length of the run」）。它们收集的三样东西也只在那段时间里可写，所以一并作为 `Driven` 返回，而不是留四个 `Rc<RefCell<…>>` 让调用方自己保持同步——四个单元格是四个可以忘记读的东西，一个值不是。
+
+`outcome` 刻意仍是 `Result` 而不在方法里 `?`：一跑失败了它的桌子照样要结，而结桌子正是把它最后几行放上历史的动作。把它提到方法边界上会静静跳过它们。
+
+**尺寸**：`dispatch_in` 975 → **833**；`drive_dispatch` 171。尺寸不是本刀的理由（照 §8-27 的写法），但它是 R2.20 尺寸门的前提，而那道门的门限是量出来的 200。
+
+**它以什么收口**：纯结构，无可咬的红——行为逐字不变（钩子体原样搬迁，`fence_scope` 由计算改为传入）。143 条 `sprawling` 测试全绿，其中包括直接盯驱动行为的 §8-24／§8-29／§8-30 三条。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。
