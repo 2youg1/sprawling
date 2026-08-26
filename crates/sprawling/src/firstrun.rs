@@ -29,7 +29,7 @@ const PROBE_INTERVAL: Duration = Duration::from_millis(200);
 ///
 /// A city is created only through `Start`, so the genesis write - the one
 /// irreversible act in this system - always has somebody behind it.
-pub(crate) enum FirstScreen {
+pub enum FirstScreen {
     Start(PathBuf),
     /// A folder the person already works in. The city forms around it
     /// and every folder inside becomes a building; nothing already there
@@ -49,7 +49,8 @@ pub(crate) enum FirstScreen {
 /// With no home to fall back to, this still answers beside the binary:
 /// the screen shows that path and starting there fails with the reason,
 /// which beats inventing a location nobody asked for.
-pub(crate) fn default_city(exe_dir: &Path, home: Option<&Path>, exe_dir_writable: bool) -> PathBuf {
+#[must_use]
+pub fn default_city(exe_dir: &Path, home: Option<&Path>, exe_dir_writable: bool) -> PathBuf {
     if exe_dir_writable {
         return exe_dir.join("city");
     }
@@ -62,7 +63,8 @@ pub(crate) fn default_city(exe_dir: &Path, home: Option<&Path>, exe_dir_writable
 /// Whether a directory accepts a file today. Probes rather than reads
 /// permissions: a read-only mount, an ACL and a full disk all end the
 /// same way, and only writing finds out.
-pub(crate) fn is_writable(dir: &Path) -> bool {
+#[must_use]
+pub fn is_writable(dir: &Path) -> bool {
     let probe = dir.join(".sprawling-write-probe");
     match std::fs::write(&probe, b"") {
         Ok(()) => {
@@ -82,7 +84,10 @@ pub(crate) fn is_writable(dir: &Path) -> bool {
 ///
 /// # Errors
 /// Propagates the failure of writing the screen or reading the answer.
-pub(crate) fn ask<R: BufRead, W: Write>(
+/// # Errors
+/// Propagates what the terminal reports: a screen nobody can be shown,
+/// or an answer that cannot be read, is not an answer to guess at.
+pub fn ask<R: BufRead, W: Write>(
     city: &Path,
     input: &mut R,
     out: &mut W,
@@ -146,7 +151,8 @@ fn strip_quotes(answer: &str) -> &str {
 /// A city bound to every interface still has to be reachable from the
 /// browser in front of it, and `http://0.0.0.0:8787` is not an address a
 /// browser can use.
-pub(crate) fn local_url(bind: SocketAddr) -> String {
+#[must_use]
+pub fn local_url(bind: SocketAddr) -> String {
     let addr = reachable(bind);
     let port = addr.port();
     match addr.ip() {
@@ -172,7 +178,7 @@ fn reachable(bind: SocketAddr) -> SocketAddr {
 /// Waits for the port to accept rather than guessing when the bind will
 /// happen, and gives up in silence when it never does - the URL was
 /// printed before this started, so nothing is lost but the convenience.
-pub(crate) fn open_when_ready(bind: SocketAddr, url: String) {
+pub fn open_when_ready(bind: SocketAddr, url: String) {
     let addr = reachable(bind);
     std::thread::spawn(move || {
         for _ in 0..PROBE_ATTEMPTS {

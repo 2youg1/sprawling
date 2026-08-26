@@ -23,9 +23,9 @@ use std::sync::Arc;
 /// The pairing token arrives as a copy of the one `serve` already read,
 /// so `/web` can carry it and nobody has to transcribe a secret. It is
 /// not re-read from the environment here: one read, one authority.
-pub(crate) struct Terminal {
-    pub(crate) url: String,
-    pub(crate) token: Option<String>,
+pub struct Terminal {
+    pub url: String,
+    pub token: Option<String>,
 }
 
 /// The console's own verbs, which are not on the wire.

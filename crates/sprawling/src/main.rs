@@ -7,13 +7,14 @@
 //! pretends (sprawling-SPEC.md). Live now: status, replay, init, serve,
 //! export, restore, resume, fork.
 
-mod assembly;
-mod console;
-mod firstrun;
+// The city harness is the library half of this package (`src/lib.rs`);
+// these two are the binary's own. `install` puts this executable where a
+// shell will find it, and `wire_client` talks to a served city from a
+// terminal - both are about the command line rather than about a city.
 mod install;
-mod mcp_http;
-mod mcp_stdio;
 mod wire_client;
+
+use sprawling::{assembly, console, firstrun};
 
 use std::process::ExitCode;
 

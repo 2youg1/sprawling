@@ -343,6 +343,59 @@ impl RunWorker {
 
 现形：`(run_id, 本跑内的调用序号, 工具名＋参数 JSON)`。序号由闭包自己的计数器给，重放同一段历史得同一串键。两次不同的调用是两个键，都跑；同一个位置被重放是同一个键，去重正是为此而存在。
 
+## 8-15 装配层长出一扇门（整修卡 R2.01）
+
+```rust
+// crates/sprawling/src/lib.rs —— 索引文件，只准声明（modmap 已看守）
+pub mod assembly;
+pub mod console;
+pub mod firstrun;
+mod mcp_http;      // 只经 assembly 到达
+mod mcp_stdio;     // 同上
+
+// assembly：跨出 crate 的项，逐个放行
+pub struct InitReport { pub ledger_dir, pub genesis, pub standing, pub adopted }
+pub enum Adopt { Nothing, EveryFolder }
+pub fn has_history(&Path) -> bool;
+pub fn init_city(&Path) -> Result<InitReport, AxError>;
+pub fn form_city(&Path, Adopt) -> Result<InitReport, AxError>;
+pub fn open_vault() -> (gateway::Custodian, Option<Payload>);
+pub struct Serving { /* 八个字段全 pub：调用方构造它 */ }
+pub async fn serve(Serving) -> Result<(), AxError>;
+pub struct ScanReport { pub waiting_approvals: usize /* lines、closed_calls 不跨出 */ }
+impl ScanReport { pub fn summary(&self) -> String; }
+pub struct RunWorker;
+impl RunWorker {
+    pub fn new(&Path, gateway::Custodian, Diagnostics) -> Result<Self, AxError>;
+    pub fn handle(&mut self, channels::Command) -> Result<(), AxError>;
+    pub fn startup_scan(&mut self) -> Result<ScanReport, AxError>;
+    pub fn fork(&mut self, RunId, Seq, Option<Address>) -> Result<RunId, AxError>;
+    pub fn adopt_building(&mut self, Address) -> Result<(), AxError>;
+}
+
+// console
+pub struct Terminal { pub url: String, pub token: Option<String> }
+
+// firstrun
+pub enum FirstScreen { Start(PathBuf), Use(PathBuf), Quit }
+pub fn ask<R: BufRead, W: Write>(&Path, &mut R, &mut W) -> std::io::Result<FirstScreen>;
+pub fn default_city(&Path, Option<&Path>, bool) -> PathBuf;
+pub fn is_writable(&Path) -> bool;
+pub fn local_url(SocketAddr) -> String;
+pub fn open_when_ready(SocketAddr, String);
+```
+
+- **这张卡为什么存在**：`crates/sprawling` 至今只有 `src/main.rs`，`mod assembly` 是私有模块，于是工作区里**没有任何东西能依赖它**——4377 行生产代码（含 1058 行的 `dispatch_in`）只由同文件内的 66 个测试看守，citysim 与任何 `tests/` 都够不到。同一个事实还有第二个后果：它是唯一带 SPEC 却逃过 `apisync` 的 crate，因为 `spec_crates` 以 `src/lib.rs` 是否存在为判据。加一个 lib target 一并了结两件。
+- **`pub mod` 而非扁平 facade**：§12 模块表以 `bin::assembly`／`bin::console`／`bin::firstrun` 命名模块，模块名本身是已记录的架构事实；折成 `sprawling::init_city` 会抹掉这层限定，而本 crate `publish = false`，C-REEXPORT 要替第三方省的那段路径没有受益人。**取窄的地方在项，不在模块**：只有跨出 crate 的项改 `pub`，其余留 `pub(crate)`——公开面因此是逐项决定的，不是逐模块授予的。
+- **`mcp_http` 与 `mcp_stdio` 保持私有**：只经 `assembly` 到达（`assembly.rs` 的 `McpLink`），没有第二个调用方。
+- **`install` 与 `wire_client` 留在 bin**：前者把二进制放上 PATH，后者从终端连一座已服务的城并从 stdin 读 enrolment——两者都是关于命令行的，不是关于城的，且除 `main` 外零引用。留在 bin 让公开面少六项。
+- **`handle` 进公开面不是为测试拓宽**：AGENTS.md 写着「Tests use the same doors as production code」。`handle` 正是服务中的 worker 循环走的那扇门，把它命名出来是承认已有的门。反过来，那 66 个内部测试**不搬去 `tests/`**：它们触及 `rebuild_views`／`read_building`／`run_id_for` 这类内部项，搬迁会为测试拓宽公开面，正是同一条规矩禁止的事。本 crate 的文件长度因此在本卡内不变——它变短要等拆 `dispatch_in` 那张卡把生产代码连同其测试一起搬走。
+- **`ScanReport` 只放行一个字段**：`main` 读 `waiting_approvals` 决定是否多印一行，`lines` 与 `closed_calls` 只进 `summary()`。按需放行而非按结构对齐——`InitReport` 四个字段全跨出，是因为 `report_standing` 四个全读。
+- **零行为变更**：`main.rs` 只改开头的声明块（七行 `mod` → 两行 `mod` ＋ 一行 `use sprawling::{assembly, console, firstrun}`），其余调用点逐字节不变。`Cargo.toml` 不改：Cargo 对同一 package 自动发现 `src/lib.rs` 与 `src/main.rs` 两个 target，OUT_DIR 对两者相同，`include!(client_embed.rs)` 与 `DEPENDENCIES` 因此留在 `main.rs` 原地。
+- **红**：`crates/sprawling/tests/assembly_door.rs` 走 `init_city → RunWorker::new → handle(Command::CreateBuilding) → 读 InitReport.ledger_dir 下的账本`，断言 `building_created` 落账。本卡之前它连编译都过不去（`sprawling` 这个 crate 名不存在），这就是「这条测试咬得动」的证据。
+- **门禁连带**：`apisync` 自本卡起把 `sprawling` 纳入契约，`xtask/api-baselines/sprawling.txt` 随本卡生成（`guard` 的 `PRODUCED_PREFIXES` 已豁免该目录，不需 `Verdict:`）；`header` 要求 `lib.rs` 与新测试文件各带三行 MPL 通告；`modmap` 对 `*/lib.rs` 自动按索引文件判定，只准 `mod`／`use`／`pub use`／注释／属性——facade 因此只能是声明，正是要的形状。
+- **一处文档更正**：ARCHITECTURE.md §3 写着「citysim is a second assembly layer: the same code with simulated adapters」。此句与现实不符——`citysim/Cargo.toml` 依赖 kernel／memory／runtime／gateway／eval，其中没有 sprawling；`run_scenario` 手工构造 `RunPlan`，够到的最高层是 `runtime::run::drive`。本卡使 assembly **可被依赖**，但没有让 citysim 依赖它：模型适配器仍由 `adapter_for` 从 `EndpointBook` 内部构造，那条缝要不要倒置是另一个决定。按 AGENTS.md「reality wins and the document is corrected first, with its reason」，本卡先把这句改成现实。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。

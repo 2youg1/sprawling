@@ -58,17 +58,17 @@ fn ledger_dir(city_root: &Path) -> PathBuf {
 }
 
 #[derive(Debug)]
-pub(crate) struct InitReport {
-    pub(crate) ledger_dir: PathBuf,
-    pub(crate) genesis: EventRef,
+pub struct InitReport {
+    pub ledger_dir: PathBuf,
+    pub genesis: EventRef,
     /// What was already in the directory when the city formed, so the
     /// person who pointed at a year of their own work is told what was
     /// laid down beside it and what was left alone.
-    pub(crate) standing: city::Standing,
+    pub standing: city::Standing,
     /// The folders that became buildings. Empty unless the caller asked
     /// for it: what is already on disk becomes governed only because
     /// somebody said so.
-    pub(crate) adopted: Vec<Address>,
+    pub adopted: Vec<Address>,
 }
 
 /// Whether the folders already in a directory become buildings.
@@ -78,7 +78,7 @@ pub(crate) struct InitReport {
 /// puts that work under rules. A boolean would make them look like one
 /// act with a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Adopt {
+pub enum Adopt {
     Nothing,
     EveryFolder,
 }
@@ -100,20 +100,26 @@ fn standing_of(city_root: &Path) -> city::Standing {
     city::survey(&entries, has_history(city_root))
 }
 
-/// `sprawling init <dir>`: the genesis write. The city is born when
-/// `city_initialized` becomes line zero; a second init refuses — history
-/// starts once.
 /// Whether this directory already carries a city's history.
 ///
 /// The one fact `init` refuses on and `up` branches on, read from one
 /// place so the two can never disagree about what counts as a city.
-pub(crate) fn has_history(city_root: &Path) -> bool {
+pub fn has_history(city_root: &Path) -> bool {
     std::fs::read_dir(ledger_dir(city_root))
         .map(|mut entries| entries.next().is_some())
         .unwrap_or(false)
 }
 
-pub(crate) fn init_city(city_root: &Path) -> Result<InitReport, AxError> {
+/// `sprawling init <dir>`: the genesis write. The city is born when
+/// `city_initialized` becomes line zero; a second init refuses — history
+/// starts once.
+///
+/// Adopts nothing: what is already in the directory is left alone, and
+/// `form_city` is the entry that puts it under rules.
+///
+/// # Errors
+/// Whatever `form_city` reports, the refusal above included.
+pub fn init_city(city_root: &Path) -> Result<InitReport, AxError> {
     form_city(city_root, Adopt::Nothing)
 }
 
@@ -127,7 +133,7 @@ pub(crate) fn init_city(city_root: &Path) -> Result<InitReport, AxError> {
 /// # Errors
 /// Refuses a directory that already has history, and propagates whatever
 /// the ledger, the store or the filesystem says.
-pub(crate) fn form_city(city_root: &Path, adopt: Adopt) -> Result<InitReport, AxError> {
+pub fn form_city(city_root: &Path, adopt: Adopt) -> Result<InitReport, AxError> {
     let standing = standing_of(city_root);
     let dir = ledger_dir(city_root);
     if has_history(city_root) {
@@ -1431,14 +1437,20 @@ pub(crate) fn rebuild_views(ledger_dir: &Path) -> Result<Views, AxError> {
 /// one writer; commands reach it through a channel, and the socket task
 /// that accepted them is free again immediately.
 /// What the startup scan found and repaired.
-pub(crate) struct ScanReport {
+pub struct ScanReport {
     pub(crate) lines: usize,
     pub(crate) closed_calls: usize,
-    pub(crate) waiting_approvals: usize,
+    /// The one count a caller branches on rather than prints: `resume`
+    /// adds a line telling the person where to answer. `lines` and
+    /// `closed_calls` reach nobody outside `summary`, so they stay in.
+    pub waiting_approvals: usize,
 }
 
 impl ScanReport {
-    pub(crate) fn summary(&self) -> String {
+    /// One line a person reads: what was verified, what was closed, and
+    /// what is still owed an answer.
+    #[must_use]
+    pub fn summary(&self) -> String {
         format!(
             "{} line(s) verified; {} unknown-outcome call(s) closed; {} approval(s) waiting",
             self.lines, self.closed_calls, self.waiting_approvals
@@ -1446,7 +1458,7 @@ impl ScanReport {
     }
 }
 
-pub(crate) struct RunWorker {
+pub struct RunWorker {
     city_root: PathBuf,
     ledger: JsonlLedger,
     cas: Cas,
@@ -1543,7 +1555,7 @@ impl RunWorker {
     /// Propagates whatever opening the ledger or the store reports, and
     /// whatever the ledger says about its own chain: a worker that
     /// cannot read the city's history cannot know what is attached.
-    pub(crate) fn new(
+    pub fn new(
         city_root: &Path,
         vault: gateway::Custodian,
         log: runtime::diagnostics::Diagnostics,
@@ -2355,7 +2367,7 @@ impl RunWorker {
 
     /// # Errors
     /// Refuses a command this stage does not run yet, naming what does.
-    pub(crate) fn handle(&mut self, command: channels::Command) -> Result<(), AxError> {
+    pub fn handle(&mut self, command: channels::Command) -> Result<(), AxError> {
         let name = command.name();
         let outcome = self.run_command(command);
         if let Err(err) = &outcome {
@@ -2585,7 +2597,11 @@ impl RunWorker {
     /// reports what is still waiting on a person. Read-only apart from
     /// the closing `tool_result` drafts, which state E_TOOL_OUTCOME_UNKNOWN
     /// rather than guessing an outcome.
-    pub(crate) fn startup_scan(&mut self) -> Result<ScanReport, AxError> {
+    ///
+    /// # Errors
+    /// Propagates whatever the chain says about itself: a history that
+    /// does not verify is not a history to append closing drafts to.
+    pub fn startup_scan(&mut self) -> Result<ScanReport, AxError> {
         let verified = runtime::replay::verify_ledger_dir(&ledger_dir(&self.city_root))?;
         let dangling = runtime::replay::dangling_tool_calls(&verified);
         let mut closed = 0usize;
@@ -2615,7 +2631,11 @@ impl RunWorker {
     /// run is a Dispatch the person (or the interface) sends when ready.
     /// Prefix semantics are the replay layer's (`runtime::fork::prefix`);
     /// this method refuses a node the mother does not own.
-    pub(crate) fn fork(
+    ///
+    /// # Errors
+    /// Refuses a node `from` does not own, and propagates whatever chain
+    /// verification or the prefix bound reports.
+    pub fn fork(
         &mut self,
         from: RunId,
         at_seq: kernel::Seq,
@@ -2952,7 +2972,12 @@ impl RunWorker {
 
     /// Adopts a directory that already sits under the city as a
     /// building; the record says it was found, not built.
-    pub(crate) fn adopt_building(&mut self, addr: Address) -> Result<(), AxError> {
+    ///
+    /// # Errors
+    /// Propagates what `city::adopt_building` reports — a path that is
+    /// not a directory under this city among them — and whatever the
+    /// ledger says about the record.
+    pub fn adopt_building(&mut self, addr: Address) -> Result<(), AxError> {
         let building = city::adopt_building(&self.city_root, &addr)?;
         self.note(
             runtime::diagnostics::Level::Effect,
@@ -4251,7 +4276,8 @@ const CITY_VERIFIER: &str = "city";
 /// that goes in the ledger. A vault that silently forgets across a
 /// restart would turn one configuration act into a later egress failure,
 /// far from its cause.
-pub(crate) fn open_vault() -> (gateway::Custodian, Option<Payload>) {
+#[must_use]
+pub fn open_vault() -> (gateway::Custodian, Option<Payload>) {
     gateway::Custodian::probe()
 }
 
@@ -4522,18 +4548,18 @@ fn run_id_for(job: &Locator, addr: &Address, now: TimeMs) -> RunId {
 /// memory, and two `Option`s of the same shape passed the wrong way
 /// round is a mistake the compiler cannot see. Named fields make the
 /// call site say which is which.
-pub(crate) struct Serving {
-    pub(crate) city_root: std::path::PathBuf,
-    pub(crate) addr: SocketAddr,
+pub struct Serving {
+    pub city_root: std::path::PathBuf,
+    pub addr: SocketAddr,
     /// The pairing token in plaintext, read once by the caller. It gets
     /// no further than the digest this takes from it, except into the
     /// console's `/web`, which is the one place it has to travel.
-    pub(crate) token: Option<String>,
-    pub(crate) client: channels::ClientAssets,
-    pub(crate) vault: gateway::Custodian,
-    pub(crate) vault_notice: Option<Payload>,
-    pub(crate) log: runtime::diagnostics::Diagnostics,
-    pub(crate) console: Option<crate::console::Terminal>,
+    pub token: Option<String>,
+    pub client: channels::ClientAssets,
+    pub vault: gateway::Custodian,
+    pub vault_notice: Option<Payload>,
+    pub log: runtime::diagnostics::Diagnostics,
+    pub console: Option<crate::console::Terminal>,
 }
 
 /// Waits for the person to stop the city from the keyboard.
@@ -4556,7 +4582,18 @@ async fn closed_by_hand() -> std::io::Result<()> {
     tokio::signal::ctrl_c().await
 }
 
-pub(crate) async fn serve(serving: Serving) -> Result<(), AxError> {
+/// Serves one city until the person stops it, and returns when the last
+/// worker has finished what it was doing.
+///
+/// The worker runs on its own thread and the socket never touches the
+/// Ledger: a refreshed page cannot kill work, and a command is accepted
+/// in one place and executed in another.
+///
+/// # Errors
+/// Refuses before serving when the city cannot be opened — an unreadable
+/// chain, a store that will not open — and propagates whatever binding
+/// the address reports.
+pub async fn serve(serving: Serving) -> Result<(), AxError> {
     let Serving {
         city_root,
         addr,

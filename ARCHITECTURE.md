@@ -114,7 +114,7 @@ sprawling: kernel, memory, gateway, runtime, collab, city, eval, browser, protoc
 
 `runtime` has the widest fan-out — three crates at once. It may **use** their interfaces and nothing more; the moment a runtime module starts passing concrete types between `memory` and `gateway`, that edge moves up into the assembly layer.
 
-`xtask` and `citysim` are workspace members outside the product graph. **citysim is a second assembly layer**: the same code with simulated adapters, which is how one seed reproduces a whole city.
+`xtask` and `citysim` are workspace members outside the product graph. **citysim drives the turn loop a second time**: `runtime::run::drive` with simulated adapters — a scripted model, scripted tools, an in-memory Ledger — which is how one seed reproduces a run. It stops below `bin::assembly`, whose `RunWorker` builds its model adapter out of the endpoint book rather than receiving one; the dispatch policy above that line is held by that module's own tests. `sprawling` carries a lib target so the policy is at least *reachable* — an integration test enters by the same door `channels::server` uses — and inverting the model seam is what a seeded scenario would still need.
 
 ## 4 Seams
 
@@ -303,7 +303,7 @@ Ten layers, each catching what the layer above cannot. They deliberately do not 
 | V8 cross-version, cross-OS fixtures | byte drift after an upgrade or a platform change | golden ledgers in `fixtures/` |
 | V9 end to end | the thing a person actually wants to do | the real client in a real browser against a real server, on a developer machine |
 
-**Two gaps, named rather than hidden.** CI has no browser driver, so V9 is a command a developer runs rather than a gate. And the isometric city compares display lists rather than bitmaps: the preconditions for bitmap comparison are paid for — placement is a pure function of the id, painter order is total, projection and its inverse are exact — but there is no rasteriser.
+**Three gaps, named rather than hidden.** CI has no browser driver, so V9 is a command a developer runs rather than a gate. The isometric city compares display lists rather than bitmaps: the preconditions for bitmap comparison are paid for — placement is a pure function of the id, painter order is total, projection and its inverse are exact — but there is no rasteriser. And V6 stops below `bin::assembly` (§3): a seeded scenario reproduces a run, not a dispatch, because `RunWorker` builds its model adapter instead of receiving one. What holds the dispatch policy is that module's own tests, plus the integration tests the lib target makes possible.
 
 ### Four times a gate changed the design
 
