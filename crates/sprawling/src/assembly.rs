@@ -2421,6 +2421,261 @@ impl RunWorker {
         })
     }
 
+    /// Gives the tree back, files what is waiting for a person, and hands
+    /// down the work this run asked for.
+    ///
+    /// Everything here happens whether the run finished or failed, which
+    /// is why the drive's outcome arrives as a `Result` and is unwrapped
+    /// only after the desks are settled: a lease left out and an approval
+    /// nobody filed are both worse than the failure that caused them.
+    ///
+    /// # Errors
+    /// Propagates the drive's own outcome, a tree that will not go back,
+    /// a waiting item that will not serialise, and whatever a run handed
+    /// down reports.
+    #[expect(clippy::too_many_arguments, reason = "the assembly point's own wiring")]
+    fn conclude(
+        &mut self,
+        driven: Result<runtime::Run<runtime::run::Frozen>, AxError>,
+        mut raised: Vec<kernel::ApprovalItem>,
+        lease: Option<memory::WorktreeLease>,
+        delegates: &std::rc::Rc<std::cell::RefCell<collab::DelegateDesk>>,
+        addr: Address,
+        who: String,
+        model: &str,
+        mode: runtime::Mode,
+        budget: kernel::BudgetCap,
+        run_id: RunId,
+    ) -> Result<Dispatched, AxError> {
+        // The tree goes back whether the run finished or failed. What was
+        // committed on its branch survives; what was not, does not.
+        if let Some(held) = lease {
+            memory::Worktrees::open(&self.city_root)
+                .map_err(memory::MemoryError::into_ax)?
+                .release(held)
+                .map_err(memory::MemoryError::into_ax)?;
+        }
+        // An item that is waiting belongs in the inbox, not only in the
+        // refusal the model saw.
+        // Recorded against the run and the address that raised it, not
+        // against the city: answering this item later has to be able to
+        // find the work it was holding up.
+        if self.tainted_arrival {
+            // C15's marker bit, set where the reason for it is known. A
+            // tainted item takes no policy and no delegate, so a run that
+            // began with a stranger's text cannot have its approvals
+            // waived by a rule somebody wrote for ordinary work.
+            for item in raised.iter_mut() {
+                item.tainted = true;
+            }
+        }
+        for item in raised.iter() {
+            let value = serde_json::to_value(item).map_err(|err| {
+                AxError::failure(
+                    AxCode::InvalidArgs,
+                    "record a waiting item",
+                    err.to_string(),
+                )
+            })?;
+            let map = value.as_object().cloned().ok_or_else(|| {
+                AxError::failure(
+                    AxCode::InvalidArgs,
+                    "record a waiting item",
+                    "an approval item is an object",
+                )
+            })?;
+            self.record_for(
+                run_id,
+                &who,
+                addr.clone(),
+                EventKind::ApprovalRequested,
+                Payload::new(map)?,
+            )?;
+        }
+        let frozen = driven?;
+        let ending = frozen.completion().clone();
+        // What it actually did, for the person reading afterwards. The
+        // ledger holds the detail; this line is the pointer into it.
+        self.note(
+            runtime::diagnostics::Level::Effect,
+            "runtime::run",
+            &format!("dispatch at {} finished on {}", addr.as_str(), model),
+        );
+        // Who this run handed work to. Started here rather than inside
+        // the tool call, because a run is built by this layer and a tool
+        // that drove one would be driving a run from inside another
+        // run's tool bench. Each child is dispatched at `Delegated`, so
+        // the gate refuses the grand-delegate without anybody having to
+        // work out their own depth.
+        //
+        // A cancelled run hands nothing down. The fourth safe point is
+        // what makes that reachable: a cancel arriving after the last
+        // wave used to have no boundary left to land on, so work asked
+        // for by a turn nobody wanted started anyway.
+        let handed = match ending {
+            kernel::Completion::Cancelled => Vec::new(),
+            _ => delegates.borrow_mut().take(),
+        };
+        for work in handed {
+            self.note(
+                runtime::diagnostics::Level::Effect,
+                "collab::delegate",
+                &format!("{} handed work to {}", addr.as_str(), work.room.as_str()),
+            );
+            // Carried rather than defaulted, for the reason `knock`
+            // states next to its own `budget`: work handed down is the
+            // same piece of work, so it is done under the same ceiling.
+            // Defaulting here told a delegate its budget was zero while
+            // its parent had been told the truth.
+            let child =
+                self.dispatch_in(work.room, work.task, work.goal, mode, budget, Some(run_id))?;
+            self.deliver_handback(&addr, &child)?;
+        }
+        Ok(Dispatched {
+            run: run_id,
+            addr,
+            who,
+            completion: ending,
+        })
+    }
+
+    /// Settles what a run asked of the request register.
+    ///
+    /// Opening commits the run's own tree first, because the record names
+    /// the commit a verifier will be judging. Checking merges, because
+    /// that is what a passed check means, and a verified request nobody
+    /// merged would be a third state for a person to chase. Both put the
+    /// line before the change, the merge by way of `memory::PlannedMerge`
+    /// (section 8-30).
+    ///
+    /// # Errors
+    /// Propagates a worktree that will not open, a fence that will not
+    /// commit, a merge the trunk has moved past, and any line the ledger
+    /// refuses.
+    #[expect(clippy::too_many_arguments, reason = "the assembly point's own wiring")]
+    fn settle_requests(
+        &mut self,
+        pr: &std::rc::Rc<std::cell::RefCell<collab::PrDesk>>,
+        produced: &runtime::Produced,
+        write_root: &Path,
+        fence_scope: &str,
+        addr: &Address,
+        who: &str,
+        mode: runtime::Mode,
+        run_id: RunId,
+    ) -> Result<(), AxError> {
+        // What the run asked of the request register. Opening commits
+        // the run's own tree first, because the record names the commit
+        // a verifier will be judging; checking merges, because that is
+        // what a passed check means and a verified request nobody merged
+        // would be a third state for a person to chase.
+        let pr_effects = pr.borrow_mut().take_effects();
+        if !pr_effects.is_empty() {
+            let trees =
+                memory::Worktrees::open(&self.city_root).map_err(memory::MemoryError::into_ax)?;
+            for effect in pr_effects {
+                match effect {
+                    collab::PrEffect::Opened { branch } => {
+                        let commit = memory::Checkpoint::open(write_root)
+                            .map_err(memory::MemoryError::into_ax)?
+                            .wave_pre(fence_scope, now_ms()?, who)
+                            .map_err(memory::MemoryError::into_ax)?;
+                        let at = commit
+                            .as_map()
+                            .get("oid")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned();
+                        let request = collab::OpenRequest {
+                            node: collab::NodeId::parse(&branch)?,
+                            implementer: who.to_owned(),
+                            branch,
+                            commit: at,
+                        };
+                        self.record_for(
+                            run_id,
+                            who,
+                            addr.clone(),
+                            EventKind::PrOpened,
+                            request.payload()?,
+                        )?;
+                        self.requests.push(request);
+                    }
+                    collab::PrEffect::Merged { request, by } => {
+                        // The last gate before work becomes the
+                        // building's. Verification says a person other
+                        // than the author looked; admission says the
+                        // evidence this mode demands is present. They
+                        // are different questions, and the second one is
+                        // the only place a mode means anything.
+                        if let runtime::Admission::Refused {
+                            because,
+                            alternative,
+                        } = runtime::admits(mode, produced)
+                        {
+                            let mut data = request.payload()?.as_map().clone();
+                            data.insert("by".to_owned(), serde_json::Value::String(by));
+                            data.insert(
+                                "why".to_owned(),
+                                serde_json::Value::String(format!("{because}; {alternative}")),
+                            );
+                            self.record_for(
+                                run_id,
+                                who,
+                                addr.clone(),
+                                EventKind::PrRejected,
+                                Payload::new(data)?,
+                            )?;
+                            self.requests.retain(|held| held.branch != request.branch);
+                            continue;
+                        }
+                        let name = memory::WorktreeName::parse(&request.branch)
+                            .map_err(memory::MemoryError::into_ax)?;
+                        // Decided first, announced second, made third.
+                        // The refusal this merge can carry - a trunk that
+                        // moved after the node branched - happens inside
+                        // `plan_merge`, so no line is ever written for a
+                        // merge that was going to be refused; and the
+                        // trunk cannot move before the line, because
+                        // moving it needs a value only that call returns.
+                        let planned = trees
+                            .plan_merge(&name)
+                            .map_err(memory::MemoryError::into_ax)?;
+                        let mut data = request.payload()?.as_map().clone();
+                        data.insert("verified_by".to_owned(), serde_json::Value::String(by));
+                        data.insert(
+                            "commit".to_owned(),
+                            serde_json::Value::String(planned.commit()),
+                        );
+                        self.record_for(
+                            run_id,
+                            who,
+                            addr.clone(),
+                            EventKind::PrMerged,
+                            Payload::new(data)?,
+                        )?;
+                        planned.apply().map_err(memory::MemoryError::into_ax)?;
+                        self.requests.retain(|held| held.branch != request.branch);
+                    }
+                    collab::PrEffect::Rejected { request, by, why } => {
+                        let mut data = request.payload()?.as_map().clone();
+                        data.insert("by".to_owned(), serde_json::Value::String(by));
+                        data.insert("why".to_owned(), serde_json::Value::String(why));
+                        self.record_for(
+                            run_id,
+                            who,
+                            addr.clone(),
+                            EventKind::PrRejected,
+                            Payload::new(data)?,
+                        )?;
+                        self.requests.retain(|held| held.branch != request.branch);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn settle(
         &mut self,
         run: RunId,
@@ -4241,205 +4496,19 @@ impl RunWorker {
                 held_out: None,
             }
         };
-        // What the run asked of the request register. Opening commits
-        // the run's own tree first, because the record names the commit
-        // a verifier will be judging; checking merges, because that is
-        // what a passed check means and a verified request nobody merged
-        // would be a third state for a person to chase.
-        let pr_effects = pr.borrow_mut().take_effects();
-        if !pr_effects.is_empty() {
-            let trees =
-                memory::Worktrees::open(&self.city_root).map_err(memory::MemoryError::into_ax)?;
-            for effect in pr_effects {
-                match effect {
-                    collab::PrEffect::Opened { branch } => {
-                        let commit = memory::Checkpoint::open(&write_root)
-                            .map_err(memory::MemoryError::into_ax)?
-                            .wave_pre(&fence_scope, now_ms()?, &who)
-                            .map_err(memory::MemoryError::into_ax)?;
-                        let at = commit
-                            .as_map()
-                            .get("oid")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or_default()
-                            .to_owned();
-                        let request = collab::OpenRequest {
-                            node: collab::NodeId::parse(&branch)?,
-                            implementer: who.clone(),
-                            branch,
-                            commit: at,
-                        };
-                        self.record_for(
-                            run_id,
-                            &who,
-                            addr.clone(),
-                            EventKind::PrOpened,
-                            request.payload()?,
-                        )?;
-                        self.requests.push(request);
-                    }
-                    collab::PrEffect::Merged { request, by } => {
-                        // The last gate before work becomes the
-                        // building's. Verification says a person other
-                        // than the author looked; admission says the
-                        // evidence this mode demands is present. They
-                        // are different questions, and the second one is
-                        // the only place a mode means anything.
-                        if let runtime::Admission::Refused {
-                            because,
-                            alternative,
-                        } = runtime::admits(mode, &produced)
-                        {
-                            let mut data = request.payload()?.as_map().clone();
-                            data.insert("by".to_owned(), serde_json::Value::String(by));
-                            data.insert(
-                                "why".to_owned(),
-                                serde_json::Value::String(format!("{because}; {alternative}")),
-                            );
-                            self.record_for(
-                                run_id,
-                                &who,
-                                addr.clone(),
-                                EventKind::PrRejected,
-                                Payload::new(data)?,
-                            )?;
-                            self.requests.retain(|held| held.branch != request.branch);
-                            continue;
-                        }
-                        let name = memory::WorktreeName::parse(&request.branch)
-                            .map_err(memory::MemoryError::into_ax)?;
-                        // Decided first, announced second, made third.
-                        // The refusal this merge can carry - a trunk that
-                        // moved after the node branched - happens inside
-                        // `plan_merge`, so no line is ever written for a
-                        // merge that was going to be refused; and the
-                        // trunk cannot move before the line, because
-                        // moving it needs a value only that call returns.
-                        let planned = trees
-                            .plan_merge(&name)
-                            .map_err(memory::MemoryError::into_ax)?;
-                        let mut data = request.payload()?.as_map().clone();
-                        data.insert("verified_by".to_owned(), serde_json::Value::String(by));
-                        data.insert(
-                            "commit".to_owned(),
-                            serde_json::Value::String(planned.commit()),
-                        );
-                        self.record_for(
-                            run_id,
-                            &who,
-                            addr.clone(),
-                            EventKind::PrMerged,
-                            Payload::new(data)?,
-                        )?;
-                        planned.apply().map_err(memory::MemoryError::into_ax)?;
-                        self.requests.retain(|held| held.branch != request.branch);
-                    }
-                    collab::PrEffect::Rejected { request, by, why } => {
-                        let mut data = request.payload()?.as_map().clone();
-                        data.insert("by".to_owned(), serde_json::Value::String(by));
-                        data.insert("why".to_owned(), serde_json::Value::String(why));
-                        self.record_for(
-                            run_id,
-                            &who,
-                            addr.clone(),
-                            EventKind::PrRejected,
-                            Payload::new(data)?,
-                        )?;
-                        self.requests.retain(|held| held.branch != request.branch);
-                    }
-                }
-            }
-        }
-        // The tree goes back whether the run finished or failed. What was
-        // committed on its branch survives; what was not, does not.
-        if let Some(held) = lease {
-            memory::Worktrees::open(&self.city_root)
-                .map_err(memory::MemoryError::into_ax)?
-                .release(held)
-                .map_err(memory::MemoryError::into_ax)?;
-        }
-        // An item that is waiting belongs in the inbox, not only in the
-        // refusal the model saw.
-        // Recorded against the run and the address that raised it, not
-        // against the city: answering this item later has to be able to
-        // find the work it was holding up.
-        if self.tainted_arrival {
-            // C15's marker bit, set where the reason for it is known. A
-            // tainted item takes no policy and no delegate, so a run that
-            // began with a stranger's text cannot have its approvals
-            // waived by a rule somebody wrote for ordinary work.
-            for item in raised.iter_mut() {
-                item.tainted = true;
-            }
-        }
-        for item in raised.iter() {
-            let value = serde_json::to_value(item).map_err(|err| {
-                AxError::failure(
-                    AxCode::InvalidArgs,
-                    "record a waiting item",
-                    err.to_string(),
-                )
-            })?;
-            let map = value.as_object().cloned().ok_or_else(|| {
-                AxError::failure(
-                    AxCode::InvalidArgs,
-                    "record a waiting item",
-                    "an approval item is an object",
-                )
-            })?;
-            self.record_for(
-                run_id,
-                &who,
-                addr.clone(),
-                EventKind::ApprovalRequested,
-                Payload::new(map)?,
-            )?;
-        }
-        let frozen = driven?;
-        let ending = frozen.completion().clone();
-        // What it actually did, for the person reading afterwards. The
-        // ledger holds the detail; this line is the pointer into it.
-        self.note(
-            runtime::diagnostics::Level::Effect,
-            "runtime::run",
-            &format!("dispatch at {} finished on {}", addr.as_str(), model.id),
-        );
-        // Who this run handed work to. Started here rather than inside
-        // the tool call, because a run is built by this layer and a tool
-        // that drove one would be driving a run from inside another
-        // run's tool bench. Each child is dispatched at `Delegated`, so
-        // the gate refuses the grand-delegate without anybody having to
-        // work out their own depth.
-        //
-        // A cancelled run hands nothing down. The fourth safe point is
-        // what makes that reachable: a cancel arriving after the last
-        // wave used to have no boundary left to land on, so work asked
-        // for by a turn nobody wanted started anyway.
-        let handed = match ending {
-            kernel::Completion::Cancelled => Vec::new(),
-            _ => delegates.borrow_mut().take(),
-        };
-        for work in handed {
-            self.note(
-                runtime::diagnostics::Level::Effect,
-                "collab::delegate",
-                &format!("{} handed work to {}", addr.as_str(), work.room.as_str()),
-            );
-            // Carried rather than defaulted, for the reason `knock`
-            // states next to its own `budget`: work handed down is the
-            // same piece of work, so it is done under the same ceiling.
-            // Defaulting here told a delegate its budget was zero while
-            // its parent had been told the truth.
-            let child =
-                self.dispatch_in(work.room, work.task, work.goal, mode, budget, Some(run_id))?;
-            self.deliver_handback(&addr, &child)?;
-        }
-        Ok(Dispatched {
-            run: run_id,
-            addr,
-            who,
-            completion: ending,
-        })
+        self.settle_requests(
+            &pr,
+            &produced,
+            &write_root,
+            &fence_scope,
+            &addr,
+            &who,
+            mode,
+            run_id,
+        )?;
+        self.conclude(
+            driven, raised, lease, &delegates, addr, who, &model.id, mode, budget, run_id,
+        )
     }
 
     /// Tells the run that asked for the work how it came back.
