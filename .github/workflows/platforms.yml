@@ -1,10 +1,10 @@
 # What ci.yml deliberately does not ask on every push.
 #
 # Two claims live here, and both are about machines rather than about a
-# change. A4/V8 assert byte identity across platforms, so a platform not
-# in this matrix is a promise rather than a fact. V5 proves eleven kernel
-# properties against real MIR, which is Linux-only upstream and minutes
-# long either way.
+# change. A4/V8 assert byte identity across platforms, so a platform this
+# workflow does not run is a promise rather than a fact. V5 proves eleven
+# kernel properties against real MIR, which is Linux-only upstream and
+# minutes long either way.
 #
 # They run on a schedule and on demand instead of on every push because a
 # gate nobody waits for is a gate nobody runs - and a twenty-minute wait
@@ -19,17 +19,21 @@ permissions:
   contents: read
 
 jobs:
-  # The same commands ci.yml runs on Linux, on the other two platforms.
-  matrix:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+  # The same commands ci.yml runs, on the platform ci.yml never sees.
+  #
+  # macOS alone: this matrix used to carry a windows leg as well, which
+  # was the same four commands ci.yml already runs on windows for every
+  # push. A gate that repeats a gate teaches nobody anything and costs a
+  # runner an hour a night, so the leg is gone rather than kept for
+  # symmetry.
+  macos:
+    runs-on: macos-latest
     steps:
+      # `guard` and `apisync` read one commit and its parent; ci.yml
+      # gives the reasoning.
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 2
       - name: install pinned toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -38,6 +42,8 @@ jobs:
           tool: cargo-nextest,cargo-public-api
       - name: nightly toolchain (rustdoc JSON for apisync)
         run: rustup toolchain install nightly --profile minimal
+      # One job rather than ci.yml's five: nobody is waiting for this
+      # one, and the sum of two builds costs a schedule nothing.
       - name: fmt
         run: cargo fmt --all --check
       - name: clippy

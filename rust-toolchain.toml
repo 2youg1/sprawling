@@ -1,3 +1,10 @@
+# `minimal` plus exactly what the loop uses. The default profile also
+# fetches rust-docs, which is tens of megabytes nothing here reads and
+# which every cold CI job downloaded four times a run. Naming the two
+# components keeps `cargo fmt` and `cargo clippy` present, which is what
+# `just check` needs; `rustup component add` still works for anything a
+# person wants locally.
 [toolchain]
 channel = "1.97.1"
+profile = "minimal"
 components = ["rustfmt", "clippy"]

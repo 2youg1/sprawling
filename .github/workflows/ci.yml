@@ -1,12 +1,40 @@
 # The gate a change closes on, run by a machine.
 #
-# One Windows job carries the whole of `just check` - the same platform
-# the project is developed on, so a red job is the red local run the
-# person can reproduce - with its steps ordered cheap-to-expensive so the
-# first real verdict arrives in seconds rather than at the end. macOS is
-# covered by `platforms.yml` nightly. Linux is deliberately out of the
-# pipeline: the person ruled it out rather than debug a platform they
-# cannot see, and nothing in this release ships a Linux artifact.
+# `just check` is four commands and CI used to run all four in one job,
+# one after another. Two of them are full compiles of the same tree that
+# cannot share a single artifact: `cargo clippy` builds in check mode
+# (`--emit=metadata`) and `cargo nextest` needs real rlibs, which is
+# measurable rather than folklore - clean one crate, `cargo clippy -p
+# kernel` says "Checking kernel", and `cargo build -p kernel --lib`
+# immediately after says "Compiling kernel". So the job's wall clock was
+# the *sum* of two builds. Split across jobs that start together, it is
+# the slower of the two.
+#
+# Five jobs, none waiting on another. Together they are exactly `just
+# check` plus `just check-web` plus the supply-chain read, and CI must
+# never be weaker than the local command: a green CI that implies less
+# than a green `just check` is worse than no CI.
+#
+#   clippy   fmt, then the zero-warning build of every target and feature
+#   test     the suite; the only job that produces trybuild scratch
+#   gates    the thirteen machine gates, and the nightly rustdoc apisync
+#            needs (27s of a 27.5s gate run locally - it is why the other
+#            twelve no longer queue behind a compile)
+#   web      the two places `just check` cannot reach
+#   supply   licences, bans and sources; compiles nothing
+#
+# Windows, and only Windows, is deliberate and unchanged: it is the
+# platform the project is developed on, so a red job is a red local run
+# the person can reproduce. macOS byte-identity is `platforms.yml`,
+# nightly. Linux stays out of the push pipeline for the reason recorded
+# there, and nothing in this release ships a Linux artifact.
+#
+# Not done, because it was measured and did not pay: forcing debuginfo
+# off in CI. Dependencies already carry `debug = false` (root
+# `Cargo.toml`), which is where the mass was, and rebuilding plus
+# relinking the largest test binary with `CARGO_PROFILE_DEV_DEBUG=0`
+# moved 11.7s to 9.6s while the full workspace build moved the wrong way.
+# A second of noise is not a lever; leave the backtraces alone.
 #
 # C1 note: GitHub Actions infrastructure is not part of the artifact build
 # chain; the zero-js gate asserts our own commands never invoke npm/node.
@@ -34,47 +62,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # fmt answers in two seconds and rides along here rather than in a job
+  # of its own: a whole runner, a whole toolchain download and a whole
+  # queue wait to save two seconds is not speed.
+  clippy:
     runs-on: windows-latest
     steps:
-      # `guard` and `apisync` read git history, so the whole of it is
-      # fetched rather than the single commit a shallow checkout gives.
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
       - name: install pinned toolchain
         run: rustup show
       # Without this every run compiles 494 packages from zero - including
       # aws-lc-sys and libgit2, which are C. It is the single largest
       # difference between a five-minute run and a twenty-minute one.
-      # Only the branch everyone builds on writes a cache. A pull request
-      # that saved its own would evict the shared one it was restored
-      # from, so the next unrelated push pays for a cold build.
+      # A key per job, because check-mode metadata and real rlibs are
+      # different artifacts and one key would make two jobs overwrite each
+      # other's cache all day. Only the branch everyone builds on writes:
+      # a pull request that saved its own would evict the shared one it
+      # was restored from, and the next unrelated push would pay for a
+      # cold build.
       - uses: Swatinem/rust-cache@v2
         with:
+          shared-key: clippy
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest,cargo-public-api
-      # The apisync gate reads rustdoc JSON, which is nightly-only. It
-      # fails closed when the toolchain is missing rather than skipping,
-      # so a job without this line stops here instead of passing.
-      - name: nightly toolchain (rustdoc JSON for apisync)
-        run: rustup toolchain install nightly --profile minimal
-
-      # Ordered by seconds-to-verdict. fmt answers in two; clippy builds
-      # the test targets that nextest and apisync then reuse; the gates
-      # read documents against a tree that is already compiled.
       - name: fmt
         run: cargo fmt --all --check
       # --all-features is load-bearing and must match `just check` word for
       # word: code behind a feature (runtime/wasm, */conformance) escapes
-      # the zero-warning gate without it, and a CI weaker than the local
-      # command means a green CI stops implying a green `just check`.
+      # the zero-warning gate without it.
       - name: clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: xtask gates
-        run: cargo xtask gates
+
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # No `--doc` companion: this workspace has no doctest, which is a
+      # fact about it (`rg '///\s*```' crates/*/src` finds nothing), not
+      # an omission for somebody to fix later by adding a slower command.
       - name: tests
         run: cargo nextest run --workspace --locked --all-features
 
@@ -82,16 +115,42 @@ jobs:
       # entry that does not survive the cache's own pruning pass. The save
       # step then walks target/ and stops on it - which is how a job whose
       # every gate was green still reported failure (rust-cache#193). The
-      # scratch is a test artifact, not a build artifact, so nothing is
-      # lost by clearing it and the cache stops tripping over it.
+      # scratch is a test artifact, so nothing is lost by clearing it, and
+      # this is the one job that runs tests and therefore creates it.
       - name: clear the trybuild scratch before the cache is saved
         if: always()
         shell: bash
         run: rm -rf target/tests
 
-  # The two places `just check` cannot reach, and so far neither could CI:
-  # web's wasm-only paths, and channels built without its server feature.
-  # Cheap, and parallel to the job above, so it costs no wall clock.
+  gates:
+    runs-on: windows-latest
+    steps:
+      # `guard` judges HEAD and `apisync` judges the commit that changed a
+      # baseline: both read one commit and its parent, so two is the whole
+      # of the history they need. The full clone this used to take was
+      # bought for a range argument no workflow passes.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: install pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: gates
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api
+      # The apisync gate reads rustdoc JSON, which is nightly-only. It
+      # fails closed when the toolchain is missing rather than skipping,
+      # so a job without this line stops here instead of passing.
+      - name: nightly toolchain (rustdoc JSON for apisync)
+        run: rustup toolchain install nightly --profile minimal
+      - name: xtask gates
+        run: cargo xtask gates
+
+  # The two places `just check` cannot reach: web's wasm-only paths, and
+  # channels built without its server feature.
   web:
     runs-on: windows-latest
     steps:
@@ -102,13 +161,13 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
+          shared-key: web
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: clippy on the target that has a browser
         run: cargo clippy -p web --target wasm32-unknown-unknown --all-targets --locked -- -D warnings
 
-  # Licences, banned crates and where they came from. Split out because it
-  # compiles nothing - it reads `Cargo.lock` - so it answers in seconds on
-  # its own runner instead of waiting behind the test suite.
+  # Licences, banned crates and where they came from. It compiles nothing
+  # - it reads `Cargo.lock` - so it is the verdict that arrives first.
   #
   # `advisories` is deliberately **not** here. An advisory published today
   # against a dependency nobody touched would turn a pull request red for
