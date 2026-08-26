@@ -117,6 +117,25 @@ arithmetic_side_effects = "deny"
 as_conversions = "deny"
 dbg_macro = "deny"
 
+# Dependencies carry debug info nobody here reads: a backtrace we act on ends
+# in our own code, and the frames below it cost bytes in every .rlib and in
+# the .pdb of every test binary that links one.
+#
+# Measured rather than assumed, on one windows-msvc machine, by building
+# `cargo test -p channels --no-run --all-features` into two empty target
+# directories: 1.05 GB without this block against 0.86 GB with it, so 18.4%
+# of what one crate's test build writes. Two thirds of the difference is
+# .rlib and one third is .pdb - the opposite weighting to the one this block
+# first carried. Like every wall-clock and disk figure in this repository the
+# number is reported with the machine that produced it and gated by nothing.
+#
+# Workspace members stay at `debug = 2`, so source-level debugging and
+# file-and-line backtraces of our own code are unchanged; only a frame inside
+# a dependency loses its line number. The release profile is untouched, so
+# nothing about the shipped binary moves.
+[profile.dev.package."*"]
+debug = false
+
 # crash-only delivery profile
 [profile.release]
 opt-level = 3
