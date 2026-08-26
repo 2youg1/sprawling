@@ -180,6 +180,8 @@ pub struct JobBrief<'a> { pub task: &'a str, pub goal: &'a str, pub budget: &'a 
 pub enum RunBrief { Job { text: String }, Principal }          // P6.03：穷尽两臂
 pub(crate) fn lay_out(building_root: &Path, addr: &Address) -> Result<(), AxError>;  // 唯一调用方是 building::create
 pub fn job_path(city_root: &Path, addr: &Address) -> PathBuf;
+pub fn roadmap_path(city_root: &Path, building_addr: &Address) -> PathBuf;        // R2.06
+pub fn roadmap(city_root: &Path, building_addr: &Address) -> Result<String, AxError>;  // R2.06
 pub fn write_job(city_root: &Path, addr: &Address, brief: &JobBrief<'_>) -> Result<String, AxError>;
 pub fn write_brief(city_root: &Path, addr: &Address, brief: &JobBrief<'_>) -> Result<RunBrief, AxError>;
 pub fn handoff(city_root: &Path, building_addr: &Address) -> Option<String>;
@@ -193,6 +195,9 @@ pub fn norms(city_root: &Path, addr: &Address) -> Result<Vec<PathBuf>, AxError>;
 - **机器只填它知道的段**：Task／Goal／Budget 三段有事实就写；Background／Delivery 无事实则不写——写一个 `(未知)` 占位，只是让模型每回合读一遍没信息的行。
 - **一次会话的 brief 只有两种，且由本次派活决定（P6.03）**：说得出 Goal 的就写 `JOB.md`（`RunBrief::Job`），说不出的就不写（`RunBrief::Principal`）。**判据选 Goal 而不选「盘上有没有 JOB.md」**：一个房间里上周留下的任务书仍在盘上，它可以被读，但不得冒充一次没人派任务的会话的 brief。Goal 是那份表单里唯一不可替代的一栏（什么时候停），它空着就等于告诉 Agent「停不停没定义」。
 - **`handoff` 不把空白表单当交接件**：一张没填过的 `Handoff.md` 与一张填过的占同样的 prefix 字节而一个字的信息也不带。识别靠模板自己的括号提示行。
+- **计划的路径与读法归本模块（整修卡 R2.06）**：`roadmap_path` 与 `roadmap` 落在这里，因为 `ROADMAP_FILE` 在这里——在别处拼 `city_root/<addr>/Roadmap.md` 就是第二份「计划在哪里」的权威，它会在真正那份搬家后继续跑得好好的。
+- **「还没有」与「读不了」是两件事**：`roadmap` 仅对 `ErrorKind::NotFound` 答空串——一栋还没铺计划的楼确实没有计划；其余任何理由一律以 `E_STORAGE_FATAL` 上报并带上路径。这与同 crate 的 `archive::index` 已有的契约同形（目录不在→`Ok(空)`，真失败→`Err`），不新立一种读法。
+- **本卡不动 `handoff`**：它的 `.ok()?` 同属一族，但它把「不在」「读不了」「空白表单」三件归为一个 `None`，改它要先决定这三件在 prefix 里各自应当怎么表现——那是另一张卡的题目，在此记一笔而不顺手改。
 - **规范类 must-read 由 `norms` 给路径，不给 Locator**：Locator 需要 CAS 或 git oid，而 city 不认识落盘物（拓扑上也依赖不到 memory）。本模块答「哪几份是规范」，装配层把它们入 CAS 变成 Locator。这也是 must-read 最大失败模式的解：不让模型凭记忆重抄规范清单。
 
 ### 8-6 city::schedule（P2.11；形状 1 判定＋形状 6 数据面）

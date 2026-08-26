@@ -182,6 +182,51 @@ pub fn job_path(city_root: &Path, addr: &Address) -> PathBuf {
     path
 }
 
+/// Where a building's plan lives.
+///
+/// The one place this path is spelled. A caller that joins
+/// `city_root/<addr>/Roadmap.md` for itself becomes a second authority
+/// for where the plan is, and it keeps working after the real one moves.
+#[must_use]
+pub fn roadmap_path(city_root: &Path, building_addr: &Address) -> PathBuf {
+    let mut path = city_root.to_path_buf();
+    for segment in building_addr.as_str().split('/') {
+        path.push(segment);
+    }
+    path.push(ROADMAP_FILE);
+    path
+}
+
+/// A building's plan as it stands, or an empty document when the
+/// building has not been given one yet.
+///
+/// "Not laid out yet" and "could not be read" are different facts, and
+/// only the first one means an empty plan. Everything else - a directory
+/// where the file belongs, a permission this process does not have, a
+/// device that stopped answering - is reported, because a caller that
+/// reads those as an empty plan goes on to tell somebody their claim
+/// lost a race that never ran.
+///
+/// # Errors
+/// `E_STORAGE_FATAL` naming the path, for every failure except a file
+/// that is not there.
+pub fn roadmap(city_root: &Path, building_addr: &Address) -> Result<String, AxError> {
+    let path = roadmap_path(city_root, building_addr);
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(text),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(err) => Err(AxError::failure(
+            AxCode::StorageFatal,
+            "read a building's plan",
+            format!("{}: {err}", path.display()),
+        )
+        .with_recovery(
+            "the plan is shared ground and a run may not claim on it unread; \
+             make the file readable, then dispatch again",
+        )),
+    }
+}
+
 /// Writes the job file for one run and returns the bytes written, so the
 /// caller can record the same text as history without reading the file
 /// back and hoping it is unchanged.

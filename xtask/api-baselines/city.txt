@@ -181,6 +181,8 @@ pub fn city::load_config(&std::path::Path, &kernel::address::Address) -> core::r
 pub fn city::norms(&std::path::Path, &kernel::address::Address) -> core::result::Result<alloc::vec::Vec<std::path::PathBuf>, kernel::error::AxError>
 pub fn city::open_room(&std::path::Path, &kernel::address::Address, &kernel::address::SessionName) -> core::result::Result<kernel::address::Address, kernel::error::AxError>
 pub fn city::relocate(&kernel::address::Address, &kernel::address::Address) -> core::result::Result<city::Relocation, kernel::error::AxError>
+pub fn city::roadmap(&std::path::Path, &kernel::address::Address) -> core::result::Result<alloc::string::String, kernel::error::AxError>
+pub fn city::roadmap_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::rooms(&std::path::Path, &kernel::address::Address) -> core::result::Result<alloc::vec::Vec<kernel::address::Address>, kernel::error::AxError>
 pub fn city::schedule_path(&std::path::Path) -> std::path::PathBuf
 pub fn city::survey(&[(alloc::string::String, bool)], bool) -> city::Standing

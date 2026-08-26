@@ -3094,12 +3094,6 @@ impl RunWorker {
     }
 
     /// Where a building keeps the plan its residents claim rows from.
-    fn plan_path(&self, building: &Address) -> std::path::PathBuf {
-        self.city_root
-            .join(building.as_str())
-            .join(city::ROADMAP_FILE)
-    }
-
     /// One dispatch, run to its frozen end on this thread.
     fn dispatch(&mut self, addr: Address, task: String, goal: String) -> Result<(), AxError> {
         self.dispatch_in(
@@ -3293,8 +3287,13 @@ impl RunWorker {
         // own tree. A claim nobody else can see is not a claim; the work
         // stays private until it is checked, the fact that somebody is
         // doing it does not.
-        let plan_path = self.plan_path(building.addr());
-        let plan_text = std::fs::read_to_string(&plan_path).unwrap_or_default();
+        let plan_path = city::roadmap_path(&self.city_root, building.addr());
+        // A plan that is not there yet reads as empty; every other reason
+        // this file cannot be read is reported here, before a model is
+        // called. Reading them as empty spent a call to produce claims
+        // that the compare-and-swap below was always going to drop, and
+        // told the person a neighbour had moved their row.
+        let plan_text = city::roadmap(&self.city_root, building.addr())?;
         let plan_desk = std::rc::Rc::new(std::cell::RefCell::new(collab::ClaimDesk::new(
             who.clone(),
             addr.clone(),
@@ -3305,8 +3304,10 @@ impl RunWorker {
         // rather than kept beside it. An index that was stored would be
         // a second copy of what the files say, and the files are the
         // ones that are true.
-        let shelf: Vec<collab::Held> = city::archive_index(&self.city_root, building.addr())
-            .unwrap_or_default()
+        // `archive_index` already answers `Ok(empty)` for a building with
+        // no shelf, so anything it reports is a real failure and telling
+        // the model this building knows nothing would be a lie about it.
+        let shelf: Vec<collab::Held> = city::archive_index(&self.city_root, building.addr())?
             .into_iter()
             .map(|entry| collab::Held {
                 kind: entry.kind.as_str().to_owned(),
@@ -3918,7 +3919,7 @@ impl RunWorker {
             (desk.take_effects(), desk.roadmap().map(str::to_owned))
         };
         if let Some(text) = plan_after {
-            let on_disk = std::fs::read_to_string(&plan_path).unwrap_or_default();
+            let on_disk = city::roadmap(&self.city_root, building.addr())?;
             let stale: Vec<&collab::ClaimEffect> = claim_effects
                 .iter()
                 .filter(|effect| !collab::still_true(&on_disk, effect))
@@ -6847,6 +6848,54 @@ mod tests {
                     .unwrap_or(false)
             })
             .count()
+    }
+
+    /// A plan nobody could read and a plan somebody else changed are two
+    /// different facts, and only one of them is the person's to fix.
+    ///
+    /// The distinction is not cosmetic: the claim path already refuses to
+    /// overwrite a row that moved, and it reports that refusal by name.
+    /// Reading the file as empty makes every claim look like it lost a
+    /// race that never happened, which sends the person to ask a resident
+    /// instead of to look at a file.
+    #[test]
+    fn a_plan_that_cannot_be_read_is_refused_by_name_rather_than_blamed_on_a_neighbour() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let building = dir.path().join("lab");
+        std::fs::create_dir_all(building.join("room1")).unwrap();
+        lay_rules(
+            dir.path(),
+            "lab",
+            "# BUILDING.md\n\n`confidential: false`\n",
+        );
+        // A directory where the plan belongs. `read_to_string` then fails
+        // for a reason that is not "it is not there yet" - the one reason
+        // an empty plan is the right answer to - without this test having
+        // to negotiate file permissions with the host.
+        let plan = building.join(city::ROADMAP_FILE);
+        let _ = std::fs::remove_file(&plan);
+        std::fs::create_dir_all(&plan).unwrap();
+
+        let (base_url, _provider) =
+            fake_openai(&["m-local"], vec![completion("nothing to do", None)]);
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        let outcome = worker.handle(channels::Command::Dispatch {
+            addr: Address::parse("lab/room1").unwrap(),
+            task: "claim a row".to_owned(),
+            goal: "one claim".to_owned(),
+            mode: channels::ModeTag::parse("plan").unwrap(),
+            budget: kernel::BudgetCap::default(),
+            idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"unreadable"),
+            session: None,
+            effort: None,
+        });
+
+        let err = outcome.expect_err("a plan nobody can read is not an empty plan");
+        assert!(
+            err.to_string().contains(city::ROADMAP_FILE),
+            "the refusal has to name the file a person must fix: {err}"
+        );
     }
 
     #[test]

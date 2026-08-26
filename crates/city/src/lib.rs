@@ -45,6 +45,6 @@ pub use room::open as open_room;
 pub use rules_tool::RulesTool;
 pub use schedule::{Cadence, Entry, SCHEDULE_FILE, Schedule, schedule_path};
 pub use spine_files::{CITY_FILE, JOB_FILE, JobBrief, ROADMAP_FILE, RunBrief, handoff};
-pub use spine_files::{job_path, norms, write_brief, write_job};
+pub use spine_files::{job_path, norms, roadmap, roadmap_path, write_brief, write_job};
 pub use watch::{Link, Source, WATCH_FILE, Watch, watch_path};
 pub use wizard::{CityPlan, Relocation, Standing, relocate, survey};
