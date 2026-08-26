@@ -802,7 +802,7 @@ impl RunWorker {
 
 `dispatch_in` 今为 **833** 行（@3611），相位实测如下。目标 <200；每刀都是同一个形制：相位成为 `RunWorker` 的一个方法，多个活值归并为一个归位值类型（如 `Driven`），而不是一排得保持同步的局部变量。
 
-已切七刀（R2.19a–f），**975 → 423**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起收回的五张桌子）与 `Site`（一次跑站在哪儿）。
+已切八刀（R2.19a–g），**975 → 237**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起收回的五张桌子）与 `Site`（一次跑站在哪儿）。
 
 **第七刀：桌子（§5 步 3–4，整修卡 R2.19f）。**
 
@@ -820,6 +820,31 @@ impl RunWorker {
 **尺寸**：`dispatch_in` 495 → **423**；`open_desks` 76。十行的 `Desks` 手工构造（原在驱动之前）随之消失：归位值由相位自己交出来，不再由调用方拼。
 
 **它以什么收口**：纯结构，无可咬的红。五张桌子的构造顺序、`now_ms()` 的采样位置、`inboxes.remove` 与 `pending()` 的先后均逐字不变。143 条 `sprawling` 测试全绿，其中 `a_signal_one_run_sends_is_read_by_the_run_that_pulls_it` 与 `a_signal_wakes_the_resident_it_was_sent_to_and_says_who_spoke` 走的就是“队列借出去、再收回”这一支。
+
+**第八刀：工作台（§5 步 6，整修卡 R2.19g）。**
+
+```rust
+struct Workbench {
+    catalog: Rc<RefCell<runtime::Catalog>>, bench: ToolBench,
+    delegates: Rc<RefCell<collab::DelegateDesk>>,
+}
+impl RunWorker {
+    fn lay_out_workbench(&mut self, site, desks, addr, depth, mode, budget, job_locator)
+        -> Result<Workbench, AxError>;
+    fn status_tool(&self, site, desks, addr, mode, budget, seen, delegates)
+        -> Result<StatusTool, AxError>;
+}
+```
+
+**`Workbench` 持目录而不持它渲出的 `tools`**：后者是前者的投影，两份都存就是同一件事的两个权威。`ToolBench` 路由一次调用，`Workbench` 是一次跑工作的那张台子——名字相邻而职责不同，差别写在 rustdoc 第一句。
+
+**工具块需要的不是两个方法而是三个，这是量出来的**。R2.19a 写「工具块需要两个」（阅览室一个、剩下一个）；切完一量，`lay_out_workbench` **206 行**，越过 R2.20 将要执行的 200。纪律是「不为通过而放宽门」，于是再切一刀。切在 `status`：它是十三件里**唯一一件要读 worker 治理状态（`governance.autonomy`）与目标登记册（`self.goals`）的工具**，也是唯一一件带活闭包的（`children` 读委派桌，因为一跑边跑边派活）。它回答的那个问题与周围不同：**这一跑对自己怎么交代**。
+
+**两个局部变量随它走了**：`writable` 与 `neighbours` 原本只为 `status` 而算（`write_domain()` 本就在同一方法里被叫三次，多一次不改变任何东西），现在各自在 `status_tool` 内部算。
+
+**尺寸**：`dispatch_in` 423 → **237**；`lay_out_workbench` 164；`status_tool` 51。
+
+**它以什么收口**：纯结构，无可咬的红。十三件工具的**构造顺序与登记顺序逐字不变**——而登记顺序是缓存面的一部分（§8-27），prefix 字节一变即有测试当场发作，这正是 143 条全绿在本卡的分量。
 
 **剩下四刀**（目标 <200，预计落在 ~160）。上一版此处写「三刀」而表里四行，是笔误：四个相位都还在 `dispatch_in` 里，四刀都要切。
 
