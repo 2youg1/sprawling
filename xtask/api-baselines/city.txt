@@ -76,6 +76,7 @@ pub const city::BUILDING_FILE: &str
 pub const city::BUILDING_SHELF: &str
 pub const city::CITY_FILE: &str
 pub const city::CONFIG_FILE: &str
+pub const city::HANDOFF_FILE: &str
 pub const city::JOB_FILE: &str
 pub const city::LIBRARY_DIR: &str
 pub const city::ROADMAP_FILE: &str
@@ -174,7 +175,8 @@ pub fn city::create_building(&std::path::Path, &kernel::address::Address, city::
 pub fn city::day_of(kernel::event::TimeMs) -> u64
 pub fn city::evaluate(&kernel::address::Address, &str) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub fn city::file_archive(&std::path::Path, &kernel::address::Address, city::ArchiveKind, kernel::event::TimeMs, &str, &str) -> core::result::Result<city::ArchiveEntry, kernel::error::AxError>
-pub fn city::handoff(&std::path::Path, &kernel::address::Address) -> core::option::Option<alloc::string::String>
+pub fn city::handoff(&std::path::Path, &kernel::address::Address) -> core::result::Result<core::option::Option<alloc::string::String>, kernel::error::AxError>
+pub fn city::handoff_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::job_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::load(&std::path::Path, &kernel::address::Address) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
 pub fn city::load_config(&std::path::Path, &kernel::address::Address) -> core::result::Result<kernel::config::FrozenConfig, kernel::error::AxError>

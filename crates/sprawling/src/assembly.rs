@@ -366,15 +366,22 @@ fn building_segment(city_root: &Path, addr: &Address, building: &Address) -> Vec
 /// In that order, because the brief is what the agent acts on and the
 /// last thing in a prompt is the thing that is read. A handoff that is
 /// still its blank form contributes nothing and is left out.
-fn run_segment(city_root: &Path, building: &Address, brief: &city::RunBrief) -> Vec<u8> {
+/// # Errors
+/// Propagates a handoff that exists and cannot be read: a prefix that
+/// left it out would tell the next session there was none.
+fn run_segment(
+    city_root: &Path,
+    building: &Address,
+    brief: &city::RunBrief,
+) -> Result<Vec<u8>, AxError> {
     let mut out = Vec::new();
-    if let Some(handoff) = city::handoff(city_root, building) {
+    if let Some(handoff) = city::handoff(city_root, building)? {
         out.extend_from_slice(handoff.as_bytes());
         out.push(NEWLINE);
         out.push(NEWLINE);
     }
     out.extend_from_slice(brief.segment_text().as_bytes());
-    out
+    Ok(out)
 }
 
 /// One line ending, named once. The prefix joins documents with it, and
@@ -3632,7 +3639,7 @@ impl RunWorker {
             FrozenSegment::new(SegmentSlot::Resident, resident),
             FrozenSegment::new(
                 SegmentSlot::Run,
-                run_segment(&self.city_root, building.addr(), &brief),
+                run_segment(&self.city_root, building.addr(), &brief)?,
             ),
         )?;
 
@@ -6924,6 +6931,45 @@ mod tests {
                     .unwrap_or(false)
             })
             .count()
+    }
+
+    /// A handoff that exists and cannot be read is not the absence of a
+    /// handoff, and the next session is assembled from it.
+    #[test]
+    fn a_handoff_that_cannot_be_read_is_refused_by_name() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let building = dir.path().join("lab");
+        std::fs::create_dir_all(building.join("room1")).unwrap();
+        lay_rules(
+            dir.path(),
+            "lab",
+            "# BUILDING.md\n\n`confidential: false`\n",
+        );
+        let lab = Address::parse("lab").unwrap();
+        let handoff = city::handoff_path(dir.path(), &lab);
+        let _ = std::fs::remove_file(&handoff);
+        std::fs::create_dir_all(&handoff).unwrap();
+
+        let (base_url, _provider) =
+            fake_openai(&["m-local"], vec![completion("nothing to do", None)]);
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+        let outcome = worker.handle(channels::Command::Dispatch {
+            addr: Address::parse("lab/room1").unwrap(),
+            task: "carry on".to_owned(),
+            goal: "one turn".to_owned(),
+            mode: channels::ModeTag::parse("plan").unwrap(),
+            budget: kernel::BudgetCap::default(),
+            idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"handoff"),
+            session: None,
+            effort: None,
+        });
+
+        let err = outcome.expect_err("an unreadable handoff is not an absent one");
+        assert!(
+            err.to_string().contains(city::HANDOFF_FILE),
+            "the refusal has to name the file a person must fix: {err}"
+        );
     }
 
     /// A build that says it carries an execution engine carries one.

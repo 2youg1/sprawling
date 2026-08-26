@@ -28,7 +28,7 @@ pub const ROADMAP_FILE: &str = "Roadmap.md";
 /// Decisions and corrections.
 pub(crate) const MEMO_FILE: &str = "Memo.md";
 /// What the next agent needs before it starts.
-pub(crate) const HANDOFF_FILE: &str = "Handoff.md";
+pub const HANDOFF_FILE: &str = "Handoff.md";
 /// The task of one session, in the room it is run from.
 pub const JOB_FILE: &str = "JOB.md";
 /// The city's own instructions, read into every prefix.
@@ -111,23 +111,53 @@ pub fn write_brief(
     Ok(RunBrief::Job { text })
 }
 
-/// What the last session in this building left for the next one.
+/// Where a building's handoff lives.
 ///
-/// `None` when the building has no handoff, or when it holds only the
-/// blank form: an unfilled template in the prefix costs the same bytes as
-/// a filled one and carries nothing.
+/// The one place this path is spelled, for the same reason `job_path`
+/// and `roadmap_path` are.
 #[must_use]
-pub fn handoff(city_root: &Path, building_addr: &Address) -> Option<String> {
+pub fn handoff_path(city_root: &Path, building_addr: &Address) -> PathBuf {
     let mut path = city_root.to_path_buf();
     for segment in building_addr.as_str().split('/') {
         path.push(segment);
     }
     path.push(HANDOFF_FILE);
-    let text = std::fs::read_to_string(&path).ok()?;
+    path
+}
+
+/// What the last session in this building left for the next one.
+///
+/// `None` says one thing only: there is nothing here worth carrying -
+/// either no file, or a form still holding the template's own
+/// parenthetical guidance, which in the prefix costs the same bytes as a
+/// filled one and carries nothing. A file that exists and cannot be read
+/// is a third fact and is reported, because a prefix that quietly omits
+/// it tells the next session there was no handoff.
+///
+/// # Errors
+/// `E_STORAGE_FATAL` naming the path, for every failure except a file
+/// that is not there.
+pub fn handoff(city_root: &Path, building_addr: &Address) -> Result<Option<String>, AxError> {
+    let path = handoff_path(city_root, building_addr);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => {
+            return Err(AxError::failure(
+                AxCode::StorageFatal,
+                "read a building's handoff",
+                format!("{}: {err}", path.display()),
+            )
+            .with_recovery(
+                "the next session is assembled from this file; \
+                 make it readable, then dispatch again",
+            ));
+        }
+    };
     if is_blank_form(&text) {
-        return None;
+        return Ok(None);
     }
-    Some(text)
+    Ok(Some(text))
 }
 
 /// Whether a handoff is still the form it was laid out as.
@@ -502,18 +532,30 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("lab");
         let lab = addr("lab");
-        assert_eq!(handoff(dir.path(), &lab), None, "no building, no handoff");
+        assert_eq!(
+            handoff(dir.path(), &lab).unwrap(),
+            None,
+            "no building, no handoff"
+        );
 
         lay_out(&root, &lab).unwrap();
         assert_eq!(
-            handoff(dir.path(), &lab),
+            handoff(dir.path(), &lab).unwrap(),
             None,
             "the blank form is the absence of a handoff, not a handoff"
         );
 
         let written = "# Handoff — lab\n\n## 1 Must-read list\n\nRead the wire spec first.\n";
         std::fs::write(root.join(HANDOFF_FILE), written).unwrap();
-        assert_eq!(handoff(dir.path(), &lab).as_deref(), Some(written));
+        assert_eq!(handoff(dir.path(), &lab).unwrap().as_deref(), Some(written));
+
+        // A third fact, and it is neither of the two above: the file is
+        // there and cannot be read.
+        let unreadable = dir.path().join("unreadable");
+        std::fs::create_dir_all(unreadable.join("lab").join(HANDOFF_FILE)).unwrap();
+        let err = handoff(&unreadable, &lab)
+            .expect_err("a handoff that cannot be read is not an absent handoff");
+        assert!(err.to_string().contains(HANDOFF_FILE), "{err}");
     }
 
     #[test]
