@@ -7,7 +7,6 @@
 #[non_exhaustive] pub enum runtime::mode::Mode
 #[non_exhaustive] pub enum runtime::run::SafePoint
 #[non_exhaustive] pub enum runtime::tools::ProviderMode
-#[non_exhaustive] pub enum runtime::turn::BenchOutcome
 #[non_exhaustive] pub enum runtime::turn::Interrupt
 impl core::fmt::Debug for runtime::diagnostics::Diagnostics
 impl core::fmt::Display for runtime::diagnostics::Level
@@ -108,6 +107,7 @@ pub enum runtime::mode::Admission
 pub enum runtime::prefix::SegmentSlot
 pub enum runtime::replay::VerifiedLine
 pub enum runtime::run::Advance
+pub enum runtime::turn::BenchOutcome
 pub enum runtime::turn::Opening
 pub enum runtime::turn::PhaseOutcome<Next>
 pub fn runtime::AbsentSandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>

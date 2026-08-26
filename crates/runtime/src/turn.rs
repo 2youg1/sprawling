@@ -1035,7 +1035,6 @@ pub struct ToolBench {
 }
 
 /// What the bench decided, alongside what the tool produced.
-#[non_exhaustive]
 #[derive(Debug)]
 pub enum BenchOutcome {
     /// The tool ran; this is its result. `fenced` carries the commit

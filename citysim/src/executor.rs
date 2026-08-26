@@ -250,14 +250,6 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
                 "invoke tool",
                 "this call was already made",
             )),
-            // An outcome this simulator does not know is refused rather
-            // than guessed: a new bench verdict must be taught here before
-            // it can pass.
-            _ => Err(AxError::failure(
-                AxCode::InvalidArgs,
-                "invoke tool",
-                "the bench returned an outcome this scenario does not handle",
-            )),
         }
     };
 

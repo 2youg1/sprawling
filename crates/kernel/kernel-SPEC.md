@@ -128,6 +128,10 @@ gate ──▶ 上述全部（组合面）＋idem
 
 ## 8 接口先行（按模块分章）
 
+**`#[non_exhaustive]` 辖谁，不辖谁（整修卡 R2.16 校正本文）**：它辖**冻结面**——会被序列化、跨版本读回、或被城外读者依赖的枚举（`AxCode`、`EventKind`、`Effect`、`DialectKind`、`DelegateKind` 等）。它**不辖判定输出**：`SpendVerdict`／`CtxVerdict`／`StallVerdict`／`GoalVerdict`／`RepairVerdict`／`DelegationVerdict`／`RegisterVerdict`／`Admission` 一律**刻意穷尽**，理由与 runtime-SPEC 对 `PhaseOutcome` 写的同一句：新增一种结论必须逼每个调用方表态，不得掉进 catch-all。`crates/kernel/src/budget.rs` 的行内注释「Deliberately exhaustive verdict enum (verdicts are not wire enums)」是同一条规则的第三处表述。
+
+本节此前在这十一个判定枚举上写了 `#[non_exhaustive]`，**而代码从来没有标过它们**——文档单方面失真，不是实现走样。按 AGENTS.md「现实与三份文件都不符时以现实为准，先改文件并写明理由」，本卡删去那十一处标注。ARCHITECTURE.md §3「nothing here is published」是这条分界成立的前提：工作区之外没有下游，故 `#[non_exhaustive]` 在判定输出上买不到任何兼容性，只卖掉 §7 想要的那个编译期穷尽性。
+
 ### 8-1 kernel::error（S1.01）
 
 **类型**：
@@ -562,13 +566,13 @@ pub struct BudgetUse { pub usd: UsdMicros, pub tokens: Tokens }    // serde（Pr
 pub struct BudgetLevel { pub cap: BudgetCap, pub used: BudgetUse }
 pub struct BudgetLadder { pub city: BudgetLevel, pub building: BudgetLevel, pub run: BudgetLevel }
 #[non_exhaustive] pub enum BudgetLayer { City, Building, Run }
-#[non_exhaustive] pub enum SpendVerdict { Admit, Exhausted { layer: BudgetLayer } }
+pub enum SpendVerdict { Admit, Exhausted { layer: BudgetLayer } }
 /// Total function: u64 overflow means the spend exceeds any representable
 /// remainder, hence Exhausted (fail-closed), never a panic or an error path.
 pub fn admit_spend(ladder: &BudgetLadder, cost: &BudgetUse) -> SpendVerdict;
 
 pub struct CtxLock(Tokens);   // pub const fn new
-#[non_exhaustive] pub enum CtxVerdict { Within, Reached }
+pub enum CtxVerdict { Within, Reached }
 pub fn observe_ctx(used: Tokens, lock: CtxLock) -> CtxVerdict;     // used ≥ lock → Reached
 ```
 
@@ -582,8 +586,8 @@ pub fn observe_ctx(used: Tokens, lock: CtxLock) -> CtxVerdict;     // used ≥ l
 ```rust
 pub struct QueueStats { pub depth: u64, pub capacity: u64 }
 pub struct ItemMeta { pub cost: u64 }        // 槽位数：Signal＝1，受理新 Run 的 fd 预留可 >1
-#[non_exhaustive] pub enum ShedReason { CapacityExhausted }
-#[non_exhaustive] pub enum Admission { Admit, Shed { reason: ShedReason } }
+pub enum ShedReason { CapacityExhausted }
+pub enum Admission { Admit, Shed { reason: ShedReason } }
 /// Decides whether the queue admits one more item. Pure and total:
 /// depth + cost ≤ capacity admits; checked arithmetic, overflow sheds.
 pub fn admit(stats: &QueueStats, item: &ItemMeta) -> Admission;
@@ -597,7 +601,7 @@ pub fn admit(stats: &QueueStats, item: &ItemMeta) -> Admission;
 
 ```rust
 pub struct ActionFingerprint(B3Hash);        // 动作规范字节的摘要；derive(bytes) 内调 B3Hash::digest
-#[non_exhaustive] pub enum StallVerdict { Ok, Stall { repeats: u32 } }
+pub enum StallVerdict { Ok, Stall { repeats: u32 } }
 /// Sole stall criterion. Sample = recent fingerprints
 /// in time order; a tail run of identical prints ≥ LOOP_REPEAT_THRESHOLD
 /// is a stall. Counters and queues live with the caller, never here.
@@ -611,10 +615,10 @@ pub fn observe(recent: &[ActionFingerprint]) -> StallVerdict;
 
 ```rust
 pub struct GoalId(String);                   // 非空
-#[non_exhaustive] pub enum GoalResource { Path(Address), External(String) }  // External 非空（外部不可分资源名）
+pub enum GoalResource { Path(Address), External(String) }  // External 非空（外部不可分资源名）
 pub struct GoalEntry { pub id: GoalId, pub owner: String, pub resources: Vec<GoalResource>,
                        pub statement: String, pub standing: bool }
-#[non_exhaustive] pub enum GoalVerdict { Clear, Conflict { with: GoalId } }
+pub enum GoalVerdict { Clear, Conflict { with: GoalId } }
 /// Same-resource mutual exclusion only: detection is
 /// kernel's, arbitration is not. Paths conflict on prefix overlap either
 /// way; External conflicts on equality; Path vs External never.
@@ -627,7 +631,7 @@ pub fn detect_conflict(registered: &[GoalEntry], candidate: &GoalEntry) -> GoalV
 ### 8-16 kernel::repair（S2.07）
 
 ```rust
-#[non_exhaustive] pub enum RepairVerdict { Lease, Queued { holder: RunId } }
+pub enum RepairVerdict { Lease, Queued { holder: RunId } }
 /// One live lease per scope subtree: overlap either
 /// way queues; the same holder re-requesting its exact scope re-leases
 /// (idempotent). State (the active map) lives with the caller.
@@ -648,8 +652,8 @@ impl Delegator { pub fn root() -> Delegator;                     // 铸造点：
 pub struct Delegate { /* kind —— 私有 */ }                        // 无 delegate 方法：trybuild 反例
 impl Delegate { pub fn kind(&self) -> &DelegateKind; }
 
-#[non_exhaustive] pub enum Depth { Root, Delegated }
-#[non_exhaustive] pub enum DelegationVerdict { Allow, Deny }
+pub enum Depth { Root, Delegated }
+pub enum DelegationVerdict { Allow, Deny }
 /// Dynamic half of the two-layer guard (static half = the missing method).
 pub fn admit(parent: Depth, kind: &DelegateKind) -> DelegationVerdict;   // Delegated 恒 Deny
 ```
@@ -672,7 +676,7 @@ impl Artifact {
 
 pub struct Registry { /* artifacts: BTreeMap<String, Artifact>, assets: BTreeSet<String>,
                          residents: BTreeSet<ResidentId> —— 私有 */ }
-#[non_exhaustive] pub enum RegisterVerdict { Registered, AlreadyRegistered }
+pub enum RegisterVerdict { Registered, AlreadyRegistered }
 impl Registry {
     pub fn new() -> Registry;
     pub fn register_artifact(&mut self, artifact: Artifact) -> RegisterVerdict;   // 键＝locator 规范拼写

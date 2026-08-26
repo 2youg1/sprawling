@@ -4001,16 +4001,6 @@ impl RunWorker {
                         "invoke tool",
                         "this call was already made",
                     )),
-                    // Unreachable today: all four of the bench's answers
-                    // are above. The arm exists because `BenchOutcome`
-                    // is `#[non_exhaustive]`, so this crate cannot match
-                    // it exhaustively - deleting it is a compile error,
-                    // which is how I found out.
-                    _ => Err(AxError::failure(
-                        AxCode::InvalidArgs,
-                        "invoke tool",
-                        "the bench returned an outcome this assembly does not handle",
-                    )),
                 }
             };
             let mut fence = |t: TimeMs| {
