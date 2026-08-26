@@ -3672,9 +3672,6 @@ impl RunWorker {
         // the reserved subtree, which no write domain does, so it goes
         // through the person rather than through the write gate.
         let rules_tool = city::RulesTool::new(&self.city_root, building.addr().clone())?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&archive_tool))?;
         // The execution boundary. What the run may reach is the frozen
         // config's answer; where the engine and the interpreter live is
         // the machine's, so a city carried elsewhere does not carry this
@@ -3694,48 +3691,18 @@ impl RunWorker {
             runtime::Fuel(config.sandbox.fuel),
             addr.clone(),
         )?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&exec))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&claim_tool))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&edit))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&status))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&signal_tool))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&goal_tool))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&pr_tool))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&delegate_tool))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&workshop_tool))?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&rules_tool))?;
         // The one door onto the rest of the city. It is registered
         // beside `signal` rather than behind it because the two answer
         // different questions - who is there, and what to say to them -
         // and until this line a model could only reach an address
         // somebody had already handed it.
         let neighbours_tool = city::NeighboursTool::new(seen)?;
-        catalog
-            .borrow_mut()
-            .admit_tool(kernel::Tool::meta(&neighbours_tool))?;
         // The one tool that reads, and the only caller of the catalog's
         // second-level disclosure: without it a building's reading room
         // could name a skill and never hand it over. It holds the
         // catalog rather than a copy of what is in it, so a skill
         // admitted below this line is still reachable by name.
         let read = runtime::ReadTool::new(&write_root, std::rc::Rc::clone(&catalog))?;
-        catalog.borrow_mut().admit_tool(kernel::Tool::meta(&read))?;
         // The net, not the forecast, is the defence (semantic authority
         // 4.4). Two handles on one repository: the bench fences a
         // command its forecast suspects, and the driver fences every
@@ -3748,29 +3715,44 @@ impl RunWorker {
                 addr.as_str(),
             )
             .for_job(addr.clone(), job_locator.clone());
-        bench.register(Box::new(edit))?;
-        bench.register(Box::new(status))?;
-        bench.register(Box::new(signal_tool))?;
-        bench.register(Box::new(goal_tool))?;
-        bench.register(Box::new(pr_tool))?;
-        bench.register(Box::new(claim_tool))?;
-        bench.register(Box::new(delegate_tool))?;
-        bench.register(Box::new(workshop_tool))?;
-        bench.register(Box::new(rules_tool))?;
-        bench.register(Box::new(neighbours_tool))?;
-        bench.register(Box::new(archive_tool))?;
-        bench.register(Box::new(exec))?;
-        bench.register(Box::new(read))?;
         for cluster in &self.governance.granted {
             bench.grant(cluster.clone());
         }
+        // One registration feeds both. The catalogue is what the model
+        // was told exists and the bench is what routes the call it
+        // makes, so a name on one list and not the other is either a
+        // tool nobody can call or a call nobody was told about. These
+        // used to be two lists of thirteen lines, agreeing by hand.
+        //
+        // The order is the catalogue's: `render` puts the tools in front
+        // of the model in this order and the resident segment is hashed,
+        // so this sequence is part of what stays cacheable across a run.
+        let mut admitted: Vec<Box<dyn kernel::Tool>> = vec![
+            Box::new(archive_tool),
+            Box::new(exec),
+            Box::new(claim_tool),
+            Box::new(edit),
+            Box::new(status),
+            Box::new(signal_tool),
+            Box::new(goal_tool),
+            Box::new(pr_tool),
+            Box::new(delegate_tool),
+            Box::new(workshop_tool),
+            Box::new(rules_tool),
+            Box::new(neighbours_tool),
+            Box::new(read),
+        ];
         // External tools, for a building whose configuration names a
         // server. They join the table here, before the catalogue is
         // rendered, because the tool table is frozen with the run: what
         // the model is told exists is decided once.
-        for tool in self.mcp_tools(&config, &write_root, rules.policy().confidential) {
-            catalog.borrow_mut().admit_tool(kernel::Tool::meta(&tool))?;
-            bench.register(Box::new(tool))?;
+        for server in self.mcp_tools(&config, &write_root, rules.policy().confidential) {
+            let tool: Box<dyn kernel::Tool> = Box::new(server);
+            admitted.push(tool);
+        }
+        for tool in admitted {
+            catalog.borrow_mut().admit_tool(tool.meta())?;
+            bench.register(tool)?;
         }
         // The reading room, and only it. The city's shelves may hold a
         // thousand skills; what costs resident bytes is the list this
@@ -4024,6 +4006,11 @@ impl RunWorker {
                         "invoke tool",
                         "this call was already made",
                     )),
+                    // Unreachable today: all four of the bench's answers
+                    // are above. The arm exists because `BenchOutcome`
+                    // is `#[non_exhaustive]`, so this crate cannot match
+                    // it exhaustively - deleting it is a compile error,
+                    // which is how I found out.
                     _ => Err(AxError::failure(
                         AxCode::InvalidArgs,
                         "invoke tool",

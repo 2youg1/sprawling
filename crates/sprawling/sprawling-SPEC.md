@@ -705,6 +705,20 @@ R2.05（交接件）与 R2.06（计划）定下的形制是：**「还没有」�
 
 **红（两条，各咬一处）**：把 `Roadmap.md`／`City.md` 各做成**同名目录**（R2.05／R2.06 用过的手法，不碰权限，在 Windows 上稳定）。一：楼页的 `problems` 必须点名 `Roadmap.md`——本卡之前它说的是 `no four-column table found`。二：`close_city` 必须以点名 `City.md` 的错误拒绝——本卡之前它返回 `Ok` 并写下一条指向空字节的 must-read。
 
+## 8-27 一次登记喂到两处，于是只写一遍（整修卡 R2.13）
+
+**病灶不是缺陷，是两个权威**。`dispatch_in` 里目录准入与工作台注册是两份各十三行的名单，而同一段的注释自述「one registration feeds both」。两份名单今天相等，但相等是人维护出来的：只上工作台的工具是没人能叫的工具，只上目录的工具是告诉了模型、叫下去却不存在的工具。
+
+**现形**：一个 `Vec<Box<dyn kernel::Tool>>`，一个循环里先 `admit_tool(tool.meta())` 再 `bench.register(tool)`。順序取**目录的**那一份：`Catalog::render` 按准入顺序把工具摆在模型面前，而 resident 段是要算哈希的，所以这个顺序是缓存面的一部分。十三件的次序逐字照旧代码排（archive、exec、claim、edit、status、signal、goal、pr、delegate、workshop、rules、neighbours、read，然后 MCP），故字节不变。
+
+**它以什么收口**（照 §8-17 的写法）：**没有可咬的红**，因为两份名单今天并未漂移——我逐项对过，十三对十三。一条「两集合相等」的断言今天就绿，而且改完之后它恒绿（不可能不相等），那不是测试而是装饰。收口在于：变化后两份名单不可能不相等，且 141 条现有测试（包括多条断言工具名与 prefix 内容的）全绿。**不为了凑一个红而补一条前后都绿的测试。**
+
+**尺寸不是本卡的理由**：`dispatch_in` 983 → 977。五十行准入换成四十五行名单加循环，净值接近零；换来的是一个权威而不是两个。
+
+**本卡推翻的一个假设（写在这里以免重走）**：我判断 `invoke` 里 `match bench.invoke(…)` 的 `_ =>` 臂是死代码——`BenchOutcome` 四个变体已全部列出，且 ARCHITECTURE.md §7 的纪律是「新增一种答案而不回答它就不编译」。删掉它即得 `E0004`：`BenchOutcome` 带 `#[non_exhaustive]`，而本 crate 在它定义的 crate 之外，因此永远无法穷尽匹配。那一臂因此保留，并注明它为何不可达。
+
+——**留给下一个人的问题**：`runtime` 不发布（ARCHITECTURE.md §3：「nothing here is published」），而 `#[non_exhaustive]` 是为 crate 外的第三方准备的。在一个工作区内部的判定输出上用它，换来的是每一个下游 match 都得写一个永不执行的分支，而代价正是 §7 想要的那个编译期穷尽性。runtime-SPEC 第 123 行已写下一条相关规则（「14.3 的 non_exhaustive 规则辖 wire 冻结枚举，不辖判定输出」），而 `BenchOutcome` 正是一个判定输出。**这一条看上去是规则与实现不符，但改它动的是 `runtime` 公开面且没有红，故本卡不动，只点名。**
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。
