@@ -419,7 +419,7 @@ impl IdemKey {
 impl fmt::Display for IdemKey { /* "idem<v>-<hex32>" */ }
 ```
 
-serde：字符串形。动作规范化（action_canonical 的构造规则）属 S2 工具面；本模块只定派生函数与框架。
+serde：字符串形。动作规范化（action_canonical 的构造规则）属 S2 工具面——自整修卡 R2.15 起它在那一面有且只有一个实现，`ToolCall::action`（§8-23）；本模块只定派生函数与框架。
 
 ### 8-7 kernel::consts_external（S1.05）
 
@@ -822,6 +822,13 @@ pub struct ToolMeta { pub name: ToolName, pub disclosure: String, pub params: Pa
 pub struct ToolCall { pub id: String, pub name: ToolName, pub args: Payload }
                                     // id：S3.08 增——tool_use↔tool_result 对号是两 Dialect 的 wire 硬性要求；
                                     // 脚本适配器用确定性合成 id（call-<n>）
+impl ToolCall {
+    /// The bytes that say what this call does: the name, then the
+    /// arguments. `IdemKey::derive` takes them as `action_canonical`;
+    /// `id` stays out, because two calls differing only by wire id are
+    /// the same action.
+    pub fn action(&self) -> Result<Vec<u8>, AxError>;    // R2.15 迁入
+}
 pub struct ToolOutcome { pub result: Payload }
 
 pub trait Tool {
@@ -841,6 +848,9 @@ pub enum ExecArm { Program { path: String, args: Vec<String> }, Python { code: S
 - **conformance 三断言**：①meta 八字段形状合法（name 文法、disclosure 非空）；②错名调用拒收（E_INVALID_ARGS）；③拒收后工具仍可用（再次正确调用不受污染）。
 - ExecArm 住本模块而非 runtime：discard::forecast（S2）先于 exec 工具（S3）需要它；工具面参数枚举属 tool 面（「可枚举的必用枚举」）。
 - **`Effect::Connector { label }`【R1.13 新增】**：目的地由**登记**而非逐调用参数定的那一类出站。`Egress` 的主语是一次调用（去哪台主机写在 args 里），`Connector` 的主语是一件工具（它恒只通往那一台 server）。**两者不得合并**：合并后要么让模型去填一个城自己已经知道的 `host`（一个可以填错的事实），要么让出站门拿不到目标而无法判定。发现它的时刻就是接线的时刻：P4.06 写下 `Effect::Egress` 时没有调用方，而第一次真调用当场拿到 `E_INVALID_ARGS: declares Egress but named no host`。
+- **`ToolCall::action` 住本模块【整修卡 R2.15 迁入】**：`IdemKey::derive` 的第三个入参由什么构成，本是 §8-6 明写「属 S2 工具面」的一条规则，而它此前**一处也不在工具面**——`bin::assembly` 与 `citysim::executor` 各写了一遍，且两遍不等：前者取 name 加 args，后者只取 name。**一条规则两个权威**（与下条 `ServerLabel` 同一理由），而这一次两个权威已经漂移出后果：`runtime::run` 每回合采一次 `t` 并把同一个 `t` 发给一波里的每次调用，于是 citysim 那一遍使**一波之内两次同名调用得同一把键**，`ToolBench::invoke` 的 dedup 当场判 `Duplicate`，第二次以「this call was already made」被拒——一件模型只能读作自己出错的事。规则回到它被指定的那一面，且由 `ToolCall` 自己回答，因为**它就是那个动作**。`id` 不进动作字节：两次只有 wire id 不同的调用是同一个动作。
+- **`action` 上报序列化失败而不吞掉它**：搬进来之前那句是 `serde_json::to_string(&call.args).unwrap_or_default()`，而 `unwrap_or_default` 在这里产空串，会让两次参数不同的调用得同一把键——正是本条要消灭的那种碰撞。`Payload` 拒浮点且键恒为字符串，故这条失败臂今天不可达；但「不可达所以取默认值」与「不可达所以据实上报」之间，只有后者在它变得可达那天仍然是对的。
+- **位次仍归调用方，本卡不动它**：`seq` 说的是「这次调用坐在这一跑的第几位」，只有驱动那一跑的一方知道。把它一并收进 `ToolBench` 会让键在一次驱动内恒不重复，于是 dedup 永不触发，`dedup_runs_before_the_side_effect`（同一把键调两次、断言第二次不落地）连同它守的那条不变量一起变得写不出来。**收窄接口不值这个价**，故本卡只搬动作字节；citysim 改用与 `bin::assembly` 同形的每跑计数器，是因为钟读数当位次逐字违反确定性第 7 条（「never from a clock」），而不是因为位次该归本模块。
 - **`ServerLabel` 住本模块而非 protocol【R1.13 迁入】**：它是一台 MCP server 在城里的名字，也是它每件工具名的第一段（`{label}_{tool}`），故它的文法就是 `ToolName` 的文法减下划线——写在两个 crate 里就是一条规则两个权威。**减下划线是判定而非口味**：允许它会让 `apps_foo_bar` 同时读作两种拆法，而这个名字要路由一次调用。迁入后 `city::config_layers` 在文件边界就能解析它（city 只见 kernel），于是「非法标签」在 Run 存在之前就不可表示。
 
 ### 8-24 kernel::model（S2.09；缝清单文件）

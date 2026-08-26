@@ -719,6 +719,21 @@ R2.05（交接件）与 R2.06（计划）定下的形制是：**「还没有」�
 
 ——**留给下一个人的问题**：`runtime` 不发布（ARCHITECTURE.md §3：「nothing here is published」），而 `#[non_exhaustive]` 是为 crate 外的第三方准备的。在一个工作区内部的判定输出上用它，换来的是每一个下游 match 都得写一个永不执行的分支，而代价正是 §7 想要的那个编译期穷尽性。runtime-SPEC 第 123 行已写下一条相关规则（「14.3 的 non_exhaustive 规则辖 wire 冻结枚举，不辖判定输出」），而 `BenchOutcome` 正是一个判定输出。**这一条看上去是规则与实现不符，但改它动的是 `runtime` 公开面且没有红，故本卡不动，只点名。**
 
+## 8-28 一次调用的键，只有一份读法（整修卡 R2.15）
+
+```rust
+// dispatch_in 驱动块内：六行手写的动作字节换成一个问句
+let key = kernel::IdemKey::derive(&run_id, kernel::Seq::new(at), &call.action()?);
+```
+
+**本卡不修 `bin::assembly` 的缺陷，因为这里没有缺陷**。被修的是 citysim（citysim-SPEC §8-4）；本文件变的是「谁来回答动作字节」。原先这六行把 name 与 `serde_json::to_string(&call.args)` 拼起来，是全库两份实现中对的那一份；对的那一份待在装配层，正是另一份能静静漂走的原因。`kernel-SPEC §8-6` 早写着这条规则「属 S2 工具面」，而它一处也不在那里。现在它在（`ToolCall::action`，kernel-SPEC §8-23），本文件改为问它。
+
+**字节逐字不变**：`action()` 内部就是搬过去的同一句（name 字节接 args 的 JSON 字节），位次仍是本地 `placed` 计数器。唯一的行为差异是 `unwrap_or_default()` 换成 `?`：一个序列化失败以前产空串（于是两次参数不同的调用得同一把键），现在上报。`Payload` 拒浮点且键恒为字符串，故这一臂今天不可达。
+
+**本卡推翻的一个假设（写在这里以免重走）**：我先判「让 `ToolBench` 自己持 run 与位次、`invoke` 内部铸键」是更好的形——传钟进来这件事就没有参数可传。核完否定：`ToolBench::seen` 恒从空集起，且键在过门之后才记入（runtime-SPEC §532），所以一个恒递增的内部位次会让键在一次驱动内永不重复，`BenchOutcome::Duplicate` 随之变成**任何门都达不到的变体**，`turn.rs` 那条 `dedup_runs_before_the_side_effect`（同键调两次、断言文件未再变）连同它守的不变量一起写不出来。**把一个可测的防御换成不可测的死代码，不是加固。** 位次因此留在调用方。
+
+**顺手记下、本卡不动的一件事**：dedup 是一道**今天接不到任何东西的防御**。`kernel::idem` 自述它存在是为了「resume 与 replay 重派出同一把键」的双付防御，而 `seen` 从不从历史播种，`sprawling resume` 也不重跑一跑（ARCH §5 末：它只验链、把丢了结果的调用关成 unknown、并报告等人的事）。本卡之后，`Duplicate` 在两个驱动器里都不会再出现，而这是**对的**：它本就是重放路径上的结果。要让它真正接上，得让 `seen` 从账本重建——那是另一张卡，它自己的红在「重建后的 worker 不会把已经付过的钱再付一遍」上。
+
 ## 8.5 两个设计
 
 **A（选中）**：`build.rs` 拷贝资产入 OUT_DIR＋`include_bytes!`——单点嵌入，S4 换 wasm 产物时只改拷贝源。**B（落选）**：`include_bytes!` 直指 `../web/assets`——少一步拷贝，但把「产物在哪」写死进源码路径，S4 换源即改代码；且无 `rerun-if-changed` 粒度。翻案条件：无。

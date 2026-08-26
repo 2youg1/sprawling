@@ -190,10 +190,18 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
     };
 
     let bench_who = who.clone();
+    // Where this call sits in this run. It used to be the clock reading,
+    // and a wave hands every call in it the same instant on purpose - so
+    // two calls of one tool inside one wave derived one key and the
+    // second came back deduplicated. Determinism rule 7 rules a clock out
+    // of a key outright; a position cannot be a clock.
+    let placed = Cell::new(0u64);
     let mut invoke = |call: &kernel::ToolCall, t: TimeMs| {
         // Every door the call must pass is the bench's to route; the
         // simulator stays thin (Handoff verdict 10).
-        let key = IdemKey::derive(&run, Seq::new(t.value()), call.name.as_str().as_bytes());
+        let at = placed.get();
+        placed.set(at.saturating_add(1));
+        let key = IdemKey::derive(&run, Seq::new(at), &call.action()?);
         let ctx = GateContext {
             actor: bench_who.clone(),
             now: t,

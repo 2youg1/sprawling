@@ -506,3 +506,82 @@ fn s3_14_the_run_is_byte_identical_when_replayed() {
     let second = run_scenario(scenario(None)).unwrap();
     assert_eq!(first.lines, second.lines);
 }
+
+/// R2.15: two calls of one tool inside one wave are two calls.
+///
+/// The driver gives every call in a wave the same `t` on purpose — a wave
+/// is one instant. A key derived from that `t` is therefore constant
+/// across the wave, so a second call of the same tool collided with the
+/// first and came back deduplicated. Nothing about it is the model's
+/// fault, and the message it read said the opposite.
+#[test]
+fn two_reads_in_one_wave_are_two_calls() {
+    fn args(path: &str) -> Payload {
+        let mut map = serde_json::Map::new();
+        map.insert("path".to_owned(), serde_json::Value::String(path.into()));
+        Payload::new(map).unwrap()
+    }
+    fn probe_at(id: &str, path: &str) -> ToolCall {
+        ToolCall {
+            id: id.to_owned(),
+            name: ToolName::parse("probe").unwrap(),
+            args: args(path),
+        }
+    }
+
+    let report = run_scenario(Scenario {
+        // One turn carrying two calls of one tool, different arguments
+        // and different wire ids.
+        model: ScriptModel::new(vec![
+            ModelReturn {
+                usage: None,
+                stop: None,
+                billed_usd_micros: None,
+                message: Payload::empty(),
+                calls: vec![
+                    probe_at("call-1", "alpha.md"),
+                    probe_at("call-2", "beta.md"),
+                ],
+            },
+            ModelReturn {
+                usage: None,
+                stop: None,
+                billed_usd_micros: None,
+                message: Payload::empty(),
+                calls: vec![],
+            },
+        ]),
+        bench: bench_with(vec![Box::new(ScriptTool::new(
+            probe_meta(),
+            vec![
+                Ok(ToolOutcome {
+                    result: args("first"),
+                }),
+                Ok(ToolOutcome {
+                    result: args("second"),
+                }),
+            ],
+        ))]),
+        ..scenario(None)
+    })
+    .unwrap();
+
+    let results: Vec<serde_json::Value> = report
+        .lines
+        .iter()
+        .map(|line| serde_json::from_slice::<serde_json::Value>(line).unwrap())
+        .filter(|value| value["kind"] == "tool_result")
+        .map(|value| value["data"].clone())
+        .collect();
+    assert_eq!(results.len(), 2, "both calls answer: {results:?}");
+    for (n, result) in results.iter().enumerate() {
+        assert!(
+            result.get("error").is_none(),
+            "call {n} came back as an error: {result}"
+        );
+        assert!(
+            result.get("result").is_some(),
+            "call {n} came back without a result: {result}"
+        );
+    }
+}

@@ -212,6 +212,36 @@ pub struct ToolCall {
     pub args: Payload,
 }
 
+impl ToolCall {
+    /// The bytes that say what this call does, for `IdemKey::derive` to
+    /// take as its `action_canonical`.
+    ///
+    /// The name and the arguments together are the action. Two calls of
+    /// one tool with different arguments are two actions, and a key that
+    /// read only the name made them one — which the deduplication then
+    /// reported to the model as a call it had already made. `id` stays
+    /// out: two calls differing only by wire id are the same action.
+    ///
+    /// # Errors
+    /// Propagates arguments that do not serialise. `Payload` keys are
+    /// strings and its values carry no floats, so this arm is out of
+    /// reach today; reporting it is still what keeps the key honest if
+    /// that ever stops being true, because the empty string this used to
+    /// substitute would collide two different calls into one key.
+    pub fn action(&self) -> Result<Vec<u8>, AxError> {
+        let mut action = self.name.as_str().as_bytes().to_vec();
+        let args = serde_json::to_string(&self.args).map_err(|err| {
+            AxError::failure(
+                AxCode::InvalidArgs,
+                "read a tool call's action",
+                err.to_string(),
+            )
+        })?;
+        action.extend_from_slice(args.as_bytes());
+        Ok(action)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolOutcome {
     pub result: Payload,

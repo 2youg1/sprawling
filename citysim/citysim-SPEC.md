@@ -101,6 +101,26 @@ Stage 2 骨架的四个替换点逐一换真，剧本仍确定性（无时钟采
 
 事件序新增断言：edit 成功波携 checkpoint_committed（波前，断言形＝每个 tool_called 之前最近的 checkpoint_committed 晚于最近的 model_returned）；tool_result 信封可携 ClockStamp（非 Off 时）；越域写被 domain 门拒且 refusal 以 tool_result 回流；链恒可验；双跑字节对拍。“真 gateway 适配器换入”的取义：dialect 翻译面入链（纯函数，确定性保持）；endpoint 的 HTTP 面不入 sim（网络即非确定），其验证住 gateway 自身的回环假服务测试（gateway-SPEC §2）。
 
+### 8-4 一波里的两次调用不再被当成同一次（整修卡 R2.15）
+
+```rust
+// citysim::executor——驱动块内
+let placed = Cell::new(0u64);              // 位次：每跑一个计数器，与 bin::assembly 同形
+let key = IdemKey::derive(&run, Seq::new(at), &call.action()?);   // 动作字节：kernel::tool 唯一一份
+```
+
+**病灶**：`IdemKey::derive(&run, Seq::new(t.value()), call.name.as_str().as_bytes())` ——位次处塞的是**钟读数**，动作字节里**只有工具名**。两处各自都不致命，合起来致命：`runtime::run` 每回合采一次 `t`，再把同一个 `t` 发给一波里的每次调用（那是驱动器故意的：一波是一个瞬间）。于是一波之内两次同名调用拿到**完全相同的 `IdemKey`**，`ToolBench::invoke` 的 dedup 当场判 `Duplicate`，第二次以 `E_INVALID_ARGS`／「this call was already made」回流给模型，且 `recovery` 为空串——一条无路可走的拒绝。参数不同不救（参数不进键），call id 不同也不救。跨回合不撞：本 crate 的 `tick` 每次 `now()` 加一。
+
+**它是潜伏的，不是在燃的**：本卡之前全部场景皆绿，因为没有一条现有剧本在一波里发两次同名调用。它咬的是下一个写这种剧本的人，而那个人会去查自己的剧本——因为错误说的是「这次调用已经发生过」。
+
+**为何是本 crate 的错而不是驱动器的**：一波共用一个 `t` 是 `runtime::run` 已记录的设计（一波是一个瞬间，而时间参数化是确定性第 2 条）。把一个“同一波内恒相等”的量当作位次，是本 crate 单方面的读法，并且逐字违反确定性第 7 条（「never from a clock」）——那个 `Seq` 是钟读数换了个类型。
+
+**现形**：动作字节改调 `ToolCall::action`（kernel-SPEC §8-23，本卡新增，全库唯一一份）；位次改用每跑一个的计数器，与 `bin::assembly` 同形。两个驱动器于是对「一次工具调用的键怎么算」只有一份读法。
+
+**红**：`two_reads_in_one_wave_are_two_calls`——一个回合携两次同名、参数不同的调用，断言两条 `tool_result` 都带结果、都不带 `error`。本卡之前第二条是 `this call was already made`。
+
+**不变的东西**：`IdemKey` 不进任何 payload，故账本字节不变，`golden-p0`（由 `run_scenario` 现跑重生）不需重生——这是带原型跑完全套验过的，不是读一个 payload 推的。
+
 ## 8.5 两个设计
 
 **A（选中）：checker 复用 runtime::replay**——验证语义一处；citysim 只加「检查器」这个角色名。

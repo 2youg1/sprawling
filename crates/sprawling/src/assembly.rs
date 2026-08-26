@@ -3944,17 +3944,12 @@ impl RunWorker {
             let mut invoke = |call: &kernel::ToolCall, t: TimeMs| {
                 let at = placed.get();
                 placed.set(at.saturating_add(1));
-                // Name and arguments together are the action. Two
-                // identical calls at two positions are two keys and both
-                // run; the same position replayed is one key, which is
-                // what deduplication is for.
-                let mut action = call.name.as_str().as_bytes().to_vec();
-                action.extend_from_slice(
-                    serde_json::to_string(&call.args)
-                        .unwrap_or_default()
-                        .as_bytes(),
-                );
-                let key = kernel::IdemKey::derive(&run_id, kernel::Seq::new(at), &action);
+                // What the action is, is the tool face's to say
+                // (kernel-SPEC 8-23). Two identical calls at two
+                // positions are two keys and both run; the same position
+                // replayed is one key, which is what deduplication is
+                // for.
+                let key = kernel::IdemKey::derive(&run_id, kernel::Seq::new(at), &call.action()?);
                 let ctx = kernel::GateContext {
                     actor: bench_who.clone(),
                     now: t,

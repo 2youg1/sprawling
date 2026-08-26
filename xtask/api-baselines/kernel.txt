@@ -80,6 +80,7 @@ impl kernel::TaintSet
 impl kernel::TaintSource
 impl kernel::TimeMs
 impl kernel::Tokens
+impl kernel::ToolCall
 impl kernel::ToolName
 impl kernel::UsdMicros
 impl kernel::Version
@@ -352,6 +353,7 @@ pub fn kernel::TimeMs::value(&self) -> u64
 pub fn kernel::Tokens::checked_add(self, kernel::Tokens) -> core::option::Option<kernel::Tokens>
 pub fn kernel::Tool::invoke(&mut self, &kernel::ToolCall) -> core::result::Result<kernel::ToolOutcome, kernel::AxError>
 pub fn kernel::Tool::meta(&self) -> &kernel::ToolMeta
+pub fn kernel::ToolCall::action(&self) -> core::result::Result<alloc::vec::Vec<u8>, kernel::AxError>
 pub fn kernel::ToolName::as_str(&self) -> &str
 pub fn kernel::ToolName::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
 pub fn kernel::ToolName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
