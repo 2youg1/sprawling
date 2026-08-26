@@ -1800,6 +1800,33 @@ struct Knock {
     budget: kernel::BudgetCap,
 }
 
+/// Where one run stands before anything is built for it: the rules over
+/// it, the model it may reach, who it runs as, and the tree it writes in.
+///
+/// One value rather than three, because the three readings of this phase
+/// interlock: the lease is named after the run, the run's id is minted
+/// after a credential renewal that may go to the network, and that
+/// renewal is chosen by the building's own rules. Splitting them would
+/// move a clock sample, and where the one sampling point lands is not
+/// something a structural change may alter (ARCHITECTURE.md section 10).
+struct Site {
+    building: city::Building,
+    rules: city::BuildingRules,
+    /// City, building and resident layers, resolved once and frozen for
+    /// the whole run.
+    config: kernel::FrozenConfig,
+    model: gateway::ModelEntry,
+    adapter: Box<dyn Model + Send>,
+    identity: city::Identity,
+    who: String,
+    run_id: RunId,
+    /// Some when the building asks for review: the tree this run writes
+    /// in, which goes back whether the run finished or failed.
+    lease: Option<memory::WorktreeLease>,
+    write_root: PathBuf,
+    branch: Option<String>,
+}
+
 /// The desks one dispatch lends out, and takes back when the drive ends.
 ///
 /// Grouped because they are settled together and in one order: four
@@ -2243,6 +2270,114 @@ impl RunWorker {
     /// Propagates the first line the ledger refuses, in which case
     /// nothing changes; then whatever delivering, writing the plan or
     /// filing an entry reports.
+    /// Settles where this run stands, before anything is built for it.
+    ///
+    /// The building's rules, the model behind them, who the run is, and
+    /// the tree it writes in are one phase rather than three, because
+    /// they interlock: a lease is named after the run, the run's id is
+    /// minted after a credential renewal that may reach the network, and
+    /// which credential that is comes from the rules. Cutting them apart
+    /// would move a clock sample, and the single sampling point is not
+    /// something a structural change may relocate.
+    ///
+    /// # Errors
+    /// Propagates a building that cannot be read, rules or configuration
+    /// that will not load, a tag with no model behind it, a credential
+    /// that will not renew, and whatever the checkpoint or the worktree
+    /// says about lending a tree out.
+    fn stand_up(
+        &mut self,
+        addr: &Address,
+        job: &Locator,
+        task: &str,
+        goal: &str,
+        budget: kernel::BudgetCap,
+    ) -> Result<Site, AxError> {
+        // The building's own rules decide which models this run may
+        // reach, so they are read before one is chosen.
+        let building = city::Building::of(addr)?;
+        let rules = city::load(&self.city_root, building.addr())?;
+        // City, building and resident layers, resolved once and frozen
+        // for the whole run: re-reading them mid-run would let the two
+        // halves of one session be shaped by two different settings.
+        let config = city::load_config(&self.city_root, addr)?;
+        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
+        // A subscription credential that expires mid-run is a run that
+        // dies on its second turn, so it is renewed before the run
+        // starts rather than after a call comes back refused. The
+        // endpoint a login attached carries the provider's own name.
+        self.renew_if_stale(&chosen.endpoint.name.clone())?;
+        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
+        let model = chosen.entry.clone();
+        let adapter = self.adapter_for(&chosen)?;
+
+        // Who runs this: the address's own URBANITE.md when it has one,
+        // and an ephemeral worker when it does not. The identity supplies
+        // the resident segment, so the same resident reads the same
+        // instructions on every run and the prefix stays cacheable across
+        // its whole life.
+        let identity = city::Identity::load(&self.city_root, addr)?;
+        let who = identity.who();
+
+        // The run's identity is fixed before the tools are built: three
+        // of them mint ids from it, and an id minted from a run that did
+        // not exist yet would not be the same id on a replay.
+        let run_id = run_id_for(job, addr, now_ms()?);
+        // What this run was sent to do, held for as long as anything it
+        // raises is still waiting. `run_started` carries the same three
+        // facts and a restarted worker folds them from there; this is the
+        // live half, registered out of the values the plan below is built
+        // from so the two cannot say different things.
+        self.governance.sent(run_id, task, goal, budget);
+
+        // A building under review gives every run its own tree, and the
+        // run writes there instead of in the city. Nothing it writes is
+        // visible until somebody else checks it — the losing line of the
+        // design made physical rather than promised.
+        //
+        // The fence goes up first: a worktree branches from a commit, so
+        // the city needs one before it can lend anything out.
+        let mut lease = None;
+        if rules.review() {
+            memory::Checkpoint::open(&self.city_root)
+                .map_err(memory::MemoryError::into_ax)?
+                .ensure_base(addr.as_str(), now_ms()?, &who)
+                .map_err(memory::MemoryError::into_ax)?;
+            let trees =
+                memory::Worktrees::open(&self.city_root).map_err(memory::MemoryError::into_ax)?;
+            let name = memory::WorktreeName::parse(&run_id.to_string())
+                .map_err(memory::MemoryError::into_ax)?;
+            let claimed = trees.claim(&name).map_err(memory::MemoryError::into_ax)?;
+            self.record_for(
+                run_id,
+                &who,
+                addr.clone(),
+                EventKind::WorktreeOpened,
+                claimed
+                    .opened_payload()
+                    .map_err(memory::MemoryError::into_ax)?,
+            )?;
+            lease = Some(claimed);
+        }
+        let write_root = lease
+            .as_ref()
+            .map_or_else(|| self.city_root.clone(), |held| held.path().to_path_buf());
+        let branch = lease.as_ref().map(|held| held.name().as_str().to_owned());
+        Ok(Site {
+            building,
+            rules,
+            config,
+            model,
+            adapter,
+            identity,
+            who,
+            run_id,
+            lease,
+            write_root,
+            branch,
+        })
+    }
+
     /// Runs the plan, and hands back what the drive left behind.
     ///
     /// The three hooks live here because they are the only code that
@@ -4118,76 +4253,23 @@ impl RunWorker {
         // interrupted, and by then the plan has consumed the original.
         let job_locator = job.clone();
 
-        // The building's own rules decide which models this run may
-        // reach, so they are read before one is chosen.
-        let building = city::Building::of(&addr)?;
-        let rules = city::load(&self.city_root, building.addr())?;
-        // City, building and resident layers, resolved once and frozen
-        // for the whole run: re-reading them mid-run would let the two
-        // halves of one session be shaped by two different settings.
-        let config = city::load_config(&self.city_root, &addr)?;
-        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
-        // A subscription credential that expires mid-run is a run that
-        // dies on its second turn, so it is renewed before the run
-        // starts rather than after a call comes back refused. The
-        // endpoint a login attached carries the provider's own name.
-        self.renew_if_stale(&chosen.endpoint.name.clone())?;
-        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
-        let model = chosen.entry.clone();
-        let mut adapter = self.adapter_for(&chosen)?;
-
-        // Who runs this: the address's own URBANITE.md when it has one,
-        // and an ephemeral worker when it does not. The identity supplies
-        // the resident segment, so the same resident reads the same
-        // instructions on every run and the prefix stays cacheable across
-        // its whole life.
-        let identity = city::Identity::load(&self.city_root, &addr)?;
-        let who = identity.who();
-
-        // The run's identity is fixed before the tools are built: three
-        // of them mint ids from it, and an id minted from a run that did
-        // not exist yet would not be the same id on a replay.
-        let run_id = run_id_for(&job, &addr, now_ms()?);
-        // What this run was sent to do, held for as long as anything it
-        // raises is still waiting. `run_started` carries the same three
-        // facts and a restarted worker folds them from there; this is the
-        // live half, registered out of the values the plan below is built
-        // from so the two cannot say different things.
-        self.governance.sent(run_id, &task, &goal, budget);
-
-        // A building under review gives every run its own tree, and the
-        // run writes there instead of in the city. Nothing it writes is
-        // visible until somebody else checks it — the losing line of the
-        // design made physical rather than promised.
-        //
-        // The fence goes up first: a worktree branches from a commit, so
-        // the city needs one before it can lend anything out.
-        let mut lease = None;
-        if rules.review() {
-            memory::Checkpoint::open(&self.city_root)
-                .map_err(memory::MemoryError::into_ax)?
-                .ensure_base(addr.as_str(), now_ms()?, &who)
-                .map_err(memory::MemoryError::into_ax)?;
-            let trees =
-                memory::Worktrees::open(&self.city_root).map_err(memory::MemoryError::into_ax)?;
-            let name = memory::WorktreeName::parse(&run_id.to_string())
-                .map_err(memory::MemoryError::into_ax)?;
-            let claimed = trees.claim(&name).map_err(memory::MemoryError::into_ax)?;
-            self.record_for(
-                run_id,
-                &who,
-                addr.clone(),
-                EventKind::WorktreeOpened,
-                claimed
-                    .opened_payload()
-                    .map_err(memory::MemoryError::into_ax)?,
-            )?;
-            lease = Some(claimed);
-        }
-        let write_root = lease
-            .as_ref()
-            .map_or_else(|| self.city_root.clone(), |held| held.path().to_path_buf());
-        let branch = lease.as_ref().map(|held| held.name().as_str().to_owned());
+        // Where this run stands, settled in one phase and taken apart
+        // here: the fields are read all over what follows, and a value
+        // whose parts stay in step across the boundary is what the phase
+        // owes its caller. Same form as `Driven` below.
+        let Site {
+            building,
+            rules,
+            config,
+            model,
+            mut adapter,
+            identity,
+            who,
+            run_id,
+            lease,
+            write_root,
+            branch,
+        } = self.stand_up(&addr, &job, &task, &goal, budget)?;
         let pr = std::rc::Rc::new(std::cell::RefCell::new(collab::PrDesk::new(
             who.clone(),
             addr.clone(),

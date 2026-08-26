@@ -802,16 +802,43 @@ impl RunWorker {
 
 `dispatch_in` 今为 **833** 行（@3611），相位实测如下。目标 <200；每刀都是同一个形制：相位成为 `RunWorker` 的一个方法，多个活值归并为一个归位值类型（如 `Driven`），而不是一排得保持同步的局部变量。
 
-已切五刀（R2.19a–d），**975 → 548**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`admit_reading_room` 32。两个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）与 `Desks`（一起出借、一起结算的四张桌子加计划路径）。
+已切六刀（R2.19a–e），**975 → 495**，产出的方法均在阀值内：`drive_dispatch` 171、`settle_desks` 124、`settle_requests` 122、`conclude` 104、`stand_up` 92、`admit_reading_room` 32。三个归位值类型：`Driven`（驱动期间写、驱动之后读的四样东西）、`Desks`（一起出借、一起结算的桌子）与 `Site`（一次跑站在哪儿）。
 
-**剩下三刀**（目标 <200，预计落在 ~180）：
+**剩下四刀**（目标 <200，预计落在 ~160）。上一版此处写「三刀」而表里四行，是笔误：四个相位都还在 `dispatch_in` 里，四刀都要切。
 
-| 相位（§5 步） | 长度 | 归位值 |
-|---|---|---|
-| 规则／配置／选型／身份／租约 | ≈62 | 一个 `Site` 值（addr、building、rules、config、who、write_root、branch） |
-| 五张 desk 的构造 | ≈75 | 返 `Desks`（类型已存在，R2.19c 建） |
-| catalog＋十三件工具＋bench（步 6） | ≈175 | 一个 `Workbench`（catalog、bench、delegates、workshop） |
-| prefix＋RunPlan＋handoff（步 5） | ≈90 | 返 `(RunPlan, Handoff)` |
+| 刀 | 相位（§5 步） | 长度 | 归位值 |
+|---|---|---|---|
+| e | 规则／配置／选型／身份／租约（步 3） | ≈70 | `Site` |
+| f | 五张 desk 的构造（步 3–4） | ≈75 | `Desks`（扩 `pr` 与 `waiting`） |
+| g | catalog＋十三件工具＋bench（步 6） | ≈175 | `Workbench`（catalog、bench、delegates） |
+| h | prefix＋RunPlan＋handoff（步 5） | ≈90 | `(RunPlan, Handoff)` |
+
+**依赖序即执行序，而且依赖是真的**：工具块读十五个局部（`write_root`／`rules`／`config`／`building`／`who`／`depth`／`model` …），先有 `Site` 才能让 g 收得下参数，而不是把十五个形参排成一列。
+
+**第六刀：站位（§5 步 3，整修卡 R2.19e）。**
+
+```rust
+struct Site {
+    building: city::Building, rules: city::BuildingRules, config: kernel::FrozenConfig,
+    model: gateway::ModelEntry, adapter: Box<dyn Model + Send>,
+    identity: city::Identity, who: String, run_id: RunId,
+    lease: Option<memory::WorktreeLease>, write_root: PathBuf, branch: Option<String>,
+}
+impl RunWorker {
+    fn stand_up(&mut self, addr: &Address, job: &Locator,
+                task: &str, goal: &str, budget: kernel::BudgetCap) -> Result<Site, AxError>;
+}
+```
+
+**一个值而不是三个，理由是时钟而不是口味**。这一相位读上去是三件事（规则与选型、身份与登记、围栏与租约），而它们在代码里互相咀合：租约要 `run_id` 与 `who`，而 `run_id` 在 `renew_if_stale`（一次可能走网的凭证续期）**之后**采钟。拆成三个方法就得把身份块提到选型之前，那会把 `run_id` 的时间戳提前一次网络往返——而本卡是纯结构卡，行为需逐字不变。**一个采钟点的先后不是重构可以顺手改的东西**（ARCH §10：全库只有一个采样点，它采到的值进了账本）。于是相位按原序整体搬迁，归位值一个。
+
+**`Site` 不收 `addr`**：`Address` 是 `dispatch_in` 的形参，它在相位之前就在，放进去就是同一个值的第二份。上一版草案把 `addr` 列在字段里，按这条删。
+
+**归位值在调用点拆开，与 `Driven` 同形**：`let Site { building, rules, … } = self.stand_up(…)?;`。值类型的职责是让十一件东西**跨过相位边界时保持同步**，不是让它们一路顶着 `site.` 前缀走完剩下的四百行；R2.19a 对 `Driven` 就是这么写的。副作用是本卡的 diff 只有两块：搬走的七十行与接替它的十七行解构，**其余四百多行逐字未动**——一张纯结构卡能拿出的最强证据就是这个。
+
+**尺寸**：`dispatch_in` 548 → **495**；`stand_up` 92。
+
+**它以什么收口**（照 §8-17／§8-27 的写法）：纯结构，无可咬的红。搬迁逐字，唯一的改动是 `&addr`／`&job` 从局部变成形参，且两者在相位内部的用法不变；采钟点的个数与先后不变（`run_id_for` 一次、`ensure_base` 一次）。143 条 `sprawling` 测试全绿，其中 `work_in_a_review_building_reaches_it_only_after_someone_else_checks_it` 直接盯租约这一支。不补前后都绿的测试冒充红转绿。
 
 工具那一块原为 214 行，本卡先把阅览室（`admit_reading_room`）切出去，余下 ≈175 才能装进一个合格方法。**这正是阀值取 200 的一个副作用**：它不允许把一堆东西搬到另一处冒充分解。
 
