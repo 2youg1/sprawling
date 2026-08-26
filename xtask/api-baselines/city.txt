@@ -165,6 +165,7 @@ pub fn city::Watch::load(&std::path::Path) -> core::result::Result<city::Watch, 
 pub fn city::Watch::parse(&str) -> core::result::Result<city::Watch, kernel::error::AxError>
 pub fn city::Watch::sources(&self) -> &[city::Source]
 pub fn city::adopt_building(&std::path::Path, &kernel::address::Address) -> core::result::Result<city::Building, kernel::error::AxError>
+pub fn city::archive_entry(&std::path::Path, &kernel::address::Address, city::ArchiveKind, kernel::event::TimeMs, &str) -> core::result::Result<city::ArchiveEntry, kernel::error::AxError>
 pub fn city::archive_index(&std::path::Path, &kernel::address::Address) -> core::result::Result<alloc::vec::Vec<city::ArchiveEntry>, kernel::error::AxError>
 pub fn city::building_adopted_payload(&city::Building) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
 pub fn city::building_created_payload(&city::Building, city::BuildingTemplate) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
@@ -174,7 +175,7 @@ pub fn city::config_path(&std::path::Path, &kernel::address::Address, city::Laye
 pub fn city::create_building(&std::path::Path, &kernel::address::Address, city::BuildingTemplate) -> core::result::Result<city::Building, kernel::error::AxError>
 pub fn city::day_of(kernel::event::TimeMs) -> u64
 pub fn city::evaluate(&kernel::address::Address, &str) -> core::result::Result<city::BuildingRules, kernel::error::AxError>
-pub fn city::file_archive(&std::path::Path, &kernel::address::Address, city::ArchiveKind, kernel::event::TimeMs, &str, &str) -> core::result::Result<city::ArchiveEntry, kernel::error::AxError>
+pub fn city::file_archive(&city::ArchiveEntry, &str) -> core::result::Result<(), kernel::error::AxError>
 pub fn city::handoff(&std::path::Path, &kernel::address::Address) -> core::result::Result<core::option::Option<alloc::string::String>, kernel::error::AxError>
 pub fn city::handoff_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf
 pub fn city::job_path(&std::path::Path, &kernel::address::Address) -> std::path::PathBuf

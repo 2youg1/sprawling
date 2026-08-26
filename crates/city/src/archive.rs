@@ -91,22 +91,28 @@ pub fn day_of(at: TimeMs) -> u64 {
     at.value().saturating_div(86_400_000)
 }
 
-/// Files one entry under its building, and returns it.
+/// What one entry is and where it goes, decided before anything is
+/// written.
 ///
 /// The path is `<building>/Archive/<kind>/<day>-<slug>.md`, which sorts
 /// by date inside each kind without an index having to exist yet.
 ///
+/// Separate from [`file`] because the ledger line an entry becomes is
+/// built out of `kind`, `day` and `subject` alone: all three are
+/// functions of what the caller passed in, so the line can be written
+/// before the shelf is touched. That order is the Ledger's own rule,
+/// and it is only available to a caller who can name the entry without
+/// filing it.
+///
 /// # Errors
-/// Propagates whatever writing the file reports, and refuses an empty
-/// subject: the index line is the only thing most entries are ever read
-/// by.
-pub fn file(
+/// Refuses an empty subject: the index line is the only thing most
+/// entries are ever read by.
+pub fn entry(
     city_root: &Path,
     building: &kernel::Address,
     kind: Kind,
     at: TimeMs,
     subject: &str,
-    body: &str,
 ) -> Result<Entry, AxError> {
     if subject.trim().is_empty() {
         return Err(AxError::failure(
@@ -117,31 +123,45 @@ pub fn file(
         .with_recovery("give it the line you would want to see months from now"));
     }
     let day = day_of(at);
-    let dir = city_root
-        .join(building.as_str())
-        .join(ARCHIVE_DIR)
-        .join(kind.as_str());
-    std::fs::create_dir_all(&dir).map_err(|err| {
+    Ok(Entry {
+        kind,
+        day,
+        subject: subject.trim().to_owned(),
+        at: city_root
+            .join(building.as_str())
+            .join(ARCHIVE_DIR)
+            .join(kind.as_str())
+            .join(format!("{day}-{}.md", slug(subject))),
+    })
+}
+
+/// Puts one entry on its building's shelf, at the place [`entry`] chose.
+///
+/// # Errors
+/// Propagates whatever creating the directory or writing the file
+/// reports, and refuses an entry whose path has no directory to sit in.
+pub fn file(entry: &Entry, body: &str) -> Result<(), AxError> {
+    let dir = entry.at.parent().ok_or_else(|| {
+        AxError::failure(
+            AxCode::InvalidArgs,
+            "file an archive entry",
+            format!("{} has no directory to sit in", entry.at.display()),
+        )
+    })?;
+    std::fs::create_dir_all(dir).map_err(|err| {
         AxError::failure(
             AxCode::StorageFatal,
             "file an archive entry",
             format!("{}: {err}", dir.display()),
         )
     })?;
-    let path = dir.join(format!("{day}-{}.md", slug(subject)));
-    let text = format!("# {}\n\n{body}\n", subject.trim());
-    std::fs::write(&path, text.as_bytes()).map_err(|err| {
+    let text = format!("# {}\n\n{body}\n", entry.subject);
+    std::fs::write(&entry.at, text.as_bytes()).map_err(|err| {
         AxError::failure(
             AxCode::StorageFatal,
             "file an archive entry",
-            format!("{}: {err}", path.display()),
+            format!("{}: {err}", entry.at.display()),
         )
-    })?;
-    Ok(Entry {
-        kind,
-        day,
-        subject: subject.trim().to_owned(),
-        at: path,
     })
 }
 
@@ -272,12 +292,16 @@ mod tests {
     #[test]
     fn what_was_filed_is_what_comes_back() {
         let dir = tempfile::tempdir().unwrap();
-        let entry = file(
+        let entry = entry(
             dir.path(),
             &lab(),
             Kind::Decision,
             TimeMs::new(1_700_000_000_000),
             "fast-forward only, and why",
+        )
+        .unwrap();
+        file(
+            &entry,
             "Because the party who knows whether the work still applies is the one who did it.",
         )
         .unwrap();
@@ -301,15 +325,15 @@ mod tests {
             (Kind::Preference, 1, "metric units"),
             (Kind::Fact, 1, "the clay comes from the east pit"),
         ] {
-            file(
+            let entry = entry(
                 dir.path(),
                 &lab(),
                 kind,
                 TimeMs::new(day * 86_400_000),
                 subject,
-                "body",
             )
             .unwrap();
+            file(&entry, "body").unwrap();
         }
         let first = index(dir.path(), &lab()).unwrap();
         let again = index(dir.path(), &lab()).unwrap();
@@ -345,16 +369,6 @@ mod tests {
     #[test]
     fn an_entry_without_a_line_worth_reading_is_refused() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(
-            file(
-                dir.path(),
-                &lab(),
-                Kind::Fact,
-                TimeMs::new(0),
-                "   ",
-                "body"
-            )
-            .is_err()
-        );
+        assert!(entry(dir.path(), &lab(), Kind::Fact, TimeMs::new(0), "   ").is_err());
     }
 }

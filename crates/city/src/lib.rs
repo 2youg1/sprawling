@@ -24,6 +24,7 @@ pub use archive::ARCHIVE_DIR;
 pub use archive::Entry as ArchiveEntry;
 pub use archive::Kind as ArchiveKind;
 pub use archive::day_of;
+pub use archive::entry as archive_entry;
 pub use archive::file as file_archive;
 pub use archive::index as archive_index;
 pub use building::adopt as adopt_building;

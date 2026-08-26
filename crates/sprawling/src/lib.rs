@@ -21,6 +21,7 @@ pub mod assembly;
 pub mod console;
 pub mod firstrun;
 
+mod effect;
 mod keying;
 mod mcp_http;
 mod mcp_stdio;

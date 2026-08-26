@@ -22,6 +22,8 @@ use runtime::run::{RunHooks, RunPlan, SafePoint, drive};
 use runtime::turn::{BenchOutcome, CallShape, Interrupt, ToolBench};
 use runtime::{EditTool, ExecTool, StatusTool};
 
+use crate::effect;
+
 /// The city segment of every prefix, and a file the person is meant to
 /// edit: `init` writes it into the city, and every later run reads that
 /// copy. The binary carries the default so a fresh city is complete
@@ -988,7 +990,7 @@ impl CollaborationFold {
                     self.consumed.insert(id.to_owned());
                 }
             }
-            EventKind::GoalRegistered => self.goals.push(goal_from_payload(record.data())?),
+            EventKind::GoalRegistered => self.goals.push(effect::goal_from_payload(record.data())?),
             EventKind::PrOpened => self
                 .requests
                 .push(collab::OpenRequest::from_payload(record.data())?),
@@ -1417,28 +1419,6 @@ fn write_plan(path: &std::path::Path, text: &str) -> Result<(), AxError> {
 
 fn new_inbox() -> collab::Inbox {
     collab::Inbox::new(INBOX_CAPACITY, SIGNAL_BANDWIDTH)
-}
-
-/// The `goal_registered` payload is the entry itself. One shape, written
-/// and read here, so a claim reads back as the claim that was made.
-fn goal_payload(entry: &kernel::GoalEntry) -> Result<Payload, AxError> {
-    let value = serde_json::to_value(entry)
-        .map_err(|err| AxError::failure(AxCode::InvalidArgs, "record a goal", err.to_string()))?;
-    let map = value.as_object().cloned().ok_or_else(|| {
-        AxError::failure(AxCode::InvalidArgs, "record a goal", "a goal is an object")
-    })?;
-    Payload::new(map)
-}
-
-fn goal_from_payload(data: &Payload) -> Result<kernel::GoalEntry, AxError> {
-    serde_json::from_value(serde_json::Value::Object(data.as_map().clone())).map_err(|err| {
-        AxError::failure(
-            AxCode::InvalidArgs,
-            "read a registered goal",
-            err.to_string(),
-        )
-        .with_recovery("this shape is written by the same binary that reads it; report it")
-    })
 }
 
 /// Who may answer, what is waiting, and what has already been allowed.
@@ -2075,6 +2055,59 @@ impl RunWorker {
         // the process restarted and folded the ledger again.
         self.govern(kind, &data);
         Ok(())
+    }
+
+    /// Puts one desk's effects on the ledger, and only then makes the
+    /// change they announce.
+    ///
+    /// This is the one door for all five of them. The change arrives as
+    /// the return value of `Landing::record`, which appends first, so
+    /// there is no expression in this file that reaches the city before
+    /// the history - and the match below is exhaustive, so a new kind of
+    /// change has to say here what it is.
+    ///
+    /// # Errors
+    /// Propagates the first line the ledger refuses, in which case
+    /// nothing changes; then whatever delivering, writing the plan or
+    /// filing an entry reports.
+    fn settle(
+        &mut self,
+        run: RunId,
+        from: &Address,
+        mode: runtime::Mode,
+        budget: kernel::BudgetCap,
+        landing: effect::Landing,
+    ) -> Result<(), AxError> {
+        let then = landing.record(&mut |line: effect::Line| {
+            self.record_for(run, &line.who, line.addr, line.kind, line.data)
+        })?;
+        match then {
+            effect::Then::Nothing => Ok(()),
+            effect::Then::Deliver(signals) => {
+                for signal in signals {
+                    self.inboxes
+                        .entry(signal.room().clone())
+                        .or_insert_with(new_inbox)
+                        .deliver(&signal)?;
+                    // Somebody was spoken to. Whether that starts a run
+                    // is decided in one place, so that the two ways of
+                    // reaching a resident stay one decision.
+                    self.knock(&signal, from, mode, budget)?;
+                }
+                Ok(())
+            }
+            effect::Then::Hold(entries) => {
+                self.goals.extend(entries);
+                Ok(())
+            }
+            effect::Then::Roadmap { path, text } => write_plan(&path, &text),
+            effect::Then::Shelf(filings) => {
+                for filing in filings {
+                    city::file_archive(&filing.entry, &filing.body)?;
+                }
+                Ok(())
+            }
+        }
     }
 
     /// Closes the city in the record, so a stop somebody chose and a
@@ -3965,57 +3998,14 @@ impl RunWorker {
             (desk.take_effects(), desk.take_inbox())
         };
         self.inboxes.insert(addr.clone(), returned);
-        for effect in signal_effects {
-            match effect {
-                collab::SignalEffect::Enqueued(signal) => {
-                    // Recorded, then delivered. The queue may only change
-                    // as a consequence of a line the history already has.
-                    self.record_for(
-                        run_id,
-                        &who,
-                        signal.room().clone(),
-                        EventKind::SignalEnqueued,
-                        signal.enqueued_payload()?,
-                    )?;
-                    self.inboxes
-                        .entry(signal.room().clone())
-                        .or_insert_with(new_inbox)
-                        .deliver(&signal)?;
-                    // Somebody was spoken to. Whether that starts a run
-                    // is decided in one place, below, so that the two
-                    // ways of reaching a resident stay one decision.
-                    self.knock(&signal, &addr, mode, budget)?;
-                }
-                collab::SignalEffect::Consumed { signal, by } => {
-                    let payload = signal.consumed_payload(&by)?;
-                    self.record_for(
-                        run_id,
-                        &by,
-                        addr.clone(),
-                        EventKind::SignalConsumed,
-                        payload,
-                    )?;
-                }
-            }
-        }
-        for effect in goals.borrow_mut().take_effects() {
-            match effect {
-                collab::GoalEffect::Registered(entry) => {
-                    self.record_for(
-                        run_id,
-                        &who,
-                        addr.clone(),
-                        EventKind::GoalRegistered,
-                        goal_payload(&entry)?,
-                    )?;
-                    self.goals.push(entry);
-                }
-                collab::GoalEffect::Conflicted { entry, level } => {
-                    let payload = collab::conflict_payload(&entry, &level)?;
-                    self.record_for(run_id, &who, addr.clone(), EventKind::GoalConflict, payload)?;
-                }
-            }
-        }
+        // Every desk below settles through one door, and that door
+        // appends before it changes anything: `effect::Then` has no
+        // other source than `Landing::record`, so a change that outran
+        // its own line cannot be written here.
+        let spoken = effect::Landing::signals(signal_effects, &addr, &who)?;
+        self.settle(run_id, &addr, mode, budget, spoken)?;
+        let ground = effect::Landing::goals(goals.borrow_mut().take_effects(), &addr, &who)?;
+        self.settle(run_id, &addr, mode, budget, ground)?;
         // The sweep the forecast cannot replace. A command can be
         // obfuscated past a text prediction; what is missing from the
         // working tree cannot be talked out of. The base is the first
@@ -4028,15 +4018,8 @@ impl RunWorker {
                 .wave_post(&base)
                 .map_err(memory::MemoryError::into_ax)?;
             let swept = discarded.len();
-            for payload in discarded {
-                self.record_for(
-                    run_id,
-                    &who,
-                    addr.clone(),
-                    EventKind::FileDiscarded,
-                    payload,
-                )?;
-            }
+            let lost = effect::Landing::discards(discarded, &addr, &who);
+            self.settle(run_id, &addr, mode, budget, lost)?;
             // Over the threshold a person is told, and the class is one
             // no policy can waive. Each file is restorable on its own;
             // what the count says is that nobody meant this.
@@ -4069,82 +4052,46 @@ impl RunWorker {
                 );
             }
         }
-        // What the run did to the plan. Each effect is checked against
-        // the file as it stands now rather than as it stood when the run
-        // was dispatched: today one run is driven at a time, so the two
-        // agree, and when they stop agreeing the losing claim is dropped
-        // with a diagnostic instead of overwriting somebody's row.
+        // What the run did to the plan.
         let (claim_effects, plan_after) = {
             let mut desk = plan_desk.borrow_mut();
             (desk.take_effects(), desk.roadmap().map(str::to_owned))
         };
         if let Some(text) = plan_after {
             let on_disk = city::roadmap(&self.city_root, building.addr())?;
-            let stale: Vec<&collab::ClaimEffect> = claim_effects
-                .iter()
-                .filter(|effect| !collab::still_true(&on_disk, effect))
-                .collect();
-            if stale.is_empty() {
-                write_plan(&plan_path, &text)?;
-                for effect in &claim_effects {
-                    let kind = match effect {
-                        collab::ClaimEffect::Claimed { .. } => EventKind::RoadmapClaimed,
-                        collab::ClaimEffect::Finished { .. } => EventKind::RoadmapFinished,
-                        collab::ClaimEffect::Released { .. } => EventKind::RoadmapReleased,
-                    };
-                    self.record_for(run_id, &who, addr.clone(), kind, effect.payload(&who)?)?;
+            match effect::Claims::of(&claim_effects, &on_disk, text, plan_path, &addr, &who)? {
+                effect::Claims::Landed(taken) => {
+                    self.settle(run_id, &addr, mode, budget, *taken)?;
                 }
-            } else {
-                for effect in stale {
-                    self.note(
-                        runtime::diagnostics::Level::Refuse,
-                        "collab::claim_tool",
-                        &format!(
-                            "row {} moved before this run's claim landed; nothing was written",
-                            effect.index()
-                        ),
-                    );
+                effect::Claims::Stale(rows) => {
+                    for row in rows {
+                        self.note(
+                            runtime::diagnostics::Level::Refuse,
+                            "collab::claim_tool",
+                            &format!(
+                                "row {row} moved before this run's claim landed; nothing was \
+                                 written"
+                            ),
+                        );
+                    }
                 }
             }
         }
-        // What the run asked the building to remember. Filed after the
-        // drive, like every other effect, so nothing is on the shelf
-        // that the history does not already carry.
-        for effect in memory_desk.borrow_mut().take_effects() {
-            let collab::ArchiveEffect::Recorded { kind, text } = effect;
-            // Inside the fence. A building under review is not the
-            // owner of what a run decided until somebody checks it, and
-            // a shelf entry is exactly the kind of thing a later run
-            // reads as the building's settled knowledge.
-            let entry = city::file_archive(
-                &write_root,
-                building.addr(),
-                city::ArchiveKind::parse(&kind)?,
-                now_ms()?,
-                &text,
-                &text,
-            )?;
-            let mut data = serde_json::Map::new();
-            data.insert(
-                "kind".to_owned(),
-                serde_json::Value::String(entry.kind.as_str().to_owned()),
-            );
-            data.insert(
-                "day".to_owned(),
-                serde_json::Value::Number(entry.day.into()),
-            );
-            data.insert(
-                "subject".to_owned(),
-                serde_json::Value::String(entry.subject.clone()),
-            );
-            self.record_for(
-                run_id,
-                &who,
-                addr.clone(),
-                EventKind::AssetArchived,
-                Payload::new(data)?,
-            )?;
-        }
+        // What the run asked the building to remember, filed after the
+        // drive like every other effect - and inside the fence. A
+        // building under review is not the owner of what a run decided
+        // until somebody checks it, and a shelf entry is exactly the
+        // kind of thing a later run reads as the building's settled
+        // knowledge.
+        let remembered = effect::Landing::shelf(
+            memory_desk.borrow_mut().take_effects(),
+            &write_root,
+            building.addr(),
+            now_ms()?,
+            &addr,
+            &who,
+        )?;
+        self.settle(run_id, &addr, mode, budget, remembered)?;
         // What the run can show for itself. `None` is not `Some(false)`:
         // "nothing ran" and "something ran and failed" are different
         // facts, and the modes that care refuse them differently.
@@ -7864,6 +7811,121 @@ addr = \"gone/room1\"
             history.matches("roadmap_claimed").count(),
             1,
             "one row, one claim, however many runs asked for it"
+        );
+    }
+
+    /// What the Ledger means by "every effect becomes an EventRecord
+    /// first", read from the one place where *first* is visible: the
+    /// write observer, which `memory::jsonl` runs on the appending
+    /// thread **after** the line is durable.
+    ///
+    /// One run files a decision on the building's shelf and takes a row
+    /// from the shared plan. At the instant each line lands, the city
+    /// must not already carry what that line announces - otherwise a
+    /// process dying between the two leaves a shelf entry and a claimed
+    /// row that the history never mentions, and the shelf's own comment
+    /// ("nothing is on the shelf that the history does not already
+    /// carry") is false.
+    #[test]
+    fn what_a_run_changes_is_changed_after_the_line_that_announces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let lab = dir.path().join("lab");
+        std::fs::create_dir_all(lab.join("room1")).unwrap();
+        std::fs::write(lab.join(city::ROADMAP_FILE), PLAN_TWO_FREE_ROWS).unwrap();
+
+        let (base_url, provider) = fake_openai(
+            &["m-local"],
+            vec![
+                tool_completion(
+                    "remembering why",
+                    "tu_1",
+                    "archive",
+                    serde_json::json!({
+                        "action": "record",
+                        "kind": "decision",
+                        "text": "we chose the embedded store",
+                    }),
+                ),
+                tool_completion(
+                    "taking a row",
+                    "tu_2",
+                    "plan",
+                    serde_json::json!({ "action": "claim", "row": 1 }),
+                ),
+                completion("done", None),
+            ],
+        );
+        let mut worker = worker_with_provider(dir.path(), &base_url, "m-local").unwrap();
+
+        // Which line landed, and whether the city already carried what
+        // it announces at that moment.
+        let seen: Arc<std::sync::Mutex<Vec<(&'static str, bool)>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let watch = Arc::clone(&seen);
+        let root = dir.path().to_path_buf();
+        worker.observe(Box::new(move |record: &EventRecord| {
+            let lab = Address::parse("lab").unwrap();
+            let carried = match record.kind() {
+                EventKind::AssetArchived => Some((
+                    "asset_archived",
+                    !city::archive_index(&root, &lab).unwrap().is_empty(),
+                )),
+                EventKind::RoadmapClaimed => Some((
+                    "roadmap_claimed",
+                    city::roadmap(&root, &lab).unwrap().contains("In progress"),
+                )),
+                _ => None,
+            };
+            if let Some(landed) = carried {
+                watch.lock().unwrap().push(landed);
+            }
+        }));
+
+        worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("lab/room1").unwrap(),
+                task: "remember one thing and take one row".to_owned(),
+                goal: "one decision, one claim".to_owned(),
+                mode: channels::ModeTag::parse("plan").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"order"),
+                session: None,
+                effort: None,
+            })
+            .unwrap();
+        drop(provider);
+
+        let landed = seen.lock().unwrap().clone();
+        assert_eq!(
+            landed.len(),
+            2,
+            "both effects reached the history: {landed:?}"
+        );
+        let early: Vec<&str> = landed
+            .iter()
+            .filter(|(_, already)| *already)
+            .map(|(line, _)| *line)
+            .collect();
+        assert!(
+            early.is_empty(),
+            "the city already carried what these lines announce before they were on the ledger: \
+             {early:?}"
+        );
+
+        // Ordered, not lost: both changes are the city's once the run
+        // is over.
+        let lab_addr = Address::parse("lab").unwrap();
+        assert_eq!(
+            city::archive_index(dir.path(), &lab_addr).unwrap().len(),
+            1,
+            "the decision is on the shelf"
+        );
+        assert!(
+            city::roadmap(dir.path(), &lab_addr)
+                .unwrap()
+                .contains("| 1 | wire the kiln | In progress |"),
+            "the row is claimed in the plan"
         );
     }
 

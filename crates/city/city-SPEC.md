@@ -346,7 +346,8 @@ impl Tool for NeighboursTool { /* name=neighbours、effect=Read、cost=Free、re
 pub enum Kind { Preference, Decision, Correction, Fact }   // 封闭四类
 pub struct Entry { pub kind: Kind, pub day: u64, pub subject: String, pub at: PathBuf }
 pub fn day_of(at: TimeMs) -> u64;                          // 时间只入参
-pub fn file(city_root, building, kind, at, subject, body) -> Result<Entry, AxError>;
+pub fn entry(city_root, building, kind, at, subject) -> Result<Entry, AxError>;  // 纯：不碰盘
+pub fn file(entry: &Entry, body: &str) -> Result<(), AxError>;                   // 只写盘
 pub fn index(city_root, building) -> Result<Vec<Entry>, AxError>;   // 算出来的，不落盘
 ```
 
@@ -354,6 +355,12 @@ pub fn index(city_root, building) -> Result<Vec<Entry>, AxError>;   // 算出来
 - **index 是算出来的**：存一份就是盘上内容的第二份账，而盘是真的那一份。删掉它没有东西可删——这正是投影该有的样子。
 - **召回是结构化的**：按类与日期归档，循索引读**原文**。不做向量记忆；翻案条件写死——真实召回率 <90% 才重议。
 - **日期取整天**：给人浏览用，精度高过问题所需只会招来没人打算做的比较。
+
+**决定一条记录是什么，与把它写上架，是两步（整修卡 R2.10）**。原先的 `file(city_root, building, kind, at, subject, body) -> Entry` 把两者合成一步，于是调用方拿到 `Entry`（账本行要的 `kind`／`day`／`subject` 全在里面）时文件已经在架上了；账本行只能后落，而 Ledger 的定义是「Every effect becomes an EventRecord first」。拆开之后：
+
+- `entry` 是纯的：拒空 subject、`day_of(at)` 取整天、按 `<building>/Archive/<kind>/<day>-<slug>.md` 算出落点，全部只读入参。**一条记录是什么，在它到达任何地方之前就已经确定**，所以调用方可以先把它落账再把它写上架。
+- `file` 只写：建目录、写正文。它现在收一个 `&Entry` 而不是六个参数——落点由 `entry` 算过一次，`file` 不再第二次决定它。
+- **仍是一个构造点**：`Entry` 的字段没有对外的写面，`index` 那一支是从盘上读回来的另一种来源（`subject_of(&text)` 而不是入参），两者不共用同一条不变式，因此没有第二个权威。
 
 ### 8-4b 两个没人写的配置层长出写面（P3.02）
 
