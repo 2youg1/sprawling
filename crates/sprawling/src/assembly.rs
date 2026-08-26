@@ -1145,6 +1145,87 @@ fn random_token(bytes: usize) -> Result<String, AxError> {
     Ok(gateway::oauth_random(&raw))
 }
 
+/// What this serve will present at its door, and whether a person has
+/// to be shown it.
+///
+/// The three cases carry different obligations, so they are an enum
+/// rather than an `Option<String>` plus a flag: only [`Self::Minted`] is
+/// shown, and only because nobody else has ever seen it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Keyed {
+    /// A loopback listener. Nothing is presented and nothing is shown.
+    NothingToPresent,
+    /// What the operator configured, adopted as it stands.
+    Adopted(String),
+    /// Minted for this serve from this machine's entropy. Shown once,
+    /// stored nowhere, and dead when the process ends.
+    Minted(String),
+}
+
+impl Keyed {
+    /// The code the listener and the console both carry, if there is one.
+    #[must_use]
+    pub fn code(&self) -> Option<&str> {
+        match self {
+            Self::NothingToPresent => None,
+            Self::Adopted(code) | Self::Minted(code) => Some(code),
+        }
+    }
+}
+
+/// Settles this serve's pairing key before anything is bound.
+///
+/// [`crate::keying::Keying`] decides which of the three cases applies;
+/// this performs the one that needs entropy. Minting happens here for
+/// the reason `channels::auth` states from its own side — that module
+/// samples nothing, and the assembly layer is where randomness in this
+/// binary comes from.
+///
+/// The result is what `channels::decide_bind` will be asked about, so an
+/// address reaching beyond this machine arrives at the socket already
+/// carrying a key. The guard is satisfied, never relaxed: there is still
+/// no moment in which the port is open and unauthenticated.
+///
+/// # Errors
+/// When this machine's entropy source refuses. No key can be minted
+/// safely then, and serving anyway would open the port without one.
+pub fn key_for(bind: std::net::SocketAddr, configured: Option<String>) -> Result<Keyed, AxError> {
+    match crate::keying::Keying::decide(bind, configured.is_some()) {
+        crate::keying::Keying::NothingToPresent => Ok(Keyed::NothingToPresent),
+        // Refused rather than unwrapped: `decide` answers `Adopt` only
+        // when the value is there, and a mismatch between those two would
+        // be a defect in this file worth naming out loud.
+        crate::keying::Keying::Adopt => configured.map(Keyed::Adopted).ok_or_else(|| {
+            AxError::failure(
+                AxCode::ConfigInvalid,
+                "adopt the configured pairing token",
+                "a token was decided on and then was not there",
+            )
+            .with_recovery("report this: keying::Keying::decide and key_for disagree")
+        }),
+        crate::keying::Keying::Mint => {
+            let mut entropy = [0u8; 32];
+            getrandom::fill(&mut entropy).map_err(|err| {
+                AxError::failure(
+                    AxCode::ConfigInvalid,
+                    "draw randomness for a pairing key",
+                    err.to_string(),
+                )
+                .with_recovery(
+                    "this machine's entropy source refused; set SPRAWLING_PAIRING_TOKEN \
+                     or bind a loopback address",
+                )
+            })?;
+            // The token half is dropped here on purpose. `serve` derives
+            // the digest it compares against from this same code through
+            // `from_configured`, so holding both would be two paths to
+            // one digest and a second thing to keep in step.
+            let (_token, code) = channels::PairingToken::mint(entropy);
+            Ok(Keyed::Minted(code))
+        }
+    }
+}
+
 /// Which dialect a provider's own API speaks. Known providers only: an
 /// endpoint attached with the wrong dialect fails on its first call, and
 /// guessing is how that happens.
@@ -4924,6 +5005,62 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
 )]
 mod tests {
     use super::*;
+
+    /// **The property the whole card exists for.** A minted code has to
+    /// be the code that opens the door, and the two halves reach that
+    /// digest by different routes: `PairingToken::mint` hashes the text
+    /// it just produced, while `serve` hashes the text it is handed back
+    /// through `from_configured`. If those ever stop agreeing, an
+    /// exposed city refuses the person who started it, holding a key it
+    /// minted for them.
+    #[test]
+    fn the_key_this_city_mints_is_the_key_its_own_door_accepts() {
+        let exposed = "0.0.0.0:8787".parse().expect("a literal address");
+        let Keyed::Minted(code) = key_for(exposed, None).expect("this machine has entropy") else {
+            panic!("an address beyond this machine with nothing configured mints one");
+        };
+        let digest = channels::PairingToken::from_configured(&code)
+            .expect("a minted code is long enough to adopt")
+            .digest();
+        assert!(
+            channels::verify(Some(&code), &digest),
+            "the code shown to a person opens the door it guards"
+        );
+        assert!(!channels::verify(None, &digest), "silence is not the key");
+    }
+
+    /// One-time means one time. Two serves of the same address must not
+    /// produce the same code, or a key read off yesterday's terminal
+    /// still works today.
+    #[test]
+    fn two_serves_of_one_address_mint_two_different_keys() {
+        let exposed = "0.0.0.0:8787".parse().expect("a literal address");
+        let first = key_for(exposed, None).expect("entropy");
+        let second = key_for(exposed, None).expect("entropy");
+        assert_ne!(first.code(), second.code());
+    }
+
+    /// What the operator configured is adopted, never replaced. Minting
+    /// over it would break every browser already paired with this city.
+    #[test]
+    fn a_configured_token_is_adopted_rather_than_replaced() {
+        let exposed = "0.0.0.0:8787".parse().expect("a literal address");
+        let configured = "a-token-the-operator-chose".to_owned();
+        assert_eq!(
+            key_for(exposed, Some(configured.clone())).expect("no entropy is drawn"),
+            Keyed::Adopted(configured)
+        );
+    }
+
+    /// Loopback stays frictionless: nothing is minted and nothing is
+    /// asked for, which is the property `decide_bind` is written to keep.
+    #[test]
+    fn a_loopback_listener_is_handed_nothing_to_present() {
+        let local = "127.0.0.1:8787".parse().expect("a literal address");
+        let keyed = key_for(local, None).expect("no entropy is drawn");
+        assert_eq!(keyed, Keyed::NothingToPresent);
+        assert_eq!(keyed.code(), None);
+    }
 
     /// The rules a person may read on the building page are the rules
     /// the city obeys, and the page reads them from a directory the

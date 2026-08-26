@@ -1676,7 +1676,12 @@ fn connect(wiring: Wiring) -> Outbound {
         let Some(url) = crate::socket::socket_url() else {
             return send_through(outbound);
         };
-        let link = std::rc::Rc::new(std::cell::RefCell::new(crate::socket::Link::new(None)));
+        // The code the host put on this URL. Hard-coded `None` here made
+        // every exposed city unreachable by its own WebUI: the server
+        // asked for a token and the page had no way to have one.
+        let link = std::rc::Rc::new(std::cell::RefCell::new(crate::socket::Link::new(
+            crate::socket::pairing_token(),
+        )));
         // What has already claimed somebody's attention. Held beside the
         // link because a reconnect re-delivers events, and one fact must
         // not interrupt twice for having been sent twice.

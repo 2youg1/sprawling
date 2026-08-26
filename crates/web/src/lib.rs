@@ -66,9 +66,9 @@ pub use route::{from_fragment, to_fragment};
 pub use settings::{AttachForm, AttachReadiness, EndpointRow, TagRow};
 pub use settings::{can_dispatch, endpoint_rows, ready, tag_rows, url_is_safe};
 pub use socket::{Enrolment, enrol};
-pub use socket::{Link, LinkAction, LinkEvent, LinkState, backoff_ms, read_frame};
+pub use socket::{Link, LinkAction, LinkEvent, LinkState, backoff_ms, read_frame, token_in};
 #[cfg(target_arch = "wasm32")]
-pub use socket::{open, send, socket_url};
+pub use socket::{open, pairing_token, send, socket_url};
 pub use theme::{ACCENT_CHROMA_PERCENT, ALERT_CHROMA_PERCENT, CHROMA_COEFFICIENT};
 pub use theme::{COLOUR_TOKENS, GRAY_CHROMA, GRAY_RAMP, HUE_ALERT, HUE_AXIS};
 pub use theme::{CORNER_SCALES, continuity_order, superellipse_tenths};

@@ -771,6 +771,24 @@ pub struct RunRow { /* … */ pub parent: Option<RunId> }   // 折自 run_starte
 - **平列表变成树，而不是变成一个新控件**：插入序＋一个字符的前缀就把层级说完了；一个树形控件要自己的展开态，而展开态是一份新的客户端状态。
 - **父的名字取自同一个 `session_of`**：两处对得上，因为它们是同一个函数。父不在本页已知集里时只冠 ↳ 而不编造名字。
 
+## 8-15 页面把主人递给它的钥匙递上去（整修卡 R2.08）
+
+**病灶**：`app.rs` 把连接写成 `Link::new(None)`。`Link` 从 P2 起就带 `token` 字段、`Hello` 从 wire v1 起就带 `token`、`channels::decide_handshake` 也一直在核它——**唯独没有任何一处把值放进去**。于是一座绑在非回环地址上的城，向每个 peer 索要配对令牌，而它自己的 WebUI 恒不出示，`server.rs:306` 照拒不误：**这座城连自己的客户端都进不来**。`socket_url()` 只取 `location.host()`，所以宿主挂在 URL 上的 `?token=` 整段丢掉，两头一起断。
+
+```rust
+// web::socket（形状 1 decision ⊕ 一次读；Humble Object，ARCHITECTURE.md §9）
+pub fn token_in(search: &str) -> Option<String>;      // 纯，任何目标上可测
+#[cfg(target_arch = "wasm32")]
+pub fn pairing_token() -> Option<String>;             // 只多一次 location.search()
+```
+
+- **判定与读分家**。`token_in` 是纯函数，故握手带不带钥匙这件事在非 wasm 目标上就能断言；`pairing_token` 里没有任何判断，与紧邻的 `socket_url`／`enrol_url` 同为浏览器侧一行。它也因此与 `socket_url` 同为 `cfg(wasm32)`：宿主上没有 location 可读，它的唯一调用方也到不了。
+- **取值不做反转义**。本城铸出的 code 取自数字与小写字母的字母表，无需反转义；一个带保留字符的**人配置**令牌会在握手处以「the pairing token does not match」显式被拒，而不是静默连成别人。失败朝拒绝的方向倒，判定仍只有一处。
+- **`token=` 空值不算值**。与 `channels::auth::verify` 的 `None` 一致：没出示与出示了空串在外部不可区分，而空值在这里答 `None`，把拒绝留在决定它的那一处。
+- **令牌留在查询串里是既有裁决的延续**，见 `bin::console::web_url` 的 doc。改存 `sessionStorage` 会把钥匙放进同源 JS 读得到的地方——对一座**公网暴露**的城，那比浏览器历史更坏。
+
+**本章测试**：`token_in` 对 `?token=…`／`?view=city&token=…`／`token=…`／`?token=`／空串／`?tokenish=…` 六个答案；以及一条握手断言——`Link::new(token_in("?token=…"))` 发出的 `Hello.token` 非空，本卡之前 `Link::new(None)` 使它恒 `None`。真浏览器对真暴露端口那一段属 V9，是人跑的命令而非门禁。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

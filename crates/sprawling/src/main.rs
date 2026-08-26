@@ -516,9 +516,15 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
              page. Run `just build-web`, rebuild, or pass --web-dir target/web-dist"
         );
     }
-    // The token is read once here and never stored: `serve` is handed a
-    // digest. This is the only place in the process that sees it.
-    let token = std::env::var("SPRAWLING_PAIRING_TOKEN").ok();
+    // The key is settled before anything binds. A configured token is
+    // adopted; an address that reaches past this machine and has none
+    // gets one minted for this serve alone. Read once here and never
+    // stored - `serve` is handed a digest.
+    let keyed = match assembly::key_for(bind, std::env::var("SPRAWLING_PAIRING_TOKEN").ok()) {
+        Ok(keyed) => keyed,
+        Err(err) => return report(err),
+    };
+    let token = keyed.code().map(str::to_owned);
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(err) => {
@@ -540,6 +546,24 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
     println!("    WebUI    {url}");
     println!("    client   {client_line}");
     println!();
+    match &keyed {
+        assembly::Keyed::NothingToPresent => {}
+        assembly::Keyed::Adopted(_) => {
+            println!("    key      the one you configured; this city will ask for it");
+            println!();
+        }
+        // Shown here and nowhere else, for as long as this process
+        // lives. Nothing writes it down, so a person who loses it stops
+        // and starts the city again rather than looking for a file.
+        assembly::Keyed::Minted(code) => {
+            println!("    key      {code}");
+            println!();
+            println!("  This address reaches past this machine, so the city minted a key.");
+            println!("  It is shown once, kept nowhere, and replaced the next time you start.");
+            println!("  Open:    {}/?token={code}", url.trim_end_matches('/'));
+            println!();
+        }
+    }
     println!("  Open the WebUI in a browser. Ctrl-C stops the city.");
     println!();
     if open {

@@ -512,7 +512,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::panel | crates/web/src/panel.rs | the one version of a centre panel: conclusion, scope, body, and where the numbers came from | decision | F2 | built |
 | web::overview | crates/web/src/overview.rs | the first screen: how much of this city is working, on what, and what waits on a person | decision | F2 | built |
 
-### browser (6), protocol (2), bin (8)
+### browser (6), protocol (2), bin (9)
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -532,6 +532,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | bin::install | crates/sprawling/src/install.rs | putting this binary where a shell will find it, and taking it back out | adapter | P0 | built |
 | bin::wire_client | crates/sprawling/src/wire_client.rs | the second client of the wire: one frame out, every frame back, and enrolment from stdin | adapter | P3 | built |
 | bin::console | crates/sprawling/src/console.rs | what a served city says to the terminal it is running in, and what a line typed there means | decision | P1 | built |
+| bin::keying | crates/sprawling/src/keying.rs | what guards the door this serve opens: nothing, what the operator configured, or one minted for this serve alone | decision | R2 | built |
 
 ## 13 Changing this document
 

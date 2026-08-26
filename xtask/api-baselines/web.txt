@@ -224,6 +224,7 @@ pub fn web::superellipse_tenths(u16) -> u16
 pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
 pub fn web::takeover_command(kernel::event::RunId) -> channels::wire::ClientFrame
 pub fn web::to_fragment(&web::View) -> alloc::string::String
+pub fn web::token_in(&str) -> core::option::Option<alloc::string::String>
 pub fn web::track_token() -> &'static str
 pub fn web::url_is_safe(&str) -> bool
 pub fn web::view_box(&web::DisplayList, usize, (i32, i32)) -> web::Frame

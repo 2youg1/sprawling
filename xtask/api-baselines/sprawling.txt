@@ -1,8 +1,11 @@
+impl sprawling::assembly::Keyed
 impl sprawling::assembly::RunWorker
 impl sprawling::assembly::ScanReport
 pub async fn sprawling::assembly::serve(sprawling::assembly::Serving) -> core::result::Result<(), kernel::error::AxError>
 pub enum sprawling::assembly::Adopt
+pub enum sprawling::assembly::Keyed
 pub enum sprawling::firstrun::FirstScreen
+pub fn sprawling::assembly::Keyed::code(&self) -> core::option::Option<&str>
 pub fn sprawling::assembly::RunWorker::adopt_building(&mut self, kernel::address::Address) -> core::result::Result<(), kernel::error::AxError>
 pub fn sprawling::assembly::RunWorker::fork(&mut self, kernel::event::RunId, kernel::event::Seq, core::option::Option<kernel::address::Address>) -> core::result::Result<kernel::event::RunId, kernel::error::AxError>
 pub fn sprawling::assembly::RunWorker::handle(&mut self, channels::wire::Command) -> core::result::Result<(), kernel::error::AxError>
@@ -12,6 +15,7 @@ pub fn sprawling::assembly::ScanReport::summary(&self) -> alloc::string::String
 pub fn sprawling::assembly::form_city(&std::path::Path, sprawling::assembly::Adopt) -> core::result::Result<sprawling::assembly::InitReport, kernel::error::AxError>
 pub fn sprawling::assembly::has_history(&std::path::Path) -> bool
 pub fn sprawling::assembly::init_city(&std::path::Path) -> core::result::Result<sprawling::assembly::InitReport, kernel::error::AxError>
+pub fn sprawling::assembly::key_for(core::net::socket_addr::SocketAddr, core::option::Option<alloc::string::String>) -> core::result::Result<sprawling::assembly::Keyed, kernel::error::AxError>
 pub fn sprawling::assembly::open_vault() -> (gateway::credential::Custodian, core::option::Option<kernel::event::Payload>)
 pub fn sprawling::firstrun::ask<R: alloc::io::buf_read::BufRead, W: core::io::write::Write>(&std::path::Path, &mut R, &mut W) -> core::io::error::Result<sprawling::firstrun::FirstScreen>
 pub fn sprawling::firstrun::default_city(&std::path::Path, core::option::Option<&std::path::Path>, bool) -> std::path::PathBuf
@@ -28,6 +32,9 @@ pub sprawling::assembly::InitReport::adopted: alloc::vec::Vec<kernel::address::A
 pub sprawling::assembly::InitReport::genesis: kernel::event::EventRef
 pub sprawling::assembly::InitReport::ledger_dir: std::path::PathBuf
 pub sprawling::assembly::InitReport::standing: city::wizard::Standing
+pub sprawling::assembly::Keyed::Adopted(alloc::string::String)
+pub sprawling::assembly::Keyed::Minted(alloc::string::String)
+pub sprawling::assembly::Keyed::NothingToPresent
 pub sprawling::assembly::ScanReport::waiting_approvals: usize
 pub sprawling::assembly::Serving::addr: core::net::socket_addr::SocketAddr
 pub sprawling::assembly::Serving::city_root: std::path::PathBuf
