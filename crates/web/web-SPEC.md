@@ -764,6 +764,43 @@ pub fn refusal(lang: Lang, because: Msg) -> AxError;    // 与其他拒绝同一
 > `crates/web/src/` 里没有 `Attach`、没有 `UploadId`、没有对 `/upload` 的请求。
 > 这与 ux-5 抓到的十九条死词条同类：答面存在，没人问。
 
+### 8-49 手势落得到对话框，且拖着的时候看得见（ux-12；形状 1 判定）
+
+```rust
+pub enum Target { Place(Address), Composer, Run(RunId), Nowhere }
+pub enum Meaning {
+    Aim  { addr: Address, task: String },   // 派活条：地址与任务一起写
+    Task { task: String },                  // 派活条：只写任务，不动地址
+    Say  { run: RunId, said: String },      // steer 框：写好，不发
+    Refused { because: Msg },
+}
+```
+
+**本卡推翻了 §8-38 的一条裁定，理由写在这里。** 原文拒绝 `Target::Run`，理由是
+「拖到它上面没有**本版**能执行的含义」。那句话里的「本版」是一个事实声明，而它已经不再成立：
+steer 框就是可以瓄准的地方。**被推翻的是那个事实，不是那条原则：
+「拖动瓄准，不启动」一字未改**——`Say` 把文件名写进 steer 框并**不发送**，
+按钮仍归人按。一个会花钱的手势仍然是收不回的手势。
+
+**`Nowhere` 修的是一个含义上的 bug。** 旧代码在房间名解不出地址时传 `Target::Run`，
+于是界面说「你拖到了一个会话上」，而人明明拖在一个房间上。两件不同的事共用一个臂，
+说出口的就是假话。
+
+**浏览器的默认行为是一个没人写的第二权威，本卡灭掉它。** MDN：可编辑文本域
+（`<textarea>`、`<input type=text>`）在数据仓含一个 `text/plain` 项时**默认就是合法投放目标**，
+不需要取消 `dragover`。派活条的任务字段正是一个裸 `input`，所以拖一段选中文本进去，
+浏览器已经在替你插入原始文本，`drop::read` 一行没跑——`Dropped::Text` 的 trim 与空白拒绝全部失效。
+接上 `ondragover` 并 `prevent_default` 后，同一个手势只剩一个权威。
+
+**拖拽中 `:hover` 不会亮，所以可供性必须换成事件。** MDN 写明拖拽全程
+「all device input events (such as mouse or keyboard) are suppressed」——靠鼠标推导的 hover 态
+因此无从谈起。`.drop-zone:hover` 只对**没在拖东西**的指针生效，也就是在人最需要看见投放区的那一刻
+它是隐形的。改用 `dragenter` 加类、`dragleave` 与 `drop` 撤类；MDN 还保证 `dragleave`
+「will always fire, even if the drag is cancelled」，这正是开关需要的清理路径。
+
+**字节仍然不复制**（§8-38 未改）：拖拽只命名。城外文件走 `/upload` → `UploadId`，
+那是另一张卡。
+
 ### 8-37 页面折得进它没连上时发生的事（P3.04）
 
 ```rust

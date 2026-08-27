@@ -22,7 +22,9 @@
 //! A gesture this build cannot name is refused with the reason. There is
 //! no arm that guesses.
 
-use channels::{Address, AxCode, AxError};
+use channels::{Address, AxCode, AxError, RunId};
+use dioxus::html::HasFileData;
+use dioxus::prelude::*;
 
 use crate::lang::{Lang, Msg, say};
 
@@ -46,10 +48,17 @@ pub enum Target {
     /// A building or a room: both are addresses, and the difference is
     /// the address's own.
     Place(Address),
-    /// A run. Not a place: a run is something that happened at an
-    /// address, and dropping work onto it has no meaning this build can
-    /// carry out.
-    Run,
+    /// The bar work is started from. It already knows where the work
+    /// goes, because a person put it there.
+    Composer,
+    /// A session already running. Dropping here means "look at these",
+    /// which is a Steer - it lands in the box and waits for the button,
+    /// exactly as every other arm does.
+    Run(RunId),
+    /// Something this page cannot address. A room name the city will not
+    /// parse is not a place, and it is not a session either: saying it
+    /// was one is the interface stating a fact that did not happen.
+    Nowhere,
 }
 
 /// What the drop means. Exhaustive, and the refusal carries its own
@@ -61,6 +70,23 @@ pub enum Meaning {
     Aim {
         addr: Address,
         task: String,
+    },
+    /// Write `task` and leave the address alone.
+    ///
+    /// A separate arm from [`Meaning::Aim`] because the two differ in the
+    /// one way that matters: dropping on a building says **where**, and
+    /// dropping on the bar says **what**. Folding them together would
+    /// make a drop overwrite a destination the person had already
+    /// chosen.
+    Task {
+        task: String,
+    },
+    /// Write `said` into the session's own box. Not sent: a run already
+    /// spending money is exactly where an unrecallable gesture would
+    /// cost the most.
+    Say {
+        run: RunId,
+        said: String,
     },
     Refused {
         because: Msg,
@@ -74,6 +100,26 @@ pub enum Meaning {
 /// what is not listed is visible rather than lost.
 pub const NAMED_FILES: usize = 8;
 
+/// What a browser will say about a drop, without reading a byte.
+///
+/// The one thin edge of this module, and it lives here rather than beside
+/// each drop zone for the reason the rest of the file exists: a second
+/// copy of it would be a second answer to "what was dropped". The names
+/// and the text are all this takes, because a file dropped on a city
+/// formed around somebody's own folder is already inside that city.
+#[must_use]
+pub fn from_event(event: &Event<DragData>) -> Dropped {
+    let names: Vec<String> = event
+        .files()
+        .iter()
+        .map(dioxus::html::FileData::name)
+        .collect();
+    if names.is_empty() {
+        return Dropped::Unreadable;
+    }
+    Dropped::Files(names)
+}
+
 /// Reads one gesture.
 ///
 /// Pure, so what a drag means is decided once and asserted without a
@@ -81,29 +127,42 @@ pub const NAMED_FILES: usize = 8;
 /// gate in this repository drives a real one.
 #[must_use]
 pub fn read(target: &Target, dropped: &Dropped) -> Meaning {
-    let Target::Place(addr) = target else {
+    // What was dropped is read once, before where it landed is
+    // considered: an unreadable drop is unreadable everywhere, and
+    // deciding that per target is how four arms become four copies of
+    // one rule.
+    let Some(written) = written(dropped) else {
         return Meaning::Refused {
-            because: Msg::DropNotAPlace,
+            because: Msg::DropUnreadable,
         };
     };
+    match target {
+        Target::Place(addr) => Meaning::Aim {
+            addr: addr.clone(),
+            task: written,
+        },
+        Target::Composer => Meaning::Task { task: written },
+        Target::Run(run) => Meaning::Say {
+            run: *run,
+            said: written,
+        },
+        Target::Nowhere => Meaning::Refused {
+            because: Msg::DropNotAPlace,
+        },
+    }
+}
+
+/// The line a drop writes, or `None` when this build cannot read it.
+///
+/// One reading for every target, so the four arms above differ only in
+/// where the line goes.
+fn written(dropped: &Dropped) -> Option<String> {
     match dropped {
-        Dropped::Unreadable => Meaning::Refused {
-            because: Msg::DropUnreadable,
-        },
-        Dropped::Text(text) if text.trim().is_empty() => Meaning::Refused {
-            because: Msg::DropUnreadable,
-        },
-        Dropped::Text(text) => Meaning::Aim {
-            addr: addr.clone(),
-            task: text.trim().to_owned(),
-        },
-        Dropped::Files(names) if names.is_empty() => Meaning::Refused {
-            because: Msg::DropUnreadable,
-        },
-        Dropped::Files(names) => Meaning::Aim {
-            addr: addr.clone(),
-            task: task_line(names),
-        },
+        Dropped::Unreadable => None,
+        Dropped::Text(text) if text.trim().is_empty() => None,
+        Dropped::Text(text) => Some(text.trim().to_owned()),
+        Dropped::Files(names) if names.is_empty() => None,
+        Dropped::Files(names) => Some(task_line(names)),
     }
 }
 
@@ -195,11 +254,11 @@ mod tests {
         assert_eq!(task, "measure the thing");
     }
 
-    /// The gesture that has no meaning: a run is something that
-    /// happened, not a place work can be put.
+    /// The gesture that has no meaning: a place this city will not
+    /// address is not somewhere work can be put.
     #[test]
-    fn a_drop_on_a_run_is_refused_and_says_why() {
-        let meaning = read(&Target::Run, &Dropped::Text("anything".to_owned()));
+    fn a_drop_on_something_unaddressable_is_refused_and_says_why() {
+        let meaning = read(&Target::Nowhere, &Dropped::Text("anything".to_owned()));
         assert_eq!(
             meaning,
             Meaning::Refused {
@@ -213,13 +272,70 @@ mod tests {
         );
     }
 
+    /// Dropping on the bar says what the work is about. It must not say
+    /// where the work goes: the person already answered that, and a
+    /// gesture that silently redirected their dispatch would be worse
+    /// than one that did nothing.
+    #[test]
+    fn a_drop_on_the_composer_writes_the_task_and_leaves_the_address_alone() {
+        let meaning = read(
+            &Target::Composer,
+            &Dropped::Files(vec!["meter.csv".to_owned()]),
+        );
+        assert_eq!(
+            meaning,
+            Meaning::Task {
+                task: "1 file was dropped here: meter.csv".to_owned()
+            }
+        );
+    }
+
+    /// The ruling section 8-38 recorded said a run had no meaning this
+    /// build could carry out. The steer box is that meaning, and the
+    /// principle it was protecting is untouched: this writes the line and
+    /// sends nothing.
+    #[test]
+    fn a_drop_on_a_session_writes_into_its_box_and_does_not_send() {
+        let run = RunId::from_bytes([9u8; 16]);
+        let meaning = read(
+            &Target::Run(run),
+            &Dropped::Files(vec!["lex.rs".to_owned(), "mod.rs".to_owned()]),
+        );
+        let Meaning::Say { run: said_to, said } = meaning else {
+            panic!("a drop on a session says something into it");
+        };
+        assert_eq!(said_to, run);
+        assert_eq!(said, "2 files were dropped here: lex.rs, mod.rs");
+    }
+
+    /// One reading of what was dropped, four places it can go. A drop
+    /// this build cannot read is refused wherever it lands, rather than
+    /// each target deciding that for itself.
+    #[test]
+    fn an_unreadable_drop_is_refused_at_every_target() {
+        let run = RunId::from_bytes([1u8; 16]);
+        for target in [
+            place("lab"),
+            Target::Composer,
+            Target::Run(run),
+            Target::Nowhere,
+        ] {
+            assert!(
+                matches!(read(&target, &Dropped::Unreadable), Meaning::Refused { .. }),
+                "{target:?} read an unreadable drop as something"
+            );
+        }
+    }
+
     #[test]
     fn a_drop_this_build_cannot_read_is_refused_rather_than_read_as_empty() {
         for dropped in [
             Dropped::Unreadable,
             Dropped::Files(Vec::new()),
             Dropped::Text("   ".to_owned()),
-        ] {
+        ]
+        .into_iter()
+        {
             assert_eq!(
                 read(&place("lab"), &dropped),
                 Meaning::Refused {

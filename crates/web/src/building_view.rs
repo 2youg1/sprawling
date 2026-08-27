@@ -26,7 +26,6 @@
 
 use crate::lang::{Msg, fill, say};
 use channels::{Address, BuildingAnswer, ClientFrame, InboxAnswer, Query};
-use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 
 /// Which of a building's faces is showing. The documents are named by the
@@ -45,23 +44,6 @@ pub enum Leaf {
     Reach,
 }
 
-/// What a browser will say about a drop, without reading a byte.
-///
-/// The names and the text are all this build takes: a file dropped on a
-/// city formed around somebody's own folder is already inside that city,
-/// and staging a copy would be a second authority for one file.
-fn dropped_from(event: &Event<DragData>) -> crate::drop::Dropped {
-    let names: Vec<String> = event
-        .files()
-        .iter()
-        .map(dioxus::html::FileData::name)
-        .collect();
-    if names.is_empty() {
-        return crate::drop::Dropped::Unreadable;
-    }
-    crate::drop::Dropped::Files(names)
-}
-
 /// The address of one room of this building.
 ///
 /// The directory tree is the space (glossary, "Floor / Room"), so a room's
@@ -72,6 +54,18 @@ fn dropped_from(event: &Event<DragData>) -> crate::drop::Dropped {
 #[must_use]
 pub fn room_addr(building: &Address, room: &str) -> Option<Address> {
     Address::parse(&format!("{}/{room}", building.as_str())).ok()
+}
+
+/// Which of this page's drop zones a drag is currently over.
+///
+/// Exhaustive rather than a name and a sentinel: "the building" and "a
+/// room called nothing" are not the same state, and a pair of strings
+/// could spell the second.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Over {
+    Nothing,
+    Building,
+    Room(String),
 }
 
 /// The first thing to show for a building: its plan, unless it has none.
@@ -195,6 +189,12 @@ pub fn BuildingView(
         };
     };
     let showing = leaf().unwrap_or_else(|| opening_leaf(&answer));
+    // Which zone a drag is over. One signal rather than one per room: a
+    // drag is in one place at a time, so a set of booleans could spell a
+    // state that cannot happen. `dragleave` always fires - even on a
+    // cancelled drag - so the way back to `Over::Nothing` does not depend
+    // on a drop happening.
+    let mut over = use_signal(|| Over::Nothing);
     let archive_tab = fill(
         word(Msg::BuildingArchiveTab),
         &[("count", &answer.archive.len().to_string())],
@@ -214,16 +214,22 @@ pub fn BuildingView(
                 // building. What the drop means is decided in one
                 // function; this only says where it landed.
                 h2 {
-                    class: "drop-zone",
+                    class: if over() == Over::Building { "drop-zone over" } else { "drop-zone" },
                     title: "{word(Msg::DropHere)}",
                     ondragover: move |event| event.prevent_default(),
+                    ondragenter: move |event| {
+                        event.prevent_default();
+                        over.set(Over::Building);
+                    },
+                    ondragleave: move |_| over.set(Over::Nothing),
                     ondrop: {
                         let here = answer.addr.clone();
                         move |event: Event<DragData>| {
                             event.prevent_default();
+                            over.set(Over::Nothing);
                             on_drop.call((
                                 crate::drop::Target::Place(here.clone()),
-                                dropped_from(&event),
+                                crate::drop::from_event(&event),
                             ));
                         }
                     },
@@ -289,7 +295,11 @@ pub fn BuildingView(
                 for room in answer.rooms.clone() {
                     button {
                         key: "room-{room}",
-                        class: "tab room drop-zone",
+                        class: if over() == Over::Room(room.clone()) {
+                            "tab room drop-zone over"
+                        } else {
+                            "tab room drop-zone"
+                        },
                         title: "{word(Msg::DropHere)}",
                         "aria-current": if showing == Leaf::Room(room.clone()) { "true" } else { "false" },
                         onclick: {
@@ -297,20 +307,29 @@ pub fn BuildingView(
                             move |_| leaf.set(Some(Leaf::Room(name.clone())))
                         },
                         ondragover: move |event| event.prevent_default(),
+                        ondragenter: {
+                            let name = room.clone();
+                            move |event: Event<DragData>| {
+                                event.prevent_default();
+                                over.set(Over::Room(name.clone()));
+                            }
+                        },
+                        ondragleave: move |_| over.set(Over::Nothing),
                         ondrop: {
                             let landed = room_addr(&answer.addr, &room);
                             move |event: Event<DragData>| {
                                 event.prevent_default();
+                                over.set(Over::Nothing);
                                 // A room name this city cannot address
-                                // is not a place; the same function that
-                                // refuses a run refuses it, with its own
-                                // words rather than a second wording
-                                // here.
+                                // is not a place. It is not a session
+                                // either, which is what this used to
+                                // say - the refusal now names what
+                                // actually happened.
                                 let target = match landed.clone() {
                                     Some(addr) => crate::drop::Target::Place(addr),
-                                    None => crate::drop::Target::Run,
+                                    None => crate::drop::Target::Nowhere,
                                 };
-                                on_drop.call((target, dropped_from(&event)));
+                                on_drop.call((target, crate::drop::from_event(&event)));
                             }
                         },
                         "{room}/"

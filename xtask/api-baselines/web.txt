@@ -199,6 +199,7 @@ pub fn web::fill(&str, &[(&str, &str)]) -> alloc::string::String
 pub fn web::fold(impl core::iter::traits::collect::IntoIterator<Item = web::Arrived>) -> web::Paint
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
 pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::wire::ClientFrame
+pub fn web::from_event(&dioxus_core::events::Event<dioxus_html::events::drag::DragData>) -> web::Dropped
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
 pub fn web::headline(&web::Working) -> (web::Msg, alloc::vec::Vec<(&'static str, alloc::string::String)>)
@@ -453,6 +454,11 @@ pub web::Meaning::Aim::addr: kernel::address::Address
 pub web::Meaning::Aim::task: alloc::string::String
 pub web::Meaning::Refused
 pub web::Meaning::Refused::because: web::Msg
+pub web::Meaning::Say
+pub web::Meaning::Say::run: kernel::event::RunId
+pub web::Meaning::Say::said: alloc::string::String
+pub web::Meaning::Task
+pub web::Meaning::Task::task: alloc::string::String
 pub web::Msg::AlertAwaitingApproval
 pub web::Msg::AlertCannot
 pub web::Msg::AlertNoRecovery
@@ -880,8 +886,10 @@ pub web::Subject::Run
 pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>
 pub web::TagRow::consequence: web::Msg
 pub web::TagRow::tag: kernel::model::ModelTag
+pub web::Target::Composer
+pub web::Target::Nowhere
 pub web::Target::Place(kernel::address::Address)
-pub web::Target::Run
+pub web::Target::Run(kernel::event::RunId)
 pub web::Trend::Falling
 pub web::Trend::Rising
 pub web::Trend::Steady

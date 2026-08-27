@@ -208,13 +208,32 @@ pub fn LiveView(
     /// page shows for its phase.
     runs: Vec<(RunId, String)>,
     following: bool,
+    /// A line a drop wrote into this session's box. It stops in the box:
+    /// a run is already spending, which is exactly where a gesture
+    /// nobody could take back would cost the most.
+    steered: Option<String>,
     on_frame: EventHandler<ClientFrame>,
     on_follow: EventHandler<bool>,
+    on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
     on_watch: EventHandler<Option<RunId>>,
 ) -> Element {
     let lang = use_context::<Signal<crate::lang::Lang>>();
     let word = move |msg: Msg| say(lang(), msg);
     let mut steer = use_signal(String::new);
+    // Reactive for the same reason the dispatch bar's is: a line written
+    // by a drop after the first render would otherwise never arrive.
+    let written = steered.clone();
+    use_effect(use_reactive!(|written| {
+        let mut steer = steer;
+        if let Some(ref line) = written
+            && !line.is_empty()
+        {
+            steer.set(line.clone());
+        }
+    }));
+    // Whether a drag is over this session's box. A hover rule cannot say
+    // so: device input events are suppressed for the whole of a drag.
+    let mut over = use_signal(|| false);
     let lines = feed.lines().to_vec();
     let dropped = feed.dropped();
     let held = lines.len();
@@ -432,7 +451,26 @@ pub fn LiveView(
                 },
                 Some(id) => rsx! {
                     form {
-                        class: "steer",
+                        class: if over() { "steer drop-zone over" } else { "steer drop-zone" },
+                        title: "{word(Msg::DropHere)}",
+                        // Section 8-38 refused a drop on a run because no
+                        // meaning could be carried out. This box is that
+                        // meaning, and the principle it protected holds:
+                        // the line is written, the button is not pressed.
+                        ondragover: move |event| event.prevent_default(),
+                        ondragenter: move |event| {
+                            event.prevent_default();
+                            over.set(true);
+                        },
+                        ondragleave: move |_| over.set(false),
+                        ondrop: move |event: Event<DragData>| {
+                            event.prevent_default();
+                            over.set(false);
+                            on_drop.call((
+                                crate::drop::Target::Run(id),
+                                crate::drop::from_event(&event),
+                            ));
+                        },
                         onsubmit: move |event| {
                             event.prevent_default();
                             let said = steer.read().trim().to_owned();

@@ -677,7 +677,22 @@
   /* A drop zone says so while a drag is over it and stays quiet
      otherwise: a target that is always outlined teaches nothing. */
   .drop-zone { border-radius: var(--corner-card); corner-shape: var(--corner-card-shape); }
+  /* Two rules, because they answer two different questions. `:hover` is a
+     pointer moving over the page with nothing in hand, and it teaches
+     that this place takes a drop at all. `.over` is a drag actually here,
+     and it is the one that has to be right: for the whole of a drag the
+     browser suppresses device input events, so the pointer state a hover
+     rule reads is not being updated and the hover outline never lights at
+     the moment somebody is deciding where to let go. The class is put on
+     by `dragenter` and taken off by `dragleave`, which always fires even
+     when the drag is cancelled. */
   .drop-zone:hover { outline: 1px dashed var(--G5); outline-offset: 2px; }
+  /* ACCENT rather than a colour of its own: "something is happening
+     here" is exactly what a drop target under the cursor means, and a
+     third hue would be a third meaning nobody asked for. Solid and two
+     pixels, so it is a different statement from the dashed hint. */
+  .drop-zone.over { outline: 2px solid var(--ACCENT); outline-offset: 2px;
+                    background: var(--G2); }
   .doc-text { background: var(--G1); border: 1px solid var(--G3);
               border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
               padding: var(--space-pane); white-space: pre-wrap; color: var(--TEXT);

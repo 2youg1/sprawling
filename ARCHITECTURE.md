@@ -508,7 +508,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::theme | crates/web/src/theme.rs | the single-hue language: the only place that produces a colour | data | S4 | built |
 | web::building_view | crates/web/src/building_view.rs | one building, what it has written down, and what waits in each room | decision | R1 | built |
 | web::reach | crates/web/src/reach.rs | what a building's runs may reach, and the one form that sets it | decision | P3 | built |
-| web::drop | crates/web/src/drop.rs | what a drag onto a place means, and what it is refused for | decision | P0 | built |
+| web::drop | crates/web/src/drop.rs | what a drag means at each of the four places it can land, and what it is refused for | decision | P0 | built |
 | web::vitals | crates/web/src/vitals.rs | the few numbers no other surface states, and the four it refuses to state | decision | F1 | built |
 | web::archive_search | crates/web/src/archive_search.rs | what this city wrote down: the shelves and the record, never merged | decision | F1 | built |
 | web::settings | crates/web/src/settings.rs | turning a URL and a key into a model a run can be given | decision | P1 | built |

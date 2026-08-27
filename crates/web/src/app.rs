@@ -1032,6 +1032,10 @@ pub fn Root(
     /// the two halves must arrive together or the bar shows an address
     /// with somebody else's task under it.
     dropped: Option<String>,
+    /// What a drop wrote into the session's own box. A separate field
+    /// from `dropped` because the two boxes take different gestures:
+    /// aiming new work, and saying something into work already running.
+    steered: Option<String>,
     following: bool,
     /// Whether frames are flowing yet.
     ///
@@ -1154,8 +1158,10 @@ pub fn Root(
                             run,
                             runs: watchable(&snapshot),
                             following,
+                            steered: steered.clone(),
                             on_frame,
                             on_follow,
+                            on_drop,
                             on_watch: move |id| on_view.call(View::Live(id)),
                         }
                     },
@@ -1233,6 +1239,7 @@ pub fn Root(
                 DispatchBar {
                     addr: selected.clone(),
                     dropped: dropped.clone(),
+                    on_drop,
                     buildings: city
                         .as_ref()
                         .map(|answer| {
@@ -1275,6 +1282,9 @@ fn DispatchBar(
     /// typed into and stops there: a gesture that also pressed the
     /// button would spend money nobody agreed to spend.
     dropped: Option<String>,
+    /// Where a drag that landed on this bar goes. The same handler every
+    /// other zone uses, so one gesture has one meaning.
+    on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
     /// The names this city already holds, offered under the address box.
     /// A person should not have to remember what they raised.
     buildings: Vec<String>,
@@ -1329,11 +1339,41 @@ fn DispatchBar(
     // reaching the task box is already the gesture that means "I am
     // writing one of these".
     let mut open = use_signal(|| false);
+    // Whether a drag is over this bar right now.
+    //
+    // A `:hover` rule cannot answer this: for the whole of a drag the
+    // browser suppresses device input events, so the pointer state a
+    // hover rule reads is not being updated. `dragleave` always fires,
+    // even when the drag is cancelled, so the flag has a cleanup path
+    // that does not depend on the drop happening.
+    let mut over = use_signal(|| false);
     let lang = use_context::<Signal<crate::lang::Lang>>();
     let word = move |msg: Msg| crate::lang::say(lang(), msg);
     rsx! {
         form {
-            class: if open() { "dispatch open" } else { "dispatch" },
+            class: match (open(), over()) {
+                (true, true) => "dispatch open drop-zone over",
+                (true, false) => "dispatch open drop-zone",
+                (false, true) => "dispatch drop-zone over",
+                (false, false) => "dispatch drop-zone",
+            },
+            // Cancelling `dragover` is what elects this bar as a drop
+            // target. It also takes the gesture away from the browser:
+            // a bare text input is a valid drop target by default for
+            // `text/plain`, so without this a dragged selection was
+            // inserted raw and `drop::read` never ran - one gesture with
+            // two authorities, and the one nobody wrote was winning.
+            ondragover: move |event| event.prevent_default(),
+            ondragenter: move |event| {
+                event.prevent_default();
+                over.set(true);
+            },
+            ondragleave: move |_| over.set(false),
+            ondrop: move |event: Event<DragData>| {
+                event.prevent_default();
+                over.set(false);
+                on_drop.call((crate::drop::Target::Composer, crate::drop::from_event(&event)));
+            },
             onsubmit: move |event| {
                 event.prevent_default();
                 let frame = dispatch_command(
@@ -1548,6 +1588,10 @@ pub fn App() -> Element {
     follow_the_address_bar(view, refused, lang);
     let mut selected = use_signal(|| None::<String>);
     let mut dropped = use_signal(|| None::<String>);
+    // A line a drop wrote into the session's box, held here for the same
+    // reason `dropped` is: the box belongs to a view that a drop can
+    // reach from outside it.
+    let mut steered = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
     // What the keyboard opened. Held here rather than inside `Root`
@@ -1604,6 +1648,7 @@ pub fn App() -> Element {
             records: records(),
             selected: selected(),
             dropped: dropped(),
+            steered: steered(),
             following: following(),
             live,
             on_frame: move |frame: channels::ClientFrame| {
@@ -1622,6 +1667,16 @@ pub fn App() -> Element {
                     crate::drop::Meaning::Aim { addr, task } => {
                         selected.set(Some(addr.as_str().to_owned()));
                         dropped.set(Some(task));
+                    }
+                    // The bar already knows where the work goes, because
+                    // somebody put it there. Only the task is written.
+                    crate::drop::Meaning::Task { task } => {
+                        dropped.set(Some(task));
+                    }
+                    // Into the session's own box, unsent. The button is
+                    // still the person's to press.
+                    crate::drop::Meaning::Say { said, .. } => {
+                        steered.set(Some(said));
                     }
                     crate::drop::Meaning::Refused { because } => {
                         refused.set(Some(crate::alert::refused(
@@ -3049,6 +3104,47 @@ mod tests {
             painted.has_class("badge"),
             "one item waits and none is shown"
         );
+    }
+
+    /// The bar a person writes work into is a drop target.
+    ///
+    /// Before this it was not, and the browser's own default was
+    /// answering the gesture instead: a bare text input accepts a
+    /// `text/plain` drop without anybody electing it, so a dragged
+    /// selection went in raw and `drop::read` never ran. Cancelling
+    /// `dragover` is what takes the gesture back.
+    #[test]
+    fn work_can_be_aimed_by_dropping_onto_the_bar_it_is_written_in() {
+        let painted = paint(View::City, Snapshot::new(), Vec::new());
+        assert!(
+            painted.has_class("dispatch drop-zone"),
+            "the control surface takes no drop: {:?}",
+            painted.attrs
+        );
+    }
+
+    /// Every drop zone must be able to say "a drag is over me" without a
+    /// hover rule, because device input events are suppressed for the
+    /// whole of a drag and a hover rule therefore never lights.
+    #[test]
+    fn a_drop_zone_reports_a_drag_through_events_and_not_through_hover() {
+        let source = include_str!("../assets/index.html");
+        assert!(
+            source.contains(".drop-zone.over"),
+            "a drop zone has no drag state to show"
+        );
+        // Read at compile time, so this does not depend on which
+        // directory the runner happened to start in.
+        for (name, wired) in [
+            ("app.rs", include_str!("app.rs")),
+            ("live.rs", include_str!("live.rs")),
+            ("building_view.rs", include_str!("building_view.rs")),
+        ] {
+            assert!(
+                wired.contains("ondragenter") && wired.contains("ondragleave"),
+                "{name} carries a drop zone it never lights"
+            );
+        }
     }
 
     #[test]
