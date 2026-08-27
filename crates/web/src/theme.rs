@@ -791,6 +791,71 @@ mod tests {
         }
     }
 
+    /// Nothing moves unless a person just moved.
+    ///
+    /// The judgement, unchanged since the layout rules were written: if a
+    /// movement would happen while nobody is touching the interface, it is
+    /// manufacturing attention, and it is deleted. `@keyframes` and
+    /// `animation` can only do that - they run on their own clock - so
+    /// they are refused outright.
+    ///
+    /// A `transition` is allowed, and is checked rather than trusted: every
+    /// property it names must be one that only `:hover`, `:focus-visible`
+    /// or `:active` changes. A transition on `height` or `opacity` would
+    /// fire when a page redraws with new content, which is an animation
+    /// nobody asked for wearing the syntax of a permitted one.
+    #[test]
+    fn nothing_moves_unless_a_person_just_moved() {
+        for banned in ["@keyframes", "animation:", "animation-name"] {
+            assert!(
+                !SHIPPED.contains(banned),
+                "{banned} runs on its own clock; a movement nobody asked for is deleted"
+            );
+        }
+        // Properties an interaction pseudo-class is allowed to change.
+        // `transform` is here because a press displaces by one pixel, which
+        // survives the desaturated snapshot where a colour-only press does
+        // not.
+        const ANSWERABLE: [&str; 5] = [
+            "background-color",
+            "border-color",
+            "color",
+            "outline-color",
+            "transform",
+        ];
+        for (at, _) in SHIPPED.match_indices("transition:") {
+            let Some(rest) = SHIPPED.get(at.saturating_add("transition:".len())..) else {
+                continue;
+            };
+            let Some(end) = rest.find(';') else {
+                panic!("a transition with no end: {rest:.60}");
+            };
+            let Some(declared) = rest.get(..end) else {
+                continue;
+            };
+            for step in declared.split(',') {
+                let mut words = step.split_whitespace();
+                let Some(property) = words.next() else {
+                    continue;
+                };
+                assert!(
+                    ANSWERABLE.contains(&property),
+                    "{property} is not a property an interaction changes, so a \
+                     transition on it fires when the page redraws: {declared}"
+                );
+                // Everything after the property is the timing, and this
+                // library has one duration to spend on it.
+                for timing in words {
+                    assert!(
+                        timing == "var(--motion-quick)",
+                        "{timing} is a second duration; the library has one, \
+                         and MOTION_QUICK_MS produces it"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn per_mille_formats_exactly() {
         assert_eq!(per_mille(145), "0.145");

@@ -2557,4 +2557,98 @@ mod tests {
         assert_eq!(say(Lang::Zh, Msg::DispatchSend), "派出去");
         assert_eq!(say(Lang::En, Msg::DispatchSend), "send it");
     }
+
+    /// Every module that draws something a person reads.
+    ///
+    /// Listed rather than walked, because this crate compiles to wasm and
+    /// a test that read the directory would be testing the machine it ran
+    /// on. A view added without a line here is a view whose English can
+    /// escape, which is the failure this table exists to make loud.
+    const VIEWS: [(&str, &str); 17] = [
+        ("alert.rs", include_str!("alert.rs")),
+        ("app.rs", include_str!("app.rs")),
+        ("approval.rs", include_str!("approval.rs")),
+        ("archive_search.rs", include_str!("archive_search.rs")),
+        ("building_view.rs", include_str!("building_view.rs")),
+        ("city_view.rs", include_str!("city_view.rs")),
+        ("dashboard.rs", include_str!("dashboard.rs")),
+        ("drop.rs", include_str!("drop.rs")),
+        ("ledger_view.rs", include_str!("ledger_view.rs")),
+        ("live.rs", include_str!("live.rs")),
+        ("overview.rs", include_str!("overview.rs")),
+        ("palette.rs", include_str!("palette.rs")),
+        ("panel.rs", include_str!("panel.rs")),
+        ("progress.rs", include_str!("progress.rs")),
+        ("reach.rs", include_str!("reach.rs")),
+        ("settings.rs", include_str!("settings.rs")),
+        ("vitals.rs", include_str!("vitals.rs")),
+    ];
+
+    /// The part of a module that draws, which is everything above its own
+    /// test module.
+    ///
+    /// Load-bearing in both directions: a phrase named only by a test is
+    /// not a phrase any reader sees, and a sentence quoted by a test to
+    /// assert that the page says it is evidence rather than a second
+    /// authority for the wording.
+    fn drawn(body: &str) -> &str {
+        match body.find("#[cfg(test)]") {
+            Some(at) => body.get(..at).unwrap_or(body),
+            None => body,
+        }
+    }
+
+    /// A phrase nothing renders is an English literal standing in its
+    /// place.
+    ///
+    /// The exhaustive `match` above proves every variant is *translated*.
+    /// It cannot prove any of them reaches a screen, and that gap is not
+    /// hypothetical: nineteen of these were dead at once, seventeen of
+    /// them because the same English had been written into a view as a
+    /// literal, so the Chinese page rendered whole English paragraphs
+    /// while every assertion in this crate stayed green.
+    #[test]
+    fn every_phrase_is_said_by_some_view() {
+        let painted: String = VIEWS.iter().map(|&(_, body)| drawn(body)).collect();
+        let mut unsaid = Vec::new();
+        for msg in every_message() {
+            let named = format!("{msg:?}");
+            if !painted.contains(&format!("Msg::{named}")) {
+                unsaid.push(named);
+            }
+        }
+        assert!(
+            unsaid.is_empty(),
+            "phrases no view renders, so something else is saying them: {unsaid:?}"
+        );
+    }
+
+    /// The English of a phrase may not also be written as a literal.
+    ///
+    /// The sharper half of the rule above. A view can call `word(...)` in
+    /// one arm and inline the same sentence in another, which is how the
+    /// city page ended up with an English paragraph while the phrase it
+    /// belonged to was in use elsewhere.
+    #[test]
+    fn no_view_writes_out_a_sentence_the_phrase_table_already_holds() {
+        let mut copied = Vec::new();
+        for msg in every_message() {
+            let english = say(Lang::En, msg);
+            // Long enough that a collision is the same sentence rather
+            // than a shared word: "page", "newer" and "cost" are phrases
+            // too, and they turn up inside identifiers and comments.
+            if english.len() < 40 {
+                continue;
+            }
+            for &(name, body) in &VIEWS {
+                if drawn(body).contains(english) {
+                    copied.push(format!("{name}: {msg:?}"));
+                }
+            }
+        }
+        assert!(
+            copied.is_empty(),
+            "a view spells out a sentence the table already says: {copied:?}"
+        );
+    }
 }
