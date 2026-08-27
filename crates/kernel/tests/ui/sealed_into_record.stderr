@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `Sealed<std::string::String>: serde::Serialize` is not satisfied
-  --> tests/ui/sealed_into_record.rs:10:35
+  --> tests/ui/sealed_into_record.rs:12:35
    |
-10 |     let _ = serde_json::to_value(&sealed);
+12 |     let _ = serde_json::to_value(&sealed);
    |             --------------------  ^^^^^^ the trait `serde_core::ser::Serialize` is not implemented for `Sealed<std::string::String>`
    |             |
    |             required by a bound introduced by this call
@@ -29,9 +29,9 @@ note: required by a bound in `to_value`
    |        ^^^^^^^^^ required by this bound in `to_value`
 
 error[E0277]: `Sealed<std::string::String>` doesn't implement `Debug`
-  --> tests/ui/sealed_into_record.rs:11:22
+  --> tests/ui/sealed_into_record.rs:13:22
    |
-11 |     let _ = format!("{sealed:?}");
+13 |     let _ = format!("{sealed:?}");
    |                      ^^^^^^^^^^ `Sealed<std::string::String>` cannot be formatted using `{:?}` because it doesn't implement `Debug`
    |
    = help: the trait `Debug` is not implemented for `Sealed<std::string::String>`

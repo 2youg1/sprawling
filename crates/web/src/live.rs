@@ -319,8 +319,10 @@ pub fn LiveView(
             }
             // The event stream stays, one click down: it is what the
             // Ledger holds, and a reader who wants the raw order should
-            // not have to leave the page to see it.
-            details { class: "stream",
+            // not have to leave the page to see it. Absent when there is
+            // nothing behind it, because a control that opens onto an
+            // empty list teaches the reader it is not worth opening.
+            details { class: "stream", hidden: held == 0,
                 summary { "{word(Msg::LiveEveryEvent)}" }
                 ol { class: "lines",
                     for line in lines {

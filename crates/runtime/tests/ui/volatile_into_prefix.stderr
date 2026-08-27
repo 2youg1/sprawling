@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `FrozenSegment: From<TimeMs>` is not satisfied
-  --> tests/ui/volatile_into_prefix.rs:10:56
+  --> tests/ui/volatile_into_prefix.rs:12:56
    |
-10 |     let _segment: runtime::prefix::FrozenSegment = now.into();
+12 |     let _segment: runtime::prefix::FrozenSegment = now.into();
    |                                                        ^^^^ the trait `From<TimeMs>` is not implemented for `FrozenSegment`
    |
    = note: required for `TimeMs` to implement `Into<FrozenSegment>`

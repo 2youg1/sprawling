@@ -1,13 +1,13 @@
 error: cannot construct `Discard` with struct literal syntax due to private fields
-  --> tests/ui/no_restoration_discard.rs:10:13
+  --> tests/ui/no_restoration_discard.rs:12:13
    |
-10 |     let _ = kernel::Discard {
+12 |     let _ = kernel::Discard {
    |             ^^^^^^^^^^^^^^^
-11 |         paths: vec![],
+13 |         paths: vec![],
    |         ------------- private field
-12 |         taint: kernel::TaintSet::empty(),
+14 |         taint: kernel::TaintSet::empty(),
    |         -------------------------------- private field
-13 |         total_bytes: kernel::ByteLen::new(0),
+15 |         total_bytes: kernel::ByteLen::new(0),
    |         ------------------------------------ private field
    |
    = note: ...and other private field `plan` that was not provided
