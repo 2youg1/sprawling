@@ -60,10 +60,26 @@
 # a keyboard all day - a feature somebody uses rather than slack that
 # accumulated, so the reading is recorded and the ratchet holds from here.
 # Headroom against the 2 MB budget is 3.6x.
+# ux-11..ux-14 records 614,807 on the person's ruling. The 34.6 KB since
+# ux-6 was weighed one card at a time, each figure from its own release
+# build: ux-11 +8.3 KB, ux-12 +4.9 KB, ux-13 +4.1 KB, ux-14 +11.9 KB, and
+# 5.4 KB of drift from ux-7..ux-10 that stayed inside the slack and was
+# never re-recorded. What it bought is the session, which is where
+# everything this product does differently actually happens and where all
+# of it used to render as the same grey line: a turn that says what the
+# model said, what it cost in tokens and dollars, what each tool
+# answered, and what a door refused in three parts; a drop that reaches
+# the box work is written in and lights up while a drag is over it; a
+# query that can ask for one session, without which yesterday's session
+# opened blank; and the change list a person reads to find what an agent
+# touched, with the counts taken from git between two real checkpoints.
+# Microcopy in two languages is most of the weight, as it was at F2.05
+# and P3.06 - it is the product's voice rather than padding. Headroom
+# against the 2 MB budget is 3.4x, and the ratchet holds from here.
 [frontend_artifact]
 what = "the client the browser downloads, gzipped, fonts excluded"
 budget_bytes = 2097152
-best_bytes = 580157
+best_bytes = 614807
 slack_bytes = 20480
 measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
 status = "gated"
