@@ -865,11 +865,20 @@ pub fn CityView(
         section { class: "city-view",
             crate::panel::Panel {
                 title: if raised == 0 { word(Msg::OverviewNoBuildings).to_owned() }
-                    else { format!("{raised} building(s), {busy_now} run(s) in flight") },
+                    else {
+                        crate::lang::fill(
+                            word(Msg::CityStanding),
+                            &[("raised", &raised.to_string()), ("busy", &busy_now.to_string())],
+                        )
+                    },
                 scope: word(Msg::CityTowerNote).to_owned(),
                 source: word(Msg::CitySource).to_owned(),
+            // An empty city still draws its ground, because a reader who
+            // sees where buildings will stand knows what the page is for.
+            // It draws less of it: at the full height the picture is a
+            // 520px void above the one form that can end it.
             svg {
-                class: "stage",
+                class: if raised == 0 { "stage bare" } else { "stage" },
                 view_box: "{frame.attr()}",
                 preserve_aspect_ratio: "xMidYMid meet",
                 role: "group",
@@ -1004,8 +1013,7 @@ pub fn CityView(
             if city.buildings.is_empty() {
                 crate::panel::Empty {
                     status: word(Msg::OverviewNoBuildings).to_owned(),
-                    what: "a building is one line of business: its own rules, its own plan, its own archive, and the rooms work happens in. Raise one above and it appears here with the ground under it."
-                        .to_owned(),
+                    what: word(Msg::CityNoBuildingsWhat).to_owned(),
                 }
             }
             // The index beside the picture. The canvas answers "where",

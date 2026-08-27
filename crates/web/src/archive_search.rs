@@ -167,24 +167,33 @@ pub fn ArchiveView(
                         oninput: move |event| needle.set(event.value()),
                     }
                 }
-                button { r#type: "submit", disabled: searchable(&needle()).is_none(), "search the shelves" }
+                button {
+                    r#type: "submit",
+                    disabled: searchable(&needle()).is_none(),
+                    "{word(Msg::ArchiveSearchButton)}"
+                }
             }
 
             match hits.as_ref() {
                 None => rsx! {
                     crate::panel::Empty {
-                        status: "no search has been run".to_owned(),
-                        what: "the shelves are read when you ask and not before, so an empty word searches nothing rather than everything. Type a word above."
-                            .to_owned(),
+                        status: word(Msg::ArchiveNoSearch).to_owned(),
+                        what: word(Msg::ArchiveNoSearchWhat).to_owned(),
                     }
                 },
                 Some(found) => {
                     let shelves = shelves(found);
                     let total: usize = shelves.iter().map(|shelf| shelf.hits.len()).sum();
+                    let counted = crate::lang::fill(
+                        word(Msg::ArchiveHits),
+                        &[
+                            ("total", &total.to_string()),
+                            ("needle", &found.needle),
+                            ("shelves", &shelves.len().to_string()),
+                        ],
+                    );
                     rsx! {
-                        p { class: "note",
-                            "{total} hit(s) for \"{found.needle}\" in {shelves.len()} building(s), read from the shelves just now"
-                        }
+                        p { class: "note", "{counted}" }
                         for shelf in shelves {
                             article { key: "{shelf.building.as_str()}", class: "shelf",
                                 h2 { "{shelf.building.as_str()}" }
@@ -204,21 +213,20 @@ pub fn ArchiveView(
             match filed.as_ref() {
                 None => rsx! {
                     crate::panel::Empty {
-                        status: "asking the record what was filed lately".to_owned(),
-                        what: "the list appears when the answer arrives".to_owned(),
+                        status: word(Msg::ArchiveAskingFiled).to_owned(),
+                        what: word(Msg::ArchiveListWhenArrives).to_owned(),
                     }
                 },
                 Some(record) if record.assets.is_empty() => rsx! {
                     crate::panel::Empty {
-                        status: "nothing has been filed yet".to_owned(),
-                        what: "a run files an asset when it settles something worth not doing twice. The archive is what the next run is told before it starts, so it fills as work completes rather than as work begins."
-                            .to_owned(),
+                        status: word(Msg::ArchiveNothingFiled).to_owned(),
+                        what: word(Msg::ArchiveNothingFiledWhat).to_owned(),
                     }
                 },
                 Some(record) => {
                     let rows = filed_lately(record, FILED_LATELY_MAX);
                     rsx! {
-                        h2 { class: "lately", "filed lately" }
+                        h2 { class: "lately", "{word(Msg::ArchiveFiledLately)}" }
                         p { class: "note", "{filed_line(record, rows.len())}" }
                         for row in rows {
                             div { key: "{row.at.value()}-{row.subject}", class: "filed",

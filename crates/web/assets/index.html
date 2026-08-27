@@ -233,6 +233,13 @@
                    letter-spacing: 0.07em; text-transform: uppercase; color: var(--TEXT); }
   .field .hint { font-size: var(--text-note); color: var(--TEXT_QUIET); }
   .field .hint.blocking { color: var(--ALERT); }
+  /* A sentence saying why a form is refused reads the whole form, so it
+     belongs under the row and not inside the last field. Inside one, it
+     made that field a line taller than its neighbours, and a row whose
+     controls align on their bottom edge answered by lifting the button
+     out of line with the selects it belongs to. */
+  form > .hint.blocking { flex-basis: 100%; color: var(--ALERT);
+                          font-size: var(--text-note); margin-top: var(--space-tight); }
 
   /* ------------------------------------------------------ tables, lists */
 
@@ -399,6 +406,10 @@
      half. Under the ceiling the picture keeps its proportions and gives
      back the margin at its sides - the only place in this client where a
      building can be raised is worth more than that margin. */
+  /* An empty city keeps its ground and gives back the height: nothing is
+     standing there yet, and the form that raises the first building is
+     worth more of the fold than a picture of bare tiles. */
+  .city-view .stage.bare { max-height: 22vh; }
   .city-view .stage { display: block; width: 100%; height: auto; max-height: 52vh;
                       background: var(--G0);
                       border: 1px solid var(--G3); border-radius: var(--corner-panel);

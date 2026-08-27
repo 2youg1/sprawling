@@ -241,20 +241,20 @@ pub fn LedgerView(
                             class: "quiet",
                             disabled: back() == 0,
                             onclick: move |_| back.set(back().saturating_sub(1)),
-                            "newer"
+                            "{word(Msg::LedgerNewer)}"
                         }
                         span { class: "where",
                             if back() == 0 {
-                                "the newest {PAGE_ROWS} that match"
+                                "{crate::lang::fill(word(Msg::LedgerNewestMatching), &[(\"rows\", &PAGE_ROWS.to_string())])}"
                             } else {
-                                "{skipped} newer record(s) skipped"
+                                "{crate::lang::fill(word(Msg::LedgerSkipped), &[(\"skipped\", &skipped.to_string())])}"
                             }
                         }
                         button {
                             class: "quiet",
                             disabled: !older,
                             onclick: move |_| back.set(back().saturating_add(1)),
-                            "older"
+                            "{word(Msg::LedgerOlder)}"
                         }
                     }
                     details { class: "export",

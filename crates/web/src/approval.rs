@@ -134,7 +134,7 @@ pub fn ApprovalsView(
         section { class: "approvals",
             crate::panel::Panel {
                 title: if clusters.is_empty() { word(Msg::ApprovalNothingWaiting).to_owned() }
-                    else { "what the city stopped to ask you".to_owned() },
+                    else { word(Msg::ApprovalTitle).to_owned() },
                 figure: (waiting > 0).then(|| waiting.to_string()),
                 scope: word(Msg::ApprovalScope).to_owned(),
                 source: word(Msg::ApprovalSource).to_owned(),
@@ -266,16 +266,25 @@ impl ReturnPath {
         }
     }
 
+    /// The instruction, in the language the reader chose.
+    ///
+    /// Takes the language rather than answering in English, for the reason
+    /// `ProviderHealth::word` does: a sentence assembled outside
+    /// `web::lang` is a second authority for the wording, and the way it
+    /// shows up is a Chinese page with one English row in it.
     #[must_use]
-    pub fn sentence(&self) -> String {
+    pub fn sentence(&self, lang: crate::lang::Lang) -> String {
         match *self {
-            Self::FromCheckpoint(ref at) => format!("restore from the checkpoint at {at}"),
-            Self::FromStore(ref at) => format!("restore the stored copy at {at}"),
-            Self::Rebuild(ref how) => format!("rebuild it: {how}"),
-            Self::Undescribed => {
-                "this build cannot describe how to restore it; the Ledger records the plan"
-                    .to_owned()
+            Self::FromCheckpoint(ref at) => {
+                crate::lang::fill(say(lang, Msg::BinRestoreCheckpoint), &[("at", at)])
             }
+            Self::FromStore(ref at) => {
+                crate::lang::fill(say(lang, Msg::BinRestoreStored), &[("at", at)])
+            }
+            Self::Rebuild(ref how) => {
+                crate::lang::fill(say(lang, Msg::BinRebuild), &[("how", how)])
+            }
+            Self::Undescribed => say(lang, Msg::BinNoDescription).to_owned(),
         }
     }
 }
@@ -403,7 +412,7 @@ pub fn RecycleBinView(
                     key: "{row.what}",
                     class: if row.restored { "binned back" } else { "binned" },
                     span { class: "what", "{row.what}" }
-                    span { class: "way-back", "{row.return_path.sentence()}" }
+                    span { class: "way-back", "{row.return_path.sentence(lang())}" }
                     if row.restored {
                         span { class: "note", "{word(Msg::BinAlreadyRestored)}" }
                     } else if let ReturnPath::FromCheckpoint(ref oid) = row.return_path {
@@ -553,7 +562,7 @@ mod tests {
         for restoration in &paths {
             let path = ReturnPath::of(restoration);
             assert_ne!(path, ReturnPath::Undescribed);
-            let sentence = path.sentence();
+            let sentence = path.sentence(crate::lang::Lang::En);
             assert!(
                 sentence.contains("restore") || sentence.contains("rebuild"),
                 "a row must name an action: {sentence}"
@@ -566,7 +575,7 @@ mod tests {
         // Fail-closed for a view: still show the row, never invent the
         // action. A client one version behind must not promise a restore
         // whose behaviour it cannot predict.
-        let sentence = ReturnPath::Undescribed.sentence();
+        let sentence = ReturnPath::Undescribed.sentence(crate::lang::Lang::En);
         assert!(sentence.contains("Ledger"));
         assert!(!sentence.contains("restore from"));
         assert!(!sentence.starts_with("rebuild"));
@@ -593,7 +602,12 @@ mod tests {
             rows: vec![discarded("file:notes/a.md", 10, Some(tracked))],
         });
         assert_eq!(rows.len(), 1);
-        assert!(rows[0].return_path.sentence().contains("checkpoint"));
+        assert!(
+            rows[0]
+                .return_path
+                .sentence(crate::lang::Lang::En)
+                .contains("checkpoint")
+        );
         assert!(!rows[0].restored);
     }
 
@@ -604,7 +618,12 @@ mod tests {
         });
         assert_eq!(rows.len(), 1, "the row is never dropped");
         assert_eq!(rows[0].return_path, ReturnPath::Undescribed);
-        assert!(rows[0].return_path.sentence().contains("Ledger"));
+        assert!(
+            rows[0]
+                .return_path
+                .sentence(crate::lang::Lang::En)
+                .contains("Ledger")
+        );
     }
 
     #[test]

@@ -253,6 +253,7 @@ pub enum Msg {
     CityScope,
     CityTowerNote,
     CitySource,
+    CityStanding,
     CityStageLabel,
     CityBuildingNamePlaceholder,
     CityRaiseBuilding,
@@ -306,7 +307,6 @@ pub enum Msg {
     BinSource,
     BinNoneYet,
     BinNoneYetWhat,
-    BinBinnedBack,
     BinAlreadyRestored,
     BinRollback,
     BinRollbackNote,
@@ -325,14 +325,23 @@ pub enum Msg {
     LedgerNewestMatching,
     LedgerTakeThisPage,
     ArchiveTitle,
+    ArchiveHits,
     ArchiveScope,
+    LedgerNewer,
+    LedgerOlder,
+    LedgerSkipped,
+    BuildingWaitingCount,
+    SettingsInterfaceTitle,
+    SettingsInterfaceScope,
+    SettingsInterfaceSource,
+    SettingsInterfaceFaces,
+    SettingsInterfaceContent,
     ArchiveSource,
     ArchiveSearchFor,
     ArchiveWordPlaceholder,
     ArchiveSearchButton,
     ArchiveNoSearch,
     ArchiveNoSearchWhat,
-    ArchiveHitsIn,
     ArchiveAskingFiled,
     ArchiveListWhenArrives,
     ArchiveNothingFiled,
@@ -350,6 +359,7 @@ pub enum Msg {
     CostNoneBilledWhat,
     CostCutEmpty,
     ProgressNoPlan,
+    AlertCannot,
     AlertNoRecovery,
     AlertAwaitingApproval,
     AlertRunFrozen,
@@ -457,9 +467,15 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "the record",
             zh: "记录",
         },
+        // Names the question the group answers, and must not repeat the
+        // one page under it: a heading reading `settings` above an item
+        // reading `settings` is a heading carrying nothing. What is
+        // actually true of everything here is that it belongs to this
+        // installation rather than to the city - the key vault is on this
+        // disk, and so is the reading language.
         Msg::NavSetup => Phrase {
-            en: "setup",
-            zh: "设置",
+            en: "this machine",
+            zh: "这台机器",
         },
         Msg::NavOverview => Phrase {
             en: "overview",
@@ -469,9 +485,12 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "city",
             zh: "城市",
         },
+        // `Run` is the identifier; 会话 is what a reader of Claude Code or
+        // Codex already calls one, and section 8.1 keeps one word per
+        // concept in each column.
         Msg::NavLive => Phrase {
-            en: "live",
-            zh: "直播",
+            en: "sessions",
+            zh: "会话",
         },
         Msg::NavApprovals => Phrase {
             en: "approvals",
@@ -575,7 +594,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::CancelLastRun => Phrase {
             en: "cancel the last run",
-            zh: "取消最近一次 Run",
+            zh: "取消最近一次会话",
         },
         Msg::VitalsRecords => Phrase {
             en: "records in the Ledger",
@@ -599,7 +618,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::OverviewNothingRunningFrozen => Phrase {
             en: "nothing is running; {frozen} run(s) stopped with work left, across {raised} building(s)",
-            zh: "没有东西在跑；{raised} 栋楼里有 {frozen} 个 Run 停在了半途",
+            zh: "没有东西在跑；{raised} 栋楼里有 {frozen} 个会话停在了半途",
         },
         Msg::OverviewNothingRunning => Phrase {
             en: "nothing is running in any of the {raised} building(s) here",
@@ -607,11 +626,11 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::OverviewOneRunning => Phrase {
             en: "1 run in flight, in 1 of the {raised} building(s) here",
-            zh: "1 个 Run 在跑，在 {raised} 栋楼中的 1 栋里",
+            zh: "1 个会话在跑，在 {raised} 栋楼中的 1 栋里",
         },
         Msg::OverviewManyRunning => Phrase {
             en: "{runs} runs in flight, across {busy} of the {raised} building(s) here",
-            zh: "{runs} 个 Run 在跑，分布在 {raised} 栋楼中的 {busy} 栋",
+            zh: "{runs} 个会话在跑，分布在 {raised} 栋楼中的 {busy} 栋",
         },
         Msg::OverviewWaitingApprovals => Phrase {
             en: "waiting for you to allow or refuse",
@@ -623,7 +642,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::OverviewFrozenRuns => Phrase {
             en: "run(s) frozen, each holding a handoff for whoever resumes it",
-            zh: "个 Run 已冻结，各自留着给接手者的 Handoff",
+            zh: "个会话已冻结，各自留着给接手者的 Handoff",
         },
         Msg::OverviewProviderDegraded => Phrase {
             en: "the model service is unstable",
@@ -675,11 +694,11 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::OverviewNeverStarted => Phrase {
             en: "no run has ever started in this city",
-            zh: "这座城从未开始过一个 Run",
+            zh: "这座城从未开始过一个会话",
         },
         Msg::OverviewNoneWorkingNow => Phrase {
             en: "{known} run(s) are on the city's books, and none is working now",
-            zh: "城的账上有 {known} 个 Run，此刻一个都不在跑",
+            zh: "城的账上有 {known} 个会话，此刻一个都不在跑",
         },
         Msg::OverviewInFlightScope => Phrase {
             en: "One row per session this page has seen an event for.",
@@ -695,7 +714,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::OverviewNothingWorkingNow => Phrase {
             en: "nothing is working now; the city holds {known} run(s) that already ran",
-            zh: "此刻没有东西在做；城里存着 {known} 个跑过的 Run",
+            zh: "此刻没有东西在做；城里存着 {known} 个跑过的会话",
         },
         Msg::OverviewSendSome => Phrase {
             en: "Send one from the bar below: which building, and what to do. It appears here the moment it starts.",
@@ -807,7 +826,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::LiveEveryRun => Phrase {
             en: "every run in this city, as it happens",
-            zh: "这座城里的每一个 Run，实时",
+            zh: "这座城里的每一个会话，实时",
         },
         Msg::LiveScope => Phrase {
             en: "a bounded window: the figure counts the lines held here, and a line that leaves the window has not left the Ledger",
@@ -823,7 +842,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::LiveRunId => Phrase {
             en: "run {id}",
-            zh: "Run {id}",
+            zh: "会话 {id}",
         },
         Msg::LiveFollowEnd => Phrase {
             en: "follow the end",
@@ -835,7 +854,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::LiveNoRunYet => Phrase {
             en: "no run has reported here yet",
-            zh: "还没有 Run 在这里报过",
+            zh: "还没有会话在这里报过",
         },
         Msg::LiveNothingSince => Phrase {
             en: "nothing has happened here since this page connected",
@@ -843,7 +862,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::LiveNoRunYetWhat => Phrase {
             en: "this window holds what arrives from now on, so a run that finished before you opened this page is in the Ledger rather than here. Send work from the bar below and every turn it takes appears as it happens.",
-            zh: "这个窗口只装从现在起到达的东西，所以在你打开本页之前就结束的 Run 在 Ledger 里而不在这里。从下面那条栏派活，它的每一轮都会实时出现。",
+            zh: "这个窗口只装从现在起到达的东西，所以在你打开本页之前就结束的会话在 Ledger 里而不在这里。从下面那条栏派活，它的每一轮都会实时出现。",
         },
         Msg::LiveNothingSinceWhat => Phrase {
             en: "this window holds what arrived after the page connected. Earlier lines are in the Ledger, which the record page reads.",
@@ -855,7 +874,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::LiveSteerPlaceholder => Phrase {
             en: "say something into this run",
-            zh: "对这个 Run 说一句",
+            zh: "对这个会话说一句",
         },
         Msg::LiveSteerSend => Phrase {
             en: "send at the next safe point",
@@ -863,11 +882,11 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::LiveTakeover => Phrase {
             en: "answer for this run from here",
-            zh: "从这里接手这个 Run",
+            zh: "从这里接手这个会话",
         },
         Msg::LiveForkFrom => Phrase {
             en: "branch a new run from step {seq}",
-            zh: "从第 {seq} 步分出一个新 Run",
+            zh: "从第 {seq} 步分出一个新会话",
         },
         Msg::LiveNothingToBranch => Phrase {
             en: "nothing to branch from yet",
@@ -883,11 +902,15 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::CityTowerNote => Phrase {
             en: "a tower is as tall as the work its plan took on and lit as far up as that work is done; a lit window is a run in flight right now",
-            zh: "楼有多高取决于它的计划接下了多少活，亮到多高取决于做完了多少；一扇亮着的窗是此刻正在跑的一个 Run",
+            zh: "楼有多高取决于它的计划接下了多少活，亮到多高取决于做完了多少；一扇亮着的窗是此刻正在跑的一个会话",
         },
         Msg::CitySource => Phrase {
             en: "where the buildings stand comes from one query, asked when this page opened; which of them are lit is folded from the event stream, record by record, and is never polled",
             zh: "楼站在哪里来自打开本页时问的一次查询；哪几栋亮着是从事件流一条一条折出来的，从不轮询",
+        },
+        Msg::CityStanding => Phrase {
+            en: "{raised} building(s), {busy} run(s) in flight",
+            zh: "{raised} 栋楼，{busy} 个会话在跑",
         },
         Msg::CityStageLabel => Phrase {
             en: "the buildings of this city",
@@ -999,7 +1022,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::BuildingRoomEmptyWhat => Phrase {
             en: "another resident can leave a signal here, and a run in this room pulls it at its next safe point. Looking is not taking.",
-            zh: "别的居民可以在这里留一条信号，这个房间里的 Run 会在下一个安全点取走。看一眼不等于取走。",
+            zh: "别的居民可以在这里留一条信号，这个房间里的会话会在下一个安全点取走。看一眼不等于取走。",
         },
         Msg::BuildingSignalFrom => Phrase {
             en: "from {who}",
@@ -1011,7 +1034,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::BuildingNothingFiledWhat => Phrase {
             en: "a resident files what it settled and does not want to work out twice. What is here is what the next run in this building is told before it starts.",
-            zh: "居民把已经定下、不想再推一遍的东西归档。这里的东西就是下一个 Run 开工前会被告知的东西。",
+            zh: "居民把已经定下、不想再推一遍的东西归档。这里的东西就是下一个会话开工前会被告知的东西。",
         },
         Msg::BuildingTruncated => Phrase {
             en: " - shown up to the page's limit; the file on disk is longer",
@@ -1095,16 +1118,13 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::BinNoneYet => Phrase {
             en: "no run has discarded anything",
-            zh: "还没有 Run 丢弃过东西",
+            zh: "还没有会话丢弃过东西",
         },
         Msg::BinNoneYetWhat => Phrase {
             en: "a deletion in this city cannot be constructed without a way back, so anything that disappears from a worktree lands here carrying the checkpoint or the content address it can be fetched from.",
             zh: "这座城里的删除没有回头路就构造不出来，所以从工作树里消失的东西都会落到这里，带着它的 checkpoint 或者内容地址。",
         },
-        Msg::BinBinnedBack => Phrase {
-            en: "binned back",
-            zh: "丢弃时间",
-        },
+
         Msg::BinAlreadyRestored => Phrase {
             en: "already restored",
             zh: "已经取回",
@@ -1177,6 +1197,46 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "what this city has written down",
             zh: "这座城写下过的东西",
         },
+        Msg::LedgerNewer => Phrase {
+            en: "newer",
+            zh: "更新",
+        },
+        Msg::LedgerOlder => Phrase {
+            en: "older",
+            zh: "更旧",
+        },
+        Msg::LedgerSkipped => Phrase {
+            en: "{skipped} newer record(s) skipped",
+            zh: "略过了 {skipped} 条更新的记录",
+        },
+        Msg::BuildingWaitingCount => Phrase {
+            en: "{count} waiting. Looking is not taking: a signal leaves this queue when a run pulls it.",
+            zh: "{count} 条在等。看一眼不等于取走：信号要等会话取走才离开这个队列。",
+        },
+        Msg::SettingsInterfaceTitle => Phrase {
+            en: "the interface takes its type from your browser",
+            zh: "界面的字体取自你的浏览器",
+        },
+        Msg::SettingsInterfaceScope => Phrase {
+            en: "font family and base size only; everything else on this page is the city's",
+            zh: "只管字族与基准字号；本页其余都属于这座城",
+        },
+        Msg::SettingsInterfaceSource => Phrase {
+            en: "no font file ships with this binary and none is fetched from anywhere",
+            zh: "本二进制不带任何字体文件，也不从任何地方取",
+        },
+        Msg::SettingsInterfaceFaces => Phrase {
+            en: "Text here is drawn with the two families your browser is set to use - the standard one for prose, the fixed-width one for numbers, addresses and hashes. To change either, open your browser's own font settings; in Chrome and Edge that is Appearance, then Customise fonts. Nothing needs to be set here, and nothing here overrides what you set there.",
+            zh: "这里的字用你浏览器设定的两个字族画：正文用标准那个，数字、地址与哈希用等宽那个。要改哪一个，就去开浏览器自己的字体设置；Chrome 与 Edge 在「外观」里的「自定义字体」。这里不需要设任何东西，也不会覆盖你在那边设的。",
+        },
+        Msg::SettingsInterfaceContent => Phrase {
+            en: "A city's own content - a building's name, a document, a ledger payload - can be in any language. Your system already holds a face for it, and this interface does not replace that choice with a guess of its own.",
+            zh: "一座城自己的内容——楼名、文档、账本载荷——可以是任何语言。你的系统已经存着能画它的字，本界面不拿自己的猜测去替掉那个选择。",
+        },
+        Msg::ArchiveHits => Phrase {
+            en: "{total} hit(s) for “{needle}” in {shelves} building(s), read from the shelves just now",
+            zh: "“{needle}”在 {shelves} 栋楼里命中 {total} 条，刚从书架上读的",
+        },
         Msg::ArchiveScope => Phrase {
             en: "two sources, never merged: a search reads the shelves on disk at the moment you ask, and the list below it is folded from history. The same item can appear in both.",
             zh: "两个来源，恒不合并：搜索在你问的那一刻读盘上的书架，下面那份列表折自历史。同一件可以同时出现在两边。",
@@ -1205,10 +1265,7 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "the shelves are read when you ask and not before, so an empty word searches nothing rather than everything. Type a word above.",
             zh: "书架在你问的时候才读，所以空词搜的是「什么都不搜」而不是「全都搜」。在上面敲一个词。",
         },
-        Msg::ArchiveHitsIn => Phrase {
-            en: " in {count} building(s), read from the shelves just now",
-            zh: " 分布在 {count} 栋楼里，刚刚从书架上读的",
-        },
+
         Msg::ArchiveAskingFiled => Phrase {
             en: "asking the record what was filed lately",
             zh: "正在问记录最近归了什么档",
@@ -1223,7 +1280,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::ArchiveNothingFiledWhat => Phrase {
             en: "a run files an asset when it settles something worth not doing twice. The archive is what the next run is told before it starts, so it fills as work completes rather than as work begins.",
-            zh: "Run 在定下某件不值得再做一遍的事时归一份档。归档是下一个 Run 开工前会被告知的东西，所以它随着活干完而变多，而不是随着活开始。",
+            zh: "会话在定下某件不值得再做一遍的事时归一份档。归档是下一个会话开工前会被告知的东西，所以它随着活干完而变多，而不是随着活开始。",
         },
         Msg::ArchiveFiledLately => Phrase {
             en: "filed lately",
@@ -1251,11 +1308,11 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::CostUnpricedScope => Phrase {
             en: "every run in this city since it was raised, in five independent cuts. The rows are what was attributed; the amounts are missing because no call came back with one - a subscription or a local model reports what it used, not what it cost.",
-            zh: "这座城建成以来的每一个 Run，五个互相独立的切面。行是归因出来的；金额缺失是因为没有一次调用带回价格——订阅制或本地模型报的是用量，不是花费。",
+            zh: "这座城建成以来的每一个会话，五个互相独立的切面。行是归因出来的；金额缺失是因为没有一次调用带回价格——订阅制或本地模型报的是用量，不是花费。",
         },
         Msg::CostScope => Phrase {
             en: "every run in this city since it was raised, in five independent cuts of the same total",
-            zh: "这座城建成以来的每一个 Run，同一个总额的五个互相独立的切面",
+            zh: "这座城建成以来的每一个会话，同一个总额的五个互相独立的切面",
         },
         Msg::CostSource => Phrase {
             en: "folded from the Ledger's model_returned records; each cut sums to that same total, and an unattributed remainder stays visible rather than being divided away",
@@ -1267,7 +1324,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::CostNoneBilledWhat => Phrase {
             en: "a run that reaches a provider is priced from that provider's own figure, and lands in all five cuts at once. Send work from the bar below and the money appears here.",
-            zh: "够到 provider 的 Run 按那家自己给的数字计价，并一次落进五个切面。从下面那条栏派活，钱就会出现在这里。",
+            zh: "够到 provider 的会话按那家自己给的数字计价，并一次落进五个切面。从下面那条栏派活，钱就会出现在这里。",
         },
         Msg::CostCutEmpty => Phrase {
             en: "this cut has nothing in it: no call has been attributed to a {dimension} yet",
@@ -1276,6 +1333,10 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::ProgressNoPlan => Phrase {
             en: "no plan",
             zh: "没有计划",
+        },
+        Msg::AlertCannot => Phrase {
+            en: "cannot {action} on {subject}",
+            zh: "不能对 {subject} 执行 {action}",
         },
         Msg::AlertNoRecovery => Phrase {
             en: "no way out was recorded with this refusal",
@@ -1287,7 +1348,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::AlertRunFrozen => Phrase {
             en: "run frozen",
-            zh: "Run 已冻结",
+            zh: "会话已冻结",
         },
         Msg::AlertProviderTrouble => Phrase {
             en: "provider trouble",
@@ -1303,7 +1364,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::AlertRunStopped => Phrase {
             en: "a run stopped and will not start itself again",
-            zh: "一个 Run 停了，它自己不会再启动",
+            zh: "一个会话停了，它自己不会再启动",
         },
         Msg::AlertProviderNotAnswering => Phrase {
             en: "the provider is not answering as it should",
@@ -1451,7 +1512,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::SettingsNoProviderWhat => Phrase {
             en: "a run needs a model to answer for `main`. Attach one below with a base URL and a key, or sign in with a subscription. Nothing here is bundled and nothing is proxied - the endpoint is yours.",
-            zh: "Run 需要一个模型来答 `main`。在下面用 base URL 加密钥接一个，或者用订阅登录。这里不捆绑任何东西，也不代理任何东西——端点是你自己的。",
+            zh: "会话需要一个模型来答 `main`。在下面用 base URL 加密钥接一个，或者用订阅登录。这里不捆绑任何东西，也不代理任何东西——端点是你自己的。",
         },
         Msg::SettingsAttachProvider => Phrase {
             en: "Attach a provider",
@@ -1507,7 +1568,7 @@ pub fn phrase(msg: Msg) -> Phrase {
         },
         Msg::DropNotAPlace => Phrase {
             en: "a run is something that happened at an address, not a place work can be put",
-            zh: "一个 Run 是在某个地址上发生过的事，不是一个可以放活进去的地方",
+            zh: "一个会话是在某个地址上发生过的事，不是一个可以放活进去的地方",
         },
         Msg::DropUnreadable => Phrase {
             en: "this build could not read anything in what was dropped",
@@ -1819,6 +1880,7 @@ mod tests {
             Msg::CityScope,
             Msg::CityTowerNote,
             Msg::CitySource,
+            Msg::CityStanding,
             Msg::CityStageLabel,
             Msg::CityBuildingNamePlaceholder,
             Msg::CityRaiseBuilding,
@@ -1872,7 +1934,6 @@ mod tests {
             Msg::BinSource,
             Msg::BinNoneYet,
             Msg::BinNoneYetWhat,
-            Msg::BinBinnedBack,
             Msg::BinAlreadyRestored,
             Msg::BinRollback,
             Msg::BinRollbackNote,
@@ -1891,14 +1952,23 @@ mod tests {
             Msg::LedgerNewestMatching,
             Msg::LedgerTakeThisPage,
             Msg::ArchiveTitle,
+            Msg::ArchiveHits,
             Msg::ArchiveScope,
+            Msg::LedgerNewer,
+            Msg::LedgerOlder,
+            Msg::LedgerSkipped,
+            Msg::BuildingWaitingCount,
+            Msg::SettingsInterfaceTitle,
+            Msg::SettingsInterfaceScope,
+            Msg::SettingsInterfaceSource,
+            Msg::SettingsInterfaceFaces,
+            Msg::SettingsInterfaceContent,
             Msg::ArchiveSource,
             Msg::ArchiveSearchFor,
             Msg::ArchiveWordPlaceholder,
             Msg::ArchiveSearchButton,
             Msg::ArchiveNoSearch,
             Msg::ArchiveNoSearchWhat,
-            Msg::ArchiveHitsIn,
             Msg::ArchiveAskingFiled,
             Msg::ArchiveListWhenArrives,
             Msg::ArchiveNothingFiled,
@@ -1916,6 +1986,7 @@ mod tests {
             Msg::CostNoneBilledWhat,
             Msg::CostCutEmpty,
             Msg::ProgressNoPlan,
+            Msg::AlertCannot,
             Msg::AlertNoRecovery,
             Msg::AlertAwaitingApproval,
             Msg::AlertRunFrozen,
@@ -2120,6 +2191,7 @@ mod tests {
                 | Msg::CityScope
                 | Msg::CityTowerNote
                 | Msg::CitySource
+                | Msg::CityStanding
                 | Msg::CityStageLabel
                 | Msg::CityBuildingNamePlaceholder
                 | Msg::CityRaiseBuilding
@@ -2173,7 +2245,6 @@ mod tests {
                 | Msg::BinSource
                 | Msg::BinNoneYet
                 | Msg::BinNoneYetWhat
-                | Msg::BinBinnedBack
                 | Msg::BinAlreadyRestored
                 | Msg::BinRollback
                 | Msg::BinRollbackNote
@@ -2192,14 +2263,23 @@ mod tests {
                 | Msg::LedgerNewestMatching
                 | Msg::LedgerTakeThisPage
                 | Msg::ArchiveTitle
+                | Msg::ArchiveHits
                 | Msg::ArchiveScope
+                | Msg::LedgerNewer
+                | Msg::LedgerOlder
+                | Msg::LedgerSkipped
+                | Msg::BuildingWaitingCount
+                | Msg::SettingsInterfaceTitle
+                | Msg::SettingsInterfaceScope
+                | Msg::SettingsInterfaceSource
+                | Msg::SettingsInterfaceFaces
+                | Msg::SettingsInterfaceContent
                 | Msg::ArchiveSource
                 | Msg::ArchiveSearchFor
                 | Msg::ArchiveWordPlaceholder
                 | Msg::ArchiveSearchButton
                 | Msg::ArchiveNoSearch
                 | Msg::ArchiveNoSearchWhat
-                | Msg::ArchiveHitsIn
                 | Msg::ArchiveAskingFiled
                 | Msg::ArchiveListWhenArrives
                 | Msg::ArchiveNothingFiled
@@ -2217,6 +2297,7 @@ mod tests {
                 | Msg::CostNoneBilledWhat
                 | Msg::CostCutEmpty
                 | Msg::ProgressNoPlan
+                | Msg::AlertCannot
                 | Msg::AlertNoRecovery
                 | Msg::AlertAwaitingApproval
                 | Msg::AlertRunFrozen

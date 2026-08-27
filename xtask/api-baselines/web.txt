@@ -126,7 +126,7 @@ pub fn web::ProviderHealth::word(self) -> web::Msg
 pub fn web::ReachForm(web::reach::ReachFormProps) -> dioxus_core::innerlude::Element
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ReturnPath::of(&kernel::discard::Restoration) -> Self
-pub fn web::ReturnPath::sentence(&self) -> alloc::string::String
+pub fn web::ReturnPath::sentence(&self, web::Lang) -> alloc::string::String
 pub fn web::Root(web::app::RootProps) -> dioxus_core::innerlude::Element
 pub fn web::RunPhase::as_str(self) -> &'static str
 pub fn web::Snapshot::adopt_approvals(&mut self, alloc::vec::Vec<kernel::approval::ApprovalItem>)
@@ -412,6 +412,7 @@ pub web::Meaning::Aim::task: alloc::string::String
 pub web::Meaning::Refused
 pub web::Meaning::Refused::because: web::Msg
 pub web::Msg::AlertAwaitingApproval
+pub web::Msg::AlertCannot
 pub web::Msg::AlertNoRecovery
 pub web::Msg::AlertProviderNotAnswering
 pub web::Msg::AlertProviderTrouble
@@ -429,7 +430,7 @@ pub web::Msg::ApprovalTainted
 pub web::Msg::ApprovalTitle
 pub web::Msg::ArchiveAskingFiled
 pub web::Msg::ArchiveFiledLately
-pub web::Msg::ArchiveHitsIn
+pub web::Msg::ArchiveHits
 pub web::Msg::ArchiveListWhenArrives
 pub web::Msg::ArchiveNoSearch
 pub web::Msg::ArchiveNoSearchWhat
@@ -445,7 +446,6 @@ pub web::Msg::AskingWhatItHolds
 pub web::Msg::BinAlreadyRestored
 pub web::Msg::BinAsking
 pub web::Msg::BinAskingWhat
-pub web::Msg::BinBinnedBack
 pub web::Msg::BinNoDescription
 pub web::Msg::BinNoneYet
 pub web::Msg::BinNoneYetWhat
@@ -483,6 +483,7 @@ pub web::Msg::BuildingStartHere
 pub web::Msg::BuildingTitle
 pub web::Msg::BuildingTruncated
 pub web::Msg::BuildingUnreadableRow
+pub web::Msg::BuildingWaitingCount
 pub web::Msg::CancelLastRun
 pub web::Msg::CityBuildingNamePlaceholder
 pub web::Msg::CityClearSelection
@@ -498,6 +499,7 @@ pub web::Msg::CityScope
 pub web::Msg::CitySendWorkHere
 pub web::Msg::CitySource
 pub web::Msg::CityStageLabel
+pub web::Msg::CityStanding
 pub web::Msg::CityTowerNote
 pub web::Msg::CityWhatCountsAsDone
 pub web::Msg::CityWhatShouldHappen
@@ -543,11 +545,14 @@ pub web::Msg::LedgerEveryKind
 pub web::Msg::LedgerFilterNote
 pub web::Msg::LedgerFirstLineNote
 pub web::Msg::LedgerKindOfEvent
+pub web::Msg::LedgerNewer
 pub web::Msg::LedgerNewestMatching
 pub web::Msg::LedgerNoMatch
 pub web::Msg::LedgerNothingArrived
 pub web::Msg::LedgerNothingSaid
+pub web::Msg::LedgerOlder
 pub web::Msg::LedgerScope
+pub web::Msg::LedgerSkipped
 pub web::Msg::LedgerSource
 pub web::Msg::LedgerTakeThisPage
 pub web::Msg::LedgerTitle
@@ -649,6 +654,11 @@ pub web::Msg::SettingsDigestConsequence
 pub web::Msg::SettingsDispatchable
 pub web::Msg::SettingsFinishLogin
 pub web::Msg::SettingsForWhichJob
+pub web::Msg::SettingsInterfaceContent
+pub web::Msg::SettingsInterfaceFaces
+pub web::Msg::SettingsInterfaceScope
+pub web::Msg::SettingsInterfaceSource
+pub web::Msg::SettingsInterfaceTitle
 pub web::Msg::SettingsKey
 pub web::Msg::SettingsKeyHint
 pub web::Msg::SettingsKeyPlaceholder

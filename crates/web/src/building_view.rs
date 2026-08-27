@@ -324,20 +324,18 @@ pub fn BuildingView(
                             RoomQueue::Unasked => rsx! {
                                 crate::panel::Empty {
                                     status: fill(word(Msg::BuildingAskingRoom), &[("room", room.as_str())]),
-                                    what: "until that answer arrives this page cannot say whether the room is empty, and will not guess"
-                                        .to_owned(),
+                                    what: word(Msg::BuildingAskingRoomWhat).to_owned(),
                                 }
                             },
                             RoomQueue::Empty => rsx! {
                                 crate::panel::Empty {
                                     status: fill(word(Msg::BuildingRoomEmpty), &[("room", room.as_str())]),
-                                    what: "another resident can leave a signal here, and a run in this room pulls it at its next safe point. Looking is not taking."
-                                        .to_owned(),
+                                    what: word(Msg::BuildingRoomEmptyWhat).to_owned(),
                                 }
                             },
                             RoomQueue::Waiting(lines) => rsx! {
                                 p { class: "note",
-                                    "{lines.len()} waiting. Looking is not taking: a signal leaves this queue when a run pulls it."
+                                    "{fill(word(Msg::BuildingWaitingCount), &[(\"count\", &lines.len().to_string())])}"
                                 }
                                 for line in lines {
                                     div { key: "{line.id}", class: "waiting",
@@ -363,8 +361,7 @@ pub fn BuildingView(
                         if answer.archive.is_empty() {
                             crate::panel::Empty {
                                 status: word(Msg::BuildingNothingFiled).to_owned(),
-                                what: "a resident files what it settled and does not want to work out twice. What is here is what the next run in this building is told before it starts."
-                                    .to_owned(),
+                                what: word(Msg::BuildingNothingFiledWhat).to_owned(),
                             }
                         }
                         for line in answer.archive.clone() {

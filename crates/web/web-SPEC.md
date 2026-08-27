@@ -875,6 +875,33 @@ Msg::OverviewProviderDegraded | Msg::OverviewProviderLost
 
 **未做（下一张卡）**：剩余约 270 条词条未过这一道；长度上限与禁词仍未写成断言（title ≤ 12 字、scope ≤ 30 字、empty-what ≤ 40 字；中文栏出现「不该」「而不是」「恰好」「正是」即红）。没有那条断言，这一轮的成果会慢慢消失。
 
+### 8-43 中文页面上的英文段落（ux-5）
+
+```rust
+// web::approval —— 与 ProviderHealth::word 同一个改法
+impl ReturnPath { pub fn sentence(&self, lang: Lang) -> String }   // 原来不收 lang
+// web::lang —— 新增 12 条，删除 2 条
+Msg::CityStanding | Msg::ArchiveHits | Msg::LedgerNewer | Msg::LedgerOlder
+| Msg::LedgerSkipped | Msg::BuildingWaitingCount | Msg::AlertCannot
+| Msg::SettingsInterface{Title,Scope,Source,Faces,Content}
+// 删除：Msg::ArchiveHitsIn（句子碎片，被 ArchiveHits 整句取代）
+//       Msg::BinBinnedBack（与 BinAlreadyRestored 同义）
+```
+
+**病灶**：§8-42 修好了 `ProviderHealth::as_str` 这一处「英文独有的权威」，但没有问同样的病还有几处。答案是 **19 条**：300 个 `Msg` 变体里有 19 个从未被任何视图调用，因为有人把它们的 `en` 逐字写成了字面量。于是中文界面上出现整段英文——城市页的空态正文、归档页的三处空态与搜索按钮、审批页的标题、回收站的四条退回说明、楼页的三处空态、账本页的翻页词。**翻译一直都在，只是没人读它。**
+
+**为什么它能活这么久**：`lang.rs` 的穷举 `match` 保证「新增一条不翻就编译不过」，但它保证不了「翻了就一定被用」。一个变体只要被声明并给出两栏译文，门就绿——**门守的是翻译存在，不是翻译上屏**。
+
+**改法**：19 处逐一接回 `word(...)`。其中两条不接回而是删除——`ArchiveHitsIn` 的 `en` 以空格开头（` in {count} building(s)…`），是为拼接设计的句子碎片，整句的 `ArchiveHits` 取代它；`BinBinnedBack` 与既有的 `BinAlreadyRestored` 同义，同一件事不留两个说法。
+
+**`ReturnPath::sentence` 收 `lang`**：它原本收不到语言却要造句，只能造英文的。这与 §8-42 对 `as_str` 的裁定是同一条——**句子不在 `web::lang` 里装配，就是措辞的第二个权威**。
+
+**顺带修好的三处**（同一次实拍里看见的）：导航「设置」组的标题与它唯一的条目同名，标题因此不承载任何东西，改为「这台机器」——保险库与阅读语言都属于这台机器而不属于这座城；`Run` 在中文栏统一读作**会话**（§8.1：隐喻可以命名地点，不可以命名动作），导航「直播」随之改为「会话」；设置页「给一个活选模型」那一行的阻塞句原本住在最后一个 field 里，比邻居高一行，而该行按底边对齐，于是按钮被抬离了它所属的那一排——句子读的是整个表单，故移到表单之下。
+
+**空城的城市图让出高度**：`.stage.bare` 把 52vh 压到 22vh。空城时那张图是一片 520px 的黑，而唯一能结束这个状态的表单在它下面。
+
+**未做**：长度上限与禁词断言仍未写（见 §8-42 结尾），另加一条——**「每个 `Msg` 都必须被某个视图调用」应当成为断言**，否则本卡修好的 19 处会以同样的方式再长回来。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

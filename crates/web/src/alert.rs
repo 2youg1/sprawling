@@ -67,7 +67,10 @@ pub fn refused(lang: Lang, error: &AxError) -> Refused {
     let recovery = error.recovery();
     Refused {
         code: error.code().as_str().to_owned(),
-        what: format!("cannot {} on {}", error.action(), error.subject()),
+        what: crate::lang::fill(
+            say(lang, Msg::AlertCannot),
+            &[("action", error.action()), ("subject", error.subject())],
+        ),
         recovery: if recovery.is_empty() {
             say(lang, Msg::AlertNoRecovery).to_owned()
         } else {

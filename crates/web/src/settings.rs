@@ -754,10 +754,16 @@ pub fn Settings(
                         disabled: select_ready(&choice.read(), &answer) != SelectReadiness::Ready,
                         "{word(Msg::SettingsPointJobAtModel)}"
                     }
-                    if select_ready(&choice.read(), &answer) != SelectReadiness::Ready {
-                        span { class: "hint blocking",
-                            "{word(select_ready(&choice.read(), &answer).sentence())}"
-                        }
+                }
+                // Under the row rather than inside the last field. The
+                // sentence reads the whole choice, so it belongs to the
+                // form; and a field that is one line taller than its
+                // neighbours drags the button out of a row whose controls
+                // align on their bottom edge, which is what put this
+                // sentence alongside the selects instead of beneath them.
+                if select_ready(&choice.read(), &answer) != SelectReadiness::Ready {
+                    span { class: "hint blocking",
+                        "{word(select_ready(&choice.read(), &answer).sentence())}"
                     }
                 }
             }
@@ -829,17 +835,11 @@ pub fn Settings(
             }
             // Interface. One setting, and it is not ours to hold.
             crate::panel::Panel {
-                title: "the interface takes its type from your browser".to_owned(),
-                scope: "font family and base size only; everything else on this page is the city's"
-                    .to_owned(),
-                source: "no font file ships with this binary and none is fetched from anywhere"
-                    .to_owned(),
-                p { class: "note",
-                    "Text here is drawn with the two families your browser is set to use - the standard one for prose, the fixed-width one for numbers, addresses and hashes. To change either, open your browser's own font settings; in Chrome and Edge that is Appearance, then Customise fonts. Nothing needs to be set here, and nothing here overrides what you set there."
-                }
-                p { class: "note",
-                    "A city's own content - a building's name, a document, a ledger payload - can be in any language. Your system already holds a face for it, and this interface does not replace that choice with a guess of its own."
-                }
+                title: word(Msg::SettingsInterfaceTitle).to_owned(),
+                scope: word(Msg::SettingsInterfaceScope).to_owned(),
+                source: word(Msg::SettingsInterfaceSource).to_owned(),
+                p { class: "note", "{word(Msg::SettingsInterfaceFaces)}" }
+                p { class: "note", "{word(Msg::SettingsInterfaceContent)}" }
             }
         }
     }
