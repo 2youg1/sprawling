@@ -858,6 +858,23 @@ pub fn fold(impl IntoIterator<Item = Arrived>) -> Paint;
 
 **尚未成立的前提**：本模块解决的是**事件突发**，不是**逐字流式**。`gateway::endpoint` 是阻塞 `send()` ＋ `response.json()`（该文件自己写着「A cut stream surfaces here as a body read error — no partial ModelReturn is ever fabricated」），60 个 `EventKind` 里没有增量，`ServerFrame` 也没有分片帧——**这座城至今没有任何东西是流式的**。逐字流式要先有传输，见 §8-42。
 
+### 8-42 界面不再替设计辩护（R2.32）
+
+```rust
+// web::app —— 以 Msg 代替英文独有的微文案权威
+impl ProviderHealth { pub fn word(self) -> Msg }   // 删除 as_str
+// web::overview —— 两个会找到人的状态各自成句，取消槽位
+Msg::OverviewProviderDegraded | Msg::OverviewProviderLost
+```
+
+**病灶一**：§8-40 把每个字变得可读，却没有把任何一句变短。二者本是一件事（§8-40：安静要用字号买，不能用灰买），只交一半的结果是首屏被三个面板填满而事实变少。`Panel` 的 `scope` 要的是「算了什么、没算什么」，`source` 要的是「数字从哪来」；它们装的却是裁定本身的理由——「一座停住的城不该读起来像忙着」「停是一个决定而不是一种可看的状态」。这些句子是对的，**而它们的住处是本 SPEC**。十条各改成一个分句。
+
+**实测（构建后的客户端，服务并截图，不是想象）**：总览中栏内容从填满 1000px 视口降到约 760px，而且上面的事实更多。
+
+**病灶二**：`ProviderHealth::as_str` 的文档写着「给人看的词，微文案只有一个权威」，而它本身就是第二个权威，且只有英文。两个调用方都把它填进槽位，于是中文页面渲染出 `provider 状态：unknown`——枚举变体的名字直接上了屏。`web::lang` 让漏译不可表示，而一个 `&'static str` 类型的槽位值就是绕过它的方式。改法不是把那个词翻译一遍，而是**取消槽位**：会找到人的只有 Degraded 与 Lost 两种，各自一句话，两种语言里都比模板短。
+
+**未做（下一张卡）**：剩余约 270 条词条未过这一道；长度上限与禁词仍未写成断言（title ≤ 12 字、scope ≤ 30 字、empty-what ≤ 40 字；中文栏出现「不该」「而不是」「恰好」「正是」即红）。没有那条断言，这一轮的成果会慢慢消失。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

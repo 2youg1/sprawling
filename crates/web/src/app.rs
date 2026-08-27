@@ -75,14 +75,22 @@ pub enum ProviderHealth {
 }
 
 impl ProviderHealth {
-    /// The word shown to a person. Microcopy has one authority.
+    /// The word shown to a person.
+    ///
+    /// A `Msg` and not a `&str`, which is the whole point: the doc here
+    /// used to say "microcopy has one authority" while being a second one,
+    /// in English only. Both callers put the result in a slot, so a
+    /// Chinese page rendered `provider 状态：unknown` - the variant's own
+    /// name, straight out of the enum. `web::lang` makes a missing
+    /// translation unrepresentable, and a slot filled with a `&'static
+    /// str` is how that guarantee was got around.
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub fn word(self) -> Msg {
         match self {
-            Self::Unknown => "unknown",
-            Self::Healthy => "healthy",
-            Self::Degraded => "degraded",
-            Self::Lost => "lost",
+            Self::Unknown => Msg::ProviderUnknown,
+            Self::Healthy => Msg::ProviderHealthy,
+            Self::Degraded => Msg::ProviderDegraded,
+            Self::Lost => Msg::ProviderLost,
         }
     }
 }
@@ -507,7 +515,7 @@ pub fn status_line(lang: crate::lang::Lang, snapshot: &Snapshot) -> [String; 4] 
         waiting_line(lang, snapshot),
         crate::lang::fill(
             crate::lang::say(lang, Msg::StatusProvider),
-            &[("state", snapshot.provider().as_str())],
+            &[("state", crate::lang::say(lang, snapshot.provider().word()))],
         ),
     ]
 }

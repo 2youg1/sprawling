@@ -196,13 +196,20 @@ pub fn needs_you(snapshot: &Snapshot) -> Vec<Attention> {
             view: View::Live(None),
         });
     }
-    if !matches!(
-        snapshot.provider(),
-        crate::app::ProviderHealth::Healthy | crate::app::ProviderHealth::Unknown
-    ) {
+    // Two states reach a person and each says its own sentence, rather
+    // than one sentence with the state dropped into a slot. The slot used
+    // to be filled with the variant's own name, so a Chinese page read
+    // `provider 状态：degraded`; a message per state removes the slot
+    // instead of translating what was never a word.
+    let word = match snapshot.provider() {
+        crate::app::ProviderHealth::Degraded => Some(Msg::OverviewProviderDegraded),
+        crate::app::ProviderHealth::Lost => Some(Msg::OverviewProviderLost),
+        crate::app::ProviderHealth::Healthy | crate::app::ProviderHealth::Unknown => None,
+    };
+    if let Some(what) = word {
         rows.push(Attention {
-            what: Msg::OverviewProviderIs,
-            slots: vec![("state", snapshot.provider().as_str().to_owned())],
+            what,
+            slots: Vec::new(),
             count: 1,
             view: View::Settings,
         });

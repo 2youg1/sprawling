@@ -185,7 +185,12 @@ pub enum Msg {
     OverviewWaitingApprovals,
     OverviewUnreadable,
     OverviewFrozenRuns,
-    OverviewProviderIs,
+    OverviewProviderDegraded,
+    OverviewProviderLost,
+    ProviderUnknown,
+    ProviderHealthy,
+    ProviderDegraded,
+    ProviderLost,
     OverviewScope,
     OverviewSource,
     OverviewHalted,
@@ -618,17 +623,37 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "run(s) frozen, each holding a handoff for whoever resumes it",
             zh: "个 Run 已冻结，各自留着给接手者的 Handoff",
         },
-        Msg::OverviewProviderIs => Phrase {
-            en: "the provider is {state}",
-            zh: "provider 现在是 {state}",
+        Msg::OverviewProviderDegraded => Phrase {
+            en: "the model service is unstable",
+            zh: "模型服务不稳定",
+        },
+        Msg::OverviewProviderLost => Phrase {
+            en: "the model service cannot be reached",
+            zh: "连不上模型服务",
+        },
+        Msg::ProviderUnknown => Phrase {
+            en: "not connected",
+            zh: "未接入",
+        },
+        Msg::ProviderHealthy => Phrase {
+            en: "working",
+            zh: "正常",
+        },
+        Msg::ProviderDegraded => Phrase {
+            en: "unstable",
+            zh: "不稳定",
+        },
+        Msg::ProviderLost => Phrase {
+            en: "unreachable",
+            zh: "连不上",
         },
         Msg::OverviewScope => Phrase {
-            en: "work in flight only: a frozen or halted run is listed below but is not counted here, because a stopped city must not read as a busy one",
-            zh: "只算在跑的：冻结或停住的 Run 在下面列着但不计入这里——一座停住的城不该读起来像忙着",
+            en: "Counts what is running. Frozen and halted sessions are listed below and not counted here.",
+            zh: "只数在跑的。冻结与停住的列在下面，不计入这一句。",
         },
         Msg::OverviewSource => Phrase {
-            en: "folded from the event stream this page is already receiving, plus one city query asked when it opened. Nothing on this page is polled.",
-            zh: "折自本页已经在收的事件流，加上打开时问的一次城查询。本页不轮询。",
+            en: "From the events this page received, plus one city query asked on open.",
+            zh: "来自本页收到的事件，加上打开时问的一次城查询。",
         },
         Msg::OverviewHalted => Phrase {
             en: "This city is halted: nothing new will start until it is released.",
@@ -639,8 +664,8 @@ pub fn phrase(msg: Msg) -> Phrase {
             zh: "没有东西在等你",
         },
         Msg::OverviewNothingWaitingWhat => Phrase {
-            en: "a run reaches a person only when a gate refuses to decide by itself, or when it freezes with work left. Neither has happened.",
-            zh: "只有两种情况会找到人：门自己不敢决定，或者 Run 带着活冻结了。这两件都没发生。",
+            en: "Approvals and frozen sessions appear here.",
+            zh: "待批的活和冻结的会话会出现在这里。",
         },
         Msg::OverviewWorkedOn => Phrase {
             en: "what is being worked on",
@@ -655,12 +680,12 @@ pub fn phrase(msg: Msg) -> Phrase {
             zh: "城的账上有 {known} 个 Run，此刻一个都不在跑",
         },
         Msg::OverviewInFlightScope => Phrase {
-            en: "one row per run whose events this page has seen; a halted run is left out because halting is a decision, not a state to watch",
-            zh: "本页见过其事件的 Run 各一行；停住的不列，因为停是一个决定而不是一种可看的状态",
+            en: "One row per session this page has seen an event for.",
+            zh: "本页见过其事件的会话各一行。",
         },
         Msg::OverviewInFlightSource => Phrase {
-            en: "the run's own events as they arrive here. This window opens when the page connects, so the counts above - which the city answers for its whole history - are what to trust for anything earlier.",
-            zh: "Run 自己的事件，到一条算一条。这个窗口从页面连上才开始，所以更早的事要看上面那些由城代表整部历史作答的计数。",
+            en: "A session's own events, one at a time. This window starts when the page connects; earlier ones are in the ledger.",
+            zh: "会话自己的事件，到一条算一条。这个窗口从页面连上才开始；更早的在账本里。",
         },
         Msg::OverviewNoWorkSent => Phrase {
             en: "no work has been sent yet",
@@ -671,12 +696,12 @@ pub fn phrase(msg: Msg) -> Phrase {
             zh: "此刻没有东西在做；城里存着 {known} 个跑过的 Run",
         },
         Msg::OverviewSendSome => Phrase {
-            en: "send some from the bar at the bottom of the window: a room to work in, what to produce, and what counts as done. A run appears here the moment it starts.",
-            zh: "从窗口底部那条派活栏发一件：去哪个房间、要产出什么、什么算完。Run 一开始就会出现在这里。",
+            en: "Send one from the bar below: which building, and what to do. It appears here the moment it starts.",
+            zh: "用下面那条栏派一件活：去哪栋楼、要做什么。它一开始就会出现在这里。",
         },
         Msg::OverviewEarlierRuns => Phrase {
-            en: "earlier runs are in the Ledger rather than in this window, and the record pages read that. Send more work and it appears here as it happens.",
-            zh: "更早的 Run 在 Ledger 里而不在这个窗口里，记录那几页读的就是它。再派活就会在这里实时出现。",
+            en: "Earlier sessions are in the ledger. Dispatch again and it appears here live.",
+            zh: "更早的会话在账本里。再派活就会实时出现在这里。",
         },
         Msg::ColumnWhere => Phrase {
             en: "where",
@@ -707,12 +732,12 @@ pub fn phrase(msg: Msg) -> Phrase {
             zh: "这座城有 {raised} 栋楼",
         },
         Msg::OverviewBuildingsScope => Phrase {
-            en: "each with what its own plan says about it; a building with no readable plan says so rather than showing a zero",
-            zh: "每栋楼配上它自己的计划所说的进度；计划读不了的楼直说读不了，而不是显示一个零",
+            en: "Each building with the progress its own plan states. A building whose plan cannot be read says so.",
+            zh: "每栋楼配上它自己的计划所说的进度。读不出计划的楼直说读不出。",
         },
         Msg::OverviewBuildingsSource => Phrase {
-            en: "one city query, asked when this page opened. Buildings appear when somebody raises one, so this is not re-asked on every event.",
-            zh: "打开本页时问的一次城查询。楼只在有人盖的时候出现，所以不必每条事件都重问。",
+            en: "The one city query this page asks on open.",
+            zh: "打开本页时问的一次城查询。",
         },
         Msg::AskingWhatItHolds => Phrase {
             en: "asking the city what it holds",
@@ -723,8 +748,8 @@ pub fn phrase(msg: Msg) -> Phrase {
             zh: "它的楼，以及各自的计划",
         },
         Msg::OverviewRaiseOneOnCity => Phrase {
-            en: "a building is one line of business, with its own rules, plan and archive. Raise one on the city page.",
-            zh: "一栋楼是一条业务线，有自己的规则、计划与归档。到城市页盖一栋。",
+            en: "A building is one line of business, and a folder on disk. Create one on the city page.",
+            zh: "一栋楼是一条业务线，也是磁盘上的一个目录。到城市页新建一栋。",
         },
         Msg::OverviewGoToCity => Phrase {
             en: "go to the city",
@@ -1726,7 +1751,12 @@ mod tests {
             Msg::OverviewWaitingApprovals,
             Msg::OverviewUnreadable,
             Msg::OverviewFrozenRuns,
-            Msg::OverviewProviderIs,
+            Msg::OverviewProviderDegraded,
+            Msg::OverviewProviderLost,
+            Msg::ProviderUnknown,
+            Msg::ProviderHealthy,
+            Msg::ProviderDegraded,
+            Msg::ProviderLost,
             Msg::OverviewScope,
             Msg::OverviewSource,
             Msg::OverviewHalted,
@@ -2022,7 +2052,12 @@ mod tests {
                 | Msg::OverviewWaitingApprovals
                 | Msg::OverviewUnreadable
                 | Msg::OverviewFrozenRuns
-                | Msg::OverviewProviderIs
+                | Msg::OverviewProviderDegraded
+                | Msg::OverviewProviderLost
+                | Msg::ProviderUnknown
+                | Msg::ProviderHealthy
+                | Msg::ProviderDegraded
+                | Msg::ProviderLost
                 | Msg::OverviewScope
                 | Msg::OverviewSource
                 | Msg::OverviewHalted

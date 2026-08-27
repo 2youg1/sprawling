@@ -187,18 +187,22 @@
 
   /* ---------------------------------------------------------- controls */
 
-  /* A control's fill stops at G2 and its states speak in stroke. Depth is
-     built by stacking lightness, and each step up spends the contrast the
-     label still needs: measured, the brightest text this library may use
-     reaches only Lc 88.1 on G3, while a 14px label needs Lc 90. So a
-     button that lit up on hover would become less readable exactly when
-     somebody is about to press it. The prisms in the city view already
-     answer hover with stroke for a different reason - a rule that has to
-     out-shout an inline style loses - and the same move works here. */
-  button { background: var(--G2); color: var(--TEXT); border: 1px solid var(--G4);
+  /* A control is raised off whatever it sits on, and a label one step
+     larger than prose is what pays for the height.
+
+     The first attempt here stopped every fill at G2 so that a 14px label
+     kept Lc 90. It satisfied the measurement and broke the control: a card
+     is G2, so a button on a card had the card's own fill and read as a
+     button only by its border. The measurement was right and the
+     conclusion was wrong - the label does not have to be 14px. At the
+     `note` step Bronze asks Lc 75, the text token reaches 87.5 on G3 and
+     83.4 on G4, and the button gets its step back on every surface it can
+     sit on. A control that is slightly larger than the prose around it is
+     also the correct thing on its own terms. */
+  button { background: var(--G3); color: var(--TEXT); border: 1px solid var(--G4);
            border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
-           padding: 6px 12px; font: inherit; font-size: var(--text-body); cursor: pointer; }
-  button:hover:not(:disabled) { border-color: var(--G6); }
+           padding: 5px 12px; font: inherit; font-size: var(--text-note); cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--G4); border-color: var(--G6); }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
   /* The one fill that carries dark text. ACCENT itself cannot: dark ink on
      it measures Lc 48.5 and a 14px label needs 90, so the solid variant is
@@ -258,6 +262,9 @@
   .attention-row { display: flex; align-items: baseline; gap: var(--space-base);
                    text-align: left; width: 100%; background: var(--G2);
                    border: 1px solid var(--G3); padding: var(--space-base) var(--space-pane); }
+  /* Hover speaks in stroke: this row carries body text and a quiet
+     second line, and raising the fill would take both below their tiers
+     for as long as the pointer is on them. */
   .attention-row:hover { border-color: var(--G6); }
   .attention-row .count { font-family: var(--font-mono); font-size: var(--text-title);
                           font-weight: var(--weight-title); color: var(--ALERT);
@@ -272,7 +279,11 @@
   .cluster { border: 1px solid var(--G3); background: var(--G2);
              border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
              margin-bottom: var(--space-base); overflow: hidden; }
-  .cluster > header { background: var(--G2); border-bottom: 1px solid var(--G3);
+  /* Stays on G2 with a rule to separate it. A header carries the group's
+     quiet text, and the quiet token measures Lc 71.8 on G3 against the 75
+     its step asks for - the raised rung is for controls, whose labels are
+     one step larger, and for nothing that has to whisper. */
+  .cluster > header { background: var(--G2); border-bottom: 1px solid var(--G4);
                       padding: var(--space-snug) var(--space-base);
                       display: flex; gap: var(--space-base); align-items: center;
                       flex-wrap: wrap; }

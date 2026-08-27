@@ -122,7 +122,7 @@ pub fn web::Paint::is_empty(&self) -> bool
 pub fn web::Paint::superseded(&self) -> usize
 pub fn web::Phrase::in_lang(self, web::Lang) -> &'static str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
-pub fn web::ProviderHealth::as_str(self) -> &'static str
+pub fn web::ProviderHealth::word(self) -> web::Msg
 pub fn web::ReachForm(web::reach::ReachFormProps) -> dioxus_core::innerlude::Element
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ReturnPath::of(&kernel::discard::Restoration) -> Self
@@ -614,7 +614,8 @@ pub web::Msg::OverviewNothingWaiting
 pub web::Msg::OverviewNothingWaitingWhat
 pub web::Msg::OverviewNothingWorkingNow
 pub web::Msg::OverviewOneRunning
-pub web::Msg::OverviewProviderIs
+pub web::Msg::OverviewProviderDegraded
+pub web::Msg::OverviewProviderLost
 pub web::Msg::OverviewRaiseOneOnCity
 pub web::Msg::OverviewScope
 pub web::Msg::OverviewSendSome
@@ -625,6 +626,10 @@ pub web::Msg::OverviewUnreadable
 pub web::Msg::OverviewWaitingApprovals
 pub web::Msg::OverviewWorkedOn
 pub web::Msg::ProgressNoPlan
+pub web::Msg::ProviderDegraded
+pub web::Msg::ProviderHealthy
+pub web::Msg::ProviderLost
+pub web::Msg::ProviderUnknown
 pub web::Msg::ReadIt
 pub web::Msg::ReleaseCity
 pub web::Msg::RouteNoSuchPage
