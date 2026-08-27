@@ -386,6 +386,43 @@
   .call .out.failed { color: var(--TEXT); font-weight: var(--weight-label); }
   .call .seq { color: var(--TEXT_QUIET); font-size: var(--text-note);
                text-align: right; }
+  /* What one turn cost. Pushed to the right of the head, after the count,
+     because it is what a reader checks second and never first. */
+  .turn-head .spent, .turn-head .used, .turn-head .stopped
+      { font-family: var(--font-mono); font-size: var(--text-note);
+        color: var(--TEXT_QUIET); }
+  /* What the model said. The reason this is a session and not a tool log,
+     so it takes the body step and the body token rather than the quiet
+     one - this is prose a person reads, not a figure they scan. */
+  .said { margin: var(--space-snug) 0 0; color: var(--TEXT);
+          max-width: 78ch; white-space: pre-wrap; overflow-wrap: break-word; }
+  /* A disclosure, one click down, spanning the call's four columns. The
+     summary is quiet at the note step; the output itself is body-coloured
+     because somebody opened it in order to read it. */
+  .call .output { grid-column: 1 / -1; margin-top: var(--space-tight); }
+  .call .output summary { cursor: pointer; color: var(--TEXT_QUIET);
+                          font-size: var(--text-note); }
+  .call .output pre { margin: var(--space-tight) 0 0; color: var(--TEXT);
+                      font-family: var(--font-mono); font-size: var(--text-note);
+                      max-height: 24em; overflow: auto; white-space: pre-wrap;
+                      overscroll-behavior: contain; }
+  .call .output .cut { margin: var(--space-tight) 0 0; color: var(--TEXT_QUIET);
+                       font-size: var(--text-note); }
+  /* What else happened inside a turn. Same left rule as a call because it
+     sits at the same depth, and no colour of its own: a refusal is a fact
+     about this turn, and ALERT means a person is needed rather than a
+     person should read. Lightness and weight carry it, as with `failed`. */
+  .note { display: flex; flex-wrap: wrap; align-items: baseline;
+          gap: var(--space-snug); padding: 3px 0 3px var(--space-base);
+          border-left: 2px solid var(--G3); margin-top: var(--space-tight);
+          font-size: var(--text-note); }
+  .note .code { font-family: var(--font-mono); color: var(--TEXT);
+                font-weight: var(--weight-label); }
+  .note .what { color: var(--TEXT); }
+  .note .recovery { color: var(--TEXT_QUIET); }
+  .note .arg { color: var(--TEXT_QUIET); font-family: var(--font-mono); }
+  .note .seq { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+               margin-left: auto; }
   .live .stream { margin-top: var(--space-base); }
   .live .stream summary { cursor: pointer; color: var(--TEXT_QUIET);
                           font-size: var(--text-note); }

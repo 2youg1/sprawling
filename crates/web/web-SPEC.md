@@ -741,6 +741,29 @@ pub fn refusal(lang: Lang, because: Msg) -> AxError;    // 与其他拒绝同一
 - **读不懂就是读不懂**：跨标签页拖过来的图片既不是文件也不是文本；把它读成「空」是界面在编造事实。
 - **判定是纯函数，组件只说落在哪里**：本仓库没有任何门会去驱一个真浏览器，纯函数是这件事唯一可测的形状。
 
+> **补记（ux-11）：上面这条「不复制字节」是一条更普遍的规则的一个臂，而那条规则此前没有被写下来。**
+>
+> **界面搬地址，不搬字节。** 字节在这座城里只有一处落地，落地那一刻就变成地址：
+> `POST /upload` 把字节写进内容寻址的暂存区，返回的 `UploadId` **就是那串 BLAKE3 摘要**
+> （`assembly.rs` 的 `upload_sink`：「Nothing enters a work tree here: staging is read-only
+> and outside every WriteDomain.」）。此后在线上走动的是 `Command::Attach { upload, notify }`——
+> 一个地址，不是一份拷贝。
+>
+> 于是两条通路互补而不是重复，取决于文件在不在城里：
+>
+> | 文件在哪 | 手势 | 得到什么 | 谁去取 |
+> |---|---|---|---|
+> | 已在城内 | 拖拽命名（本节） | `Address` | agent 的 `read` |
+> | 尚在城外 | 上传交付字节 | `UploadId`＝`b3` 摘要 | `Command::Attach` |
+>
+> 取回语法本身是内核的既有权威：`kernel::Locator`（`cas:` / `file:…@oid`，fail-closed，
+> 连非规范拼法都拒）。`runtime::offload` 是同一条规则在返程上的实现——大结果先存后切，
+> 替代品带一行说明并指向 `Locator`。
+>
+> **未做，且是本条补记要记下的缺口**：上传这一半**服务端整条通路都在，客户端一行没接**——
+> `crates/web/src/` 里没有 `Attach`、没有 `UploadId`、没有对 `/upload` 的请求。
+> 这与 ux-5 抓到的十九条死词条同类：答面存在，没人问。
+
 ### 8-37 页面折得进它没连上时发生的事（P3.04）
 
 ```rust
@@ -1010,6 +1033,79 @@ pub enum Outcome { Waiting, Answered, Failed }
 **`Failed` 不借 ALERT**：一次失败是事实，不是求助；它若真卡住了会话，冻结会另出一张卡（§2.4）。
 
 **未做**：动过的文件清单与上下文用量仍在服务端缺口后面（§9）；`web::turn` 只画事件里已有的那部分，**不编造**。
+
+> **修正（ux-11）**：上面这句「只画事件里已有的那部分」仍然成立，但当时对「事件里已有什么」的
+> 盘点是错的，代价写在 §8-48。
+
+### 8-48 一轮里已经在线上、却被折叠函数丢掉的东西（ux-11；形状 1 判定）
+
+```rust
+pub struct Turn {
+    pub number: u32,
+    pub opened: Seq,
+    pub said: Option<String>,        // ModelReturned.message
+    pub spent: Option<UsdMicros>,    // ModelReturned.billed_usd_micros
+    pub used: Option<Used>,          // ModelReturned.usage
+    pub stopped: Option<String>,     // ModelReturned.stop
+    pub calls: Vec<Call>,
+    pub notes: Vec<Note>,
+}
+pub struct Used { pub input: Tokens, pub output: Tokens, pub cached: Tokens }
+pub struct Call { /* 既有四字段不动 */ pub output: Option<Output> }
+pub struct Output { pub head: String, pub cut: usize }
+pub enum Note {
+    Refused   { error: AxError, at: Seq },
+    Fenced    { oid: String, at: Seq },
+    Waiting   { at: Seq },
+    Arrived   { from: String, said: String, at: Seq },
+    Discarded { count: usize, at: Seq },
+}
+pub fn turns<'a>(records: impl IntoIterator<Item = &'a EventRecord>) -> Vec<Turn>;
+```
+
+**这张卡不是加功能，是把已经付过钱的事实接上屏。** `turn.rs` 认三种 `EventKind`，其余 55 种
+落进 `_ => {}`。同时 `ModelReturned` 的载荷有五个字段（`runtime/turn.rs` 的
+`ModelReturn { message, calls, usage, stop, billed_usd_micros }`），折叠函数一个没读。
+
+**载荷形状仍然是查过的**，逐条记来源：
+
+| 上屏的东西 | 取自 | 生产点 |
+|---|---|---|
+| 模型说的话、停止原因 | `model_returned.message` / `.stop` | `runtime/turn.rs` |
+| 这一轮的钱 | `model_returned.billed_usd_micros` | 同上 |
+| 这一轮的 token | `model_returned.usage`＝`ModelUsage` 四计数器 | `gateway/cost.rs` |
+| 工具说了什么 | `tool_result.result` \| `.error` | `runtime/turn.rs` |
+| 三段式拒绝 | `gate_denied` 的载荷是**扁平序列化的 `AxError`** | `runtime/run.rs`；字段见 `kernel/error.rs` 的 `ErrorDetail` |
+| 检查点 | `checkpoint_committed.oid` | `memory/checkpoint.rs` |
+| 人或邻居说的话 | `steer_received { source, text }` | `runtime/turn.rs` |
+
+**Token 的分子在线上，此前记的「Token 是编的」是错的。** 缺的只有分母（上下文窗口大小），
+所以本卡画绝对数不画比例——一个没有分母的百分比在这个仓库里连类型都拼不出来
+（`UnplannedProgress` 没有 `ratio`）。
+
+**`Note` 是封闭集，判据写在这里**：一个事件进 `Note` 的条件是**它改变了这一轮做成了什么、
+或这一轮在等什么**。其余留在事件流——那是账本的形状，不是读者的（§8-6）。
+按这条判据落选的例子：`EventKind::LogTruncated` 是账本尾部恢复写的（`memory/jsonl.rs`），
+与轮无关；`EventKind::GateChecked` 每次放行都写，进来就是噪音。
+
+**`Note::Refused` 携 `AxError` 本身，不自己拆三段。** `web::alert::refused` 已经是
+「把一个拒绝变成人需要的三样东西」的权威，两处拆就是两个权威，而漂开的总是没人看的那个。
+`AxError` 有 `Deserialize`，折叠函数把载荷读回一个 `AxError` 就够。
+
+**`Note::Waiting` 不带载荷。** 等谁答、答什么是 `web::approval` 的权威，`web::alert` 决定
+要不要打扰人。这里只说「这一轮停在这儿等人」并携 `seq`，多抄一份就是第三个权威。
+
+**`Output` 有界，且不解析 offload 的提示行。** §8-47 的「披露不是倾倒」在这里的兑现方式是
+**按行截断**并报出截了多少。大结果早已被 `runtime::offload` 换成替代品，那份替代品自带一行
+`[offloaded: total N bytes; rest at …; original cas:b3-…]`——**照原样显示即可**。
+在客户端再解析一遍那行文字，就是给 offload 的替代品格式造第二个权威。
+
+**一轮仍然是一行**（§8-47 未动）：`said` 折起、`output` 折起、`notes` 折起。
+展开才有细节，字节仍然只在 Ledger，每样东西都携着寻址用的 `seq`。
+
+**对读不懂的载荷仍然 fail-open**：认不出形状的 `model_returned` 照样出一行，只是不带钱和 token。
+
+**未做**：动过的文件清单与上下文窗口大小仍在服务端缺口后面（§9）。
 
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 

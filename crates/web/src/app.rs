@@ -979,19 +979,29 @@ pub fn dispatch_command(
     )))
 }
 
-/// Renders micro-dollars as dollars and cents, in integers.
+/// Renders micro-dollars as dollars, in integers.
 ///
 /// No float anywhere: money is an integer count of micro-dollars end to end
 ///, and converting to `f64` for display would introduce
 /// the one rounding this library spent effort avoiding.
+///
+/// **Two decimals, or four when two would say zero about money that was
+/// actually spent.** Cents are the right resolution for a total and the
+/// wrong one for a single turn, which routinely bills a few thousand
+/// micro-dollars: rendering that as `$0.00` is not rounding, it is the
+/// interface reporting that nothing happened. One rule rather than one
+/// renderer per caller - show enough digits to tell this amount apart
+/// from zero, and never more than four.
 #[must_use]
 pub fn render_usd(amount: UsdMicros) -> String {
     let micros = amount.get();
     let dollars = micros.checked_div(1_000_000).unwrap_or_default();
-    let cents = micros
-        .checked_rem(1_000_000)
-        .and_then(|rest| rest.checked_div(10_000))
-        .unwrap_or_default();
+    let rest = micros.checked_rem(1_000_000).unwrap_or_default();
+    let cents = rest.checked_div(10_000).unwrap_or_default();
+    if dollars == 0 && cents == 0 && rest > 0 {
+        let ten_thousandths = rest.checked_div(100).unwrap_or_default();
+        return format!("${dollars}.{ten_thousandths:04}");
+    }
     format!("${dollars}.{cents:02}")
 }
 
@@ -3357,7 +3367,20 @@ mod tests {
         assert_eq!(render_usd(UsdMicros::new(0)), "$0.00");
         assert_eq!(render_usd(UsdMicros::new(1_000_000)), "$1.00");
         assert_eq!(render_usd(UsdMicros::new(1_234_567)), "$1.23");
-        assert_eq!(render_usd(UsdMicros::new(9_999)), "$0.00", "truncates down");
+        assert_eq!(
+            render_usd(UsdMicros::new(1_230_000)),
+            "$1.23",
+            "truncates down"
+        );
+        // What one turn costs. Two decimals would report that a call
+        // which spent money spent none.
+        assert_eq!(render_usd(UsdMicros::new(9_999)), "$0.0099");
+        assert_eq!(render_usd(UsdMicros::new(3_340)), "$0.0033");
+        assert_eq!(
+            render_usd(UsdMicros::new(1_003_340)),
+            "$1.00",
+            "a dollar and a fraction of a cent is still a dollar"
+        );
         assert_eq!(render_usd(UsdMicros::new(u64::MAX)), "$18446744073709.55");
     }
 }

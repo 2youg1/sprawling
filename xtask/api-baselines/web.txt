@@ -13,6 +13,7 @@ impl web::Frame
 impl web::Kind
 impl web::Lang
 impl web::Link
+impl web::Note
 impl web::Outcome
 impl web::Paint
 impl web::Phrase
@@ -40,6 +41,7 @@ pub const web::Lang::ALL: [web::Lang; 2]
 pub const web::MARGIN: i32
 pub const web::MOTION_QUICK_MS: u16
 pub const web::NAMED_FILES: usize
+pub const web::OUTPUT_LINES: usize
 pub const web::PAGE_ROWS: usize
 pub const web::PROGRESS_DONE: (&str, &str)
 pub const web::SERIES_DASHES: [&str; 4]
@@ -69,6 +71,7 @@ pub enum web::LinkEvent
 pub enum web::LinkState
 pub enum web::Meaning
 pub enum web::Msg
+pub enum web::Note
 pub enum web::Outcome
 pub enum web::Place
 pub enum web::ProviderHealth
@@ -125,6 +128,7 @@ pub fn web::Link::is_live(&self) -> bool
 pub fn web::Link::new(core::option::Option<alloc::string::String>) -> Self
 pub fn web::Link::state(&self) -> &web::LinkState
 pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Element
+pub fn web::Note::at(&self) -> kernel::event::Seq
 pub fn web::Outcome::class(self) -> &'static str
 pub fn web::Outcome::word(self) -> web::Msg
 pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::innerlude::Element
@@ -279,6 +283,7 @@ pub struct web::Line
 pub struct web::Link
 pub struct web::NavGroup
 pub struct web::Offer
+pub struct web::Output
 pub struct web::Page
 pub struct web::Paint
 pub struct web::Phrase
@@ -294,6 +299,7 @@ pub struct web::Stroke<'a>
 pub struct web::TagRow
 pub struct web::Turn
 pub struct web::Usage
+pub struct web::Used
 pub struct web::Working
 pub use web::App
 pub use web::ApprovalsView
@@ -353,6 +359,7 @@ pub web::BinRow::return_path: web::ReturnPath
 pub web::BinRow::what: alloc::string::String
 pub web::Call::at: kernel::event::Seq
 pub web::Call::outcome: web::Outcome
+pub web::Call::output: core::option::Option<web::Output>
 pub web::Call::subject: core::option::Option<alloc::string::String>
 pub web::Call::tool: alloc::string::String
 pub web::Camera::tile_height: u32
@@ -642,6 +649,10 @@ pub web::Msg::NavRecycleBin
 pub web::Msg::NavSettings
 pub web::Msg::NavSetup
 pub web::Msg::NavTheRecord
+pub web::Msg::NoteArrived
+pub web::Msg::NoteDiscarded
+pub web::Msg::NoteFenced
+pub web::Msg::NoteWaiting
 pub web::Msg::OverviewBuildingsHeld
 pub web::Msg::OverviewBuildingsScope
 pub web::Msg::OverviewBuildingsSource
@@ -770,6 +781,10 @@ pub web::Msg::TurnAnswered
 pub web::Msg::TurnFailed
 pub web::Msg::TurnNoTools
 pub web::Msg::TurnNumber
+pub web::Msg::TurnOutput
+pub web::Msg::TurnOutputCut
+pub web::Msg::TurnStopped
+pub web::Msg::TurnTokens
 pub web::Msg::TurnTools
 pub web::Msg::TurnWaiting
 pub web::Msg::VitalsAsking
@@ -778,12 +793,29 @@ pub web::Msg::VitalsRecords
 pub web::Msg::VitalsSignals
 pub web::NavGroup::label: web::Msg
 pub web::NavGroup::places: alloc::vec::Vec<web::Destination>
+pub web::Note::Arrived
+pub web::Note::Arrived::at: kernel::event::Seq
+pub web::Note::Arrived::from: alloc::string::String
+pub web::Note::Arrived::said: alloc::string::String
+pub web::Note::Discarded
+pub web::Note::Discarded::at: kernel::event::Seq
+pub web::Note::Discarded::count: usize
+pub web::Note::Fenced
+pub web::Note::Fenced::at: kernel::event::Seq
+pub web::Note::Fenced::oid: alloc::string::String
+pub web::Note::Refused
+pub web::Note::Refused::at: kernel::event::Seq
+pub web::Note::Refused::error: kernel::error::AxError
+pub web::Note::Waiting
+pub web::Note::Waiting::at: kernel::event::Seq
 pub web::Offer::going: web::View
 pub web::Offer::kind: web::Kind
 pub web::Offer::label: alloc::string::String
 pub web::Outcome::Answered
 pub web::Outcome::Failed
 pub web::Outcome::Waiting
+pub web::Output::cut: usize
+pub web::Output::head: alloc::string::String
 pub web::Page::filtered_out: usize
 pub web::Page::next_from: core::option::Option<kernel::event::Seq>
 pub web::Page::rows: alloc::vec::Vec<web::Row>
@@ -854,13 +886,21 @@ pub web::Trend::Falling
 pub web::Trend::Rising
 pub web::Trend::Steady
 pub web::Turn::calls: alloc::vec::Vec<web::Call>
+pub web::Turn::notes: alloc::vec::Vec<web::Note>
 pub web::Turn::number: u32
 pub web::Turn::opened: kernel::event::Seq
+pub web::Turn::said: core::option::Option<alloc::string::String>
+pub web::Turn::spent: core::option::Option<kernel::budget::UsdMicros>
+pub web::Turn::stopped: core::option::Option<alloc::string::String>
+pub web::Turn::used: core::option::Option<web::Used>
 pub web::Usage::cache_read: kernel::budget::Tokens
 pub web::Usage::input: kernel::budget::Tokens
 pub web::Usage::output: kernel::budget::Tokens
 pub web::Usage::priced_calls: u32
 pub web::Usage::unpriced_calls: u32
+pub web::Used::cached: kernel::budget::Tokens
+pub web::Used::input: kernel::budget::Tokens
+pub web::Used::output: kernel::budget::Tokens
 pub web::View::Approvals
 pub web::View::Archive
 pub web::View::Building(kernel::address::Address)

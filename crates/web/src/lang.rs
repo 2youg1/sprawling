@@ -365,6 +365,14 @@ pub enum Msg {
     TurnWaiting,
     TurnAnswered,
     TurnFailed,
+    TurnTokens,
+    TurnStopped,
+    TurnOutput,
+    TurnOutputCut,
+    NoteWaiting,
+    NoteFenced,
+    NoteArrived,
+    NoteDiscarded,
     LiveEveryEvent,
     DispatchMore,
     DispatchFewer,
@@ -1380,6 +1388,38 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "failed",
             zh: "失败",
         },
+        Msg::TurnTokens => Phrase {
+            en: "{input} in, {output} out",
+            zh: "{input} 进，{output} 出",
+        },
+        Msg::TurnStopped => Phrase {
+            en: "stopped: {why}",
+            zh: "停在：{why}",
+        },
+        Msg::TurnOutput => Phrase {
+            en: "what it said",
+            zh: "它说了什么",
+        },
+        Msg::TurnOutputCut => Phrase {
+            en: "{cut} more line(s), in the Ledger at {seq}",
+            zh: "还有 {cut} 行，在账本第 {seq} 条",
+        },
+        Msg::NoteWaiting => Phrase {
+            en: "this turn stopped for a person to answer",
+            zh: "这一轮停下来等人答",
+        },
+        Msg::NoteFenced => Phrase {
+            en: "checkpoint {oid}",
+            zh: "检查点 {oid}",
+        },
+        Msg::NoteArrived => Phrase {
+            en: "{from} said something",
+            zh: "{from} 说了一句",
+        },
+        Msg::NoteDiscarded => Phrase {
+            en: "{count} file(s) went away, each with its way back",
+            zh: "{count} 个文件没了，每个都带着回去的路",
+        },
         Msg::LiveEveryEvent => Phrase {
             en: "every event, one line each",
             zh: "每一条事件，各一行",
@@ -2102,6 +2142,14 @@ mod tests {
             Msg::TurnWaiting,
             Msg::TurnAnswered,
             Msg::TurnFailed,
+            Msg::TurnTokens,
+            Msg::TurnStopped,
+            Msg::TurnOutput,
+            Msg::TurnOutputCut,
+            Msg::NoteWaiting,
+            Msg::NoteFenced,
+            Msg::NoteArrived,
+            Msg::NoteDiscarded,
             Msg::LiveEveryEvent,
             Msg::DispatchMore,
             Msg::DispatchFewer,
@@ -2435,6 +2483,14 @@ mod tests {
                 | Msg::TurnWaiting
                 | Msg::TurnAnswered
                 | Msg::TurnFailed
+                | Msg::TurnTokens
+                | Msg::TurnStopped
+                | Msg::TurnOutput
+                | Msg::TurnOutputCut
+                | Msg::NoteWaiting
+                | Msg::NoteFenced
+                | Msg::NoteArrived
+                | Msg::NoteDiscarded
                 | Msg::LiveEveryEvent
                 | Msg::DispatchMore
                 | Msg::DispatchFewer
