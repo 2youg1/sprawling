@@ -1,6 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 2youg1
 
 //! S1.11 closing card: the in-memory Ledger is the second adapter of the
 //! kernel port (V3 made real), the chain checker is invariant 1, and the

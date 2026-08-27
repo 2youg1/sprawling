@@ -9,7 +9,7 @@
 
 | 单元 | 一句话 |
 |---|---|
-| header | 每个 `.rs` 前三行恒为 MPL-2.0 头 |
+| header | 每个 `.rs` 前五行恒为 MPL-2.0 通告加版权行 |
 | lexicon | 禁用词命中即红；数据面 `xtask/lexicon.toml` |
 | modmap | `crates/**/src/**/*.rs` ↔ ARCHITECTURE.md §6 模块表一一对应；状态列一致性；索引文件零逻辑 |
 | depmap | crate 依赖边 ⊆ §2 depmap 块；`pub trait` 仅现于 §3 缝清单文件 |
@@ -34,7 +34,7 @@
 | 娱乐性抽象（无第二实现的 trait） | depmap | `pub trait` 只许出现在缝清单文件 |
 | 放宽 lint／改门过门／删表行 | guard | 门自身变更必须携用户 verdict 尾注 |
 | 词汇漂移、自造同义词 | lexicon | 附录 A 禁用词的机器子集，命中即红 |
-| 忘记许可头 | header | 三行逐字节比对 |
+| 忘记许可头或版权行 | header | 五行逐字节比对 |
 | 引入 JS/TS 或 node 构建步 | zerojs | 扩展名扫描＋命令面 token 扫描（C1） |
 | stub／todo!／unwrap 蒙混 | （不在本 crate）workspace lints | clippy deny 已覆盖，本 crate 不重复 |
 | 一个函数里塞进整条流程（模型最常见的结构失效） | length | 超过行数预算即红，报出函数名、行数与预算 |

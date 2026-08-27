@@ -1,6 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 2youg1
 
 //! The run driver: dispatch, turns, freeze — the single authority for the
 //! event sequence a run leaves behind. The real city and citysim call this

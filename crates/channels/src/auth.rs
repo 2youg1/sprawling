@@ -1,6 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 2youg1
 
 //! Pairing tokens: minting, the one form a person may read, and the
 //! comparison. Local use is frictionless - a loopback listener asks for

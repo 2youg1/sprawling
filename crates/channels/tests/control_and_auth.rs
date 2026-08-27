@@ -1,6 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 2youg1
 
 //! The two judgements a control surface owns: which frames intervene in a
 //! running Run and what an intervention must leave behind, and whether the

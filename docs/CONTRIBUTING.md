@@ -51,7 +51,7 @@ Every row is enforced by a machine. Violating one turns CI red with a message na
 | Return failure through `Result`; propagate arithmetic, indexing and conversion errors instead of ending the process. Use `checked_*` arithmetic, `TryFrom` for narrowing conversions, and pattern matching with an explicit fallback for lookups. | workspace lints: `unwrap_used`, `expect_used`, `panic`, `indexing_slicing`, `arithmetic_side_effects`, `as_conversions`, all `deny` |
 | One module, one file, semantically named. Register the file in the module table, then create it. Keep `lib.rs` and index files free of logic. | `xtask modmap` |
 | Default to `pub(crate)`. Declare a `pub` trait only in a file on the seam list. | `xtask depmap` |
-| Start every `.rs` file with the three-line MPL-2.0 notice. | `xtask header` |
+| Start every `.rs` file with the MPL-2.0 notice, then the copyright line. | `xtask header` |
 | Take the time as a parameter. The single sampling point is `bin::assembly`. | `clippy.toml` disallowed methods |
 | Use `BTreeMap` on kernel decision paths; keep floats out of ledger payloads; start tasks from the one spawn point. | review plus the determinism tests in citysim |
 | Use one name per concept, taken from `docs/glossary.md`. | `xtask lexicon`, data face `xtask/lexicon.toml` |

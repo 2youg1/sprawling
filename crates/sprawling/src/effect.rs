@@ -1,6 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 2youg1
 
 //! What a run's desks left behind: the lines the history takes, and the
 //! change the city may not make before them.

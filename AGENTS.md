@@ -55,7 +55,7 @@ Violating any of these turns CI red with a message naming the rule, the violatio
 | Return failure through `Result`. No `unwrap`, `expect`, `panic!`, `todo!`, `unreachable!`, bare indexing or slicing in non-test code. Checked arithmetic; `TryFrom` for narrowing; no `as` casts; no `unsafe`. | workspace lints, `-D warnings` |
 | One module, one file, semantically named. Register the file in the module map, then create it. Keep `lib.rs` and index files free of logic. | `xtask modmap` |
 | Default to `pub(crate)`. Declare a `pub` trait only in a file on the seam list. | `xtask depmap` |
-| Start every `.rs` file with the three-line MPL-2.0 notice. | `xtask header` |
+| Start every `.rs` file with the MPL-2.0 notice, then the copyright line. | `xtask header` |
 | Take the time as a parameter. The single sampling point is `bin::assembly`. | `clippy.toml` disallowed methods |
 | Use `BTreeMap` on kernel decision paths; keep floats out of ledger payloads; start tasks from the one spawn point. | review, plus the citysim determinism scenarios |
 | One name per concept, taken from the glossary. | `xtask lexicon` with `xtask/lexicon.toml` |
