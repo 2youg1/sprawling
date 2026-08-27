@@ -212,6 +212,9 @@ pub fn LiveView(
     /// a run is already spending, which is exactly where a gesture
     /// nobody could take back would cost the most.
     steered: Option<String>,
+    /// Whether the socket is live; see `app::Root`. A page that asked
+    /// before the handshake finished asked nobody.
+    live: Signal<bool>,
     on_frame: EventHandler<ClientFrame>,
     on_follow: EventHandler<bool>,
     on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
@@ -219,6 +222,28 @@ pub fn LiveView(
 ) -> Element {
     let lang = use_context::<Signal<crate::lang::Lang>>();
     let word = move |msg: Msg| say(lang(), msg);
+    // What happened in this session before this tab opened.
+    //
+    // The stream carries what happens next, and the city-wide backfill is
+    // one bounded slice divided between every session in flight - so a
+    // session older than that slice was simply not in it, and this page
+    // rendered blank for it. Asked once per session, the same way every
+    // other page asks its own question when it opens.
+    let asked = use_signal(|| None::<RunId>);
+    use_effect(use_reactive!(|(run, live)| {
+        let mut asked = asked;
+        if live()
+            && let Some(id) = run
+            && asked() != Some(id)
+        {
+            asked.set(Some(id));
+            on_frame.call(ClientFrame::Query(channels::Query::RunHistory {
+                run: id,
+                before: None,
+                limit: channels::HISTORY_MAX,
+            }));
+        }
+    }));
     let mut steer = use_signal(String::new);
     // Reactive for the same reason the dispatch bar's is: a line written
     // by a drop after the first render would otherwise never arrive.

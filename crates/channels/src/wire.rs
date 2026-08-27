@@ -43,7 +43,7 @@ use serde::{Deserialize, Serialize};
 ///    (P3.02).
 /// 9: a page can ask for the history that happened before it opened
 ///    (P3.04).
-pub const WIRE_V: u32 = 9;
+pub const WIRE_V: u32 = 10;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
@@ -74,8 +74,9 @@ pub const COMMAND_NAMES: [&str; 22] = [
 ];
 
 /// The Query surface, in declaration order.
-pub const QUERY_NAMES: [&str; 12] = [
+pub const QUERY_NAMES: [&str; 13] = [
     "History",
+    "RunHistory",
     "RunView",
     "CityView",
     "ApprovalQueue",
@@ -622,6 +623,24 @@ pub enum Query {
         before: Option<Seq>,
         limit: u32,
     },
+    /// The same slice, narrowed to one session.
+    ///
+    /// [`Query::History`] carries no run, so a client watching four
+    /// sessions divides one bounded slice between them and a session
+    /// that started before the tab did is not in it at all - which is
+    /// the whole of why opening yesterday's session showed a blank
+    /// page. [`Query::RunView`] does not close the gap: five fields say
+    /// whether a run exists and where it got to, not what happened in
+    /// it.
+    ///
+    /// Answered with [`HistoryAnswer`], because "a page of history"
+    /// already has a shape and a second one would be a second answer to
+    /// the same question.
+    RunHistory {
+        run: RunId,
+        before: Option<Seq>,
+        limit: u32,
+    },
     RunView {
         run: RunId,
     },
@@ -653,6 +672,7 @@ impl Query {
     pub fn name(&self) -> &'static str {
         match *self {
             Self::History { .. } => "History",
+            Self::RunHistory { .. } => "RunHistory",
             Self::RunView { .. } => "RunView",
             Self::CityView => "CityView",
             Self::ApprovalQueue => "ApprovalQueue",
@@ -690,6 +710,21 @@ pub struct HistoryAnswer {
 /// socket, and a limit the caller cannot exceed is one fewer way for a
 /// client to make the server do unbounded work.
 pub const HISTORY_MAX: u32 = 500;
+
+/// The most ledger lines one [`Query::RunHistory`] answer may read.
+///
+/// Two bounds rather than one, because narrowing to a session separates
+/// them: `limit` bounds what comes back and this bounds what was looked
+/// at. Without it, asking for one session that ended a month ago would
+/// walk the whole Ledger - unbounded server work a client can ask for,
+/// which is the thing [`HISTORY_MAX`] exists to prevent for the
+/// unfiltered query.
+///
+/// The consequence is deliberate and the caller has to handle it: an
+/// answer may hold nothing while `earlier` is `Some`, meaning "this
+/// stretch held none of it, keep asking". That is a different statement
+/// from reaching the first record the city ever wrote.
+pub const HISTORY_SCAN: u64 = 5_000;
 
 /// One run, as a reader needs it. The client folds the live stream for
 /// itself; this shape is what a query answers about runs it never saw,
@@ -1050,6 +1085,11 @@ mod tests {
     fn the_query_names_match_the_variants() {
         let queries = [
             Query::History {
+                before: None,
+                limit: 20,
+            },
+            Query::RunHistory {
+                run: RunId::from_bytes([1u8; 16]),
                 before: None,
                 limit: 20,
             },

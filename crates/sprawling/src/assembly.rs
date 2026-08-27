@@ -691,6 +691,79 @@ impl Views {
         }
     }
 
+    /// One session's slice of the history, ending just before `before`.
+    ///
+    /// Two bounds, and they are not the same bound: `limit` caps what
+    /// comes back and `HISTORY_SCAN` caps what is read. Scanning until
+    /// `limit` records of one run were found would let a client ask the
+    /// server to walk the whole Ledger by naming a session that ended a
+    /// month ago.
+    ///
+    /// So an answer may carry nothing and still report `earlier`: that
+    /// says "this stretch held none of it, keep asking", which is a
+    /// different fact from having reached the first record the city ever
+    /// wrote. Collapsing the two would turn a busy city into a session
+    /// that appears to have no history.
+    fn run_history(
+        &self,
+        run: kernel::RunId,
+        before: Option<kernel::Seq>,
+        limit: u32,
+    ) -> channels::HistoryAnswer {
+        let empty = channels::HistoryAnswer {
+            records: Vec::new(),
+            earlier: None,
+        };
+        let dir = ledger_dir(&self.city_root);
+        let Ok(index) = memory::LedgerIndex::load_or_rebuild(&dir) else {
+            return empty;
+        };
+        let Some(tail) = index.tail_seq() else {
+            return empty;
+        };
+        let end = match before {
+            None => tail,
+            Some(seq) => match seq.value().checked_sub(1) {
+                None => return empty,
+                Some(value) => kernel::Seq::new(value),
+            },
+        };
+        let want = usize::try_from(limit.clamp(1, channels::HISTORY_MAX)).unwrap_or(1);
+        let floor = end
+            .value()
+            .saturating_sub(channels::HISTORY_SCAN.saturating_sub(1));
+        let start = floor.max(kernel::Seq::FIRST.value());
+        // Backwards, because what a reader wants first is the end of the
+        // session, and the newest `want` records of it are what stopping
+        // early must leave them holding.
+        let mut found: Vec<EventRecord> = Vec::new();
+        let mut reached = start;
+        for value in (start..=end.value()).rev() {
+            if found.len() >= want {
+                // Stopped early: the next question resumes here rather
+                // than at the floor, or the records between would be
+                // skipped on the way back.
+                reached = value.saturating_add(1);
+                break;
+            }
+            reached = value;
+            let Ok(line) = index.line_at(&dir, kernel::Seq::new(value)) else {
+                break;
+            };
+            let Ok(record) = EventRecord::parse_line(&line) else {
+                break;
+            };
+            if record.run() == run {
+                found.push(record);
+            }
+        }
+        found.reverse();
+        channels::HistoryAnswer {
+            records: found,
+            earlier: (reached > kernel::Seq::FIRST.value()).then(|| kernel::Seq::new(reached)),
+        }
+    }
+
     /// Answers one query. Every arm either answers or names itself
     /// unavailable; none of them returns an empty result that a reader
     /// would mistake for an empty city.
@@ -730,6 +803,9 @@ impl Views {
             }
             channels::Query::History { before, limit } => {
                 channels::Answer::History(Box::new(self.history(*before, *limit)))
+            }
+            channels::Query::RunHistory { run, before, limit } => {
+                channels::Answer::History(Box::new(self.run_history(*run, *before, *limit)))
             }
             channels::Query::EndpointView => {
                 channels::Answer::Endpoints(endpoints_answer(&self.book))
@@ -10013,6 +10089,127 @@ addr = \"gone/room1\"
             older.records.last().map(|r| r.seq().value()) < seqs.first().copied(),
             "the two slices do not overlap"
         );
+    }
+
+    /// Opening a session that started before this tab did.
+    ///
+    /// `Query::History` carries no run, so four sessions divided one
+    /// bounded slice between them and a session older than the slice was
+    /// not in it at all - the page for it was blank. This asks for one
+    /// session and gets that session.
+    #[test]
+    fn one_session_can_be_asked_for_by_itself_rather_than_filtered_out_of_the_city() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        for n in 0..6u8 {
+            worker
+                .handle(channels::Command::CreateBuilding {
+                    addr: Address::parse(&format!("lab{n}")).unwrap(),
+                    template: channels::TemplateName::parse("minimal").unwrap(),
+                    idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, &[n]),
+                })
+                .unwrap();
+        }
+        let views = rebuild_views(&report.ledger_dir).unwrap();
+
+        // Everything a fresh city writes belongs to the city's own run,
+        // so asking for it gets those records and asking for a session
+        // nobody ever opened gets none of them.
+        let channels::Answer::History(mine) = views.answer(&channels::Query::RunHistory {
+            run: RunId::CITY,
+            before: None,
+            limit: channels::HISTORY_MAX,
+        }) else {
+            panic!("the run history query has an answer");
+        };
+        assert!(!mine.records.is_empty(), "the city's own run wrote these");
+        assert!(
+            mine.records.iter().all(|held| held.run() == RunId::CITY),
+            "a session's history holds only that session"
+        );
+        let seqs: Vec<u64> = mine.records.iter().map(|r| r.seq().value()).collect();
+        let mut ascending = seqs.clone();
+        ascending.sort_unstable();
+        assert_eq!(seqs, ascending, "oldest first, as the fold expects");
+
+        let channels::Answer::History(stranger) = views.answer(&channels::Query::RunHistory {
+            run: RunId::from_bytes([3u8; 16]),
+            before: None,
+            limit: channels::HISTORY_MAX,
+        }) else {
+            panic!("the run history query has an answer");
+        };
+        assert!(
+            stranger.records.is_empty(),
+            "a session this city never ran has no history in it"
+        );
+    }
+
+    /// The bound that stops a client asking the server to walk the whole
+    /// Ledger: one answer reads at most `HISTORY_SCAN` lines. Stopping
+    /// early has to be told apart from reaching the beginning, or a busy
+    /// city reads as a session with nothing in it.
+    #[test]
+    fn a_run_history_that_stopped_early_says_where_to_resume_rather_than_that_it_ended() {
+        let dir = tempfile::tempdir().unwrap();
+        let report = init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        for n in 0..6u8 {
+            worker
+                .handle(channels::Command::CreateBuilding {
+                    addr: Address::parse(&format!("lab{n}")).unwrap(),
+                    template: channels::TemplateName::parse("minimal").unwrap(),
+                    idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, &[n]),
+                })
+                .unwrap();
+        }
+        let views = rebuild_views(&report.ledger_dir).unwrap();
+
+        // One record at a time, so the walk stops on the limit well
+        // before it reaches the genesis line.
+        let channels::Answer::History(page) = views.answer(&channels::Query::RunHistory {
+            run: RunId::CITY,
+            before: None,
+            limit: 1,
+        }) else {
+            panic!("the run history query has an answer");
+        };
+        assert_eq!(page.records.len(), 1);
+        let resume = page
+            .earlier
+            .expect("stopping on the limit is not reaching the beginning");
+        assert!(
+            resume.value() <= page.records[0].seq().value(),
+            "resuming must not skip the records between"
+        );
+
+        // And paging with it does reach the beginning, which is the
+        // other statement `earlier` has to be able to make.
+        let mut before = Some(resume);
+        let mut guard = 0;
+        while let Some(at) = before {
+            let channels::Answer::History(page) = views.answer(&channels::Query::RunHistory {
+                run: RunId::CITY,
+                before: Some(at),
+                limit: 1,
+            }) else {
+                panic!("the run history query has an answer");
+            };
+            before = page.earlier;
+            guard += 1;
+            assert!(guard < 1_000, "paging back does not terminate");
+        }
     }
 
     /// `[sandbox]` and `[mcp]` resolve city -> building -> room and

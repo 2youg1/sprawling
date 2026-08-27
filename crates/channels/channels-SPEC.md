@@ -19,10 +19,20 @@
 
 ## 2 验收标准
 
-- **wire**：Command 恰 18 个 variant（P4.08 增 `Wake`）、Query 恰 9 个（计数断言，对本 SPEC §8-1 两表逐名核对）；每个改状态 Command 携 `IdemKey`（类型强制，无可省字段）；`PutSecret` 的 `value: Sealed<String>` 不实现 `Serialize`——**「远程录凭证」这条帧编译不出来**，以 trybuild 反例钉死。
+- **wire**：Command 恰 18 个 variant（P4.08 增 `Wake`）、Query 恰 13 个（计数断言，对本 SPEC §8-1 两表逐名核对）；每个改状态 Command 携 `IdemKey`（类型强制，无可省字段）；`PutSecret` 的 `value: Sealed<String>` 不实现 `Serialize`——**「远程录凭证」这条帧编译不出来**，以 trybuild 反例钉死。
 - **握手**：版本＋schema 哈希不配即断连并回 `E_WIRE_MISMATCH`（装载期码，无 carrier）；schema 哈希由 wire 类型集派生，改一个 variant 即变。golden 钉住当前哈希，改哈希必须与本 SPEC 同集变更。
-  **当前 golden**（P3.04 起）：`c7b41d505180c5a41ffffbff6506e2c1f6406b3c0ef884ec8170db7013158d94`；**WIRE_V ＝ 9**（新增 `Query::History`）。前值 `0a600659…`（P3.02，WIRE_V 8：新增 `ConfigureBuilding`）、`4bb71c0b…`（P3.01，WIRE_V 7：新增 `ProbeEndpoint`，`AttachEndpoint` 长出 `admit`）、`c059c6e2…`（F2.16–P2.01，WIRE_V 6）、`d825e83a…`（F2.11–F2.15，WIRE_V 5）、 `aa57cb7e…`（F1.01–F2.10，WIRE_V 4）、 `941ede9f…`（R1.16–R1.18，WIRE_V 3）、`defe9a75…`（R1.14–R1.15，WIRE_V 2）、 `85705c03…`（R1.11–R1.13，WIRE_V 1）、`238f11b2…`（P1.11–R1.10）、`692b5f96…`（S4.02–P1.10）。
+  **当前 golden**（ux-13 起）：`1de1a1ae936c6e639e2b697e5de4a34e9518b910b636523edafeb7859ac8a61c`；**WIRE_V ＝ 10**（新增 `Query::RunHistory`）。前值 `c7b41d50…`（P3.04，WIRE_V 9：新增 `Query::History`）、`0a600659…`（P3.02，WIRE_V 8：新增 `ConfigureBuilding`）、`4bb71c0b…`（P3.01，WIRE_V 7：新增 `ProbeEndpoint`，`AttachEndpoint` 长出 `admit`）、`c059c6e2…`（F2.16–P2.01，WIRE_V 6）、`d825e83a…`（F2.11–F2.15，WIRE_V 5）、 `aa57cb7e…`（F1.01–F2.10，WIRE_V 4）、 `941ede9f…`（R1.16–R1.18，WIRE_V 3）、`defe9a75…`（R1.14–R1.15，WIRE_V 2）、 `85705c03…`（R1.11–R1.13，WIRE_V 1）、`238f11b2…`（P1.11–R1.10）、`692b5f96…`（S4.02–P1.10）。
   P1.11 增三帧：`AttachEndpoint`／`SelectModel` 两个 Command（十九），`EndpointView` 一个 Query（十）。`PutSecret` 仍无线格式——它经 `/enroll` 路由在进程内成形，见 §8-2 录入口。
+
+**ux-13 增：`Query::RunHistory { run, before, limit }` → `Answer::History`，WIRE_V 9→10。**
+
+补的是一个**页面成立的前提**而不是一项便利：`Query::History` 不带 run 过滤，客户端在连上时问一次城全局的最后 500 条，然后在本地按 run 过滤。于是四个会话分这 500 条，而**昨天的会话根本不在里面——打开它是一张空白页**。`Query::RunView` 只答 5 个字段，它回答「这个 run 在不在、走到哪」，不回答「这个会话是什么」。
+
+**答面复用 `HistoryAnswer` 而不新增一个。** 它已经带 `earlier` 游标，形状正是「往回翻」；再造一个只会让「一页历史长什么样」有两个答案。
+
+**扫描窗口有界，且与返回条数是两个界。** 一个上月结束的会话，若按「一直往回扫到凑够 limit 条」实现，就是客户端可以驱动的无界服务端工作——正是 `HISTORY_MAX` 的注释在防的事。故新增 `HISTORY_SCAN`：一次查询最多读这么多行账本，答里带回 `earlier` 让调用方接着问。**因此一个答可以是空的而 `earlier` 是 `Some`**，含义是「这一段里没有它的事，继续往前问」——这与「到头了」（`earlier: None`）是两件事，不可合并。
+
+**不建 run→seq 的索引。** 那会是「这个 run 的历史在哪」的第二个权威，而账本本身已经是第一个；有界扫描付的是几毫秒的解析，索引付的是一份要随账本同步的派生状态。
 - **server**：默认绑定回环；绑非回环且 `auth` 未配置令牌时**拒绝启动**并回 `E_CONFIG_INVALID`（不是启动后再拒连——这是绑定面判定，不是请求面判定）。
 - **auth**：令牌比较恒为常数时间（不早退）；比较函数以「逐字节差异位置不影响耗时」的性质测试看守。S4.02 已落其地基（`server::constant_time_eq`＋`decide_handshake`）；S4.03 的 `auth` 模块接令牌的生成、展示与持久化。
 - **aggregate**：**类型化保证**——聚合上游连接的发送面在类型上只接受 `Query`，没有一个能塞进 `Command` 的方法（不是运行时 `if`，是类型上不存在该入口）；以 trybuild 反例钉死。

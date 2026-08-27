@@ -256,6 +256,10 @@ pub channels::Query::InboxView
 pub channels::Query::InboxView::addr: kernel::address::Address
 pub channels::Query::Metrics
 pub channels::Query::RegistryView
+pub channels::Query::RunHistory
+pub channels::Query::RunHistory::before: core::option::Option<kernel::event::Seq>
+pub channels::Query::RunHistory::limit: u32
+pub channels::Query::RunHistory::run: kernel::event::RunId
 pub channels::Query::RunView
 pub channels::Query::RunView::run: kernel::event::RunId
 pub channels::RegistryAnswer::assets: alloc::vec::Vec<channels::RegistryLine>
@@ -305,7 +309,8 @@ pub channels::Welcome::schema: kernel::locator::B3Hash
 pub channels::Welcome::wire_v: u32
 pub const channels::COMMAND_NAMES: [&str; 22]
 pub const channels::HISTORY_MAX: u32
-pub const channels::QUERY_NAMES: [&str; 12]
+pub const channels::HISTORY_SCAN: u64
+pub const channels::QUERY_NAMES: [&str; 13]
 pub const channels::WIRE_V: u32
 pub enum channels::Answer
 pub enum channels::AssetReply

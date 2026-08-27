@@ -922,15 +922,44 @@ pub const HELD_RECORDS: usize = 2_000;
 /// and in a batch when a page that has just opened asks what happened
 /// before it - and both land here, because how much history a tab holds
 /// has one answer. Kept in `seq` order, one record per `seq`, never
-/// more than [`HELD_RECORDS`] of them, and the oldest are the ones that
-/// go: what falls out is still in the Ledger.
-pub fn hold(held: &mut Vec<EventRecord>, arriving: impl IntoIterator<Item = EventRecord>) {
+/// more than [`HELD_RECORDS`] of them: what falls out is still in the
+/// Ledger.
+///
+/// `reading` is the session the person currently has open, and it
+/// decides **which** records go when the store is full. Age alone is the
+/// wrong rule as soon as a page can ask for a session older than the
+/// tab: those records sort to the front and a cap that only drops the
+/// oldest drains them on the way in, so the page asks the right
+/// question, receives the right answer, and still renders blank. What is
+/// not being read gives way first; a session longer than the whole store
+/// still gives way to itself, because the bound is the point.
+pub fn hold(
+    held: &mut Vec<EventRecord>,
+    arriving: impl IntoIterator<Item = EventRecord>,
+    reading: Option<RunId>,
+) {
     held.extend(arriving);
     held.sort_by_key(EventRecord::seq);
     held.dedup_by_key(|record| record.seq());
-    let excess = held.len().saturating_sub(HELD_RECORDS);
-    if excess > 0 {
-        held.drain(..excess);
+    let mut excess = held.len().saturating_sub(HELD_RECORDS);
+    if excess == 0 {
+        return;
+    }
+    if let Some(open) = reading {
+        // Oldest first, and only what belongs to some other session.
+        held.retain(|record| {
+            if excess == 0 || record.run() == open {
+                return true;
+            }
+            excess = excess.saturating_sub(1);
+            false
+        });
+    }
+    // Whatever is still over the bound goes by age, which is the rule
+    // when nothing is open and the last resort when something is.
+    let over = held.len().saturating_sub(HELD_RECORDS);
+    if over > 0 {
+        held.drain(..over);
     }
 }
 
@@ -1159,6 +1188,7 @@ pub fn Root(
                             runs: watchable(&snapshot),
                             following,
                             steered: steered.clone(),
+                            live,
                             on_frame,
                             on_follow,
                             on_drop,
@@ -2354,7 +2384,11 @@ mod tests {
         let mut held = Vec::new();
 
         // The live road brings one record at a time.
-        hold(&mut held, [record(2, EventKind::RunStarted, [1u8; 16])]);
+        hold(
+            &mut held,
+            [record(2, EventKind::RunStarted, [1u8; 16])],
+            None,
+        );
         // The backfill road brings a batch, in whatever order the
         // answer came back, overlapping what is already held.
         hold(
@@ -2364,6 +2398,7 @@ mod tests {
                 record(1, EventKind::CityInitialized, [0u8; 16]),
                 record(2, EventKind::RunStarted, [1u8; 16]),
             ],
+            None,
         );
 
         let seqs: Vec<u64> = held.iter().map(|record| record.seq().value()).collect();
@@ -2373,6 +2408,7 @@ mod tests {
         hold(
             &mut held,
             (4..=bound + 8).map(|seq| record(seq, EventKind::RunStarted, [1u8; 16])),
+            None,
         );
         assert_eq!(held.len(), HELD_RECORDS, "a tab that grows all night dies");
         assert_eq!(
@@ -2384,6 +2420,63 @@ mod tests {
             held.last().map(|record| record.seq().value()),
             Some(bound + 8),
             "the newest record is the one a page needs most"
+        );
+    }
+
+    /// Opening yesterday's session, in a tab that has been watching a
+    /// busy city all day.
+    ///
+    /// The store was full of today's records and the answer's are older,
+    /// so sorting by seq put them at the front and the cap drained them
+    /// on the way in: the page asked the right question, got the right
+    /// answer, and still rendered blank. Age alone cannot decide what
+    /// goes - it has to be age within what the reader is looking at.
+    #[test]
+    fn a_session_being_read_survives_a_store_already_full_of_newer_work() {
+        let old = [7u8; 16];
+        let busy = [8u8; 16];
+        let bound = u64::try_from(HELD_RECORDS).unwrap();
+        let mut held = Vec::new();
+        // A day of somebody else's work fills the tab.
+        hold(
+            &mut held,
+            (1_000..1_000 + bound).map(|seq| record(seq, EventKind::ToolCalled, busy)),
+            None,
+        );
+        assert_eq!(held.len(), HELD_RECORDS);
+
+        // Yesterday's session arrives, older than everything held.
+        let arriving: Vec<EventRecord> = (1..=20)
+            .map(|seq| record(seq, EventKind::ToolCalled, old))
+            .collect();
+        hold(&mut held, arriving, Some(RunId::from_bytes(old)));
+
+        assert_eq!(held.len(), HELD_RECORDS, "the bound still holds");
+        let kept = held
+            .iter()
+            .filter(|record| record.run() == RunId::from_bytes(old))
+            .count();
+        assert_eq!(kept, 20, "the session being read is what the tab is for");
+    }
+
+    /// The session being read is preferred, never exempt. A session
+    /// longer than the whole store still cannot grow the tab without
+    /// end.
+    #[test]
+    fn even_the_session_being_read_cannot_grow_a_tab_past_its_bound() {
+        let mine = [5u8; 16];
+        let bound = u64::try_from(HELD_RECORDS).unwrap();
+        let mut held = Vec::new();
+        hold(
+            &mut held,
+            (1..=bound + 500).map(|seq| record(seq, EventKind::ToolCalled, mine)),
+            Some(RunId::from_bytes(mine)),
+        );
+        assert_eq!(held.len(), HELD_RECORDS, "a tab that grows all night dies");
+        assert_eq!(
+            held.last().map(|record| record.seq().value()),
+            Some(bound + 500),
+            "and what it keeps is the end of the session"
         );
     }
 
@@ -3580,10 +3673,16 @@ fn apply_frame(
             keep.push(event);
         }
     }
+    // Which session the person has open, so a store at its bound gives
+    // way in what they are not reading rather than in what they are.
+    let reading = match *view.read() {
+        View::Live(run) => run,
+        _ => None,
+    };
     if !keep.is_empty() {
         // Kept once, read by every page that reads history, and bounded by
         // the one function that answers "how much does a tab hold".
-        hold(&mut records.write(), keep);
+        hold(&mut records.write(), keep, reading);
     }
     // An answer reaches the view that asked for it. It is not history: it
     // moves no snapshot, and a reload asks again rather than trusting what
@@ -3603,9 +3702,16 @@ fn apply_frame(
             // snapshot and kept for the pages that read history, in the
             // same bounded store the live stream fills - one answer to
             // "how much does a tab hold".
+            // What happened before this tab opened, from either of the
+            // two questions that ask it: the city's own slice at connect,
+            // and one session's when its page opens. The backfill is
+            // forward-only and refuses the second, which is correct - a
+            // snapshot already folded past these must not be walked
+            // back - but the records themselves are still what the
+            // session page reads, so they are kept either way.
             channels::Answer::History(held) => {
                 snapshot.write().backfill(&held.records);
-                hold(&mut records.write(), held.records);
+                hold(&mut records.write(), held.records, reading);
             }
             // What was already waiting when this page connected. The
             // stream carries what happens next; without this the inbox

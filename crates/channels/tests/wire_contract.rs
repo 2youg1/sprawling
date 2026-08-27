@@ -38,10 +38,10 @@ fn exposed() -> SocketAddr {
 
 #[test]
 fn the_command_and_query_tables_hold_their_declared_counts() {
-    // Twenty-two commands, twelve queries. The count is not a style
+    // Twenty-two commands, thirteen queries. The count is not a style
     // choice - it is the wire's closed surface.
     assert_eq!(COMMAND_NAMES.len(), 22, "command table");
-    assert_eq!(QUERY_NAMES.len(), 12, "query table");
+    assert_eq!(QUERY_NAMES.len(), 13, "query table");
 
     let mut sorted = COMMAND_NAMES.to_vec();
     sorted.sort_unstable();
@@ -51,7 +51,7 @@ fn the_command_and_query_tables_hold_their_declared_counts() {
     let mut sorted = QUERY_NAMES.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 12, "query names are distinct");
+    assert_eq!(sorted.len(), 13, "query names are distinct");
 }
 
 #[test]
@@ -81,14 +81,14 @@ fn the_schema_hash_is_stable_across_calls_and_covers_the_wire_version() {
         "schema hash changed - update channels-SPEC.md section 8-1 in the same commit"
     );
     assert_eq!(
-        WIRE_V, 9,
+        WIRE_V, 10,
         "the version rises when the grammar changes shape without a name changing"
     );
 }
 
 /// Pinned on the first green of S4.02. It is a function of WIRE_V and the two
 /// name tables, so any change to the protocol surface lands here first.
-const WIRE_SCHEMA_GOLDEN: &str = "c7b41d505180c5a41ffffbff6506e2c1f6406b3c0ef884ec8170db7013158d94";
+const WIRE_SCHEMA_GOLDEN: &str = "1de1a1ae936c6e639e2b697e5de4a34e9518b910b636523edafeb7859ac8a61c";
 
 // -------------------------------------------------------------- binding face
 
@@ -383,6 +383,37 @@ fn a_query_never_carries_an_idempotency_key() {
         assert!(!name.is_empty());
     }
     assert!(matches!(Query::ApprovalQueue, Query::ApprovalQueue));
+}
+
+/// Narrowing history to one session survives the wire, and stays a
+/// different frame from the unfiltered slice.
+///
+/// The two used to be one question, and the consequence was a page:
+/// four sessions divided one bounded slice between them, so a session
+/// older than that slice opened blank.
+#[test]
+fn asking_for_one_session_is_a_different_frame_from_asking_for_the_city() {
+    let run = kernel::RunId::from_bytes([4u8; 16]);
+    let mine = Query::RunHistory {
+        run,
+        before: Some(kernel::Seq::new(90)),
+        limit: 50,
+    };
+    let bytes = serde_json::to_vec(&mine).expect("a query serialises");
+    let back: Query = serde_json::from_slice(&bytes).expect("and reads back");
+    assert_eq!(back, mine);
+    assert_eq!(mine.name(), "RunHistory");
+    assert!(QUERY_NAMES.contains(&mine.name()), "named in the table");
+
+    let city = Query::History {
+        before: Some(kernel::Seq::new(90)),
+        limit: 50,
+    };
+    assert_ne!(
+        serde_json::to_vec(&city).expect("a query serialises"),
+        bytes,
+        "one session and the whole city must not spell the same frame"
+    );
 }
 
 /// The second step of a login has its own byte form: a page that means
