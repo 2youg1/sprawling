@@ -24,6 +24,7 @@ pub use aggregate::{Aggregate, CityLabel, Forwarded, Sighting, Upstream};
 pub use auth::{PairingToken, verify};
 pub use control::{ControlVerdict, Intervention, classify};
 pub use kernel::{FileChange, How, Lines};
+pub use kernel::{Span, Token, markdown};
 #[cfg(feature = "server")]
 pub use server::{AcpBody, AcpProgress, AcpSink};
 #[cfg(feature = "server")]

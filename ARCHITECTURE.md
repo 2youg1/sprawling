@@ -339,7 +339,7 @@ The machine's data face, parsed by `cargo xtask modmap`: a `.rs` file under `cra
 
 Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (the construction stage that introduced it: S0–S5 skeleton, P1–P4 product, R1 repair, F1 front end, P5–P7 documents, measurement and delivery) **| Status** (`planned`, `building`, `built`, `frozen`).
 
-### kernel (28) — every decision in the city, and nothing that touches a disk
+### kernel (29) — every decision in the city, and nothing that touches a disk
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -371,6 +371,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | kernel::secret | crates/kernel/src/secret.rs | secret-shape judgement, the `secret:` grammar, and `Sealed<T>` | decision | S2 | built |
 | kernel::discard | crates/kernel/src/discard.rs | deletion as an effect class; a Discard without a Restoration cannot exist | decision | S2 | built |
 | kernel::change | crates/kernel/src/change.rs | what moved between two checkpoints; a binary file cannot be spelled as one that moved nothing | value | R2 | built |
+| kernel::highlight | crates/kernel/src/highlight.rs | a document read as ordered, disjoint spans; it says where things are and never rewrites the text | decision | R2 | built |
 
 ### memory (13) — persistence, and every view derived from it
 

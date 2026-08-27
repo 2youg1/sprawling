@@ -454,8 +454,11 @@ pub use channels::Sealed
 pub use channels::Seq
 pub use channels::ServerLabel
 pub use channels::SessionName
+pub use channels::Span
 pub use channels::TimeMs
+pub use channels::Token
 pub use channels::Tokens
 pub use channels::UnplannedProgress
 pub use channels::UsdMicros
 pub use channels::WriteDomain
+pub use channels::markdown

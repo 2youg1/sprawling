@@ -79,6 +79,10 @@ pub use spine::{check_memo_shape, check_roadmap_shape, set_roadmap_status, tally
 
 mod change;
 
+mod highlight;
+
+pub use highlight::{Span, Token, markdown};
+
 pub use change::{FileChange, How, Lines};
 
 mod discard;

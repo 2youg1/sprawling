@@ -118,6 +118,61 @@ pub fn day_label(day: u64) -> String {
     format!("day {day}")
 }
 
+/// One document, split into what is marked and what is not.
+///
+/// `kernel::markdown` guarantees its spans are ordered, disjoint and on
+/// character boundaries, so this walks them once and never decides
+/// anything: a piece is either inside a span or between two of them.
+/// Carries the offset as a key, because two pieces of a document can say
+/// the same words.
+#[must_use]
+pub fn pieces(text: &str) -> Vec<(usize, Option<channels::Token>, String)> {
+    let mut split: Vec<(usize, Option<channels::Token>, String)> = Vec::new();
+    let mut at = 0usize;
+    for span in channels::markdown(text) {
+        let (Ok(start), Ok(len)) = (usize::try_from(span.start), usize::try_from(span.len)) else {
+            continue;
+        };
+        let end = start.saturating_add(len);
+        if let Some(plain) = text.get(at..start)
+            && !plain.is_empty()
+        {
+            split.push((at, None, plain.to_owned()));
+        }
+        if let Some(marked) = text.get(start..end) {
+            split.push((start, Some(span.token), marked.to_owned()));
+            at = end;
+        }
+    }
+    if let Some(rest) = text.get(at..)
+        && !rest.is_empty()
+    {
+        split.push((at, None, rest.to_owned()));
+    }
+    split
+}
+
+/// The class one token takes.
+///
+/// Names the token and not a colour: what a heading looks like is
+/// `web::theme`'s to say, and it says it in lightness and weight because
+/// this design has two chromatic tokens and both already mean something
+/// else.
+#[must_use]
+pub fn class_of(token: channels::Token) -> &'static str {
+    match token {
+        channels::Token::Heading => "tok heading",
+        channels::Token::Strong => "tok strong",
+        channels::Token::Emphasis => "tok emphasis",
+        channels::Token::Code => "tok code",
+        channels::Token::Fence => "tok fence",
+        channels::Token::Meta => "tok meta",
+        channels::Token::Link => "tok link",
+        channels::Token::Marker => "tok marker",
+        channels::Token::Quote => "tok quote",
+    }
+}
+
 /// The building page.
 #[component]
 pub fn BuildingView(
@@ -403,7 +458,24 @@ pub fn BuildingView(
                                         "{word(Msg::BuildingTruncated)}"
                                     }
                                 }
-                                pre { class: "doc-text", "{doc.text}" }
+                                // Read as spans rather than shown as one
+                                // wall of bytes. The lexing is
+                                // `kernel::markdown`; this only walks
+                                // what it returned, which is why the
+                                // view has no rule of its own about
+                                // which mark outranks which.
+                                pre { class: "doc-text",
+                                    for (at, piece, said) in pieces(&doc.text) {
+                                        span {
+                                            key: "{at}",
+                                            class: match piece {
+                                                Some(token) => class_of(token),
+                                                None => "tok",
+                                            },
+                                            "{said}"
+                                        }
+                                    }
+                                }
                             }
                         },
                         None => rsx! {
@@ -484,6 +556,69 @@ mod tests {
     #[test]
     fn a_building_with_no_documents_opens_on_what_it_has_filed() {
         assert_eq!(opening_leaf(&answer(Vec::new())), Leaf::Archive);
+    }
+
+    /// The whole document arrives, in order, whatever the lexer marked.
+    /// A view that dropped the bytes between two spans would silently
+    /// lose the prose that is most of any document an agent writes.
+    #[test]
+    fn splitting_a_document_loses_none_of_it_and_keeps_its_order() {
+        let doc =
+            "# 标题\n\n段落里有 `代码` 与 **重点**。\n\n- 一条\n\n```rust\nlet 值 = 1;\n```\n";
+        let split = pieces(doc);
+        let rejoined: String = split.iter().map(|(_, _, said)| said.as_str()).collect();
+        assert_eq!(rejoined, doc, "a document is not a place to lose bytes");
+        let offsets: Vec<usize> = split.iter().map(|(at, _, _)| *at).collect();
+        let mut ascending = offsets.clone();
+        ascending.sort_unstable();
+        assert_eq!(offsets, ascending);
+        assert!(
+            split
+                .iter()
+                .any(|(_, piece, _)| *piece == Some(channels::Token::Heading)),
+            "the heading is marked: {split:?}"
+        );
+    }
+
+    /// A document with nothing to mark is still the document.
+    #[test]
+    fn plain_prose_arrives_whole_and_unmarked() {
+        let split = pieces("just some words\n");
+        assert_eq!(split.len(), 1);
+        assert_eq!(split[0].1, None);
+        assert_eq!(split[0].2, "just some words\n");
+    }
+
+    /// Colour cannot carry a token here: this design has two chromatic
+    /// tokens and both already mean something else, so every class has to
+    /// be separable by lightness and weight alone - and every one of them
+    /// has to actually be drawn.
+    #[test]
+    fn every_token_has_its_own_class_and_every_class_is_drawn() {
+        let all = [
+            channels::Token::Heading,
+            channels::Token::Strong,
+            channels::Token::Emphasis,
+            channels::Token::Code,
+            channels::Token::Fence,
+            channels::Token::Meta,
+            channels::Token::Link,
+            channels::Token::Marker,
+            channels::Token::Quote,
+        ];
+        let mut classes: Vec<&str> = all.iter().map(|token| class_of(*token)).collect();
+        let held = classes.len();
+        classes.sort_unstable();
+        classes.dedup();
+        assert_eq!(classes.len(), held, "two tokens cannot share one class");
+        let sheet = include_str!("../assets/index.html");
+        for token in all {
+            let class = class_of(token).replace(' ', ".");
+            assert!(
+                sheet.contains(&format!(".{class}")),
+                "{class} is marked and never drawn"
+            );
+        }
     }
 
     fn queue_of(room: &str, ids: &[&str]) -> InboxAnswer {

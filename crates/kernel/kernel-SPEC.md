@@ -1046,6 +1046,34 @@ pub struct FileChange { pub path: String, pub how: How, pub lines: Lines }
 **没有任何字段能装补丁文本**：补丁文本就是文件内容，而文件内容离开这台机器是
 `secret::scan` 存在的理由。hunk 必须单独请求并同样受扫，所以它拼不进这个类型。
 
+### 8-31 kernel::highlight（ux-15；形状 1 判定）
+
+```rust
+pub enum Token { Heading, Strong, Emphasis, Code, Fence, Meta, Link, Marker, Quote }
+pub struct Span { pub start: u32, pub len: u32, pub token: Token }
+pub fn markdown(text: &str) -> Vec<Span>;
+```
+
+**落点只有一个，而它全是 Markdown。** 界面唯一读文件的地方是 `BuildingDoc.text`，
+而 `read_building` 只收 `BUILDING.md` 与楼根目录下的 `*.md`。agent 写给下一个 agent 的计划与
+交接就是这些文件，而人读它们时需要的是标题、列表、行内代码与围栏块彼此分开。
+
+**为什么不上线不上服务端。** 先前的方案是服务端分词、线上走 span，理由是 syntect 在 wasm 里太重。
+那条理由对 syntect 成立，对一个 Markdown 词法器不成立——它就几 KB。为一个尚不存在的第二实现
+先把线格式撑大，是 ARCHITECTURE 明禁的「以假想复用为理由的抽象」。
+**缝在 `markdown(&str) -> Vec<Span>` 这个签名上**：将来真需要语法引擎时，它去服务端、
+线格式那时再长，并另立一次依赖裁定。
+
+**在 kernel 而不在 web**：同 `kernel::change` 的理由——无 I/O、无时钟、输出穷举枚，
+而且服务端有一天也要用它。`channels` 转出类型与函数，`web` 调用。
+
+**偏移量恒在字符边界上**：切片由客户端拿着 `start`/`len` 去做，落在多字节字符中间的
+偏移会让一页中文文档直接炸。一条断言钉住：每一个 span 都切得出来。
+
+**Span 恒不重叠、按 `start` 升序**：重叠的 span 让渲染方必须自己决定谁赢，
+那就是把词法规则的一半搬到了视图里。围栏块内部整块是 `Code`，不再分词——
+本版没有语法引擎，而把 `**x**` 在 Rust 代码里读成粗体是在编造。
+
 ### 8-28 C17 从「首段」扩到「任一段」（F2.08；形状 2 value 的一条原语）
 
 ```rust

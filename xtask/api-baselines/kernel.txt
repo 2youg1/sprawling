@@ -189,6 +189,7 @@ pub enum kernel::ScopeChange
 pub enum kernel::ShedReason
 pub enum kernel::SpendVerdict
 pub enum kernel::StallVerdict
+pub enum kernel::Token
 pub enum kernel::VersionVerdict
 pub enum kernel::WindowClass
 pub enum kernel::WriteMoment
@@ -388,6 +389,7 @@ pub fn kernel::forecast(&kernel::ExecArm) -> kernel::DiscardForecast
 pub fn kernel::freeze(&kernel::LayeredValue<kernel::ClockStampGranularity>, &kernel::LayeredValue<alloc::vec::Vec<kernel::ClockZone>>, &kernel::LayeredValue<kernel::Effort>, &kernel::LayeredValue<kernel::SandboxLimits>, &kernel::LayeredValue<alloc::vec::Vec<kernel::McpServer>>) -> kernel::FrozenConfig
 pub fn kernel::gate_discard(&kernel::DiscardRequest, &kernel::Registry, &kernel::GateContext, &str, &kernel::Locator) -> kernel::GateOutcome
 pub fn kernel::govern(&kernel::GateContext, &kernel::Address, &kernel::Address, &str, &kernel::Locator, &kernel::TaintSet) -> kernel::GateOutcome
+pub fn kernel::markdown(&str) -> alloc::vec::Vec<kernel::Span>
 pub fn kernel::match_item(&kernel::Policy, &kernel::ApprovalItem) -> kernel::PolicyApplication
 pub fn kernel::may_answer(&kernel::Autonomy, &kernel::ApprovalItem, &kernel::Answerer) -> kernel::AnswerVerdict
 pub fn kernel::message_payload(&[kernel::ContentBlock]) -> core::result::Result<kernel::Payload, kernel::AxError>
@@ -806,6 +808,9 @@ pub kernel::SecretSpan::len: usize
 pub kernel::SecretSpan::provider: core::option::Option<&'static str>
 pub kernel::SecretSpan::start: usize
 pub kernel::ShedReason::CapacityExhausted
+pub kernel::Span::len: u32
+pub kernel::Span::start: u32
+pub kernel::Span::token: kernel::Token
 pub kernel::SpendVerdict::Admit
 pub kernel::SpendVerdict::Exhausted
 pub kernel::SpendVerdict::Exhausted::layer: kernel::BudgetLayer
@@ -819,6 +824,15 @@ pub kernel::SystemBlock::cache: bool
 pub kernel::SystemBlock::text: alloc::string::String
 pub kernel::Temporal::Timeless
 pub kernel::Temporal::Timestamped
+pub kernel::Token::Code
+pub kernel::Token::Emphasis
+pub kernel::Token::Fence
+pub kernel::Token::Heading
+pub kernel::Token::Link
+pub kernel::Token::Marker
+pub kernel::Token::Meta
+pub kernel::Token::Quote
+pub kernel::Token::Strong
 pub kernel::ToolCall::args: kernel::Payload
 pub kernel::ToolCall::id: alloc::string::String
 pub kernel::ToolCall::name: kernel::ToolName
@@ -916,6 +930,7 @@ pub struct kernel::SecretSpan
 pub struct kernel::Seq(_)
 pub struct kernel::ServerLabel(_)
 pub struct kernel::SessionName(_)
+pub struct kernel::Span
 pub struct kernel::SystemBlock
 pub struct kernel::TaintSet(_)
 pub struct kernel::TaintSource(_)

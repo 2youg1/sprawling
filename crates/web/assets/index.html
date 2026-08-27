@@ -726,6 +726,45 @@
               padding: var(--space-pane); white-space: pre-wrap; color: var(--TEXT);
               max-height: 56vh; overflow: auto; margin: 0; font-size: var(--text-note);
               line-height: 1.6; }
+  /* Syntax, carried by lightness and weight and by nothing else.
+
+     This is not a limitation worked around, it is the design's own rule
+     followed: there are exactly two chromatic tokens in this product and
+     each has one meaning - ACCENT "something is happening here", ALERT
+     "a person is needed here". A rainbow document would break the
+     single-hue language and, worse, spend the only two colours the
+     interface has on syntax that means neither of those things. So the
+     nine tokens separate the way `.call .out.failed` separates from
+     `.answered`: where they sit on the grey ramp, how heavy they are,
+     and whether they slant.
+
+     Every token is at the note step or larger and takes TEXT or a token
+     the ramp admits at that step, so `xtask color` still decides the
+     contrast rather than this block. */
+  .tok { color: inherit; }
+  /* The ramp has no step above TEXT, so a heading cannot be made brighter
+     than the prose under it. It separates upward in weight instead, which
+     is the same move `.call .out.failed` makes and the reason that one
+     works. */
+  .tok.heading { color: var(--TEXT); font-weight: var(--weight-heading); }
+  .tok.strong { color: var(--TEXT); font-weight: var(--weight-label); }
+  .tok.emphasis { font-style: italic; }
+  /* Inline code and fenced blocks read as one thing, because they are.
+     The tint is a step on the surface ladder, not a hue. */
+  .tok.code { background: var(--G2); border-radius: var(--corner-control);
+              corner-shape: var(--corner-control-shape); }
+  /* Scaffolding: present, because somebody editing the file needs to see
+     it, and quiet, because it is not the content. Quiet and not faint -
+     `.doc-text` is at the note step and faint sits below the tier Bronze
+     admits there. */
+  .tok.fence { color: var(--TEXT_QUIET); }
+  .tok.meta { color: var(--TEXT_QUIET); font-style: italic; }
+  /* Underlined rather than coloured, which is already what this document
+     does with every other link on the page. */
+  .tok.link { text-decoration: underline; text-underline-offset: 2px;
+              text-decoration-color: var(--G5); }
+  .tok.marker { color: var(--TEXT_QUIET); font-weight: var(--weight-label); }
+  .tok.quote { color: var(--TEXT_QUIET); font-weight: var(--weight-label); }
   .open-building { margin: var(--space-snug) 0; }
   .index { margin-top: var(--space-base); display: flex; flex-direction: column; gap: 1px; }
   .index-row { display: grid; grid-template-columns: 1fr 110px auto; gap: var(--space-base);
