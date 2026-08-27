@@ -144,8 +144,23 @@ impl Feed {
 /// One line of text for an event.
 ///
 /// Deliberately short and deliberately not the payload: a live view that
-/// prints raw payloads is a log, and the reason to watch a session is to see
-/// its shape, not its bytes. The bytes are one click away in `ledger_view`.
+/// prints raw payloads is a log, and the reason to watch a session is to
+/// see its shape, not its bytes. The bytes are one click away in
+/// `ledger_view`.
+///
+/// **Amended (ux-9).** That ruling holds and it was answering the wrong
+/// question. What it forbids is a dump; what it was read as forbidding is
+/// any disclosure at all, and the cost of the wider reading is that
+/// everything this product does differently happens inside a single turn
+/// and reaches the screen as another grey line - a refusal in three
+/// parts, a checkpoint fence, a write outside its domain, a compaction
+/// that reports what it dropped. `read` and `read src/lex.rs` differ by
+/// nothing a byte count can measure: the second says what it did.
+///
+/// So this function keeps its job, which is one short line per event, and
+/// `web::turn` folds the same records into the rounds a person reads. The
+/// bytes are still only in the Ledger, and a call still carries the `seq`
+/// that addresses them.
 #[must_use]
 pub fn describe(record: &EventRecord) -> (Option<Msg>, String) {
     let who = record
@@ -182,6 +197,12 @@ pub fn describe_in(lang: crate::lang::Lang, record: &EventRecord) -> String {
 #[component]
 pub fn LiveView(
     feed: Feed,
+    /// The same records the feed holds, folded into rounds.
+    ///
+    /// Passed rather than folded here because `Feed` keeps lines and not
+    /// records: it is the window, and the window's job is to say what it
+    /// dropped. Two readings of one list, never two lists.
+    turns: Vec<crate::turn::Turn>,
     run: Option<RunId>,
     /// Every run the client knows of, newest first, with the word the
     /// page shows for its phase.
@@ -257,14 +278,59 @@ pub fn LiveView(
             if dropped > 0 {
                 p { class: "dropped", "{dropped_line}" }
             }
-            ol { class: "lines",
-                for line in lines {
-                    li {
-                        key: "{line.seq.value()}",
-                        class: if line.from_person { "line person" } else { "line" },
-                        span { class: "seq", "{line.seq.value()}" }
-                        span { class: "kind", "{line.kind:?}" }
-                        span { class: "text", "{line_text(lang(), &line)}" }
+            // A turn is one row, and what it did is inside it. The event
+            // stream is the Ledger's shape; this is the reader's, and
+            // both are readings of the same records.
+            ol { class: "turns",
+                for round in turns {
+                    li { key: "{round.opened.value()}", class: "turn",
+                        header { class: "turn-head",
+                            span { class: "n",
+                                "{fill(word(Msg::TurnNumber), &[(\"n\", &round.number.to_string())])}"
+                            }
+                            span { class: "seq", "{round.opened.value()}" }
+                            span { class: "count",
+                                if round.calls.is_empty() {
+                                    "{word(Msg::TurnNoTools)}"
+                                } else {
+                                    "{fill(word(Msg::TurnTools), &[(\"count\", &round.calls.len().to_string())])}"
+                                }
+                            }
+                        }
+                        for call in round.calls {
+                            div { key: "{call.at.value()}", class: "call",
+                                span { class: "tool", "{call.tool}" }
+                                // What it acted on. Absent when the
+                                // arguments name no one thing, which is
+                                // what every row used to look like.
+                                if let Some(ref on) = call.subject {
+                                    span { class: "arg", "{on}" }
+                                }
+                                span { class: "{call.outcome.class()}",
+                                    "{word(call.outcome.word())}"
+                                }
+                                // Where the bytes are. The row shows a
+                                // shape; this addresses the rest of it.
+                                span { class: "seq", "{call.at.value()}" }
+                            }
+                        }
+                    }
+                }
+            }
+            // The event stream stays, one click down: it is what the
+            // Ledger holds, and a reader who wants the raw order should
+            // not have to leave the page to see it.
+            details { class: "stream",
+                summary { "{word(Msg::LiveEveryEvent)}" }
+                ol { class: "lines",
+                    for line in lines {
+                        li {
+                            key: "{line.seq.value()}",
+                            class: if line.from_person { "line person" } else { "line" },
+                            span { class: "seq", "{line.seq.value()}" }
+                            span { class: "kind", "{line.kind:?}" }
+                            span { class: "text", "{line_text(lang(), &line)}" }
+                        }
                     }
                 }
             }

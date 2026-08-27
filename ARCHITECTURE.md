@@ -487,7 +487,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | channels::auth | crates/channels/src/auth.rs | pairing tokens: minting, the one readable form, constant-time comparison | value | S4 | built |
 | channels::aggregate | crates/channels/src/aggregate.rs | watching several cities from one interface, queries and events only | decision | S4 | built |
 
-### web (22) — the only client, compiled to WebAssembly
+### web (23) — the only client, compiled to WebAssembly
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -496,6 +496,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::pace | crates/web/src/pace.rs | how often this page may change, and what a burst of frames folds into | decision | R2 | built |
 | web::keys | crates/web/src/keys.rs | what a keystroke means, and the one sequence that cannot strand a reader | decision | R2 | built |
 | web::palette | crates/web/src/palette.rs | one box that reaches every page, building and session, and how a query ranks them | decision | R2 | built |
+| web::turn | crates/web/src/turn.rs | a session's events folded into the rounds a person reads, and what each call came to | decision | R2 | built |
 | web::city_view | crates/web/src/city_view.rs | the isometric canvas: one geometry for projection and its inverse | decision | S4 | built |
 | web::progress | crates/web/src/progress.rs | the one place a progress bar is drawn, for all three of its callers | decision | S4 | built |
 | web::dashboard | crates/web/src/dashboard.rs | cost in five cuts, with shares against the authoritative total | decision | S4 | built |

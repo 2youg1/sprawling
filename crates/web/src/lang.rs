@@ -359,6 +359,13 @@ pub enum Msg {
     CostNoneBilledWhat,
     CostCutEmpty,
     ProgressNoPlan,
+    TurnNumber,
+    TurnTools,
+    TurnNoTools,
+    TurnWaiting,
+    TurnAnswered,
+    TurnFailed,
+    LiveEveryEvent,
     DispatchMore,
     DispatchFewer,
     PalettePlaceholder,
@@ -1349,6 +1356,34 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "no plan",
             zh: "没有计划",
         },
+        Msg::TurnNumber => Phrase {
+            en: "turn {n}",
+            zh: "第 {n} 轮",
+        },
+        Msg::TurnTools => Phrase {
+            en: "{count} tool call(s)",
+            zh: "{count} 次工具调用",
+        },
+        Msg::TurnNoTools => Phrase {
+            en: "no tool was called",
+            zh: "没有调用工具",
+        },
+        Msg::TurnWaiting => Phrase {
+            en: "running",
+            zh: "在跑",
+        },
+        Msg::TurnAnswered => Phrase {
+            en: "answered",
+            zh: "已答",
+        },
+        Msg::TurnFailed => Phrase {
+            en: "failed",
+            zh: "失败",
+        },
+        Msg::LiveEveryEvent => Phrase {
+            en: "every event, one line each",
+            zh: "每一条事件，各一行",
+        },
         Msg::DispatchMore => Phrase {
             en: "more",
             zh: "更多",
@@ -2061,6 +2096,13 @@ mod tests {
             Msg::CostNoneBilledWhat,
             Msg::CostCutEmpty,
             Msg::ProgressNoPlan,
+            Msg::TurnNumber,
+            Msg::TurnTools,
+            Msg::TurnNoTools,
+            Msg::TurnWaiting,
+            Msg::TurnAnswered,
+            Msg::TurnFailed,
+            Msg::LiveEveryEvent,
             Msg::DispatchMore,
             Msg::DispatchFewer,
             Msg::PalettePlaceholder,
@@ -2387,6 +2429,13 @@ mod tests {
                 | Msg::CostNoneBilledWhat
                 | Msg::CostCutEmpty
                 | Msg::ProgressNoPlan
+                | Msg::TurnNumber
+                | Msg::TurnTools
+                | Msg::TurnNoTools
+                | Msg::TurnWaiting
+                | Msg::TurnAnswered
+                | Msg::TurnFailed
+                | Msg::LiveEveryEvent
                 | Msg::DispatchMore
                 | Msg::DispatchFewer
                 | Msg::PalettePlaceholder
@@ -2564,7 +2613,7 @@ mod tests {
     /// a test that read the directory would be testing the machine it ran
     /// on. A view added without a line here is a view whose English can
     /// escape, which is the failure this table exists to make loud.
-    const VIEWS: [(&str, &str); 17] = [
+    const VIEWS: [(&str, &str); 18] = [
         ("alert.rs", include_str!("alert.rs")),
         ("app.rs", include_str!("app.rs")),
         ("approval.rs", include_str!("approval.rs")),
@@ -2575,6 +2624,7 @@ mod tests {
         ("drop.rs", include_str!("drop.rs")),
         ("ledger_view.rs", include_str!("ledger_view.rs")),
         ("live.rs", include_str!("live.rs")),
+        ("turn.rs", include_str!("turn.rs")),
         ("overview.rs", include_str!("overview.rs")),
         ("palette.rs", include_str!("palette.rs")),
         ("panel.rs", include_str!("panel.rs")),

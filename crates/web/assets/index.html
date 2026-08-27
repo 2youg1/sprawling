@@ -352,6 +352,43 @@
   td { padding: 7px var(--space-snug); border-bottom: 1px solid var(--G2);
        vertical-align: top; }
   tbody tr:hover td { background: var(--G2); }
+  /* A turn is one row and what it did is inside it. The event stream is
+     the Ledger's shape; this is the reader's, and both read the same
+     records. Everything this product does differently happens inside one
+     turn, and as a flat stream all of it arrived as the same grey line. */
+  ol.turns { list-style: none; margin: 0; padding: 0; max-height: 56vh;
+             overflow: auto; scrollbar-gutter: stable;
+             overscroll-behavior: contain; }
+  .turn { border-top: 1px solid var(--G2); padding: var(--space-snug) 0; }
+  .turn-head { display: flex; align-items: baseline; gap: var(--space-base);
+               font-size: var(--text-note); color: var(--TEXT_QUIET); }
+  .turn-head .n { color: var(--TEXT); font-weight: var(--weight-label); }
+  .turn-head .count { margin-left: auto; }
+  /* One call, one line: what ran, what it ran on, how it came out, and
+     where the bytes are. The last column is why this is a disclosure and
+     not a dump - the row states a shape and addresses the rest. */
+  .call { display: grid; grid-template-columns: 13ch minmax(0, 1fr) 9ch 7ch;
+          gap: var(--space-base); align-items: baseline; padding: 3px 0 3px var(--space-base);
+          border-left: 2px solid var(--G3); margin-top: var(--space-tight); }
+  .call .tool { color: var(--TEXT); font-family: var(--font-mono); }
+  /* `note` and not the body step: the quiet token answers Lc 75, which
+     Bronze admits from 15px, and at 14px it would be below its tier. On a
+     dark surface quiet is bought with size, never with grey. */
+  .call .arg { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+               font-size: var(--text-note);
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .call .out { font-size: var(--text-note); }
+  .call .out.waiting { color: var(--TEXT_QUIET); }
+  .call .out.answered { color: var(--TEXT_QUIET); }
+  /* A failed call is a fact, not a request for a person, so it does not
+     borrow ALERT. It separates by lightness and by the word, which is the
+     same handling the diff rules describe. */
+  .call .out.failed { color: var(--TEXT); font-weight: var(--weight-label); }
+  .call .seq { color: var(--TEXT_QUIET); font-size: var(--text-note);
+               text-align: right; }
+  .live .stream { margin-top: var(--space-base); }
+  .live .stream summary { cursor: pointer; color: var(--TEXT_QUIET);
+                          font-size: var(--text-note); }
   ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; }
   .line { display: grid; grid-template-columns: 76px 152px 1fr; gap: var(--space-base);
           padding: var(--space-tight) 0; border-bottom: 1px solid var(--G2); }

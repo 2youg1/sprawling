@@ -1138,6 +1138,9 @@ pub fn Root(
                     View::Live(run) => rsx! {
                         crate::live::LiveView {
                             feed: crate::live::Feed::replay(records.iter(), run, following),
+                            turns: crate::turn::turns(
+                                records.iter().filter(|held| Some(held.run()) == run),
+                            ),
                             run,
                             runs: watchable(&snapshot),
                             following,

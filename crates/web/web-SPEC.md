@@ -169,6 +169,14 @@ pub fn recycle_bin(Vec<BinRow>) -> Vec<BinRow>;
 
 **live**——窗口有界（老行掉出视图不掉出历史，这正是 ledger_view 存在的理由）；跟随是**粘性**的——滚回去的读者是在读东西，下一条事件把他拽走就是抢走它。
 
+> **修正（ux-9）**：`describe` 的「故意不带载荷」仍然成立，但它答的不是这个问题。
+> 它禁的是**倾倒**，而它被读成禁一切**披露**；后一种读法的代价是：
+> **这个产品全部与众不同的东西都发生在一轮内部，而它们一律渲染成同一行灰字**——
+> 三段式拒绝、检查点栅栏、写域拒绝、报出丢了多少的压缩。
+> `read` 与 `read src/lex.rs` 的差别不是字节多少，是后者**说得出它做了什么**。
+> 故 `describe` 保留原职（一事件一短行），新模块 `web::turn` 把同一批记录折成人读的轮。
+> 字节仍然只在 Ledger，每个调用携着寻址用的 `seq`。
+
 **city_view**——S4 只建几何，P2.10 填绘制层（见 §8-12），S4 定下的签名一个未动。**投影与反投影共用一套几何**（两套几何＝两个权威，而漂开的总是没人看的那一个）。落位是 id 的纯函数、画家序全序——位图回归的确定性前提在此兑现。
 
 **施工中抳出的真 bug**：2:1 投影在奇数瓦片宽下 `tile_height*2 ≠ tile_width`；从瓦片到像素偏移中间有两次折半，故瓦片宽必须取 4 的倍数，否则命中测试不再是绘制的逆。
@@ -975,6 +983,33 @@ pub fn matching(query: &str, offers: Vec<Offer>) -> Vec<Offer>
 顶栏的下标与控制面的下标不可比；故只断言「不穿主按钮的衣服」，位置由看运行中的客户端作证。
 
 **顺带**：拒绝条的三段改为按段换行（原来三段各自折成几个字宽的窄栏），恢复路径占自己一行——它是要做的那一步，不是上一句的继续。
+
+### 8-47 web::turn——一轮是一行，展开才有细节（ux-9）
+
+```rust
+pub fn turns<'a>(records: impl IntoIterator<Item = &'a EventRecord>) -> Vec<Turn>
+pub struct Turn { pub number: u32, pub opened: Seq, pub calls: Vec<Call> }
+pub struct Call { pub tool: String, pub subject: Option<String>,
+                 pub outcome: Outcome, pub at: Seq }
+pub enum Outcome { Waiting, Answered, Failed }
+```
+
+**先改记录再改代码**：`live.rs` 的 doc 与本文 §8-6 的 live 段在同一次提交里先改，理由写在那里。
+
+**载荷形状是查过的不是猜的**：`runtime::turn` 写 `tool_called = { id, name, args }`、
+`tool_result = { tool_use_id, name, result|error }`；`SUBJECT_KEYS` 取自工具定义（`path` 占 12 个）。
+
+**配对按 id 而不按位置**：两个调用可以先后发出、后发的先回。按位置配对会把失败标到另一个调用头上——
+这是一条断言（`an_answer_finds_its_own_call_and_not_the_nearest_one`）。
+
+**窗口有界的后果写成了断言**：对不上号的 `tool_result` **丢弃而不猜**，否则会报出一个从未发生过的结果。
+
+**对解不开的参数 fail-open**：认不出的 `args` 仍然出行，只是不带 subject——
+落后一个版本的客户端必须**显示**它读不懂的调用，而不是藏掉。
+
+**`Failed` 不借 ALERT**：一次失败是事实，不是求助；它若真卡住了会话，冻结会另出一张卡（§2.4）。
+
+**未做**：动过的文件清单与上下文用量仍在服务端缺口后面（§9）；`web::turn` 只画事件里已有的那部分，**不编造**。
 
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 

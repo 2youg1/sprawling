@@ -13,6 +13,7 @@ impl web::Frame
 impl web::Kind
 impl web::Lang
 impl web::Link
+impl web::Outcome
 impl web::Paint
 impl web::Phrase
 impl web::ProviderHealth
@@ -68,6 +69,7 @@ pub enum web::LinkEvent
 pub enum web::LinkState
 pub enum web::Meaning
 pub enum web::Msg
+pub enum web::Outcome
 pub enum web::Place
 pub enum web::ProviderHealth
 pub enum web::Raise
@@ -123,6 +125,8 @@ pub fn web::Link::is_live(&self) -> bool
 pub fn web::Link::new(core::option::Option<alloc::string::String>) -> Self
 pub fn web::Link::state(&self) -> &web::LinkState
 pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Element
+pub fn web::Outcome::class(self) -> &'static str
+pub fn web::Outcome::word(self) -> web::Msg
 pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::innerlude::Element
 pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::wire::Answer>, core::option::Option<kernel::error::AxError>)
 pub fn web::Paint::is_empty(&self) -> bool
@@ -246,6 +250,7 @@ pub fn web::takeover_command(kernel::event::RunId) -> channels::wire::ClientFram
 pub fn web::to_fragment(&web::View) -> alloc::string::String
 pub fn web::token_in(&str) -> core::option::Option<alloc::string::String>
 pub fn web::track_token() -> &'static str
+pub fn web::turns<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> alloc::vec::Vec<web::Turn>
 pub fn web::url_is_safe(&str) -> bool
 pub fn web::view_box(&web::DisplayList, usize, (i32, i32)) -> web::Frame
 pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
@@ -259,6 +264,7 @@ pub struct web::AttachForm
 pub struct web::Attention
 pub struct web::Bar
 pub struct web::BinRow
+pub struct web::Call
 pub struct web::Camera
 pub struct web::Cluster
 pub struct web::CostRow
@@ -286,6 +292,7 @@ pub struct web::Sign
 pub struct web::Snapshot
 pub struct web::Stroke<'a>
 pub struct web::TagRow
+pub struct web::Turn
 pub struct web::Usage
 pub struct web::Working
 pub use web::App
@@ -344,6 +351,10 @@ pub web::BinRow::discarded_at: kernel::event::TimeMs
 pub web::BinRow::restored: bool
 pub web::BinRow::return_path: web::ReturnPath
 pub web::BinRow::what: alloc::string::String
+pub web::Call::at: kernel::event::Seq
+pub web::Call::outcome: web::Outcome
+pub web::Call::subject: core::option::Option<alloc::string::String>
+pub web::Call::tool: alloc::string::String
 pub web::Camera::tile_height: u32
 pub web::Camera::tile_width: u32
 pub web::Chord::Idle
@@ -599,6 +610,7 @@ pub web::Msg::LineSteered
 pub web::Msg::LineToolCalled
 pub web::Msg::LineToolResult
 pub web::Msg::LiveDropped
+pub web::Msg::LiveEveryEvent
 pub web::Msg::LiveEveryRun
 pub web::Msg::LiveEverything
 pub web::Msg::LiveFollowEnd
@@ -754,6 +766,12 @@ pub web::Msg::StatusProvider
 pub web::Msg::StatusSpent
 pub web::Msg::StatusSpentSomeUnpriced
 pub web::Msg::StatusUsedNoPrice
+pub web::Msg::TurnAnswered
+pub web::Msg::TurnFailed
+pub web::Msg::TurnNoTools
+pub web::Msg::TurnNumber
+pub web::Msg::TurnTools
+pub web::Msg::TurnWaiting
 pub web::Msg::VitalsAsking
 pub web::Msg::VitalsDiscards
 pub web::Msg::VitalsRecords
@@ -763,6 +781,9 @@ pub web::NavGroup::places: alloc::vec::Vec<web::Destination>
 pub web::Offer::going: web::View
 pub web::Offer::kind: web::Kind
 pub web::Offer::label: alloc::string::String
+pub web::Outcome::Answered
+pub web::Outcome::Failed
+pub web::Outcome::Waiting
 pub web::Page::filtered_out: usize
 pub web::Page::next_from: core::option::Option<kernel::event::Seq>
 pub web::Page::rows: alloc::vec::Vec<web::Row>
@@ -832,6 +853,9 @@ pub web::Target::Run
 pub web::Trend::Falling
 pub web::Trend::Rising
 pub web::Trend::Steady
+pub web::Turn::calls: alloc::vec::Vec<web::Call>
+pub web::Turn::number: u32
+pub web::Turn::opened: kernel::event::Seq
 pub web::Usage::cache_read: kernel::budget::Tokens
 pub web::Usage::input: kernel::budget::Tokens
 pub web::Usage::output: kernel::budget::Tokens
