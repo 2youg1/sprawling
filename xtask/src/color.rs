@@ -159,7 +159,240 @@ fn judge_tokens(source: &str) -> Vec<Violation> {
             "COLOUR_TOKENS parsed to nothing".to_owned(),
         ));
     }
+
+    // 7. Text reaches the contrast its own size demands.
+    violations.extend(judge_readability(source, &greys));
     violations
+}
+
+/// The seventh assertion: every text token reaches the tier it claims, and
+/// every type step claims the tier its size and weight actually demand.
+///
+/// This one is here rather than in a browser because it never needed one.
+/// The surfaces are a closed ladder and the tokens are a closed table, so
+/// the pairs are enumerable and the judgement is a pure function - what the
+/// architecture calls a missing end-to-end gate is, for contrast, a missing
+/// table. It is checked against `TEXT_SURFACE_CEILING`, the brightest
+/// surface text may sit on, because a token that passed on the page and
+/// failed on a card would be one rule with two answers.
+fn judge_readability(source: &str, greys: &[(String, u16)]) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    let tokens = parse_text_tokens(source);
+    let steps = parse_type_scale(source);
+    if tokens.is_empty() || steps.is_empty() {
+        violations.push(token_violation(
+            "the text token and type tables are readable",
+            "TEXT_TOKENS or TYPE_SCALE parsed to nothing".to_owned(),
+        ));
+        return violations;
+    }
+    let Some(surface) = text_surface_ceiling(source).and_then(|name| {
+        greys
+            .iter()
+            .find(|(rung, _)| *rung == name)
+            .map(|(_, l)| *l)
+    }) else {
+        violations.push(token_violation(
+            "the brightest surface that carries text is a rung of the ramp",
+            "TEXT_SURFACE_CEILING names no rung of GRAY_RAMP".to_owned(),
+        ));
+        return violations;
+    };
+
+    for (name, lightness, claimed) in &tokens {
+        let reached = apca_lc(*lightness, surface);
+        if reached + 0.05 < f64::from(*claimed) {
+            violations.push(token_violation(
+                "a text token reaches the tier it claims",
+                format!("{name} claims Lc {claimed} and reaches {reached:.1}"),
+            ));
+        }
+    }
+
+    for (name, px, weight, claimed) in &steps {
+        // A step called `body` is prose and takes the body column; every
+        // other step is something that qualifies prose and takes the
+        // content column. Bronze states different minimum sizes for the
+        // two, and merging them would let a 15px note claim a tier only a
+        // 15px sentence may claim.
+        let derived = bronze_tier(*px, *weight, name == "body");
+        match derived {
+            None => violations.push(token_violation(
+                "every type step is large enough for some tier to admit it",
+                format!(
+                    "{name} is {px}px at weight {weight}, below every Bronze minimum: \
+                     no colour makes it legible"
+                ),
+            )),
+            Some(tier) if tier != *claimed => violations.push(token_violation(
+                "a type step claims the tier its size and weight demand",
+                format!("{name} claims Lc {claimed} and demands Lc {tier}"),
+            )),
+            Some(_) => {}
+        }
+        if let Some(tier) = derived
+            && !tokens.iter().any(|(_, _, claim)| *claim >= tier)
+        {
+            violations.push(token_violation(
+                "some text token can serve every type step",
+                format!("{name} demands Lc {tier} and no text token reaches it"),
+            ));
+        }
+    }
+    violations
+}
+
+/// `("TEXT", 928, 90),`
+fn parse_text_tokens(source: &str) -> Vec<(String, u16, u16)> {
+    table_body(source, "pub const TEXT_TOKENS")
+        .lines()
+        .filter_map(|line| {
+            let mut fields = row_fields(line)?;
+            let name = fields.next()?.trim_matches('"').to_owned();
+            let lightness = resolve(fields.next()?)?;
+            let tier = resolve(fields.next()?)?;
+            Some((name, lightness, tier))
+        })
+        .collect()
+}
+
+/// `("body", 14, 400, 90),`
+fn parse_type_scale(source: &str) -> Vec<(String, u16, u16, u16)> {
+    table_body(source, "pub const TYPE_SCALE")
+        .lines()
+        .filter_map(|line| {
+            let mut fields = row_fields(line)?;
+            let name = fields.next()?.trim_matches('"').to_owned();
+            let px = resolve(fields.next()?)?;
+            let weight = resolve(fields.next()?)?;
+            let tier = resolve(fields.next()?)?;
+            Some((name, px, weight, tier))
+        })
+        .collect()
+}
+
+fn text_surface_ceiling(source: &str) -> Option<String> {
+    let after = source
+        .split_once("pub const TEXT_SURFACE_CEILING")
+        .map(|(_, rest)| rest)?;
+    let quoted = after.split_once('"').map(|(_, rest)| rest)?;
+    quoted.split_once('"').map(|(name, _)| name.to_owned())
+}
+
+/// The APCA-RC Bronze Simple Mode minimum sizes, transcribed from the
+/// published criterion: for each tier, the smallest size each weight may
+/// use. Body text and everything else have different tables, which is the
+/// whole reason the two are kept apart.
+///
+/// Lc 30 is deliberately absent. Its published scope is placeholder text,
+/// disabled controls and non-text elements - it is not a floor content may
+/// fall back to, and treating it as one makes every size pass.
+const BRONZE_BODY: [(u16, &[(u16, u16)]); 2] = [
+    (90, &[(300, 18), (400, 14)]),
+    (75, &[(300, 24), (400, 18), (500, 16), (700, 14)]),
+];
+const BRONZE_CONTENT: [(u16, &[(u16, u16)]); 4] = [
+    (90, &[(400, 12)]),
+    (75, &[(400, 15)]),
+    (
+        60,
+        &[
+            (200, 48),
+            (300, 36),
+            (400, 24),
+            (500, 21),
+            (600, 18),
+            (700, 16),
+        ],
+    ),
+    (45, &[(400, 36), (700, 24)]),
+];
+
+/// The lowest tier that admits this size at this weight, or `None` when no
+/// tier does - which means the step is too small to be content at any
+/// contrast, and is a defect in the type scale rather than in the palette.
+fn bronze_tier(px: u16, weight: u16, body: bool) -> Option<u16> {
+    let rows: &[(u16, &[(u16, u16)])] = if body { &BRONZE_BODY } else { &BRONZE_CONTENT };
+    rows.iter()
+        .filter(|(_, mins)| {
+            // A heavier face is legible smaller, so a weight the table does
+            // not list takes the heaviest listed weight at or below it, and
+            // failing that the lightest listed - which is the strictest
+            // reading available.
+            let floor = mins
+                .iter()
+                .filter(|(w, _)| *w <= weight)
+                .max_by_key(|(w, _)| *w)
+                .or_else(|| mins.iter().min_by_key(|(w, _)| *w));
+            floor.is_some_and(|(_, min_px)| px >= *min_px)
+        })
+        .map(|(tier, _)| *tier)
+        .min()
+}
+
+/// APCA lightness contrast between two on-axis tokens, both given as
+/// lightness in per mille. Reverse polarity (light text on a dark surface)
+/// reports negative, and the absolute value is what the tiers compare
+/// against.
+///
+/// Constants are apca-w3 0.1.9 / 0.98G-4g. The 8-bit quantisation is
+/// reproduced because a browser displays quantised channels, and the
+/// difference decides a boundary case; it is done in floating point so that
+/// no lossy integer conversion appears anywhere in this file.
+fn apca_lc(text: u16, surface: u16) -> f64 {
+    let text_y = soft_clamp(axis_luminance(text));
+    let surface_y = soft_clamp(axis_luminance(surface));
+    if (surface_y - text_y).abs() < 0.0005 {
+        return 0.0;
+    }
+    let raw = if surface_y > text_y {
+        let sapc = (surface_y.powf(0.56) - text_y.powf(0.57)) * 1.14;
+        if sapc < 0.001 { 0.0 } else { sapc - 0.027 }
+    } else {
+        let sapc = (surface_y.powf(0.65) - text_y.powf(0.62)) * 1.14;
+        if sapc > -0.001 { 0.0 } else { sapc + 0.027 }
+    };
+    (raw * 100.0).abs()
+}
+
+/// Screen luminance of an on-axis token: OKLCH through OKLab to linear
+/// sRGB, quantised to eight bits, then APCA's own simple transfer curve.
+fn axis_luminance(lightness: u16) -> f64 {
+    let l = f64::from(lightness) / 1000.0;
+    let chroma = f64::from(GRAY_CHROMA) / 1000.0;
+    let hue = f64::from(HUE_AXIS).to_radians();
+    let (a, b) = (chroma * hue.cos(), chroma * hue.sin());
+    let long = (l + 0.396_337_777_4 * a + 0.215_803_757_3 * b).powi(3);
+    let medium = (l - 0.105_561_345_8 * a - 0.063_854_172_8 * b).powi(3);
+    let short = (l - 0.089_484_177_5 * a - 1.291_485_548_0 * b).powi(3);
+    let linear = [
+        4.076_741_662_1 * long - 3.307_711_591_3 * medium + 0.230_969_929_2 * short,
+        -1.268_438_004_6 * long + 2.609_757_401_1 * medium - 0.341_319_396_5 * short,
+        -0.004_196_086_3 * long - 0.703_418_614_7 * medium + 1.707_614_701_0 * short,
+    ];
+    let coefficients = [0.212_672_9, 0.715_152_2, 0.072_175_0];
+    let mut y = 0.0;
+    for (channel, weight) in linear.into_iter().zip(coefficients) {
+        let clipped = channel.clamp(0.0, 1.0);
+        let encoded = if clipped <= 0.003_130_8 {
+            12.92 * clipped
+        } else {
+            1.055 * clipped.powf(1.0 / 2.4) - 0.055
+        };
+        let quantised = (encoded * 255.0).round() / 255.0;
+        y += weight * quantised.powf(2.4);
+    }
+    y
+}
+
+/// APCA lifts the darkest values so that near-black pairs do not report
+/// more contrast than an eye finds there.
+fn soft_clamp(y: f64) -> f64 {
+    if y > 0.022 {
+        y
+    } else {
+        y + (0.022 - y).powf(1.414)
+    }
 }
 
 fn token_violation(rule: &str, violation: String) -> Violation {
@@ -345,11 +578,27 @@ pub const GRAY_RAMP: [(&str, u16); 11] = [
     ("G9", 830),
     ("G10", 930),
 ];
-pub const COLOUR_TOKENS: [(&str, u16, u16, u16); 4] = [
+pub const COLOUR_TOKENS: [(&str, u16, u16, u16); 5] = [
     ("ACCENT", 680, HUE_AXIS, ACCENT_CHROMA_PERCENT),
-    ("ALERT", 900, HUE_ALERT, ALERT_CHROMA_PERCENT),
+    ("ALERT", 919, HUE_ALERT, ALERT_CHROMA_PERCENT),
     ("ACCENT_HOVER", 760, HUE_AXIS, ACCENT_CHROMA_PERCENT),
     ("ALERT_HOVER", 945, HUE_ALERT, ALERT_CHROMA_PERCENT),
+    ("ACCENT_SOLID", 919, HUE_AXIS, ACCENT_CHROMA_PERCENT),
+];
+pub const TEXT_SURFACE_CEILING: &str = "G2";
+pub const TEXT_TOKENS: [(&str, u16, u16); 4] = [
+    ("TEXT", 928, 90),
+    ("TEXT_QUIET", 852, 75),
+    ("TEXT_FAINT", 771, 60),
+    ("TEXT_DISABLED", 582, 30),
+];
+pub const TYPE_SCALE: [(&str, u16, u16, u16); 6] = [
+    ("figure", 28, 600, 60),
+    ("title", 20, 600, 60),
+    ("heading", 18, 600, 60),
+    ("label", 14, 600, 90),
+    ("body", 14, 400, 90),
+    ("note", 15, 400, 75),
 ];
 "#;
 
@@ -358,12 +607,123 @@ pub const COLOUR_TOKENS: [(&str, u16, u16, u16); 4] = [
         let found = judge_tokens(GOOD);
         assert!(found.is_empty(), "{}", rules(&found));
         assert_eq!(grey_ramp(GOOD).len(), 11);
-        assert_eq!(parse_colour_tokens(GOOD).len(), 4);
+        assert_eq!(parse_colour_tokens(GOOD).len(), 5);
+        assert_eq!(parse_text_tokens(GOOD).len(), 4);
+        assert_eq!(parse_type_scale(GOOD).len(), 6);
+    }
+
+    /// The reading this gate exists to make mechanical: these are the
+    /// measured values the design was solved against, so a change to the
+    /// transfer curve, the constants or the quantisation shows up here
+    /// rather than as a page that is quietly harder to read.
+    #[test]
+    fn the_measurement_reproduces_the_readings_the_design_was_solved_against() {
+        for (text, surface, expected) in [
+            (930, 245, 90.6),
+            (930, 195, 91.9),
+            (930, 300, 88.1),
+            (928, 245, 90.0),
+            (852, 245, 75.0),
+            (771, 245, 60.0),
+            (830, 245, 70.4),
+            (630, 195, 38.2),
+        ] {
+            let got = apca_lc(text, surface);
+            assert!(
+                (got - expected).abs() < 0.15,
+                "L {text} on L {surface}: expected Lc {expected}, measured {got:.1}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_text_token_that_does_not_reach_its_tier_is_caught() {
+        // G9 is the rung a designer would reach for when "a bit quieter"
+        // is wanted. It reaches Lc 73.8 on a card, and body needs 90.
+        let broken = GOOD.replace("(\"TEXT\", 928, 90)", "(\"TEXT\", 830, 90)");
+        let found = judge_tokens(&broken);
+        assert!(
+            found
+                .iter()
+                .any(|v| v.violation.contains("TEXT claims Lc 90 and reaches 70.4")),
+            "{}",
+            rules(&found)
+        );
+    }
+
+    #[test]
+    fn a_type_step_claiming_the_wrong_tier_is_caught() {
+        let broken = GOOD.replace("(\"note\", 15, 400, 75)", "(\"note\", 15, 400, 60)");
+        let found = judge_tokens(&broken);
+        assert!(
+            found
+                .iter()
+                .any(|v| v.violation.contains("note claims Lc 60 and demands Lc 75")),
+            "{}",
+            rules(&found)
+        );
+    }
+
+    /// One of the two steps this library used to ship is below every
+    /// Bronze minimum, and no colour repairs that - which is why the fix
+    /// was to the type scale and not to the greys.
+    #[test]
+    fn a_step_too_small_for_any_tier_is_caught() {
+        let broken = GOOD.replace("(\"label\", 14, 600, 90)", "(\"label\", 11, 600, 90)");
+        let found = judge_tokens(&broken);
+        assert!(
+            found
+                .iter()
+                .any(|v| v.violation.contains("below every Bronze minimum")),
+            "{}",
+            rules(&found)
+        );
+    }
+
+    /// The other step was legal and still had to go, which is a different
+    /// finding and worth its own assertion: 12px at weight 400 is admitted,
+    /// but only at the top tier, so the only token that may paint it is the
+    /// one body text uses. **A 12px line cannot be quieter than the prose
+    /// beside it** - and "quieter" was its entire job. Quiet has to be
+    /// bought with size here, not with grey.
+    #[test]
+    fn a_twelve_pixel_step_is_legal_and_still_cannot_be_quiet() {
+        assert_eq!(bronze_tier(12, 400, false), Some(90));
+        assert_eq!(bronze_tier(15, 400, false), Some(75));
+        let quiet_enough: Vec<&str> = parse_text_tokens(GOOD)
+            .into_iter()
+            .filter(|(_, _, tier)| *tier < 90)
+            .map(|(name, _, _)| match name.as_str() {
+                "TEXT_QUIET" => "TEXT_QUIET",
+                "TEXT_FAINT" => "TEXT_FAINT",
+                _ => "other",
+            })
+            .collect();
+        assert!(
+            !quiet_enough.is_empty(),
+            "there is a quieter token; it is 12px that cannot use it"
+        );
+    }
+
+    #[test]
+    fn text_on_a_surface_the_ladder_may_not_reach_is_caught() {
+        // G3 is where the ladder stops carrying text. Pointing the ceiling
+        // at it must make the body token illegal, because it is.
+        let broken = GOOD.replace(
+            "pub const TEXT_SURFACE_CEILING: &str = \"G2\"",
+            "pub const TEXT_SURFACE_CEILING: &str = \"G3\"",
+        );
+        let found = judge_tokens(&broken);
+        assert!(
+            found.iter().any(|v| v.violation.starts_with("TEXT claims")),
+            "{}",
+            rules(&found)
+        );
     }
 
     #[test]
     fn a_third_hue_is_caught() {
-        let broken = GOOD.replace("(\"ALERT\", 900, HUE_ALERT", "(\"ALERT\", 900, 12");
+        let broken = GOOD.replace("(\"ALERT\", 919, HUE_ALERT", "(\"ALERT\", 919, 12");
         let found = judge_tokens(&broken);
         assert!(
             found.iter().any(|v| v.violation.contains("hue 12")),

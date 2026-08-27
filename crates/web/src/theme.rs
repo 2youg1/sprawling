@@ -17,6 +17,15 @@
 //!    in lightness or shape, so setting the chroma coefficient to zero
 //!    leaves the interface fully legible - and the desaturated snapshot is
 //!    the same stylesheet evaluated twice, not a second set of rules.
+//! 4. **A text lightness is a required contrast, not a rung somebody
+//!    picked.** The yardstick is **APCA** (apca-w3 0.1.9, constants
+//!    0.98G-4g) at the **APCA-RC Bronze Simple Mode** thresholds, which is
+//!    what a dark interface needs: WCAG 2.x measures a ratio of relative
+//!    luminance and is known to misjudge light-on-dark, where APCA weights
+//!    the two polarities separately. `TEXT_TOKENS` therefore stores, for
+//!    each Bronze tier this library can reach, the lightness that reaches
+//!    it - solved, the way a coloured token's chroma is solved from a
+//!    ratio. `cargo xtask color` re-solves both and fails on drift.
 //!
 //! Values are stored in **per-mille integers**, not floats. `oklch()` takes
 //! fractions, and formatting `145` as `0.145` is exact where a float would
@@ -86,15 +95,61 @@ pub const GRAY_RAMP: [(&str, u16); 11] = [
 ///
 /// `xtask color` parses this table too, and fails if a chroma literal ever
 /// appears in it.
-pub const COLOUR_TOKENS: [(&str, u16, u16, u16); 4] = [
+pub const COLOUR_TOKENS: [(&str, u16, u16, u16); 5] = [
     ("ACCENT", 680, HUE_AXIS, ACCENT_CHROMA_PERCENT),
-    ("ALERT", 900, HUE_ALERT, ALERT_CHROMA_PERCENT),
+    ("ALERT", 919, HUE_ALERT, ALERT_CHROMA_PERCENT),
     ("ACCENT_HOVER", 760, HUE_AXIS, ACCENT_CHROMA_PERCENT),
     ("ALERT_HOVER", 945, HUE_ALERT, ALERT_CHROMA_PERCENT),
+    ("ACCENT_SOLID", 919, HUE_AXIS, ACCENT_CHROMA_PERCENT),
+];
+
+/// The brightest surface that may have text on it.
+///
+/// Depth in a dark interface is built by stacking lightness, and every step
+/// up spends the contrast the text still needs. Measured: the ceiling
+/// itself reaches only Lc 88.1 on G3, and body text needs Lc 90 - so **the
+/// raised rung cannot carry body text at any lightness this library is
+/// allowed to use**. G3 keeps its job as a border, a rule and a fill that
+/// carries nothing; text stops at G2.
+///
+/// This is also why `TEXT_TOKENS` is solved against G2 rather than against
+/// the page: a token solved on the darkest surface would be legal on the
+/// page and illegal on a card, which is the same defect as a rule with two
+/// authorities.
+pub const TEXT_SURFACE_CEILING: &str = "G2";
+
+/// The lightness at which text reaches each Bronze tier, and the tier it
+/// answers: name, lightness per mille, Lc.
+///
+/// **These are not rungs of the grey ramp.** The ramp is the surface
+/// ladder; a rung of it is a place to put something, not a permission to
+/// write. G9 (830) reaches Lc 70.4 on a card and body text needs 90, so
+/// picking a rung that "looks quiet enough" is exactly the judgement this
+/// table removes.
+///
+/// The consequence is worth stating because it decides how a page is
+/// composed: on a dark surface APCA charges heavily for small text, so
+/// **"quieter" cannot be bought with a darker grey - it has to be bought
+/// with a larger step.** A 14px line has exactly one legal colour here.
+/// Hierarchy at one size is therefore weight, and colour only moves when
+/// the size does.
+///
+/// `cargo xtask color` parses this table. Keep one row per line, literal
+/// integers only.
+pub const TEXT_TOKENS: [(&str, u16, u16); 4] = [
+    ("TEXT", 928, 90),
+    ("TEXT_QUIET", 852, 75),
+    ("TEXT_FAINT", 771, 60),
+    ("TEXT_DISABLED", 582, 30),
 ];
 
 /// Lowest rung that may carry information. G3 to G6 are decoration and are
 /// exempt from the contrast floor; anything a reader must read starts here.
+///
+/// This governs one surface only: the release badges `cargo xtask badge`
+/// renders, which are their own drawing with their own background. The
+/// interface's own floor is `TEXT_TOKENS`, which is measured rather than
+/// named.
 pub const INFORMATION_FLOOR: &str = "G7";
 
 /// The library's only gradient: the finished part of a progress bar runs
@@ -168,7 +223,8 @@ pub const FONT_SANS: &str = "sans-serif";
 /// from its label without emphasising either.
 pub const FONT_MONO: &str = "monospace";
 
-/// The type scale: name, size in px, weight.
+/// The type scale: name, size in px, weight, and the Bronze tier that size
+/// and weight demand.
 ///
 /// A table for the same reason the greys are a table. Before this existed
 /// the stylesheet held eleven sizes between 11px and 28px, four of them
@@ -179,17 +235,30 @@ pub const FONT_MONO: &str = "monospace";
 /// **The name says what a step is for, not how large it is**, so a step
 /// can be retuned without every reader of it becoming wrong. `figure` is
 /// the one number a page exists to state; `title` names the page's
-/// conclusion; `heading` divides a page; `body` is prose; `small` is
+/// conclusion; `heading` divides a page; `body` is prose; `note` is
 /// everything that qualifies something else - scope, provenance, an empty
-/// state; `micro` is a label that has been shouted into uppercase and
-/// must not compete with what it labels.
-pub const TYPE_SCALE: [(&str, u16, u16); 6] = [
-    ("figure", 28, 600),
-    ("title", 20, 600),
-    ("heading", 15, 600),
-    ("body", 14, 400),
-    ("small", 12, 400),
-    ("micro", 11, 600),
+/// state; `label` is a name shouted into uppercase that must not compete
+/// with what it labels.
+///
+/// **The fourth column is why two steps changed size.** Bronze states a
+/// minimum size for each tier, so a step's size decides how much contrast
+/// it needs, and the two smallest steps this library used to have - 12px
+/// at weight 400 and 11px at weight 600 - are below every tier's minimum:
+/// no colour makes them legible, because the problem is not the colour.
+/// `small` became `note` at 15px, which is the smallest size Bronze admits
+/// at Lc 75; `micro` became `label` at 14px, which Bronze admits at Lc 90.
+/// `heading` moved from 15px to 18px so that it can be quieter than the
+/// body it divides, which at 15px it was not allowed to be.
+///
+/// `cargo xtask color` re-derives this column from the size and the weight
+/// and fails on drift, so the tier is checked rather than asserted.
+pub const TYPE_SCALE: [(&str, u16, u16, u16); 6] = [
+    ("figure", 28, 600, 60),
+    ("title", 20, 600, 60),
+    ("heading", 18, 600, 60),
+    ("label", 14, 600, 90),
+    ("body", 14, 400, 90),
+    ("note", 15, 400, 75),
 ];
 
 /// The spacing scale: name, size in px. Every step is a multiple of four,
@@ -256,6 +325,18 @@ pub fn custom_properties() -> String {
             per_mille(resolved_chroma(lightness, hue, percent)),
         ));
     }
+    // The text tokens sit on the axis and take the ramp's chroma, because
+    // what puts them on the axis is the same fact that puts the ramp on it.
+    // They are written after the ramp so that a stylesheet reading
+    // `var(--TEXT)` gets a value chosen by a required contrast rather than
+    // by which rung looked quiet enough.
+    for (name, lightness, _) in TEXT_TOKENS {
+        css.push_str(&format!(
+            "--{name}:oklch({} {} {HUE_AXIS});",
+            per_mille(lightness),
+            per_mille(GRAY_CHROMA),
+        ));
+    }
     let (from, to) = PROGRESS_DONE;
     css.push_str(&format!(
         "--PROGRESS_DONE:linear-gradient(90deg,var(--{from}),var(--{to}));"
@@ -263,7 +344,7 @@ pub fn custom_properties() -> String {
     // Type and space travel with colour for the same reason shape does:
     // they are presentation constants, and a stylesheet that named its own
     // sizes would be the second place a size is decided.
-    for (name, size, weight) in TYPE_SCALE {
+    for (name, size, weight, _) in TYPE_SCALE {
         css.push_str(&format!("--text-{name}:{size}px;--weight-{name}:{weight};"));
     }
     for (name, size) in SPACE_SCALE {
@@ -461,19 +542,38 @@ mod tests {
 
     #[test]
     fn chroma_is_resolved_from_a_ratio_and_lands_where_the_table_says() {
-        // Constitution 17.1 records ACCENT near 0.151 and ALERT near 0.058.
-        // Those are consequences of the two ratios, not inputs; if the
-        // search drifted far from them, one of the two is wrong.
+        // Constitution 17.1 records ACCENT near 0.151. That is a
+        // consequence of the ratio, not an input; if the search drifted far
+        // from it, either the ratio or the gamut search is wrong.
         let accent = resolved_chroma(680, HUE_AXIS, ACCENT_CHROMA_PERCENT);
-        let alert = resolved_chroma(900, HUE_ALERT, ALERT_CHROMA_PERCENT);
         assert!(
             (140..=165).contains(&accent),
             "ACCENT chroma resolved to {accent} per mille"
         );
-        assert!(
-            (48..=70).contains(&alert),
-            "ALERT chroma resolved to {alert} per mille"
-        );
+        // Every row resolves to its own share of what the screen can show
+        // at its own lightness. Reading the table rather than repeating a
+        // lightness keeps this true when a token moves: ALERT rose from 900
+        // to 919 so that dark numerals on a badge reach Lc 90, and its
+        // chroma fell with the gamut, which is the ratio working rather
+        // than a number going stale.
+        for (name, lightness, hue, percent) in COLOUR_TOKENS {
+            let ceiling = gamut_chroma_ceiling(lightness, hue);
+            let resolved = resolved_chroma(lightness, hue, percent);
+            assert!(
+                resolved <= ceiling,
+                "{name} resolved past the gamut ceiling"
+            );
+            assert!(resolved > 0, "{name} resolved to no colour at all");
+            let expected = u32::from(ceiling)
+                .saturating_mul(u32::from(percent))
+                .checked_div(100)
+                .unwrap_or_default();
+            assert_eq!(
+                u32::from(resolved),
+                expected,
+                "{name} is not its ratio of the ceiling"
+            );
+        }
     }
 
     #[test]
@@ -570,7 +670,7 @@ mod tests {
     #[test]
     fn the_stylesheet_never_has_to_name_a_size_or_a_family() {
         let css = custom_properties();
-        for (name, size, weight) in TYPE_SCALE {
+        for (name, size, weight, _) in TYPE_SCALE {
             assert!(css.contains(&format!("--text-{name}:{size}px;")), "{name}");
             assert!(
                 css.contains(&format!("--weight-{name}:{weight};")),
@@ -588,6 +688,42 @@ mod tests {
         assert!(
             !SHIPPED.contains("font-family: \"") && !SHIPPED.contains("font-family: '"),
             "the stylesheet names a font family; it should read var(--font-sans) or var(--font-mono)"
+        );
+    }
+
+    /// Renaming a step used to be silent: the table changed, the
+    /// stylesheet went on reading the old name, and the browser resolved
+    /// it to nothing - which paints at the initial value rather than at
+    /// the value anybody chose. Nothing in the library noticed, because
+    /// every existing assertion reads the table and none reads the page.
+    #[test]
+    fn the_stylesheet_never_reads_a_token_that_is_not_produced() {
+        let produced = custom_properties();
+        let mut missing = Vec::new();
+        for (at, _) in SHIPPED.match_indices("var(--") {
+            let Some(rest) = SHIPPED.get(at.saturating_add(4)..) else {
+                continue;
+            };
+            let Some(end) = rest.find([')', ',']) else {
+                continue;
+            };
+            let Some(name) = rest.get(..end) else {
+                continue;
+            };
+            // `--chroma` is the coefficient itself, declared first and by
+            // name rather than through a table.
+            if name == CHROMA_COEFFICIENT {
+                continue;
+            }
+            if !produced.contains(&format!("{name}:")) {
+                missing.push(name);
+            }
+        }
+        missing.sort_unstable();
+        missing.dedup();
+        assert!(
+            missing.is_empty(),
+            "the stylesheet reads tokens no table produces: {missing:?}"
         );
     }
 

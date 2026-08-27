@@ -19,7 +19,7 @@
      from shadow: a shadow cannot render darker than a near-black page. So
      the ladder is G0 page -> G1 working surface -> G2 card -> G3 raised,
      and a 1px G3 border sharpens an edge where two steps meet. */
-  body { background: var(--G0); color: var(--G8);
+  body { background: var(--G0); color: var(--TEXT);
          font-family: var(--font-sans); font-size: var(--text-body);
          font-weight: var(--weight-body); line-height: 1.55;
          margin: 0; min-height: 100vh; -webkit-font-smoothing: antialiased; }
@@ -36,9 +36,14 @@
         font-variant-numeric: tabular-nums; }
 
   h1, h2, h3 { margin: 0; font-weight: var(--weight-heading); }
-  h2 { font-size: var(--text-heading); color: var(--G9); }
+  h2 { font-size: var(--text-heading); color: var(--TEXT); }
   p { margin: 0; }
-  a { color: var(--ACCENT); }
+  /* Colour is never the only thing carrying a meaning, and here it cannot
+     be the thing at all: ACCENT on the working surface measures Lc 45.7
+     against the 90 a 14px line needs. The word takes the text token and
+     ACCENT moves to the underline, which is a non-text element. */
+  a { color: var(--TEXT); text-decoration: underline;
+      text-decoration-color: var(--ACCENT); text-underline-offset: 2px; }
 
   /* ---------------------------------------------------------- the regions */
 
@@ -52,10 +57,10 @@
             grid-template-rows: auto minmax(0, 1fr) auto;
             grid-template-areas: "top top top" "nav centre status" "foot foot foot"; }
   .left-nav, .right-status { overflow: auto; }
-  .top-bar { grid-area: top; color: var(--G9); display: flex; align-items: center;
+  .top-bar { grid-area: top; color: var(--TEXT); display: flex; align-items: center;
              gap: var(--space-base); padding-bottom: var(--space-tight); }
   .top-bar .address { font-size: var(--text-heading); font-weight: var(--weight-heading);
-                      color: var(--G10); letter-spacing: 0.02em; }
+                      color: var(--TEXT); letter-spacing: 0.02em; }
   .left-nav { grid-area: nav; display: flex; flex-direction: column;
               gap: var(--space-pane); }
   .centre { grid-area: centre; background: var(--G1); overflow: auto;
@@ -68,7 +73,7 @@
                   gap: var(--space-base); background: var(--G1);
                   border: 1px solid var(--G3); border-radius: var(--corner-panel);
                   corner-shape: var(--corner-panel-shape); padding: var(--space-pane); }
-  .right-status .standing { color: var(--G8); }
+  .right-status .standing { color: var(--TEXT); }
   .right-status .vitals { flex-direction: column; gap: var(--space-snug); margin: 0;
                           padding-top: var(--space-base); border-top: 1px solid var(--G2); }
   .right-status .sign { display: flex; gap: var(--space-snug); align-items: baseline; }
@@ -84,16 +89,16 @@
      mark meaning somebody has to act. */
   .refusal { margin-left: auto; display: flex; align-items: baseline;
              gap: var(--space-snug); max-width: 72ch;
-             padding: var(--space-tight) var(--space-snug); font-size: var(--text-small);
+             padding: var(--space-tight) var(--space-snug); font-size: var(--text-note);
              background: var(--G2); border: 1px solid var(--ALERT);
              border-radius: var(--corner-control); corner-shape: var(--corner-control-shape); }
   .refusal-code { color: var(--ALERT); font-weight: var(--weight-heading); white-space: nowrap;
                   font-family: var(--font-mono); }
-  .refusal-what { color: var(--G10); }
-  .refusal-way { color: var(--G6); }
-  .refusal-close { background: transparent; border: 0; color: var(--G6);
+  .refusal-what { color: var(--TEXT); }
+  .refusal-way { color: var(--TEXT_QUIET); }
+  .refusal-close { background: transparent; border: 0; color: var(--TEXT_QUIET);
                    padding: 0 2px; line-height: 1; }
-  .refusal-close:hover { color: var(--G10); }
+  .refusal-close:hover { color: var(--TEXT); }
 
   /* ------------------------------------------------------------- the nav */
 
@@ -102,20 +107,20 @@
      Nothing collapses - a hidden page is not a shorter nav, it is a page
      nobody finds. */
   .nav-group { display: flex; flex-direction: column; gap: 1px; }
-  .nav-heading { font-size: var(--text-micro); font-weight: var(--weight-micro);
-                 letter-spacing: 0.09em; text-transform: uppercase; color: var(--G5);
+  .nav-heading { font-size: var(--text-note); font-weight: var(--weight-note);
+                 letter-spacing: 0.09em; text-transform: uppercase; color: var(--TEXT_QUIET);
                  margin: 0 0 var(--space-tight) 10px; }
-  .nav-item { text-align: left; background: transparent; border: 0; color: var(--G8);
+  .nav-item { text-align: left; background: transparent; border: 0; color: var(--TEXT);
               border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
               padding: 7px 10px; display: flex; align-items: center; gap: var(--space-snug);
               font-size: var(--text-body); }
-  .nav-item:hover { background: var(--G2); color: var(--G10); }
-  .nav-item[aria-current="page"] { background: var(--G2); color: var(--G10);
+  .nav-item:hover { background: var(--G2); color: var(--TEXT); }
+  .nav-item[aria-current="page"] { background: var(--G2); color: var(--TEXT);
                                    font-weight: var(--weight-heading);
                                    box-shadow: inset 2px 0 0 var(--ACCENT); }
   .badge { margin-left: auto; background: var(--ALERT); color: var(--G0);
            border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
-           padding: 0 6px; font-size: var(--text-micro); font-weight: 700;
+           padding: 0 6px; font-size: var(--text-label); font-weight: 700;
            font-family: var(--font-mono); }
 
   /* --------------------------------------------------------- the panel */
@@ -136,14 +141,14 @@
   .panel-head { display: flex; align-items: baseline; gap: var(--space-base);
                 flex-wrap: wrap; margin-bottom: var(--space-tight); }
   .panel-title { font-size: var(--text-title); font-weight: var(--weight-title);
-                 color: var(--G10); letter-spacing: -0.01em; }
+                 color: var(--TEXT); letter-spacing: -0.01em; }
   .panel-figure { font-size: var(--text-figure); font-weight: var(--weight-figure);
-                  color: var(--G10); font-family: var(--font-mono);
+                  color: var(--TEXT); font-family: var(--font-mono);
                   font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .panel-scope { color: var(--G6); font-size: var(--text-small);
+  .panel-scope { color: var(--TEXT_QUIET); font-size: var(--text-note);
                  margin-bottom: var(--space-base); max-width: 88ch; }
   .panel-body { display: block; }
-  .panel-source { color: var(--G6); font-size: var(--text-small);
+  .panel-source { color: var(--TEXT_QUIET); font-size: var(--text-note);
                   margin-top: var(--space-base); padding-top: var(--space-snug);
                   border-top: 1px solid var(--G2); }
 
@@ -159,13 +164,13 @@
      and give the way to put something here. A pane that says nothing is
      read as a pane that is broken, and a reader cannot tell "nothing yet"
      from "still loading" from "the filter excluded everything". */
-  .empty { display: block; color: var(--G7); font-size: var(--text-small);
+  .empty { display: block; color: var(--TEXT_QUIET); font-size: var(--text-note);
            background: var(--G1); border: 1px dashed var(--G3);
            border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
            padding: var(--space-pane) var(--space-pane); }
-  .empty-status { color: var(--G8); font-size: var(--text-body);
+  .empty-status { color: var(--TEXT); font-size: var(--text-body);
                   display: block; margin-bottom: var(--space-tight); }
-  .empty-what { color: var(--G6); display: block; max-width: 72ch; }
+  .empty-what { color: var(--TEXT_QUIET); display: block; max-width: 72ch; }
   .empty-way { margin-top: var(--space-base); display: flex; gap: var(--space-snug);
                flex-wrap: wrap; }
 
@@ -173,33 +178,46 @@
      that was left out, a note under a row. One size, one step of grey. */
   .note, .window, .dropped, .settings-state, .city-state, .reconciled,
   .spent-line, .enrolment, .doc-note, .desc-note
-      { color: var(--G6); font-size: var(--text-small); }
+      { color: var(--TEXT_QUIET); font-size: var(--text-note); }
   /* ALERT means one thing everywhere: a person is needed, and nothing else
      may borrow it. A filter that hid rows and a total nobody priced are
      both cases where the interface would otherwise quietly answer for the
      person. */
-  .filtered, .unpriced, .problems { color: var(--ALERT); font-size: var(--text-small); }
+  .filtered, .unpriced, .problems { color: var(--ALERT); font-size: var(--text-note); }
 
   /* ---------------------------------------------------------- controls */
 
-  button { background: var(--G3); color: var(--G9); border: 1px solid var(--G4);
+  /* A control's fill stops at G2 and its states speak in stroke. Depth is
+     built by stacking lightness, and each step up spends the contrast the
+     label still needs: measured, the brightest text this library may use
+     reaches only Lc 88.1 on G3, while a 14px label needs Lc 90. So a
+     button that lit up on hover would become less readable exactly when
+     somebody is about to press it. The prisms in the city view already
+     answer hover with stroke for a different reason - a rule that has to
+     out-shout an inline style loses - and the same move works here. */
+  button { background: var(--G2); color: var(--TEXT); border: 1px solid var(--G4);
            border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
            padding: 6px 12px; font: inherit; font-size: var(--text-body); cursor: pointer; }
-  button:hover:not(:disabled) { background: var(--G4); color: var(--G10); }
+  button:hover:not(:disabled) { border-color: var(--G6); }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
-  button[type="submit"]:not(:disabled) { background: var(--ACCENT); border-color: var(--ACCENT);
+  /* The one fill that carries dark text. ACCENT itself cannot: dark ink on
+     it measures Lc 48.5 and a 14px label needs 90, so the solid variant is
+     solved for the label rather than chosen for the fill. Hover speaks in
+     stroke here too, because raising the fill would take the label back
+     below the floor. */
+  button[type="submit"]:not(:disabled) { background: var(--ACCENT_SOLID);
+                                         border-color: var(--ACCENT_SOLID);
                                          color: var(--G0); font-weight: var(--weight-heading); }
-  button[type="submit"]:hover:not(:disabled) { background: var(--ACCENT_HOVER);
-                                               border-color: var(--ACCENT_HOVER); }
-  button.quiet { background: transparent; border-color: var(--G3); color: var(--G7); }
-  button.quiet:hover:not(:disabled) { background: var(--G2); color: var(--G10); }
+  button[type="submit"]:hover:not(:disabled) { border-color: var(--TEXT); }
+  button.quiet { background: transparent; border-color: var(--G3); color: var(--TEXT_QUIET); }
+  button.quiet:hover:not(:disabled) { background: var(--G2); color: var(--TEXT); }
   :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 1px; }
-  input, select, textarea { background: var(--G1); color: var(--G9); font: inherit;
+  input, select, textarea { background: var(--G1); color: var(--TEXT); font: inherit;
                             font-size: var(--text-body);
                             border: 1px solid var(--G4); border-radius: var(--corner-control);
                             corner-shape: var(--corner-control-shape); padding: 6px 9px; }
-  input:hover, select:hover, textarea:hover { border-color: var(--G5); }
-  input::placeholder { color: var(--G5); }
+  input:hover, select:hover, textarea:hover { border-color: var(--TEXT_DISABLED); }
+  input::placeholder { color: var(--TEXT_DISABLED); }
   form { display: flex; gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap;
          margin: var(--space-base) 0; }
 
@@ -207,16 +225,16 @@
      placeholder disappears the moment somebody types, taking the only
      statement of what the field wanted with it. */
   .field { display: flex; flex-direction: column; gap: var(--space-tight); }
-  .field > label { font-size: var(--text-micro); font-weight: var(--weight-micro);
-                   letter-spacing: 0.07em; text-transform: uppercase; color: var(--G6); }
-  .field .hint { font-size: var(--text-small); color: var(--G6); }
+  .field > label { font-size: var(--text-label); font-weight: var(--weight-label);
+                   letter-spacing: 0.07em; text-transform: uppercase; color: var(--TEXT); }
+  .field .hint { font-size: var(--text-note); color: var(--TEXT_QUIET); }
   .field .hint.blocking { color: var(--ALERT); }
 
   /* ------------------------------------------------------ tables, lists */
 
   table { width: 100%; border-collapse: collapse; margin: var(--space-snug) 0; }
-  th { text-align: left; color: var(--G6); font-weight: var(--weight-body);
-       font-size: var(--text-micro); letter-spacing: 0.07em; text-transform: uppercase;
+  th { text-align: left; color: var(--TEXT); font-weight: var(--weight-body);
+       font-size: var(--text-label); letter-spacing: 0.07em; text-transform: uppercase;
        padding: var(--space-snug); border-bottom: 1px solid var(--G3); }
   td { padding: 7px var(--space-snug); border-bottom: 1px solid var(--G2);
        vertical-align: top; }
@@ -224,10 +242,10 @@
   ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; }
   .line { display: grid; grid-template-columns: 76px 152px 1fr; gap: var(--space-base);
           padding: var(--space-tight) 0; border-bottom: 1px solid var(--G2); }
-  .line .seq { color: var(--G5); }
-  .line .kind { color: var(--G7); }
-  .line .text { color: var(--G9); }
-  .line.person .text { color: var(--G10); font-weight: var(--weight-heading); }
+  .line .seq { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+  .line .kind { color: var(--TEXT_QUIET); }
+  .line .text { color: var(--TEXT); }
+  .line.person .text { color: var(--TEXT); font-weight: var(--weight-heading); }
 
   /* ------------------------------------------------------------- pages */
 
@@ -240,12 +258,12 @@
   .attention-row { display: flex; align-items: baseline; gap: var(--space-base);
                    text-align: left; width: 100%; background: var(--G2);
                    border: 1px solid var(--G3); padding: var(--space-base) var(--space-pane); }
-  .attention-row:hover { background: var(--G3); }
+  .attention-row:hover { border-color: var(--G6); }
   .attention-row .count { font-family: var(--font-mono); font-size: var(--text-title);
                           font-weight: var(--weight-title); color: var(--ALERT);
                           min-width: 2ch; }
-  .attention-row .what { color: var(--G9); }
-  .overview .in-flight td.addr { color: var(--G10); }
+  .attention-row .what { color: var(--TEXT); }
+  .overview .in-flight td.addr { color: var(--TEXT); }
   .overview .index-row { grid-template-columns: minmax(0, 22ch) 120px 1fr;
                          padding: var(--space-snug) var(--space-snug); }
 
@@ -254,15 +272,16 @@
   .cluster { border: 1px solid var(--G3); background: var(--G2);
              border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
              margin-bottom: var(--space-base); overflow: hidden; }
-  .cluster > header { background: var(--G3); padding: var(--space-snug) var(--space-base);
+  .cluster > header { background: var(--G2); border-bottom: 1px solid var(--G3);
+                      padding: var(--space-snug) var(--space-base);
                       display: flex; gap: var(--space-base); align-items: center;
                       flex-wrap: wrap; }
   .cluster.tainted { border-color: var(--ALERT); }
   .cluster .item { padding: 9px var(--space-base); border-top: 1px solid var(--G3);
                    display: flex; gap: var(--space-base); align-items: center;
                    flex-wrap: wrap; }
-  .cluster .desc { flex: 1; color: var(--G9); }
-  .cluster .actor, .cluster .count { color: var(--G6); font-size: var(--text-small); }
+  .cluster .desc { flex: 1; color: var(--TEXT); }
+  .cluster .actor, .cluster .count { color: var(--TEXT_QUIET); font-size: var(--text-note); }
 
   /* The progress bar: one shape, three states, and the blocked one carries
      a rule so it survives both the loss of hue and a lightness collision.
@@ -276,15 +295,15 @@
   .bar.done .fill { background: var(--PROGRESS_DONE); }
   .bar.blocked .fill { background: var(--ALERT); box-shadow: inset -2px 0 0 var(--G10); }
   .bar.blocked .track { box-shadow: inset 2px 0 0 var(--G10); }
-  .bar .bar-label { color: var(--G7); font-size: var(--text-small); }
+  .bar .bar-label { color: var(--TEXT_QUIET); font-size: var(--text-note); }
 
   /* The city's vital signs: three counts. Plain text rather than tiles - a
      number that needs a box around it to be noticed is a number nobody
      needed. */
-  .vitals { display: flex; gap: var(--space-wide); flex-wrap: wrap; color: var(--G6);
-            font-size: var(--text-small); margin-bottom: var(--space-base); }
+  .vitals { display: flex; gap: var(--space-wide); flex-wrap: wrap; color: var(--TEXT_QUIET);
+            font-size: var(--text-note); margin-bottom: var(--space-base); }
   .vitals.empty { border: 0; background: none; padding: 0; }
-  .vitals b { color: var(--G9); font-weight: var(--weight-heading); }
+  .vitals b { color: var(--TEXT); font-weight: var(--weight-heading); }
 
   /* The archive: a search over the shelves, and what the record says went
      in lately. The two halves are separated, never merged - one reads the
@@ -292,32 +311,32 @@
   .archive-search .search { margin: 0 0 var(--space-base); }
   .archive-search .search input { min-width: 280px; }
   .shelf { margin: var(--space-base) 0 var(--space-pane); }
-  .shelf h2 { color: var(--G9); border-bottom: 1px solid var(--G3);
+  .shelf h2 { color: var(--TEXT); border-bottom: 1px solid var(--G3);
               padding-bottom: var(--space-tight); }
   .lately { margin-top: var(--space-wide); padding-top: var(--space-base);
             border-top: 1px solid var(--G3); }
   .archive-search .filed { grid-template-columns: 90px 110px 1fr 160px; }
-  .filed .where { color: var(--G6); font-size: var(--text-small); }
+  .filed .where { color: var(--TEXT_QUIET); font-size: var(--text-note); }
   .filed { display: grid; grid-template-columns: 90px 110px 1fr; gap: var(--space-base);
            padding: 7px 0; border-bottom: 1px solid var(--G2); }
-  .filed .day, .filed .kind { color: var(--G6); }
+  .filed .day, .filed .kind { color: var(--TEXT_QUIET); }
 
   /* A room's mailbox: what waits, and who sent it. */
   .waiting { display: grid; grid-template-columns: 110px 180px 1fr; gap: var(--space-base);
              padding: var(--space-snug) 0; border-bottom: 1px solid var(--G2); }
-  .waiting .kind { color: var(--G9); }
-  .waiting .from, .waiting .id { color: var(--G6); }
-  .tab.room { font-size: var(--text-small); }
+  .waiting .kind { color: var(--TEXT); }
+  .waiting .from, .waiting .id { color: var(--TEXT_QUIET); }
+  .tab.room { font-size: var(--text-note); }
 
   /* The Recycle Bin: the way back is the widest column because it is the
      only part a person acts on. A row that already came back dims - it is
      evidence, not work. */
   .binned { display: grid; grid-template-columns: 280px 1fr auto; gap: var(--space-base);
             padding: 7px 0; border-bottom: 1px solid var(--G2); align-items: baseline; }
-  .binned .what { color: var(--G9); font-size: var(--text-small); }
-  .binned .way-back { color: var(--G7); }
-  .binned.back { color: var(--G6); }
-  .binned.back .what, .binned.back .way-back { color: var(--G6); }
+  .binned .what { color: var(--TEXT); font-size: var(--text-note); }
+  .binned .way-back { color: var(--TEXT_QUIET); }
+  .binned.back { color: var(--TEXT_QUIET); }
+  .binned.back .what, .binned.back .way-back { color: var(--TEXT_QUIET); }
 
   /* Cost: one bar grammar, share by width, amount right-aligned. */
   .dimension { margin-bottom: var(--space-pane); }
@@ -330,9 +349,9 @@
   .total { display: flex; gap: var(--space-base); align-items: baseline; flex-wrap: wrap;
            margin-bottom: var(--space-base); }
   .total .amount { font-size: var(--text-figure); font-weight: var(--weight-figure);
-                   color: var(--G10); letter-spacing: -0.02em; }
+                   color: var(--TEXT); letter-spacing: -0.02em; }
   .dashboard .amount { text-align: right; }
-  .consumed { color: var(--G7); }
+  .consumed { color: var(--TEXT_QUIET); }
 
   /* The dispatch bar takes the width it needs and no more. The address
      column is measured in characters because that is what it holds: at
@@ -354,7 +373,7 @@
                    padding-top: var(--space-base); border-top: 1px solid var(--G2); }
   .interventions .note { flex-basis: 100%; }
   .filters input, .filters select { min-width: 160px; }
-  .export textarea { width: 100%; background: var(--G1); color: var(--G7);
+  .export textarea { width: 100%; background: var(--G1); color: var(--TEXT_QUIET);
                      border: 1px solid var(--G3); border-radius: var(--corner-card);
                      corner-shape: var(--corner-card-shape); }
 
@@ -391,7 +410,7 @@
   .stage text.note { font-size: 12px; font-family: var(--font-mono); }
   .city-view .camera { display: flex; gap: var(--space-tight); flex-wrap: wrap;
                        margin-top: var(--space-snug); }
-  .city-view .camera button { padding: 4px 9px; font-size: var(--text-small); }
+  .city-view .camera button { padding: 4px 9px; font-size: var(--text-note); }
 
   /* The registration form is read as four steps in one column: name the
      provider and its wire, hand the key over, then attach. Three fields
@@ -401,14 +420,14 @@
   /* The language switch: two words, each in its own language, and the
      one in use marked the way the nav marks the page you are on. */
   .languages { display: flex; gap: var(--space-snug); }
-  .languages button[aria-current="true"] { border-color: var(--ACCENT); color: var(--G10); }
+  .languages button[aria-current="true"] { border-color: var(--ACCENT); color: var(--TEXT); }
   .settings .attach { align-items: start; }
   .settings .attach .field { flex: 1 1 20ch; }
   .settings .attach .field.wide, .settings .attach .enrolment { flex-basis: 100%; }
   .settings .attach .field.submit { align-items: flex-start; }
-  .settings .models summary { cursor: pointer; color: var(--G7); }
-  .settings .model { display: inline-block; margin: 2px 6px 0 0; color: var(--G7);
-                     font-size: var(--text-small); border: 1px solid var(--G3);
+  .settings .models summary { cursor: pointer; color: var(--TEXT_QUIET); }
+  .settings .model { display: inline-block; margin: 2px 6px 0 0; color: var(--TEXT_QUIET);
+                     font-size: var(--text-note); border: 1px solid var(--G3);
                      border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
                      padding: 0 6px; font-family: var(--font-mono); }
   /* The heading of a watched session: the name its person gave it, then
@@ -416,46 +435,46 @@
      person reads the name and addresses `sprawling fork` with the id. */
   .live-head { display: flex; gap: var(--space-base); align-items: baseline;
                flex-wrap: wrap; margin-bottom: var(--space-snug); }
-  .live-head .run { color: var(--G10); font-weight: var(--weight-heading); }
-  .live-head .run-id { color: var(--G5); font-family: var(--font-mono);
-                       font-size: var(--text-small); }
+  .live-head .run { color: var(--TEXT); font-weight: var(--weight-heading); }
+  .live-head .run-id { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+                       font-size: var(--text-note); }
   .runs { display: flex; gap: var(--space-tight); flex-wrap: wrap;
           margin-bottom: var(--space-base); }
-  .runs button[aria-current="true"] { border-color: var(--ACCENT); color: var(--G10); }
+  .runs button[aria-current="true"] { border-color: var(--ACCENT); color: var(--TEXT); }
   .paging { display: flex; gap: var(--space-snug); align-items: center;
             margin-top: var(--space-base); }
 
   /* A building's own pages: tabs across the top, one document below. */
   .building-head { display: flex; gap: var(--space-pane); align-items: baseline;
                    flex-wrap: wrap; margin-bottom: var(--space-base); }
-  .building-head .progress, .building-head .rooms { color: var(--G6);
-                                                    font-size: var(--text-small); }
+  .building-head .progress, .building-head .rooms { color: var(--TEXT_QUIET);
+                                                    font-size: var(--text-note); }
   .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--G3);
           margin-bottom: var(--space-base); flex-wrap: wrap; }
-  .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--G7);
+  .tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--TEXT_QUIET);
          padding: 7px var(--space-base); }
-  .tab:hover { color: var(--G10); }
-  .tab[aria-current="true"] { color: var(--G10); border-bottom-color: var(--ACCENT); }
+  .tab:hover { color: var(--TEXT); }
+  .tab[aria-current="true"] { color: var(--TEXT); border-bottom-color: var(--ACCENT); }
   /* A drop zone says so while a drag is over it and stays quiet
      otherwise: a target that is always outlined teaches nothing. */
   .drop-zone { border-radius: var(--corner-card); corner-shape: var(--corner-card-shape); }
   .drop-zone:hover { outline: 1px dashed var(--G5); outline-offset: 2px; }
   .doc-text { background: var(--G1); border: 1px solid var(--G3);
               border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
-              padding: var(--space-pane); white-space: pre-wrap; color: var(--G8);
-              max-height: 56vh; overflow: auto; margin: 0; font-size: var(--text-small);
+              padding: var(--space-pane); white-space: pre-wrap; color: var(--TEXT);
+              max-height: 56vh; overflow: auto; margin: 0; font-size: var(--text-note);
               line-height: 1.6; }
   .open-building { margin: var(--space-snug) 0; }
   .index { margin-top: var(--space-base); display: flex; flex-direction: column; gap: 1px; }
   .index-row { display: grid; grid-template-columns: 1fr 110px auto; gap: var(--space-base);
                align-items: center; padding: 3px 0; }
   .index-row:hover { background: var(--G2); }
-  .index-row .pick { text-align: left; background: transparent; border: 0; color: var(--G9); }
-  .index-row .pick[aria-current="true"] { color: var(--G10);
+  .index-row .pick { text-align: left; background: transparent; border: 0; color: var(--TEXT); }
+  .index-row .pick[aria-current="true"] { color: var(--TEXT);
                                           font-weight: var(--weight-heading);
                                           box-shadow: inset 2px 0 0 var(--ACCENT); }
-  .index-row .note { color: var(--G6); font-size: var(--text-small); }
-  .index-row .read { padding: 3px 9px; font-size: var(--text-small); }
+  .index-row .note { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+  .index-row .read { padding: 3px 9px; font-size: var(--text-note); }
 </style>
 </head>
 <body>
