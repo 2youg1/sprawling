@@ -806,6 +806,58 @@ pub fn hold(held: &mut Vec<EventRecord>, arriving: impl IntoIterator<Item = Even
 
 **它以什么收口**：一条会咬的红。`what_a_tab_holds_has_one_answer_on_both_roads` 在实现前跑不起来（`hold` 不存在）；它断言回填与直播混到一起时同一个 `seq` 只留一条、超过 `HELD_RECORDS` 时最早的先走、且留下的那一段按 `seq` 递增。把 `drain` 改成从尾部删，它当场红在「最新的那条还在」这句上。
 
+### 8-40 对比度有了尺子，字阶因此改了两档（R2.30；形状 6 数据面 ＋ xtask 第七条断言）
+
+```rust
+// web::theme —— 文字明度由要求的对比度解出，不是从灰阶里挑出来的
+pub const TEXT_SURFACE_CEILING: &str = "G2";
+pub const TEXT_TOKENS: [(&str, u16, u16); 4];      // 名，明度‰，它答的 Bronze 档
+pub const TYPE_SCALE: [(&str, u16, u16, u16); 6];  // 名，px，字重，该档要求的 Lc
+pub const COLOUR_TOKENS: [(&str, u16, u16, u16); 5];  // 增 ACCENT_SOLID；ALERT 900 → 919
+```
+
+**病灶**：本 SPEC §2 只写「对比度在渲染后的页面上实测」，既没有算法也没有阈值；`APCA`／`WCAG`／`Lc` 在整个仓库出现 0 次。ARCHITECTURE §11 把无头浏览器列为 CI 关不上的缺口，于是这一项从来没有被判过。**它缺的不是浏览器，是一张表**：表面是一条闭合阶梯（G0 页→G1 面板→G2 卡→G3 抬起），令牌是一张闭合表，故「前景×表面×字阶」可枚举、判定是纯函数。
+
+**尺子（本卡裁定）**：APCA（apca-w3 0.1.9，常量 0.98G-4g），阈值取 APCA-RC Bronze Simple Mode。暗色界面属反极性，Lc 报绝对值。取 APCA 而非 WCAG 2.x 的理由是硬的：后者比的是相对亮度之比，对浅字深底判得偏严且不区分极性，而本库只有暗面。
+
+**首次运行的读数**：已发布的 `assets/index.html` 有 **19 处规则**用 G5／G6 画 11–14px 的字，其中包括 `panel-scope` 与 `panel-source`——§8-29 明写「这个产品不能省的那一段」。G6 压在卡上是 Lc 23.4，而内容文字最低档是 Lc 45。
+
+三条随之而来的裁定，每一条都是量出来的：
+
+- **文字明度由要求解出**，与彩色令牌的 chroma 由比例解出同理。`TEXT_TOKENS` 每档一行：TEXT 928／Lc 90、TEXT_QUIET 852／75、TEXT_FAINT 771／60、TEXT_DISABLED 582／30。**G0–G6 从此不画字形**，只作表面、边框、规则线。
+- **两个最小字阶退役**。11px 在任何对比下都低于 Bronze 每一档的最小字号；12px 只被最高档接纳，于是能画它的只有正文那一个令牌——**一行 12px 不可能比它旁边的句子更安静，而「更安静」正是它全部的职责**。安静在这里要用字号买，不能用灰买。故 `small 12px`→`note 15px`、`micro 11px`→`label 14px`、`heading` 15→18px。
+- **阶梯到 G2 就不再承载文字**。本库允许的最亮的字压在 G3 上是 Lc 88.1，而正文要 90——一个 hover 时抬亮填充的按钮，恰好在有人要按它的那一刻变得更难读。控件改为**以描边应答 hover**，与等距城市的棱柱早已采用的做法同源（§8-28：一条需要盖过行内样式的规则总会在某处输掉）。
+
+**ACCENT 保住本职，失去一项它做不到的事**：深字压它是 Lc 48.5。新增 `ACCENT_SOLID`（L 919，chroma 仍取色域上限的 90%），是唯一可承载深色文字的实心底；`ACCENT` 退为纯非文字令牌。`ALERT` 900→919，使徽标里的深色数字达到 Lc 90，仍低于既有的 `ALERT_HOVER` 945。链接不再以颜色为唯一载体（ACCENT 压 G1 是 Lc 45.7）：字用 TEXT，强调交给下划线。
+
+**门**：`xtask color` 第七条断言重解 APCA 与 Bronze，比对 `TEXT_TOKENS` 声称的档与 `TYPE_SCALE` 声称的档；五条测试使它会咬人，含「设计据以求解的那组读数」，于是传递曲线一改就红在这里，而不是变成一页悄悄更难读的界面。`web::theme` 另加一条：样式表读到任何一张表都不产出的令牌即红——本卡之前三个死名字正是这样活下来的。
+
+**未做**：`xtask badge` 的墨色仍按 `INFORMATION_FLOOR` 判，那是徽章自己的画面与底色，不在本卡范围内，已在该常量的文档里写明它只管那一处。
+
+### 8-41 页面一帧只变一次（R2.31；形状 1 判定 ＋ Humble Object，新模块 `web::pace`）
+
+```rust
+pub enum Arrived { Event(Box<EventRecord>), Answer(Box<Answer>), Refusal(Box<AxError>) }
+pub struct Paint { /* 私有 */ }
+impl Paint {
+    pub fn into_parts(self) -> (Vec<EventRecord>, Vec<Answer>, Option<AxError>);
+    pub fn is_empty(&self) -> bool;  pub fn superseded(&self) -> usize;
+}
+pub fn fold(impl IntoIterator<Item = Arrived>) -> Paint;
+#[cfg(wasm32)] pub mod browser { pub struct Buffer; pub fn each_frame(Buffer, impl FnMut(Paint) + 'static); }
+```
+
+**病灶**：`App::connect` 收到一帧就应用一帧——写快照、写留存记录、重渲整棵树。而一次工具波会在几毫秒内写下 `tool_called`／`gate_checked`／`checkpoint_committed`／`tool_result`／`result_offloaded`，每一条都让一张最多持 `HELD_RECORDS` 行的页面重画一遍。**这些活是真的，而其中没有一次是看得见的**：显示器一次刷新只能显示一帧。
+
+- **规则是关于显示器的，不是关于性能的**：一页一帧只变一次。两帧之间到达的一切是一次变化，本模块决定那一次变化是什么。
+- **批处理，不是合并**。事件是事实且折叠只向前，故全部按到达序应用、一条不丢——省下的是一次写入而不是 *n* 次，绝不是一条事件而不是 *n* 条。答面不同：一个答面是某样东西此刻的状态，故同一问题的两个答面不是两个事实，而是一个事实加一份过期副本；把过期的那份画在通往当前那份的路上，正是本模块消掉的闪烁。
+- **答面身份取枚举自身的 discriminant**，不另立一张问题种类表——那会是「有哪些问题」的第二个权威，而且有人新增一个 `Query` 变体时它会照常编译、悄悄不去顶替新的答面。
+- **顺序是值的一部分**，故 `into_parts` 是一个方法而不是三个访问器：答面描述的是某一刻的城，先折完本帧的事件才不会渲染出一个快照尚未追上的视图。
+- **后台标签页不排帧**，与链路既有的裁定同向（`Backgrounded` 关闭链路而非放慢）；socket 关着，也就没有东西到达。
+- **判定全在 `cfg` 之外**，故宿主侧的门与测试盖得到；`browser` 里没有任何判断，只有一次 `requestAnimationFrame` 与一次 drain。
+
+**尚未成立的前提**：本模块解决的是**事件突发**，不是**逐字流式**。`gateway::endpoint` 是阻塞 `send()` ＋ `response.json()`（该文件自己写着「A cut stream surfaces here as a body read error — no partial ModelReturn is ever fabricated」），60 个 `EventKind` 里没有增量，`ServerFrame` 也没有分片帧——**这座城至今没有任何东西是流式的**。逐字流式要先有传输，见 §8-42。
+
 ## 8.5 两个设计（crate 级）——S4.01 前端框架结论书
 
 > **地位**：本节即卡 S4.01 的产出。当时的要求是「结论书写明度量方法与败诉线，并记录被否方案的理由」；ARCHITECTURE §11 要求被否方案就地留痕于 SPEC 的「两个设计」节，不另设记录文件。

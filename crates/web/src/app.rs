@@ -1671,22 +1671,26 @@ fn follow_the_address_bar(
 fn connect(wiring: Wiring) -> Outbound {
     use dioxus::prelude::use_hook;
 
+    // Only two of these move here now. The rest are copied into the
+    // frame's own wiring and moved once per animation frame instead of
+    // once per arriving message, which is the whole of what this loop
+    // changed (`web::pace`).
     let Wiring {
         mut snapshot,
-        mut endpoints,
-        mut city,
-        mut cost,
-        mut building,
-        mut discards,
-        mut inbox,
-        mut hits,
-        mut filed,
-        mut vitals,
-        mut records,
+        endpoints,
+        city,
+        cost,
+        building,
+        discards,
+        inbox,
+        hits,
+        filed,
+        vitals,
+        records,
         mut live,
-        mut view,
-        mut expecting,
-        mut refused,
+        view,
+        expecting,
+        refused,
         lang,
     } = wiring;
     use_hook(move || {
@@ -1705,9 +1709,46 @@ fn connect(wiring: Wiring) -> Outbound {
         // not interrupt twice for having been sent twice.
         let alerts = std::rc::Rc::new(std::cell::RefCell::new(crate::alert::Alerts::new()));
         let socket = std::rc::Rc::new(std::cell::RefCell::new(None));
+        // Where frames wait for the next animation frame. A run does not
+        // deliver one event at a time - a tool wave writes five in a few
+        // milliseconds - and applying each on arrival repainted the page
+        // once per event at whatever rate the network chose. A display
+        // cannot show more than one frame per refresh, so those paints
+        // were work produced for nobody (`web::pace`).
+        let buffer = crate::pace::browser::Buffer::default();
+        {
+            let buffer_for_loop = buffer.clone();
+            let alerts = std::rc::Rc::clone(&alerts);
+            let socket = std::rc::Rc::clone(&socket);
+            crate::pace::browser::each_frame(buffer_for_loop, move |paint| {
+                apply_frame(
+                    paint,
+                    &socket,
+                    &alerts,
+                    FrameWiring {
+                        snapshot,
+                        endpoints,
+                        city,
+                        cost,
+                        building,
+                        discards,
+                        inbox,
+                        hits,
+                        filed,
+                        vitals,
+                        records,
+                        view,
+                        expecting,
+                        refused,
+                        lang,
+                    },
+                );
+            });
+        }
         let opened = {
             let link = std::rc::Rc::clone(&link);
             let socket = std::rc::Rc::clone(&socket);
+            let buffer = buffer.clone();
             crate::socket::open(&url, move |event| {
                 let action = match link.try_borrow_mut() {
                     Ok(mut link) => link.advance(event),
@@ -1750,87 +1791,19 @@ fn connect(wiring: Wiring) -> Outbound {
                     crate::socket::LinkAction::Send(hello) => {
                         let _ = crate::socket::send(socket, &channels::ClientFrame::Hello(*hello));
                     }
+                    // The three actions that change the page do not change
+                    // it here. They go into the buffer and the animation
+                    // frame applies them together, because the rate a
+                    // network delivers at is not a rate a display can show
+                    // (`web::pace`).
                     crate::socket::LinkAction::Deliver(event) => {
-                        // Decided in the same pass as the snapshot: what
-                        // happened and whether it needs a person are two
-                        // readings of one event, not two readers of the
-                        // stream.
-                        let said = lang();
-                        if let Ok(mut alerts) = alerts.try_borrow_mut()
-                            && crate::alert::absorb(said, &mut alerts, &event)
-                                == crate::alert::Raise::Interrupt
-                            && let Some(alert) = crate::alert::alert_for(said, &event)
-                        {
-                            crate::alert::interrupt(said, &alert);
-                        }
-                        if let Some(query) = invalidated_by(event.kind()) {
-                            let _ =
-                                crate::socket::send(socket, &channels::ClientFrame::Query(query));
-                        }
-                        // The session this person asked for, opening.
-                        // Knowledge rather than a guess: this client sent
-                        // that dispatch and knows the room it named.
-                        // Read and released before the write below: a
-                        // signal held open across its own set is a panic
-                        // in a browser and nothing at all in a host test.
-                        let waiting = expecting.read().clone();
-                        if let Some(waiting) = waiting
-                            && let Some(run) = started_here(&event, &waiting)
-                        {
-                            expecting.set(None);
-                            view.set(View::Live(Some(run)));
-                            crate::route::go(&View::Live(Some(run)));
-                        }
-                        if snapshot.write().apply(&event) {
-                            // Kept once, read by every page that reads
-                            // history, and bounded by the one function
-                            // that answers "how much does a tab hold".
-                            hold(&mut records.write(), [*event]);
-                        }
+                        buffer.push(crate::pace::Arrived::Event(event));
                     }
-                    // An answer reaches the view that asked for it. It
-                    // is not history: it moves no snapshot, and a reload
-                    // asks again rather than trusting what is held.
-                    crate::socket::LinkAction::Answered(answer) => match *answer {
-                        channels::Answer::Endpoints(view) => endpoints.set(Some(view)),
-                        channels::Answer::City(view) => city.set(Some(view)),
-                        channels::Answer::Cost(view) => cost.set(Some(*view)),
-                        channels::Answer::Building(view) => building.set(Some(*view)),
-                        channels::Answer::Discards(view) => discards.set(Some(view)),
-                        channels::Answer::Inbox(view) => inbox.set(Some(view)),
-                        channels::Answer::Archive(view) => hits.set(Some(view)),
-                        channels::Answer::Registry(view) => filed.set(Some(view)),
-                        channels::Answer::Metrics(view) => vitals.set(Some(*view)),
-                        // What happened before this tab opened. Folded
-                        // into the snapshot and kept for the pages that
-                        // read history, in the same bounded store the
-                        // live stream fills - one answer to "how much
-                        // does a tab hold".
-                        channels::Answer::History(view) => {
-                            snapshot.write().backfill(&view.records);
-                            hold(&mut records.write(), view.records);
-                        }
-                        // What was already waiting when this page
-                        // connected. The stream carries what happens
-                        // next; without this the inbox would show only
-                        // the items raised since the tab opened.
-                        channels::Answer::Approvals(view) => {
-                            snapshot.write().adopt_approvals(view.items);
-                        }
-                        // Named one by one rather than caught by a
-                        // wildcard: each of these has an answer the
-                        // server can give and no page that asks for it
-                        // yet, and a wildcard here would hide the next
-                        // one that arrives as well.
-                        channels::Answer::Run(_) | channels::Answer::Unavailable { .. } => {}
-                    },
-                    // A refusal is not history and must not move the
-                    // snapshot - but it is the answer to something a
-                    // person just did, so it goes where they can read
-                    // it. Before this, the client received the frame
-                    // and dropped it, and the page said nothing at all.
+                    crate::socket::LinkAction::Answered(answer) => {
+                        buffer.push(crate::pace::Arrived::Answer(answer));
+                    }
                     crate::socket::LinkAction::Report(error) => {
-                        refused.set(Some(crate::alert::refused(lang(), &error)));
+                        buffer.push(crate::pace::Arrived::Refusal(error));
                     }
                     // The retry ladder is not history either, and
                     // closing on the way out of view is the transport
@@ -2998,5 +2971,152 @@ mod tests {
         assert_eq!(render_usd(UsdMicros::new(1_234_567)), "$1.23");
         assert_eq!(render_usd(UsdMicros::new(9_999)), "$0.00", "truncates down");
         assert_eq!(render_usd(UsdMicros::new(u64::MAX)), "$18446744073709.55");
+    }
+}
+
+/// The signals one painted frame may move.
+///
+/// A struct rather than fifteen parameters, and by value because every
+/// field is a `Copy` handle: this is the same reasoning that gave `Wiring`
+/// its shape, and splitting it would produce two halves neither of which
+/// can paint a frame.
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Copy)]
+struct FrameWiring {
+    snapshot: Signal<Snapshot>,
+    endpoints: Signal<Option<channels::EndpointsAnswer>>,
+    city: Signal<Option<channels::CityAnswer>>,
+    cost: Signal<Option<channels::CostAnswer>>,
+    building: Signal<Option<channels::BuildingAnswer>>,
+    discards: Signal<Option<channels::DiscardAnswer>>,
+    inbox: Signal<Option<channels::InboxAnswer>>,
+    hits: Signal<Option<channels::ArchiveAnswer>>,
+    filed: Signal<Option<channels::RegistryAnswer>>,
+    vitals: Signal<Option<channels::MetricsAnswer>>,
+    records: Signal<Vec<channels::EventRecord>>,
+    view: Signal<View>,
+    expecting: Signal<Option<String>>,
+    refused: Signal<Option<crate::alert::Refused>>,
+    lang: Signal<crate::lang::Lang>,
+}
+
+/// Applies one animation frame's worth of arrivals.
+///
+/// The order is the one `Paint::into_parts` hands them out in and the
+/// reason is recorded there: an answer describes the city as of some
+/// moment, so folding the frame's events first is what stops a page
+/// rendering a view its own snapshot has not caught up with.
+///
+/// Every event is still read one at a time - `alert::absorb` deduplicates
+/// an interruption, `invalidated_by` asks again, `started_here` recognises
+/// the room this client asked for. What the frame changed is *when the
+/// signals move*, and they now move once for the whole burst.
+#[cfg(target_arch = "wasm32")]
+fn apply_frame(
+    paint: crate::pace::Paint,
+    socket: &std::rc::Rc<std::cell::RefCell<Option<web_sys::WebSocket>>>,
+    alerts: &std::rc::Rc<std::cell::RefCell<crate::alert::Alerts>>,
+    wiring: FrameWiring,
+) {
+    let FrameWiring {
+        mut snapshot,
+        mut endpoints,
+        mut city,
+        mut cost,
+        mut building,
+        mut discards,
+        mut inbox,
+        mut hits,
+        mut filed,
+        mut vitals,
+        mut records,
+        mut view,
+        mut expecting,
+        mut refused,
+        lang,
+    } = wiring;
+    let (events, answers, refusal) = paint.into_parts();
+    let said = lang();
+    // Everything the burst adds to history, folded and kept in one write
+    // each rather than in one write each per event.
+    let mut keep: Vec<channels::EventRecord> = Vec::new();
+    for event in events {
+        // Decided in the same pass as the snapshot: what happened and
+        // whether it needs a person are two readings of one event, not two
+        // readers of the stream.
+        if let Ok(mut alerts) = alerts.try_borrow_mut()
+            && crate::alert::absorb(said, &mut alerts, &event) == crate::alert::Raise::Interrupt
+            && let Some(alert) = crate::alert::alert_for(said, &event)
+        {
+            crate::alert::interrupt(said, &alert);
+        }
+        if let Some(query) = invalidated_by(event.kind()) {
+            let held = socket.borrow();
+            if let Some(socket) = held.as_ref() {
+                let _ = crate::socket::send(socket, &channels::ClientFrame::Query(query));
+            }
+        }
+        // The session this person asked for, opening. Knowledge rather
+        // than a guess: this client sent that dispatch and knows the room
+        // it named. Read and released before the write below: a signal
+        // held open across its own set is a panic in a browser and nothing
+        // at all in a host test.
+        let waiting = expecting.read().clone();
+        if let Some(waiting) = waiting
+            && let Some(run) = started_here(&event, &waiting)
+        {
+            expecting.set(None);
+            view.set(View::Live(Some(run)));
+            crate::route::go(&View::Live(Some(run)));
+        }
+        if snapshot.write().apply(&event) {
+            keep.push(event);
+        }
+    }
+    if !keep.is_empty() {
+        // Kept once, read by every page that reads history, and bounded by
+        // the one function that answers "how much does a tab hold".
+        hold(&mut records.write(), keep);
+    }
+    // An answer reaches the view that asked for it. It is not history: it
+    // moves no snapshot, and a reload asks again rather than trusting what
+    // is held.
+    for answer in answers {
+        match answer {
+            channels::Answer::Endpoints(held) => endpoints.set(Some(held)),
+            channels::Answer::City(held) => city.set(Some(held)),
+            channels::Answer::Cost(held) => cost.set(Some(*held)),
+            channels::Answer::Building(held) => building.set(Some(*held)),
+            channels::Answer::Discards(held) => discards.set(Some(held)),
+            channels::Answer::Inbox(held) => inbox.set(Some(held)),
+            channels::Answer::Archive(held) => hits.set(Some(held)),
+            channels::Answer::Registry(held) => filed.set(Some(held)),
+            channels::Answer::Metrics(held) => vitals.set(Some(*held)),
+            // What happened before this tab opened. Folded into the
+            // snapshot and kept for the pages that read history, in the
+            // same bounded store the live stream fills - one answer to
+            // "how much does a tab hold".
+            channels::Answer::History(held) => {
+                snapshot.write().backfill(&held.records);
+                hold(&mut records.write(), held.records);
+            }
+            // What was already waiting when this page connected. The
+            // stream carries what happens next; without this the inbox
+            // would show only the items raised since the tab opened.
+            channels::Answer::Approvals(held) => {
+                snapshot.write().adopt_approvals(held.items);
+            }
+            // Named one by one rather than caught by a wildcard: each of
+            // these has an answer the server can give and no page that
+            // asks for it yet, and a wildcard here would hide the next one
+            // that arrives as well.
+            channels::Answer::Run(_) | channels::Answer::Unavailable { .. } => {}
+        }
+    }
+    // A refusal is not history and must not move the snapshot - but it is
+    // the answer to something a person just did, so it goes where they can
+    // read it.
+    if let Some(error) = refusal {
+        refused.set(Some(crate::alert::refused(said, &error)));
     }
 }

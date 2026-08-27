@@ -12,6 +12,7 @@ impl web::Filter
 impl web::Frame
 impl web::Lang
 impl web::Link
+impl web::Paint
 impl web::Phrase
 impl web::ProviderHealth
 impl web::ReturnPath
@@ -22,7 +23,7 @@ pub const fn web::Camera::tiles() -> Self
 pub const web::ACCENT_CHROMA_PERCENT: u16
 pub const web::ALERT_CHROMA_PERCENT: u16
 pub const web::CHROMA_COEFFICIENT: &str
-pub const web::COLOUR_TOKENS: [(&str, u16, u16, u16); 4]
+pub const web::COLOUR_TOKENS: [(&str, u16, u16, u16); 5]
 pub const web::CORNER_SCALES: [(&str, u16, u16); 4]
 pub const web::FILED_LATELY_MAX: usize
 pub const web::GRAY_CHROMA: u16
@@ -41,10 +42,14 @@ pub const web::PROGRESS_DONE: (&str, &str)
 pub const web::SERIES_DASHES: [&str; 4]
 pub const web::SERIES_PER_CHART_MAX: usize
 pub const web::SERIES_WIDTHS: [&str; 4]
+pub const web::TEXT_SURFACE_CEILING: &str
+pub const web::TEXT_TOKENS: [(&str, u16, u16); 4]
 pub const web::TILE_WIDTH: u32
+pub const web::TYPE_SCALE: [(&str, u16, u16, u16); 6]
 pub const web::WINDOW: usize
 pub const web::ZOOM_STOPS: [u32; 3]
 pub enum web::AlertKind
+pub enum web::Arrived
 pub enum web::AttachReadiness
 pub enum web::Backfill
 pub enum web::BarState
@@ -112,6 +117,9 @@ pub fn web::Link::new(core::option::Option<alloc::string::String>) -> Self
 pub fn web::Link::state(&self) -> &web::LinkState
 pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Element
 pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::innerlude::Element
+pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::wire::Answer>, core::option::Option<kernel::error::AxError>)
+pub fn web::Paint::is_empty(&self) -> bool
+pub fn web::Paint::superseded(&self) -> usize
 pub fn web::Phrase::in_lang(self, web::Lang) -> &'static str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::as_str(self) -> &'static str
@@ -172,6 +180,7 @@ pub fn web::filed_at(kernel::event::TimeMs) -> alloc::string::String
 pub fn web::filed_lately(&channels::wire::RegistryAnswer, usize) -> alloc::vec::Vec<channels::wire::RegistryLine>
 pub fn web::filed_line(&channels::wire::RegistryAnswer, usize) -> alloc::string::String
 pub fn web::fill(&str, &[(&str, &str)]) -> alloc::string::String
+pub fn web::fold(impl core::iter::traits::collect::IntoIterator<Item = web::Arrived>) -> web::Paint
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
 pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::wire::ClientFrame
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
@@ -254,6 +263,7 @@ pub struct web::Line
 pub struct web::Link
 pub struct web::NavGroup
 pub struct web::Page
+pub struct web::Paint
 pub struct web::Phrase
 pub struct web::Prism
 pub struct web::Refused
@@ -286,6 +296,9 @@ pub web::AlertKind::AwaitingApproval
 pub web::AlertKind::ProviderTrouble
 pub web::AlertKind::Refused
 pub web::AlertKind::RunFrozen
+pub web::Arrived::Answer(alloc::boxed::Box<channels::wire::Answer>)
+pub web::Arrived::Event(alloc::boxed::Box<kernel::event::EventRecord>)
+pub web::Arrived::Refusal(alloc::boxed::Box<kernel::error::AxError>)
 pub web::AttachForm::admit: alloc::vec::Vec<alloc::string::String>
 pub web::AttachForm::base_url: alloc::string::String
 pub web::AttachForm::dialect: core::option::Option<kernel::model::DialectKind>
