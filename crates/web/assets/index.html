@@ -120,15 +120,20 @@
      before work continues. ALERT is on the border and the code alone; a
      whole strip in the warm token would outshout the badge, which is the one
      mark meaning somebody has to act. */
+  /* Three parts that wrap as parts. Held in one line they each folded
+     into a column a few characters wide, which is how a refusal that
+     names a long address used to read - three narrow paragraphs side by
+     side. The recovery takes its own row: it is the step to take, not a
+     continuation of the sentence above it. */
   .refusal { margin-left: auto; display: flex; align-items: baseline;
-             gap: var(--space-snug); max-width: 72ch;
+             flex-wrap: wrap; gap: var(--space-snug); max-width: 72ch;
              padding: var(--space-tight) var(--space-snug); font-size: var(--text-note);
              background: var(--G2); border: 1px solid var(--ALERT);
              border-radius: var(--corner-control); corner-shape: var(--corner-control-shape); }
   .refusal-code { color: var(--ALERT); font-weight: var(--weight-heading); white-space: nowrap;
                   font-family: var(--font-mono); }
-  .refusal-what { color: var(--TEXT); }
-  .refusal-way { color: var(--TEXT_QUIET); }
+  .refusal-what { color: var(--TEXT); flex: 1 1 24ch; }
+  .refusal-way { color: var(--TEXT_QUIET); flex: 1 1 100%; }
   .refusal-close { background: transparent; border: 0; color: var(--TEXT_QUIET);
                    padding: 0 2px; line-height: 1; }
   .refusal-close:hover { color: var(--TEXT); }
@@ -473,12 +478,33 @@
      180px the one field nobody can guess the format of showed
      `which room, as building/ro`, and a placeholder cut in half is a
      placeholder that teaches the wrong format. */
-  .dispatch { flex: 1; display: grid; gap: var(--space-snug); margin: 0;
-              grid-template-columns: minmax(13ch, 17ch) minmax(12ch, 16ch) minmax(0, 1fr)
-                                     minmax(0, 1fr) 96px 132px auto;
-              align-items: end; }
+  /* At rest this is two fields and two buttons: where the work goes, what
+     it is, one control that says there is more, and the one that starts
+     it. The other four have defaults that are right most of the time, and
+     standing open they asked a person to read the whole grammar of a
+     dispatch before writing a word of it.
+
+     Flex rather than a fixed column count, because the number of controls
+     is now a state: a seven-column grid holding four items leaves three
+     empty tracks, and the send button lands in the middle of the bar. */
+  .dispatch { flex: 1; display: flex; flex-wrap: wrap; gap: var(--space-snug);
+              margin: 0; align-items: end; }
   .dispatch input, .dispatch select { width: 100%; }
-  .dispatch .field { gap: 3px; min-width: 0; }
+  .dispatch .field { gap: 3px; min-width: 0; flex: 1 1 15ch; }
+  /* The task takes what is left: it is the only field whose content has no
+     shape anybody can predict. Opened, it takes a whole row instead, so
+     the five short fields beside it stop being squeezed to the point where
+     a select reads `follow the city set...`. */
+  .dispatch .field.task { flex: 3 1 28ch; }
+  .dispatch.open .field.task { flex: 1 1 100%; order: -1; }
+  .dispatch .field.where { flex: 0 1 18ch; }
+  /* Away from the send button and behind a rule. Stopping the city is a
+     different kind of act from starting a session, and it used to sit
+     where a slip of the hand reaches it. */
+  .control-surface .cancel { margin-left: var(--space-base);
+                             padding-left: var(--space-base);
+                             border-left: 1px solid var(--G3); }
+  .top-bar .halt { margin-left: var(--space-base); }
   .steer input { min-width: 320px; }
   /* What a person may do to a run, beside what they may say to it. Quiet
      buttons: these are available rather than suggested, and a page that

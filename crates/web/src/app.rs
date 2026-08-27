@@ -1055,6 +1055,19 @@ pub fn Root(
         main { class: "layout",
             header { class: "top-bar",
                 span { class: "address", "{status[0]}" }
+                // Halting the city is a fact about the city, so it stands
+                // where the city is named. It was beside the send button,
+                // which is the one place in this interface a person's hand
+                // is already moving fast.
+                button {
+                    class: "quiet halt",
+                    onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
+                    if snapshot.is_halted() {
+                        "{word(crate::lang::Msg::ReleaseCity)}"
+                    } else {
+                        "{word(crate::lang::Msg::HaltCity)}"
+                    }
+                }
                 if let Some(told) = refused.clone() {
                     div { class: "refusal", role: "alert",
                         span { class: "refusal-code", "{told.code}" }
@@ -1204,19 +1217,28 @@ pub fn Root(
                 crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
             }
             footer { class: "control-surface",
-                DispatchBar { addr: selected.clone(), dropped: dropped.clone(), on_frame, on_view }
-                button {
-                    class: "halt",
-                    onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
-                    if snapshot.is_halted() {
-                        "{word(crate::lang::Msg::ReleaseCity)}"
-                    } else {
-                        "{word(crate::lang::Msg::HaltCity)}"
-                    }
+                DispatchBar {
+                    addr: selected.clone(),
+                    dropped: dropped.clone(),
+                    buildings: city
+                        .as_ref()
+                        .map(|answer| {
+                            answer
+                                .buildings
+                                .iter()
+                                .map(|raised| raised.addr.as_str().to_owned())
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    on_frame,
+                    on_view,
                 }
+                // Stopping a run is not the same kind of act as starting
+                // one, and it used to sit against the send button where a
+                // slip reaches it. Quiet, and behind a rule.
                 if let Some(run) = running {
                     button {
-                        class: "cancel",
+                        class: "quiet cancel",
                         onclick: move |_| on_frame.call(cancel_command(run)),
                         "{word(crate::lang::Msg::CancelLastRun)}"
                     }
@@ -1240,6 +1262,9 @@ fn DispatchBar(
     /// typed into and stops there: a gesture that also pressed the
     /// button would spend money nobody agreed to spend.
     dropped: Option<String>,
+    /// The names this city already holds, offered under the address box.
+    /// A person should not have to remember what they raised.
+    buildings: Vec<String>,
     on_frame: EventHandler<channels::ClientFrame>,
     /// Where the person is taken once the frame is away. A control that
     /// leaves the page exactly as it found it cannot be told apart from
@@ -1281,11 +1306,21 @@ fn DispatchBar(
     // because the layers above answer when they do not (user verdict,
     // 2026-08-24).
     let mut effort = use_signal(|| None::<channels::Effort>);
+    // Whether the four fields behind the resting line are showing.
+    //
+    // Seven controls stood open at all times, which asked a person to read
+    // the whole grammar of a dispatch before writing one word of it. Two
+    // are enough to start work; the other four have defaults that are
+    // right most of the time, so they wait behind one disclosure that says
+    // it is there. Opened by focus as well as by the control, because
+    // reaching the task box is already the gesture that means "I am
+    // writing one of these".
+    let mut open = use_signal(|| false);
     let lang = use_context::<Signal<crate::lang::Lang>>();
     let word = move |msg: Msg| crate::lang::say(lang(), msg);
     rsx! {
         form {
-            class: "dispatch",
+            class: if open() { "dispatch open" } else { "dispatch" },
             onsubmit: move |event| {
                 event.prevent_default();
                 let frame = dispatch_command(
@@ -1301,6 +1336,9 @@ fn DispatchBar(
                     task.set(String::new());
                     goal.set(String::new());
                     session.set(String::new());
+                    // Back to the resting line: the next dispatch starts
+                    // from the same two fields this one did.
+                    open.set(false);
                     // The run this frame starts reports itself on the
                     // live page, so that is where the person who sent it
                     // belongs. Which session they then watch stays their
@@ -1308,11 +1346,17 @@ fn DispatchBar(
                     on_view.call(View::Live(None));
                 }
             },
-            div { class: "field",
+            div { class: "field where",
                 label { r#for: "dispatch-addr", "{word(Msg::DispatchRoom)}" }
                 input {
                     id: "dispatch-addr",
                     name: "addr",
+                    // The city already knows every building it holds, so
+                    // the names are offered rather than remembered. A
+                    // `datalist` and not a `select`: a room inside a
+                    // building is still typed, and a control that only
+                    // offered what exists could not reach a new one.
+                    list: "raised-buildings",
                     // Short, because the label above already said what
                     // the field is: a placeholder wider than its column
                     // teaches half a format.
@@ -1320,61 +1364,86 @@ fn DispatchBar(
                     value: "{at}",
                     oninput: move |event| at.set(event.value()),
                 }
-            }
-            div { class: "field",
-                label { r#for: "dispatch-session", "{word(Msg::DispatchCallIt)}" }
-                input {
-                    id: "dispatch-session",
-                    name: "session",
-                    placeholder: "{word(Msg::DispatchCallItHint)}",
-                    value: "{session}",
-                    oninput: move |event| session.set(event.value()),
+                datalist { id: "raised-buildings",
+                    for name in buildings.clone() {
+                        option { key: "{name}", value: "{name}" }
+                    }
                 }
             }
-            div { class: "field",
+            if open() {
+                div { class: "field",
+                    label { r#for: "dispatch-session", "{word(Msg::DispatchCallIt)}" }
+                    input {
+                        id: "dispatch-session",
+                        name: "session",
+                        placeholder: "{word(Msg::DispatchCallItHint)}",
+                        value: "{session}",
+                        oninput: move |event| session.set(event.value()),
+                    }
+                }
+            }
+            div { class: "field task",
                 label { r#for: "dispatch-task", "{word(Msg::DispatchTask)}" }
                 input {
                     id: "dispatch-task",
                     name: "task",
                     placeholder: "{word(Msg::DispatchTaskHint)}",
                     value: "{task}",
+                    // Reaching this box is already the gesture that means
+                    // a dispatch is being written, so it opens the rest
+                    // rather than making somebody ask for it twice.
+                    onfocus: move |_| open.set(true),
                     oninput: move |event| task.set(event.value()),
                 }
             }
-            div { class: "field",
-                label { r#for: "dispatch-goal", "{word(Msg::DispatchDoneWhen)}" }
-                input {
-                    id: "dispatch-goal",
-                    name: "goal",
-                    placeholder: "{word(Msg::DispatchDoneWhenHint)}",
-                    value: "{goal}",
-                    oninput: move |event| goal.set(event.value()),
+            if open() {
+                div { class: "field",
+                    label { r#for: "dispatch-goal", "{word(Msg::DispatchDoneWhen)}" }
+                    input {
+                        id: "dispatch-goal",
+                        name: "goal",
+                        placeholder: "{word(Msg::DispatchDoneWhenHint)}",
+                        value: "{goal}",
+                        oninput: move |event| goal.set(event.value()),
+                    }
                 }
-            }
-            div { class: "field",
-                label { r#for: "dispatch-mode", "{word(Msg::DispatchMode)}" }
-                select {
-                    id: "dispatch-mode",
-                    name: "mode",
-                    onchange: move |event| mode.set(event.value()),
-                    option { value: "plan", "plan" }
-                    option { value: "build", "build" }
-                    option { value: "review", "review" }
+                div { class: "field",
+                    label { r#for: "dispatch-mode", "{word(Msg::DispatchMode)}" }
+                    select {
+                        id: "dispatch-mode",
+                        name: "mode",
+                        onchange: move |event| mode.set(event.value()),
+                        option { value: "plan", "plan" }
+                        option { value: "build", "build" }
+                        option { value: "review", "review" }
+                    }
                 }
-            }
-            div { class: "field",
-                label { r#for: "dispatch-effort", "{word(Msg::DispatchEffort)}" }
-                select {
-                    id: "dispatch-effort",
-                    name: "effort",
-                    onchange: move |event| effort.set(effort_named(&event.value())),
-                    for offered in EFFORTS {
-                        option {
-                            key: "{offered.0}",
-                            value: "{offered.0}",
-                            "{word(offered.1)}"
+                div { class: "field",
+                    label { r#for: "dispatch-effort", "{word(Msg::DispatchEffort)}" }
+                    select {
+                        id: "dispatch-effort",
+                        name: "effort",
+                        onchange: move |event| effort.set(effort_named(&event.value())),
+                        for offered in EFFORTS {
+                            option {
+                                key: "{offered.0}",
+                                value: "{offered.0}",
+                                "{word(offered.1)}"
+                            }
                         }
                     }
+                }
+            }
+            // Says that there is more and how much, rather than hiding it.
+            button {
+                r#type: "button",
+                class: "quiet disclose",
+                "aria-expanded": if open() { "true" } else { "false" },
+                onclick: move |_| open.toggle(),
+                if open() {
+                    "{word(Msg::DispatchFewer)}"
+                } else {
+                    "{word(Msg::DispatchMore)}"
                 }
             }
             button {
@@ -2973,11 +3042,10 @@ mod tests {
     fn the_control_surface_asks_for_work_and_not_for_a_budget() {
         // A person cannot say what a task is worth before it runs, and a
         // subscription has no unit price to say it in (user verdict,
-        // 2026-08-22). The form asks for the four facts a Run needs.
+        // 2026-08-22). Whatever the bar shows, it never shows a price.
         let painted = paint(View::City, Snapshot::new(), Vec::new());
         assert!(painted.has_class("dispatch"));
         assert!(painted.says("what to produce"));
-        assert!(painted.says("what counts as done"));
         assert!(
             !painted.says("budget") && !painted.says("how much"),
             "the dispatch bar asks for money: {:?} / {:?}",
@@ -3207,19 +3275,61 @@ mod tests {
         );
     }
 
-    /// The four controls of the dispatch bar carry labels, not only
-    /// placeholders - this repository's own stylesheet says why, and the
+    /// Every control the dispatch bar shows carries a label, not only a
+    /// placeholder - this repository's own stylesheet says why, and the
     /// bar was the one form in the client that ignored it.
     #[test]
     fn the_dispatch_bar_names_its_fields_where_the_name_survives_typing() {
         let painted = paint(View::Overview, Snapshot::new(), Vec::new());
-        for label in ["room", "task", "done when", "mode"] {
+        for label in ["room", "task"] {
             assert!(
                 painted.text.iter().any(|line| line == label),
                 "the dispatch bar has no label {label:?}: {:?}",
                 painted.text
             );
         }
+    }
+
+    /// Two fields start work; the rest wait behind something that says so.
+    ///
+    /// Seven controls stood open at all times, which asked a person to
+    /// read the whole grammar of a dispatch before writing one word of it.
+    /// The four with usable defaults fold away - and the fold is announced
+    /// rather than hidden, because a control nobody can see is a control
+    /// nobody finds.
+    #[test]
+    fn the_resting_bar_is_two_fields_and_says_where_the_rest_went() {
+        let painted = paint(View::Overview, Snapshot::new(), Vec::new());
+        assert!(
+            painted.text.iter().any(|line| line == "more"),
+            "the fold is silent: {:?}",
+            painted.text
+        );
+        for folded in ["done when", "mode", "how hard it thinks", "call it"] {
+            assert!(
+                !painted.text.iter().any(|line| line == folded),
+                "{folded:?} is still open at rest"
+            );
+        }
+    }
+
+    /// Stopping is not the same kind of act as starting, and it used to
+    /// sit against the button a person's hand is already moving towards.
+    ///
+    /// Only the dress is asserted here. Where the control sits is a fact
+    /// about the document, and this harness reads one template at a time
+    /// in the order the differ loads them, so an index taken from the top
+    /// bar cannot be compared with one taken from the control surface -
+    /// the placement was checked by looking at the running client.
+    #[test]
+    fn stopping_the_city_is_never_dressed_as_the_thing_that_starts_work() {
+        let painted = paint(View::Overview, Snapshot::new(), Vec::new());
+        assert!(painted.says("stop the city"), "the city cannot be stopped");
+        assert!(
+            painted.has_class("quiet halt"),
+            "the halt control is dressed as a primary action: {:?}",
+            painted.classes
+        );
     }
 
     /// A steer box with no session chosen sent nothing, said nothing,

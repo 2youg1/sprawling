@@ -359,6 +359,8 @@ pub enum Msg {
     CostNoneBilledWhat,
     CostCutEmpty,
     ProgressNoPlan,
+    DispatchMore,
+    DispatchFewer,
     PalettePlaceholder,
     PaletteNothing,
     PaletteNothingWhat,
@@ -1347,6 +1349,14 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "no plan",
             zh: "没有计划",
         },
+        Msg::DispatchMore => Phrase {
+            en: "more",
+            zh: "更多",
+        },
+        Msg::DispatchFewer => Phrase {
+            en: "fewer",
+            zh: "收起",
+        },
         Msg::PalettePlaceholder => Phrase {
             en: "go to a page, a building or a session",
             zh: "去某一页、某栋楼或某个会话",
@@ -2051,6 +2061,8 @@ mod tests {
             Msg::CostNoneBilledWhat,
             Msg::CostCutEmpty,
             Msg::ProgressNoPlan,
+            Msg::DispatchMore,
+            Msg::DispatchFewer,
             Msg::PalettePlaceholder,
             Msg::PaletteNothing,
             Msg::PaletteNothingWhat,
@@ -2375,6 +2387,8 @@ mod tests {
                 | Msg::CostNoneBilledWhat
                 | Msg::CostCutEmpty
                 | Msg::ProgressNoPlan
+                | Msg::DispatchMore
+                | Msg::DispatchFewer
                 | Msg::PalettePlaceholder
                 | Msg::PaletteNothing
                 | Msg::PaletteNothingWhat

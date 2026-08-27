@@ -546,7 +546,9 @@ pub web::Msg::DispatchCallItHint
 pub web::Msg::DispatchDoneWhen
 pub web::Msg::DispatchDoneWhenHint
 pub web::Msg::DispatchEffort
+pub web::Msg::DispatchFewer
 pub web::Msg::DispatchMode
+pub web::Msg::DispatchMore
 pub web::Msg::DispatchRoom
 pub web::Msg::DispatchRoomHint
 pub web::Msg::DispatchSend
