@@ -10,6 +10,7 @@ impl web::CostDimension
 impl web::Feed
 impl web::Filter
 impl web::Frame
+impl web::Kind
 impl web::Lang
 impl web::Link
 impl web::Paint
@@ -36,6 +37,7 @@ pub const web::L_CEILING: u16
 pub const web::L_FLOOR: u16
 pub const web::Lang::ALL: [web::Lang; 2]
 pub const web::MARGIN: i32
+pub const web::MOTION_QUICK_MS: u16
 pub const web::NAMED_FILES: usize
 pub const web::PAGE_ROWS: usize
 pub const web::PROGRESS_DONE: (&str, &str)
@@ -48,14 +50,17 @@ pub const web::TILE_WIDTH: u32
 pub const web::TYPE_SCALE: [(&str, u16, u16, u16); 6]
 pub const web::WINDOW: usize
 pub const web::ZOOM_STOPS: [u32; 3]
+pub enum web::Act
 pub enum web::AlertKind
 pub enum web::Arrived
 pub enum web::AttachReadiness
 pub enum web::Backfill
 pub enum web::BarState
+pub enum web::Chord
 pub enum web::CostDimension
 pub enum web::Dropped
 pub enum web::Enrolment
+pub enum web::Kind
 pub enum web::Lang
 pub enum web::Leaf
 pub enum web::LinkAction
@@ -63,6 +68,7 @@ pub enum web::LinkEvent
 pub enum web::LinkState
 pub enum web::Meaning
 pub enum web::Msg
+pub enum web::Place
 pub enum web::ProviderHealth
 pub enum web::Raise
 pub enum web::ReturnPath
@@ -103,6 +109,7 @@ pub fn web::Feed::replay<'a>(impl core::iter::traits::collect::IntoIterator<Item
 pub fn web::Feed::stop_following(&mut self)
 pub fn web::Filter::keeps(&self, &kernel::event::EventRecord) -> bool
 pub fn web::Frame::attr(&self) -> alloc::string::String
+pub fn web::Kind::word(self) -> web::Msg
 pub fn web::Lang::endonym(self) -> &'static str
 pub fn web::Lang::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn web::Lang::of(&str) -> web::Lang
@@ -120,6 +127,7 @@ pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::inner
 pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::wire::Answer>, core::option::Option<kernel::error::AxError>)
 pub fn web::Paint::is_empty(&self) -> bool
 pub fn web::Paint::superseded(&self) -> usize
+pub fn web::Palette(web::palette::PaletteProps) -> dioxus_core::innerlude::Element
 pub fn web::Phrase::in_lang(self, web::Lang) -> &'static str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::word(self) -> web::Msg
@@ -192,6 +200,7 @@ pub fn web::invalidated_by(kernel::event::EventKind) -> core::option::Option<cha
 pub fn web::kind_name(kernel::event::EventKind) -> alloc::string::String
 pub fn web::kind_named(&str) -> core::option::Option<kernel::event::EventKind>
 pub fn web::latest_run(&web::Snapshot) -> core::option::Option<kernel::event::RunId>
+pub fn web::matching(&str, alloc::vec::Vec<web::Offer>) -> alloc::vec::Vec<web::Offer>
 pub fn web::needs_you(&web::Snapshot) -> alloc::vec::Vec<web::Attention>
 pub fn web::opened_building(core::option::Option<&str>) -> core::option::Option<kernel::address::Address>
 pub fn web::opening_leaf(&channels::wire::BuildingAnswer) -> web::Leaf
@@ -203,6 +212,7 @@ pub fn web::phrase(web::Msg) -> web::Phrase
 pub fn web::place(&str, u32) -> (i32, i32)
 pub fn web::points_attr(&[(i32, i32); 4]) -> alloc::string::String
 pub fn web::policy_admits(&kernel::approval::ApprovalItem) -> bool
+pub fn web::press(web::Chord, &web::Stroke<'_>) -> (web::Chord, web::Act)
 pub fn web::read(&web::Target, &web::Dropped) -> web::Meaning
 pub fn web::read_frame(&str) -> web::LinkEvent
 pub fn web::read_mounts(&str) -> (alloc::vec::Vec<kernel::address::Address>, alloc::vec::Vec<alloc::string::String>)
@@ -262,6 +272,7 @@ pub struct web::Frame
 pub struct web::Line
 pub struct web::Link
 pub struct web::NavGroup
+pub struct web::Offer
 pub struct web::Page
 pub struct web::Paint
 pub struct web::Phrase
@@ -273,6 +284,7 @@ pub struct web::SavingsRow
 pub struct web::Shelf
 pub struct web::Sign
 pub struct web::Snapshot
+pub struct web::Stroke<'a>
 pub struct web::TagRow
 pub struct web::Usage
 pub struct web::Working
@@ -284,11 +296,18 @@ pub use web::CostsView
 pub use web::LedgerView
 pub use web::LiveView
 pub use web::OverviewView
+pub use web::Palette
 pub use web::ProgressBar
 pub use web::ReachForm
 pub use web::RecycleBinView
 pub use web::Root
 pub use web::Vitals
+pub web::Act::Compose
+pub web::Act::Dismiss
+pub web::Act::Go(web::Place)
+pub web::Act::Ignore
+pub web::Act::OpenPalette
+pub web::Act::ShowKeys
 pub web::Alert::key: alloc::string::String
 pub web::Alert::kind: web::AlertKind
 pub web::Alert::message: alloc::string::String
@@ -327,6 +346,8 @@ pub web::BinRow::return_path: web::ReturnPath
 pub web::BinRow::what: alloc::string::String
 pub web::Camera::tile_height: u32
 pub web::Camera::tile_width: u32
+pub web::Chord::Idle
+pub web::Chord::Leading
 pub web::Cluster::answer_individually: bool
 pub web::Cluster::members: alloc::vec::Vec<kernel::approval::ApprovalItem>
 pub web::Cluster::summary: alloc::string::String
@@ -371,6 +392,9 @@ pub web::Frame::height: u32
 pub web::Frame::width: u32
 pub web::Frame::x: i32
 pub web::Frame::y: i32
+pub web::Kind::Building
+pub web::Kind::Page
+pub web::Kind::Session
 pub web::Lang::En
 pub web::Lang::Zh
 pub web::Leaf::Archive
@@ -540,6 +564,13 @@ pub web::Msg::EffortMax
 pub web::Msg::EffortMedium
 pub web::Msg::EffortXHigh
 pub web::Msg::HaltCity
+pub web::Msg::KeysCompose
+pub web::Msg::KeysDismiss
+pub web::Msg::KeysGo
+pub web::Msg::KeysPalette
+pub web::Msg::KeysScope
+pub web::Msg::KeysShow
+pub web::Msg::KeysTitle
 pub web::Msg::LedgerAnyPartOfName
 pub web::Msg::LedgerEveryKind
 pub web::Msg::LedgerFilterNote
@@ -630,6 +661,12 @@ pub web::Msg::OverviewStepsSoFar
 pub web::Msg::OverviewUnreadable
 pub web::Msg::OverviewWaitingApprovals
 pub web::Msg::OverviewWorkedOn
+pub web::Msg::PaletteKindBuilding
+pub web::Msg::PaletteKindPage
+pub web::Msg::PaletteKindSession
+pub web::Msg::PaletteNothing
+pub web::Msg::PaletteNothingWhat
+pub web::Msg::PalettePlaceholder
 pub web::Msg::ProgressNoPlan
 pub web::Msg::ProviderDegraded
 pub web::Msg::ProviderHealthy
@@ -721,11 +758,19 @@ pub web::Msg::VitalsRecords
 pub web::Msg::VitalsSignals
 pub web::NavGroup::label: web::Msg
 pub web::NavGroup::places: alloc::vec::Vec<web::Destination>
+pub web::Offer::going: web::View
+pub web::Offer::kind: web::Kind
+pub web::Offer::label: alloc::string::String
 pub web::Page::filtered_out: usize
 pub web::Page::next_from: core::option::Option<kernel::event::Seq>
 pub web::Page::rows: alloc::vec::Vec<web::Row>
 pub web::Phrase::en: &'static str
 pub web::Phrase::zh: &'static str
+pub web::Place::Approvals
+pub web::Place::City
+pub web::Place::Ledger
+pub web::Place::Overview
+pub web::Place::Sessions
 pub web::Prism::active: bool
 pub web::Prism::done: u32
 pub web::Prism::id: alloc::string::String
@@ -772,6 +817,9 @@ pub web::Shelf::building: kernel::address::Address
 pub web::Shelf::hits: alloc::vec::Vec<channels::wire::ArchiveHit>
 pub web::Sign::count: u64
 pub web::Sign::what: web::Msg
+pub web::Stroke::command: bool
+pub web::Stroke::in_text: bool
+pub web::Stroke::key: &'a str
 pub web::Subject::Plan
 pub web::Subject::Run
 pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>

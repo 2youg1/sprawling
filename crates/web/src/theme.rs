@@ -280,6 +280,24 @@ pub const SPACE_SCALE: [(&str, u16); 6] = [
     ("section", 32),
 ];
 
+/// The one duration in the library, in milliseconds.
+///
+/// **A change a person did not ask for may not be animated at all.** The
+/// judgement is stated as a question with one answer: if the movement would
+/// happen while nobody is touching the interface, it is manufacturing
+/// attention and is deleted. That rules out every ambient effect - a striped
+/// progress bar, a pulsing badge, a row that fades in as it arrives - and it
+/// leaves exactly one case, which is the acknowledgement a control owes the
+/// hand that just moved to it.
+///
+/// 90ms because the window closes at about 100ms: past that the
+/// acknowledgement is late enough to read as lag rather than as feedback,
+/// and below about 60ms it is not seen at all. One value rather than a
+/// scale, for the reason the spacing steps are a scale rather than a free
+/// choice - two durations differ visibly long before anybody can say which
+/// is which, and there is only one thing here worth timing.
+pub const MOTION_QUICK_MS: u16 = 90;
+
 /// The CSS parameter for a superellipse exponent, in tenths.
 ///
 /// `corner-shape: superellipse(K)` raises the ellipse equation to `2K`
@@ -352,6 +370,7 @@ pub fn custom_properties() -> String {
     for (name, size) in SPACE_SCALE {
         css.push_str(&format!("--space-{name}:{size}px;"));
     }
+    css.push_str(&format!("--motion-quick:{MOTION_QUICK_MS}ms;"));
     css.push_str(&format!("--font-sans:{FONT_SANS};--font-mono:{FONT_MONO};"));
     // Shape travels with colour because both are presentation constants
     // with one production point. A stylesheet that had

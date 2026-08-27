@@ -359,6 +359,19 @@ pub enum Msg {
     CostNoneBilledWhat,
     CostCutEmpty,
     ProgressNoPlan,
+    PalettePlaceholder,
+    PaletteNothing,
+    PaletteNothingWhat,
+    PaletteKindPage,
+    PaletteKindBuilding,
+    PaletteKindSession,
+    KeysTitle,
+    KeysScope,
+    KeysPalette,
+    KeysCompose,
+    KeysDismiss,
+    KeysGo,
+    KeysShow,
     AlertCannot,
     AlertNoRecovery,
     AlertAwaitingApproval,
@@ -1334,6 +1347,58 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "no plan",
             zh: "没有计划",
         },
+        Msg::PalettePlaceholder => Phrase {
+            en: "go to a page, a building or a session",
+            zh: "去某一页、某栋楼或某个会话",
+        },
+        Msg::PaletteNothing => Phrase {
+            en: "nothing matches",
+            zh: "没有匹配的",
+        },
+        Msg::PaletteNothingWhat => Phrase {
+            en: "part of a page name, a building name or a session id is enough",
+            zh: "页名、楼名或会话 id 的一部分就够了",
+        },
+        Msg::PaletteKindPage => Phrase {
+            en: "page",
+            zh: "页",
+        },
+        Msg::PaletteKindBuilding => Phrase {
+            en: "building",
+            zh: "楼",
+        },
+        Msg::PaletteKindSession => Phrase {
+            en: "session",
+            zh: "会话",
+        },
+        Msg::KeysTitle => Phrase {
+            en: "keys",
+            zh: "快捷键",
+        },
+        Msg::KeysScope => Phrase {
+            en: "a letter on its own works outside a text box; the two with a modifier work everywhere",
+            zh: "单个字母在输入框外才算；带修饰键的那两个到处都算",
+        },
+        Msg::KeysPalette => Phrase {
+            en: "go to a page, a building or a session",
+            zh: "去某一页、某栋楼或某个会话",
+        },
+        Msg::KeysCompose => Phrase {
+            en: "start work here, or send what is already written",
+            zh: "在这里开工，或送出已经写好的",
+        },
+        Msg::KeysDismiss => Phrase {
+            en: "close what is open",
+            zh: "关掉打开的东西",
+        },
+        Msg::KeysGo => Phrase {
+            en: "then o, c, s, a or l: overview, city, sessions, approvals, ledger",
+            zh: "再按 o、c、s、a 或 l：总览、城市、会话、审批、账本",
+        },
+        Msg::KeysShow => Phrase {
+            en: "this list",
+            zh: "这张表",
+        },
         Msg::AlertCannot => Phrase {
             en: "cannot {action} on {subject}",
             zh: "不能对 {subject} 执行 {action}",
@@ -1986,6 +2051,19 @@ mod tests {
             Msg::CostNoneBilledWhat,
             Msg::CostCutEmpty,
             Msg::ProgressNoPlan,
+            Msg::PalettePlaceholder,
+            Msg::PaletteNothing,
+            Msg::PaletteNothingWhat,
+            Msg::PaletteKindPage,
+            Msg::PaletteKindBuilding,
+            Msg::PaletteKindSession,
+            Msg::KeysTitle,
+            Msg::KeysScope,
+            Msg::KeysPalette,
+            Msg::KeysCompose,
+            Msg::KeysDismiss,
+            Msg::KeysGo,
+            Msg::KeysShow,
             Msg::AlertCannot,
             Msg::AlertNoRecovery,
             Msg::AlertAwaitingApproval,
@@ -2297,6 +2375,19 @@ mod tests {
                 | Msg::CostNoneBilledWhat
                 | Msg::CostCutEmpty
                 | Msg::ProgressNoPlan
+                | Msg::PalettePlaceholder
+                | Msg::PaletteNothing
+                | Msg::PaletteNothingWhat
+                | Msg::PaletteKindPage
+                | Msg::PaletteKindBuilding
+                | Msg::PaletteKindSession
+                | Msg::KeysTitle
+                | Msg::KeysScope
+                | Msg::KeysPalette
+                | Msg::KeysCompose
+                | Msg::KeysDismiss
+                | Msg::KeysGo
+                | Msg::KeysShow
                 | Msg::AlertCannot
                 | Msg::AlertNoRecovery
                 | Msg::AlertAwaitingApproval

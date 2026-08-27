@@ -13,6 +13,32 @@
   family or a size reappears here.
 -->
 <style>
+  /* --------------------------------------------------------- the machine */
+
+  /* Tells the engine this document is dark, which is not decoration: a
+     browser that has not been told renders every widget it draws itself
+     in its light theme. On Windows that meant a white popup opening out
+     of a select on a near-black page, a white autofill panel, and a date
+     control nobody styled. One declaration answers all of them, and it
+     also gives the scrollbars below their dark base. */
+  :root { color-scheme: dark; }
+
+  /* The scrollbar is furniture, so it takes surface tokens rather than
+     text tokens: a thumb one step above the raised rung, on the working
+     surface it slides over. Before this it was the platform's own light
+     grey, which on a near-black page is the brightest thing on screen and
+     is attached to the part of the interface that means least. */
+  * { scrollbar-width: thin; scrollbar-color: var(--G4) var(--G1); }
+
+  /* Selection inverts rather than lightening the surface under the text.
+     Lightening is what a highlight normally does and it cannot be done
+     here: text stops at G2 because the ladder above it does not leave
+     enough contrast, so a brighter highlight would make the selected
+     words the least readable on the page. ACCENT_SOLID is already solved
+     to carry dark ink at the body tier - that is the whole reason it
+     exists - so selection borrows the one fill that can. */
+  ::selection { background: var(--ACCENT_SOLID); color: var(--G0); }
+
   /* ---------------------------------------------------------------- base */
 
   /* Depth in a dark interface comes from stepped surface lightness, not
@@ -56,6 +82,13 @@
             grid-template-columns: 208px minmax(0, 1fr) 264px;
             grid-template-rows: auto minmax(0, 1fr) auto;
             grid-template-areas: "top top top" "nav centre status" "foot foot foot"; }
+  /* `stable` reserves the scrollbar's width whether or not one is showing,
+     so a page whose content crosses the fold does not shift sideways as it
+     grows. `contain` stops a scroll that reaches the end of one pane from
+     continuing in the pane behind it, which is how a list inside a panel
+     used to drag the whole document. */
+  .left-nav, .right-status, .centre, ol.lines, .doc-text
+      { scrollbar-gutter: stable; overscroll-behavior: contain; }
   .left-nav, .right-status { overflow: auto; }
   .top-bar { grid-area: top; color: var(--TEXT); display: flex; align-items: center;
              gap: var(--space-base); padding-bottom: var(--space-tight); }
@@ -122,6 +155,53 @@
            border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
            padding: 0 6px; font-size: var(--text-label); font-weight: 700;
            font-family: var(--font-mono); }
+
+  /* --------------------------------------------------- the command box */
+
+  /* The one thing in this client that covers the page, and it covers it
+     because it is modal in the reader's head too: they have stopped to say
+     where they are going. The scrim is the page's own token mixed with
+     transparency rather than a new colour, so desaturating the interface
+     desaturates this with it. */
+  .palette-scrim { position: fixed; inset: 0; z-index: 40; display: grid;
+                   justify-items: center; align-content: start; padding-top: 12vh;
+                   padding-left: var(--space-pane); padding-right: var(--space-pane);
+                   background: color-mix(in oklab, var(--G0) 74%, transparent); }
+  .palette, .keymap { width: min(560px, 100%); background: var(--G1);
+                      border: 1px solid var(--G4); border-radius: var(--corner-panel);
+                      corner-shape: var(--corner-panel-shape); overflow: hidden; }
+  /* The query line carries no border of its own: the box around it is
+     already the edge, and a second one inside reads as a field inside a
+     field. One step larger than prose, because it is the only thing on
+     screen the person is doing. */
+  .palette-query { width: 100%; background: transparent; border: 0;
+                   border-bottom: 1px solid var(--G3); border-radius: 0;
+                   font-size: var(--text-heading); font-weight: var(--weight-body);
+                   padding: var(--space-base) var(--space-pane); }
+  .palette-query:focus-visible { outline: none; border-bottom-color: var(--ACCENT); }
+  .palette-list { list-style: none; margin: 0; padding: var(--space-tight);
+                  max-height: 46vh; overflow: auto; }
+  /* A row is the whole width: the target is the destination, not the word
+     that names it. */
+  .palette-row { display: flex; width: 100%; align-items: baseline;
+                 gap: var(--space-base); text-align: left; background: transparent;
+                 border: 0; padding: var(--space-snug) var(--space-base);
+                 font-size: var(--text-body); }
+  .palette-row:hover:not(:disabled) { background: var(--G2); border-color: transparent; }
+  .palette-label { color: var(--TEXT); }
+  /* Which sort of thing this is. "lab" can be a building and "lab/parser"
+     a session, so a list that does not say has to be guessed at. */
+  .palette-kind { margin-left: auto; color: var(--TEXT_QUIET);
+                  font-size: var(--text-note); }
+  .palette-empty { padding: var(--space-pane); }
+  .keymap { padding: var(--space-pane) var(--space-wide) var(--space-wide); }
+  .keymap dl { margin: var(--space-base) 0 0; }
+  .keymap-row { display: grid; grid-template-columns: 152px 1fr;
+                gap: var(--space-base); padding: var(--space-snug) 0;
+                border-top: 1px solid var(--G2); }
+  .keymap-row dd { margin: 0; color: var(--TEXT); }
+  .keymap .chord { font-family: var(--font-mono); color: var(--TEXT_QUIET);
+                   font-size: var(--text-note); }
 
   /* --------------------------------------------------------- the panel */
 
@@ -215,13 +295,30 @@
   button[type="submit"]:hover:not(:disabled) { border-color: var(--TEXT); }
   button.quiet { background: transparent; border-color: var(--G3); color: var(--TEXT_QUIET); }
   button.quiet:hover:not(:disabled) { background: var(--G2); color: var(--TEXT); }
-  :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 1px; }
+  :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 2px; }
   input, select, textarea { background: var(--G1); color: var(--TEXT); font: inherit;
                             font-size: var(--text-body);
                             border: 1px solid var(--G4); border-radius: var(--corner-control);
-                            corner-shape: var(--corner-control-shape); padding: 6px 9px; }
+                            corner-shape: var(--corner-control-shape); padding: 6px 9px;
+                            caret-color: var(--ACCENT); accent-color: var(--ACCENT); }
   input:hover, select:hover, textarea:hover { border-color: var(--TEXT_DISABLED); }
-  input::placeholder { color: var(--TEXT_DISABLED); }
+  input::placeholder, textarea::placeholder { color: var(--TEXT_DISABLED); }
+
+  /* What a control owes the hand that just moved to it, and the only
+     movement in this library. Declared on the resting rule because a
+     transition has to be there for the way back as well; every property
+     named here is one that nothing but :hover, :focus-visible or :active
+     changes, so none of it can fire while nobody is touching the page.
+
+     The press is a real displacement rather than another colour: at this
+     size a one-pixel drop is the difference between a surface that
+     answers and a picture of a button, and it survives the desaturated
+     snapshot, where a colour-only press would not. */
+  button, .nav-item, .tab, .attention-row, .index-row .pick {
+      transition: background-color var(--motion-quick), border-color var(--motion-quick),
+                  color var(--motion-quick), transform var(--motion-quick); }
+  button:active:not(:disabled), .nav-item:active, .tab:active,
+  .attention-row:active { transform: translateY(1px); }
   form { display: flex; gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap;
          margin: var(--space-base) 0; }
 

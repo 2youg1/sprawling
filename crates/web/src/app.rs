@@ -1468,6 +1468,18 @@ pub fn App() -> Element {
     let mut dropped = use_signal(|| None::<String>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
+    // What the keyboard opened. Held here rather than inside `Root`
+    // because the listener that sets them is registered once for the
+    // window, and a page redraw must not take a reader's palette away.
+    let mut palette = use_signal(|| false);
+    let mut keymap = use_signal(|| false);
+    listen_for_keys(Keyboard {
+        chord: use_signal(crate::keys::Chord::default),
+        palette,
+        keymap,
+        view,
+        refused,
+    });
     // The room the last dispatch asked for, so its run can be opened
     // when it starts rather than left for the person to find among the
     // others.
@@ -1545,6 +1557,102 @@ pub fn App() -> Element {
             },
             on_follow: move |on| following.set(on),
             on_dismiss: move |()| refused.set(None),
+        }
+        if palette() {
+            crate::palette::Palette {
+                offers: reachable(&snapshot(), city().as_ref(), lang()),
+                on_go: move |going: View| {
+                    palette.set(false);
+                    #[cfg(target_arch = "wasm32")]
+                    crate::route::go(&going);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    view.set(going);
+                },
+                on_close: move |()| palette.set(false),
+            }
+        }
+        if keymap() {
+            KeyMap { on_close: move |()| keymap.set(false) }
+        }
+    }
+}
+
+/// Everything the palette can reach, in the order a reader expects it.
+///
+/// Pages first because they are the answer most of the time, then the
+/// buildings this city holds, then the sessions it knows of. Assembled
+/// here because this is where the nav, the city answer and the run list
+/// already meet; the palette holding its own list would be a second
+/// answer to "where can a person go".
+#[must_use]
+fn reachable(
+    snapshot: &Snapshot,
+    city: Option<&channels::CityAnswer>,
+    lang: crate::lang::Lang,
+) -> Vec<crate::palette::Offer> {
+    let mut offers: Vec<crate::palette::Offer> = destinations(snapshot)
+        .into_iter()
+        .flat_map(|group| group.places)
+        .map(|spot| crate::palette::Offer {
+            label: crate::lang::say(lang, spot.label).to_owned(),
+            kind: crate::palette::Kind::Page,
+            going: spot.view,
+        })
+        .collect();
+    if let Some(answer) = city {
+        offers.extend(answer.buildings.iter().filter_map(|building| {
+            let addr = Address::parse(building.addr.as_str()).ok()?;
+            Some(crate::palette::Offer {
+                label: building.addr.as_str().to_owned(),
+                kind: crate::palette::Kind::Building,
+                going: View::Building(addr),
+            })
+        }));
+    }
+    offers.extend(
+        watchable(snapshot)
+            .into_iter()
+            .map(|(id, said)| crate::palette::Offer {
+                label: said,
+                kind: crate::palette::Kind::Session,
+                going: View::Live(Some(id)),
+            }),
+    );
+    offers
+}
+
+/// The key map, shown by the key that is hardest to guess.
+///
+/// A product whose shortcuts are undocumented has no shortcuts: nobody
+/// tries a chord they have not been told about. This is the one page in
+/// the client that exists to be read once.
+#[component]
+fn KeyMap(on_close: EventHandler<()>) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| crate::lang::say(lang(), msg);
+    let rows = [
+        ("Ctrl / \u{2318} + K", Msg::KeysPalette),
+        ("Ctrl / \u{2318} + \u{21b5}", Msg::KeysCompose),
+        ("Esc", Msg::KeysDismiss),
+        ("g", Msg::KeysGo),
+        ("?", Msg::KeysShow),
+    ];
+    rsx! {
+        div { class: "palette-scrim", onclick: move |_| on_close.call(()),
+            div {
+                class: "keymap",
+                onclick: move |event| event.stop_propagation(),
+                h2 { "{word(Msg::KeysTitle)}" }
+                p { class: "note", "{word(Msg::KeysScope)}" }
+                dl {
+                    for (chord, said) in rows {
+                        div { key: "{chord}", class: "keymap-row",
+                            dt { class: "chord", "{chord}" }
+                            dd { "{word(said)}" }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1676,6 +1784,163 @@ fn follow_the_address_bar(
     _lang: Signal<crate::lang::Lang>,
 ) {
 }
+
+/// What a keystroke may move. Bundled for the reason [`Wiring`] is: a
+/// listener that took six handles would grow a seventh without anybody
+/// noticing which of them it actually writes.
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    expect(
+        dead_code,
+        reason = "the only reader is the browser's keydown listener"
+    )
+)]
+#[derive(Clone, Copy)]
+struct Keyboard {
+    chord: Signal<crate::keys::Chord>,
+    palette: Signal<bool>,
+    keymap: Signal<bool>,
+    view: Signal<View>,
+    refused: Signal<Option<crate::alert::Refused>>,
+}
+
+/// Where the `g` sequence's second key goes.
+///
+/// Here rather than in `web::keys` because a `View` carries a run id and
+/// an address, and a module that decides what a key means has no business
+/// holding either.
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    expect(
+        dead_code,
+        reason = "the only caller is the browser's keydown listener"
+    )
+)]
+fn place_view(place: crate::keys::Place) -> View {
+    match place {
+        crate::keys::Place::Overview => View::Overview,
+        crate::keys::Place::City => View::City,
+        crate::keys::Place::Sessions => View::Live(None),
+        crate::keys::Place::Approvals => View::Approvals,
+        crate::keys::Place::Ledger => View::Ledger,
+    }
+}
+
+/// The one place a keystroke reaches this client.
+///
+/// On the window rather than on an element: a person who has clicked
+/// nothing still has a keyboard, and a handler hung on the layout would
+/// never see a key pressed while the body itself holds focus.
+///
+/// The browser contributes three facts and no judgement - which key,
+/// whether the accelerator was down, and whether focus sits in something
+/// the reader types into - and `web::keys` decides the rest, which is what
+/// keeps the key map testable on the host.
+#[cfg(target_arch = "wasm32")]
+fn listen_for_keys(keyboard: Keyboard) {
+    use dioxus::prelude::use_hook;
+    use wasm_bindgen::JsCast as _;
+    use_hook(move || {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let mut held = keyboard;
+        let pressed = wasm_bindgen::closure::Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(
+            move |event: web_sys::KeyboardEvent| {
+                let key = event.key();
+                let stroke = crate::keys::Stroke {
+                    key: &key,
+                    command: event.ctrl_key() || event.meta_key(),
+                    in_text: typing_now(),
+                };
+                // `peek` rather than a read: this closure lives outside
+                // the render that created it, and subscribing here would
+                // tie a DOM listener to a reactive scope it outlives.
+                let (next, act) = crate::keys::press(*held.chord.peek(), &stroke);
+                held.chord.set(next);
+                match act {
+                    crate::keys::Act::Ignore => return,
+                    crate::keys::Act::OpenPalette => {
+                        held.keymap.set(false);
+                        held.palette.set(true);
+                    }
+                    // One key closes whatever is open, outermost first, so
+                    // a reader never has to know how deep they are.
+                    crate::keys::Act::Dismiss => {
+                        held.palette.set(false);
+                        held.keymap.set(false);
+                        held.refused.set(None);
+                    }
+                    crate::keys::Act::Compose => {
+                        held.palette.set(false);
+                        focus_where_work_starts();
+                    }
+                    crate::keys::Act::ShowKeys => {
+                        held.keymap.set(true);
+                    }
+                    crate::keys::Act::Go(place) => {
+                        held.palette.set(false);
+                        held.keymap.set(false);
+                        let going = place_view(place);
+                        crate::route::go(&going);
+                        held.view.set(going);
+                    }
+                }
+                // Only what this client claimed: an ignored key belongs to
+                // the browser, and taking it would break the reader's own
+                // find-in-page and text entry.
+                event.prevent_default();
+            },
+        );
+        if window
+            .add_event_listener_with_callback("keydown", pressed.as_ref().unchecked_ref())
+            .is_ok()
+        {
+            // The page outlives the listener; dropping the closure here
+            // would unregister the only thing that reads the keyboard.
+            pressed.forget();
+        }
+    });
+}
+
+/// Whether focus sits in something the reader is writing into.
+///
+/// Without this, writing the word "goal" into the task box would navigate
+/// away on its `g`.
+#[cfg(target_arch = "wasm32")]
+fn typing_now() -> bool {
+    let Some(active) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.active_element())
+    else {
+        return false;
+    };
+    matches!(
+        active.tag_name().to_ascii_uppercase().as_str(),
+        "INPUT" | "TEXTAREA" | "SELECT"
+    ) || active.has_attribute("contenteditable")
+}
+
+/// Puts the cursor in the box work is described in.
+///
+/// The discarded result follows `route::go`: a focus call that the
+/// document refuses has no second thing to try, and the page is already
+/// showing the field it failed to reach.
+#[cfg(target_arch = "wasm32")]
+fn focus_where_work_starts() {
+    use wasm_bindgen::JsCast as _;
+    if let Some(field) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("dispatch-task"))
+        .and_then(|found| found.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let _ = field.focus();
+    }
+}
+
+/// Off the browser there is no keyboard to listen to.
+#[cfg(not(target_arch = "wasm32"))]
+fn listen_for_keys(_keyboard: Keyboard) {}
 
 #[cfg(target_arch = "wasm32")]
 fn connect(wiring: Wiring) -> Outbound {

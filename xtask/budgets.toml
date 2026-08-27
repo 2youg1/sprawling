@@ -53,10 +53,17 @@
 # recovered, and the ratchet holds the line from here. Headroom against the
 # 2 MB budget is 3.8x, which is why this is not the size to spend attention
 # on today.
+# ux-6 records 580,157. The 21.2 KB since P3.06 is the keyboard: `web::keys`
+# and `web::palette`, the key map the `?` key opens, and the thirteen phrases
+# the two of them say in both languages. It is what makes every page and
+# every building reachable without a pointer, in a client whose readers work
+# a keyboard all day - a feature somebody uses rather than slack that
+# accumulated, so the reading is recorded and the ratchet holds from here.
+# Headroom against the 2 MB budget is 3.6x.
 [frontend_artifact]
 what = "the client the browser downloads, gzipped, fonts excluded"
 budget_bytes = 2097152
-best_bytes = 558419
+best_bytes = 580157
 slack_bytes = 20480
 measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
 status = "gated"
