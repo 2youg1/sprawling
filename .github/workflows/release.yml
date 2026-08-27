@@ -131,6 +131,17 @@ jobs:
         run: |
           set -euo pipefail
           ls -la assets
+          # Re-cutting a tag is a legitimate thing to do, and this step
+          # could only ever run once: `gh release create` refuses a tag
+          # that already carries a release, so a corrected build of the
+          # same version failed at the last step with every archive
+          # already built and verified. Replaced rather than appended to,
+          # so what hangs off a tag is always what that tag's tree
+          # produced - a release holding archives from two different
+          # trees is worse than one that failed loudly.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release delete "${GITHUB_REF_NAME}" --yes
+          fi
           gh release create "${GITHUB_REF_NAME}" assets/*.zip \
             --title "sprawling ${GITHUB_REF_NAME}" \
             --notes-file .github/release-notes.md
