@@ -172,6 +172,8 @@ pub enum kernel::ExecArm
 pub enum kernel::GateOutcome
 pub enum kernel::GoalResource
 pub enum kernel::GoalVerdict
+pub enum kernel::How
+pub enum kernel::Lines
 pub enum kernel::Locator
 pub enum kernel::MemoShape
 pub enum kernel::PolicyApplication
@@ -664,6 +666,9 @@ pub kernel::ExecArm::Python
 pub kernel::ExecArm::Python::code: alloc::string::String
 pub kernel::ExecArm::Shell
 pub kernel::ExecArm::Shell::text: alloc::string::String
+pub kernel::FileChange::how: kernel::How
+pub kernel::FileChange::lines: kernel::Lines
+pub kernel::FileChange::path: alloc::string::String
 pub kernel::FrozenConfig::clock_stamp: kernel::ClockStampGranularity
 pub kernel::FrozenConfig::clock_zones: alloc::vec::Vec<kernel::ClockZone>
 pub kernel::FrozenConfig::effort: core::option::Option<kernel::Effort>
@@ -687,10 +692,19 @@ pub kernel::GoalResource::Path(kernel::Address)
 pub kernel::GoalVerdict::Clear
 pub kernel::GoalVerdict::Conflict
 pub kernel::GoalVerdict::Conflict::with: kernel::GoalId
+pub kernel::How::Added
+pub kernel::How::Deleted
+pub kernel::How::Modified
+pub kernel::How::Renamed
+pub kernel::How::Renamed::from: alloc::string::String
 pub kernel::ItemMeta::cost: u64
 pub kernel::LayeredValue::building: core::option::Option<T>
 pub kernel::LayeredValue::city: core::option::Option<T>
 pub kernel::LayeredValue::resident: core::option::Option<T>
+pub kernel::Lines::Binary
+pub kernel::Lines::Counted
+pub kernel::Lines::Counted::added: u32
+pub kernel::Lines::Counted::removed: u32
 pub kernel::Locator::Cas
 pub kernel::Locator::Cas::hash: kernel::B3Hash
 pub kernel::Locator::Cas::range: core::option::Option<kernel::Range>
@@ -871,6 +885,7 @@ pub struct kernel::EventDraft
 pub struct kernel::EventRecord
 pub struct kernel::EventRef
 pub struct kernel::Evidence(_)
+pub struct kernel::FileChange
 pub struct kernel::FrozenConfig
 pub struct kernel::GateContext
 pub struct kernel::GateRefusal

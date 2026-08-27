@@ -69,3 +69,7 @@ pub use worktree::Worktrees;
 mod checkpoint;
 
 pub use checkpoint::Checkpoint;
+
+mod changes;
+
+pub use changes::{Head, between};

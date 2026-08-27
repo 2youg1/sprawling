@@ -21,6 +21,7 @@ impl memory::WorktreeLease
 impl memory::WorktreeName
 impl memory::Worktrees
 pub const memory::MANIFEST: &str
+pub enum memory::Head
 pub enum memory::MemoryError
 pub fn memory::Attribution::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::Attribution::new() -> memory::Attribution
@@ -97,6 +98,7 @@ pub fn memory::Worktrees::live(&self) -> core::result::Result<alloc::vec::Vec<me
 pub fn memory::Worktrees::open(&std::path::Path) -> core::result::Result<memory::Worktrees, memory::MemoryError>
 pub fn memory::Worktrees::plan_merge(&self, &memory::WorktreeName) -> core::result::Result<memory::PlannedMerge<'_>, memory::MemoryError>
 pub fn memory::Worktrees::release(&self, memory::WorktreeLease) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::between(&std::path::Path, kernel::locator::GitOid, memory::Head) -> core::result::Result<alloc::vec::Vec<kernel::change::FileChange>, memory::MemoryError>
 pub fn memory::open_restored(&std::path::Path, kernel::event::TimeMs) -> core::result::Result<std::path::PathBuf, memory::MemoryError>
 pub fn memory::read_raw_lines_at(&std::path::Path) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, memory::MemoryError>
 pub memory::AttributionReport::by_actor: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
@@ -105,6 +107,8 @@ pub memory::AttributionReport::by_segment: alloc::vec::Vec<(alloc::string::Strin
 pub memory::AttributionReport::by_skill: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
 pub memory::AttributionReport::by_tool: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>
 pub memory::AttributionReport::total: kernel::budget::UsdMicros
+pub memory::Head::Commit(kernel::locator::GitOid)
+pub memory::Head::WorkingTree
 pub memory::MemoryError::Bundle
 pub memory::MemoryError::Bundle::detail: alloc::string::String
 pub memory::MemoryError::Bundle::op: &'static str

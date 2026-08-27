@@ -211,6 +211,7 @@ pub fn web::kind_named(&str) -> core::option::Option<kernel::event::EventKind>
 pub fn web::latest_run(&web::Snapshot) -> core::option::Option<kernel::event::RunId>
 pub fn web::matching(&str, alloc::vec::Vec<web::Offer>) -> alloc::vec::Vec<web::Offer>
 pub fn web::needs_you(&web::Snapshot) -> alloc::vec::Vec<web::Attention>
+pub fn web::opened_at(&[web::Turn]) -> core::option::Option<kernel::locator::GitOid>
 pub fn web::opened_building(core::option::Option<&str>) -> core::option::Option<kernel::address::Address>
 pub fn web::opening_leaf(&channels::wire::BuildingAnswer) -> web::Leaf
 pub fn web::page<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>, &web::Filter, usize) -> web::Page
@@ -533,6 +534,13 @@ pub web::Msg::BuildingTruncated
 pub web::Msg::BuildingUnreadableRow
 pub web::Msg::BuildingWaitingCount
 pub web::Msg::CancelLastRun
+pub web::Msg::ChangedAdded
+pub web::Msg::ChangedBinary
+pub web::Msg::ChangedDeleted
+pub web::Msg::ChangedFiles
+pub web::Msg::ChangedModified
+pub web::Msg::ChangedNothing
+pub web::Msg::ChangedRenamed
 pub web::Msg::CityBuildingNamePlaceholder
 pub web::Msg::CityClearSelection
 pub web::Msg::CityFit
@@ -808,7 +816,7 @@ pub web::Note::Discarded::at: kernel::event::Seq
 pub web::Note::Discarded::count: usize
 pub web::Note::Fenced
 pub web::Note::Fenced::at: kernel::event::Seq
-pub web::Note::Fenced::oid: alloc::string::String
+pub web::Note::Fenced::oid: kernel::locator::GitOid
 pub web::Note::Refused
 pub web::Note::Refused::at: kernel::event::Seq
 pub web::Note::Refused::error: kernel::error::AxError

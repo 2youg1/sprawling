@@ -807,6 +807,26 @@ impl Views {
             channels::Query::RunHistory { run, before, limit } => {
                 channels::Answer::History(Box::new(self.run_history(*run, *before, *limit)))
             }
+            // A checkpoint this city does not hold is `Unavailable`, not
+            // an empty change list: "nothing moved" and "I could not
+            // look" are different answers and a reader acts differently
+            // on each.
+            channels::Query::Changes { base, head } => {
+                let far = match head {
+                    Some(oid) => memory::Head::Commit(*oid),
+                    None => memory::Head::WorkingTree,
+                };
+                match memory::between(&self.city_root, *base, far) {
+                    Ok(files) => channels::Answer::Changes(channels::ChangesAnswer {
+                        base: *base,
+                        head: *head,
+                        files,
+                    }),
+                    Err(_) => channels::Answer::Unavailable {
+                        query: format!("Changes({base})"),
+                    },
+                }
+            }
             channels::Query::EndpointView => {
                 channels::Answer::Endpoints(endpoints_answer(&self.book))
             }

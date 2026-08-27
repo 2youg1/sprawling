@@ -339,7 +339,7 @@ The machine's data face, parsed by `cargo xtask modmap`: a `.rs` file under `cra
 
 Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (the construction stage that introduced it: S0–S5 skeleton, P1–P4 product, R1 repair, F1 front end, P5–P7 documents, measurement and delivery) **| Status** (`planned`, `building`, `built`, `frozen`).
 
-### kernel (27) — every decision in the city, and nothing that touches a disk
+### kernel (28) — every decision in the city, and nothing that touches a disk
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -370,8 +370,9 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | kernel::model (port) | crates/kernel/src/model.rs | what a model call is, carrying the building's policy with it | port | S2 | built |
 | kernel::secret | crates/kernel/src/secret.rs | secret-shape judgement, the `secret:` grammar, and `Sealed<T>` | decision | S2 | built |
 | kernel::discard | crates/kernel/src/discard.rs | deletion as an effect class; a Discard without a Restoration cannot exist | decision | S2 | built |
+| kernel::change | crates/kernel/src/change.rs | what moved between two checkpoints; a binary file cannot be spelled as one that moved nothing | value | R2 | built |
 
-### memory (12) — persistence, and every view derived from it
+### memory (13) — persistence, and every view derived from it
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -383,6 +384,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | memory::projection | crates/memory/src/projection.rs | the cold view: questions too big for memory, and recovery after restart | projection | S3 | built |
 | memory::attribution | crates/memory/src/attribution.rs | where the money went, in five independent cuts that reconcile | projection | S3 | built |
 | memory::checkpoint | crates/memory/src/checkpoint.rs | git fences around a tool wave, and what disappeared between them | adapter | S3 | built |
+| memory::changes | crates/memory/src/changes.rs | what moved between two checkpoints, as paths and counts and never as patch text | adapter | R2 | built |
 | memory::worktree | crates/memory/src/worktree.rs | one node, one working tree, objects shared and files not | adapter | P2 | built |
 | memory::queue | crates/memory/src/queue.rs | one queue implementation serving three lanes | value | S3 | built |
 | memory::digest_cache | crates/memory/src/digest_cache.rs | the same bytes summarised once in their lifetime | projection | S3 | built |

@@ -1065,6 +1065,8 @@ pub fn Root(
     /// from `dropped` because the two boxes take different gestures:
     /// aiming new work, and saying something into work already running.
     steered: Option<String>,
+    /// What the open session changed on disk, once the server has said.
+    changes: Option<channels::ChangesAnswer>,
     following: bool,
     /// Whether frames are flowing yet.
     ///
@@ -1188,6 +1190,7 @@ pub fn Root(
                             runs: watchable(&snapshot),
                             following,
                             steered: steered.clone(),
+                            changes: changes.clone(),
                             live,
                             on_frame,
                             on_follow,
@@ -1622,6 +1625,9 @@ pub fn App() -> Element {
     // reason `dropped` is: the box belongs to a view that a drop can
     // reach from outside it.
     let mut steered = use_signal(|| None::<String>);
+    // What the open session changed on disk. An answer, so it is held
+    // beside the others and a reload asks again rather than trusting it.
+    let changes = use_signal(|| None::<channels::ChangesAnswer>);
     let mut following = use_signal(|| true);
     let live = use_signal(|| false);
     // What the keyboard opened. Held here rather than inside `Root`
@@ -1652,6 +1658,7 @@ pub fn App() -> Element {
         hits,
         filed,
         vitals,
+        changes,
         records,
         live,
         view,
@@ -1679,6 +1686,7 @@ pub fn App() -> Element {
             selected: selected(),
             dropped: dropped(),
             steered: steered(),
+            changes: changes(),
             following: following(),
             live,
             on_frame: move |frame: channels::ClientFrame| {
@@ -1866,6 +1874,7 @@ struct Wiring {
     hits: Signal<Option<channels::ArchiveAnswer>>,
     filed: Signal<Option<channels::RegistryAnswer>>,
     vitals: Signal<Option<channels::MetricsAnswer>>,
+    changes: Signal<Option<channels::ChangesAnswer>>,
     records: Signal<Vec<EventRecord>>,
     live: Signal<bool>,
     /// Which page is showing, so the run a person just asked for can be
@@ -2128,6 +2137,7 @@ fn connect(wiring: Wiring) -> Outbound {
         hits,
         filed,
         vitals,
+        changes,
         records,
         mut live,
         view,
@@ -2178,6 +2188,7 @@ fn connect(wiring: Wiring) -> Outbound {
                         hits,
                         filed,
                         vitals,
+                        changes,
                         records,
                         view,
                         expecting,
@@ -3593,6 +3604,7 @@ struct FrameWiring {
     hits: Signal<Option<channels::ArchiveAnswer>>,
     filed: Signal<Option<channels::RegistryAnswer>>,
     vitals: Signal<Option<channels::MetricsAnswer>>,
+    changes: Signal<Option<channels::ChangesAnswer>>,
     records: Signal<Vec<channels::EventRecord>>,
     view: Signal<View>,
     expecting: Signal<Option<String>>,
@@ -3629,6 +3641,7 @@ fn apply_frame(
         mut hits,
         mut filed,
         mut vitals,
+        mut changes,
         mut records,
         mut view,
         mut expecting,
@@ -3698,6 +3711,7 @@ fn apply_frame(
             channels::Answer::Archive(held) => hits.set(Some(held)),
             channels::Answer::Registry(held) => filed.set(Some(held)),
             channels::Answer::Metrics(held) => vitals.set(Some(*held)),
+            channels::Answer::Changes(held) => changes.set(Some(held)),
             // What happened before this tab opened. Folded into the
             // snapshot and kept for the pages that read history, in the
             // same bounded store the live stream fills - one answer to

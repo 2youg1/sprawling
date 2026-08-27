@@ -1024,6 +1024,28 @@ impl SessionName {
 - **64 字符**：超过这个长度的不是名字，是一件被写进名字栏的任务；它还要当别人机器上的目录名。
 - **serde 进口复验**：`Deserialize` 走 `parse`（同 `Address`），于是一个从线上来的名字不会因为发送方没检查而变成路径。
 
+### 8-30 kernel::change（ux-14；形状 2 value）
+
+```rust
+pub enum Lines { Counted { added: u32, removed: u32 }, Binary }
+pub enum How   { Added, Modified, Deleted, Renamed { from: String } }
+pub struct FileChange { pub path: String, pub how: How, pub lines: Lines }
+```
+
+**为什么在 kernel 而不在产地**：三处需要这个形状——`memory::changes` 从两棵树上读出它、
+`channels::wire` 携它、`web` 画它——而 `channels` 看不见 `memory`。定义两份再互相转换，
+就是「一个文件变更是什么」有两个定义，而漂开的总是没人看的那个。这与 `Restoration` 当初落在这里
+是同一条理由。
+
+**`Lines` 是穷举枚而不是两个 `u32`**：二进制文件没有行数。把它拼成 `Counted { 0, 0 }`
+与「碰过但没改」同形，而那是界面在报一个没人做过的测量——一条断言钉住两者序列化后不同形。
+
+**`How::Renamed` 自带来处**：改名与「删一个加一个」是关于同两棵树的两个事实；
+一个在判断 agent 是搬了代码还是重写了代码的人，需要这个差别。
+
+**没有任何字段能装补丁文本**：补丁文本就是文件内容，而文件内容离开这台机器是
+`secret::scan` 存在的理由。hunk 必须单独请求并同样受扫，所以它拼不进这个类型。
+
 ### 8-28 C17 从「首段」扩到「任一段」（F2.08；形状 2 value 的一条原语）
 
 ```rust

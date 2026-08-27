@@ -321,6 +321,40 @@ impl Checkpoint {
 - P2.03 补：`open` 逐次钉仓库局部 `core.autocrlf=false`。城里的文件必须逐字节往返，而这台机器的 git 有可能被配成在检出时重写行尾；被重写的文件与 Ledger 里它的哈希不符，而那看起来像损坏不像设置（P2.03 的 worktree 检出抳出此事）。
 - 提交身份固定 `sprawling <sprawling@local>`；时间恒入参（git 签名时间＝t，确定性 2）；scope 外文件恒不入 add（WriteDomain 即边界，全树扫描被明拒）。无变化波：wave_pre 产空提交（同树 oid，仍记 payload——链可重建优于省一次提交）。
 
+### 8-13 memory::changes（ux-14；形状 4 适配器；git2）
+
+```rust
+pub enum Lines { Counted { added: u32, removed: u32 }, Binary }
+pub enum How    { Added, Modified, Deleted, Renamed { from: String } }
+pub struct FileChange { pub path: String, pub how: How, pub lines: Lines }
+pub enum Head   { Commit(GitOid), WorkingTree }
+pub fn between(city_root: &Path, base: GitOid, head: Head)
+    -> Result<Vec<FileChange>, MemoryError>;
+```
+
+**写入侧早就是 git 原生的，缺的是整个读出侧。** 每一次工具浪前 `wave_pre` 都落一个真 commit，
+而仓库里没有任何一处读得出两个 commit 之间变了什么。人要的是「这个 agent 动过哪些文件」，
+而那个事实已经在盘上。
+
+**它天然只含写域。** `stage_scope` 只暂存 `<scope>/*`，所以两个检查点之间的差异不可能包含
+会话只读过的文件——其他 harness 正在为这件事头痛（一个会话的 diff 把读过的文件也算进去），
+而这个设计因为栅栏就是写域而白得。
+
+**`Lines` 是穷举枚而不是两个数。** 二进制文件没有行数，把它画成 `+0 −0` 是界面在说假话；
+同理 `How::Renamed` 与「删一个加一个」是两件事。
+
+**只算数，不搬补丁文本。** `scan_staged` 拒绝回显命中的字节（「回显字节本身即泄漏」），
+而补丁文本就是文件内容过 socket——同一个出口问题。路径与计数是一个查询；单文件的 hunk
+得是另一个显式查询，并且必须过同一道 `kernel::secret::scan`。**本卡只做前者。**
+
+**不缓存。** 两个 oid 都不可变，所以结果可以永久缓存（`digest_cache` 是现成先例）；
+但先测再调，未测到慢之前多一张表就是多一份要同步的状态。
+
+**一件尚未裁定的事（不阻本卡）**：`Checkpoint::commit` 写的是城仓库的 `HEAD`，而城是围绕
+人已有的文件夹形成的（`web::drop` 的文档明写）。即每一次工具浪都在往人自己的分支历史里写 commit。
+Conductor 与 Kilo Code 都明确拒绝了这条路，改用独立快照仓库。本卡只读不写，结论不受影响；
+但**在把这些 commit 摆进界面给人看之后，这个问题会变得更难改**。
+
 ### 8-9 memory::worktree（P2.03；形状 4 适配器＋形状 2 值类型；git2）
 
 ```rust

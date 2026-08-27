@@ -373,6 +373,13 @@ pub enum Msg {
     NoteFenced,
     NoteArrived,
     NoteDiscarded,
+    ChangedFiles,
+    ChangedNothing,
+    ChangedAdded,
+    ChangedModified,
+    ChangedDeleted,
+    ChangedRenamed,
+    ChangedBinary,
     LiveEveryEvent,
     DispatchMore,
     DispatchFewer,
@@ -1420,6 +1427,34 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "{count} file(s) went away, each with its way back",
             zh: "{count} 个文件没了，每个都带着回去的路",
         },
+        Msg::ChangedFiles => Phrase {
+            en: "{count} file(s) this session changed",
+            zh: "这次会话动过的文件 {count}",
+        },
+        Msg::ChangedNothing => Phrase {
+            en: "nothing on disk has moved since this session opened",
+            zh: "这次会话开工以来，盘上没有东西动过",
+        },
+        Msg::ChangedAdded => Phrase {
+            en: "new",
+            zh: "新增",
+        },
+        Msg::ChangedModified => Phrase {
+            en: "changed",
+            zh: "改动",
+        },
+        Msg::ChangedDeleted => Phrase {
+            en: "gone",
+            zh: "删除",
+        },
+        Msg::ChangedRenamed => Phrase {
+            en: "moved",
+            zh: "改名",
+        },
+        Msg::ChangedBinary => Phrase {
+            en: "not text",
+            zh: "非文本",
+        },
         Msg::LiveEveryEvent => Phrase {
             en: "every event, one line each",
             zh: "每一条事件，各一行",
@@ -2150,6 +2185,13 @@ mod tests {
             Msg::NoteFenced,
             Msg::NoteArrived,
             Msg::NoteDiscarded,
+            Msg::ChangedFiles,
+            Msg::ChangedNothing,
+            Msg::ChangedAdded,
+            Msg::ChangedModified,
+            Msg::ChangedDeleted,
+            Msg::ChangedRenamed,
+            Msg::ChangedBinary,
             Msg::LiveEveryEvent,
             Msg::DispatchMore,
             Msg::DispatchFewer,
@@ -2491,6 +2533,13 @@ mod tests {
                 | Msg::NoteFenced
                 | Msg::NoteArrived
                 | Msg::NoteDiscarded
+                | Msg::ChangedFiles
+                | Msg::ChangedNothing
+                | Msg::ChangedAdded
+                | Msg::ChangedModified
+                | Msg::ChangedDeleted
+                | Msg::ChangedRenamed
+                | Msg::ChangedBinary
                 | Msg::LiveEveryEvent
                 | Msg::DispatchMore
                 | Msg::DispatchFewer

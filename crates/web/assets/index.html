@@ -423,6 +423,34 @@
   .note .arg { color: var(--TEXT_QUIET); font-family: var(--font-mono); }
   .note .seq { color: var(--TEXT_QUIET); font-family: var(--font-mono);
                margin-left: auto; }
+  /* What this session did to the disk. Above the turns because it is the
+     fastest answer to "what has this agent been doing", and open by
+     default for the same reason. */
+  .changed { margin: var(--space-snug) 0 var(--space-base);
+             border: 1px solid var(--G3); border-radius: var(--corner-card);
+             corner-shape: var(--corner-card-shape); padding: var(--space-snug); }
+  .changed summary { cursor: pointer; color: var(--TEXT);
+                     font-weight: var(--weight-label); }
+  .changed-file { display: grid;
+                  grid-template-columns: 6ch minmax(0, 1fr) 6ch 6ch;
+                  gap: var(--space-base); align-items: baseline;
+                  padding: 3px 0; font-size: var(--text-note); }
+  .changed-file .how { color: var(--TEXT_QUIET); }
+  .changed-file .path { color: var(--TEXT); font-family: var(--font-mono);
+                        overflow: hidden; text-overflow: ellipsis;
+                        white-space: nowrap; direction: rtl; text-align: left; }
+  /* No green and no red. This design has two chromatic tokens and both
+     already mean something else - ACCENT "something is happening", ALERT
+     "a person is needed" - so a red deletion would be asking for a person
+     every time an agent tidied up. The sign carries the direction, the
+     column carries which is which, and weight separates the one that is
+     usually being looked for. Same instrument as `.call .out.failed`. */
+  .changed-file .added { color: var(--TEXT); font-family: var(--font-mono);
+                         font-weight: var(--weight-label); text-align: right; }
+  .changed-file .removed { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+                           text-align: right; }
+  .changed-file .binary { grid-column: 3 / -1; color: var(--TEXT_QUIET);
+                          text-align: right; }
   .live .stream { margin-top: var(--space-base); }
   .live .stream summary { cursor: pointer; color: var(--TEXT_QUIET);
                           font-size: var(--text-note); }

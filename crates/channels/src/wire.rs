@@ -27,8 +27,9 @@
 
 use kernel::{
     Address, ApprovalId, ApprovalItem, Autonomy, AxCode, AxError, B3Hash, BudgetCap, DialectKind,
-    Effort, EventKind, EventRecord, GitOid, IdemKey, McpServer, ModelTag, PolicyVerdict, Progress,
-    Restoration, RunId, SandboxLimits, Sealed, Seq, SessionName, TimeMs, UsdMicros,
+    Effort, EventKind, EventRecord, FileChange, GitOid, IdemKey, McpServer, ModelTag,
+    PolicyVerdict, Progress, Restoration, RunId, SandboxLimits, Sealed, Seq, SessionName, TimeMs,
+    UsdMicros,
 };
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +44,7 @@ use serde::{Deserialize, Serialize};
 ///    (P3.02).
 /// 9: a page can ask for the history that happened before it opened
 ///    (P3.04).
-pub const WIRE_V: u32 = 10;
+pub const WIRE_V: u32 = 11;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
@@ -74,9 +75,10 @@ pub const COMMAND_NAMES: [&str; 22] = [
 ];
 
 /// The Query surface, in declaration order.
-pub const QUERY_NAMES: [&str; 13] = [
+pub const QUERY_NAMES: [&str; 14] = [
     "History",
     "RunHistory",
+    "Changes",
     "RunView",
     "CityView",
     "ApprovalQueue",
@@ -641,6 +643,23 @@ pub enum Query {
         before: Option<Seq>,
         limit: u32,
     },
+    /// What moved between two checkpoints: paths and counts, never patch
+    /// text.
+    ///
+    /// The caller names both ends because it already knows them - a
+    /// checkpoint's oid is in the `checkpoint_committed` payload the
+    /// client folded - and computing the pair a second time on the
+    /// server would be a second answer to "which fences belong to this
+    /// session". Both oids are immutable, so the answer is cacheable
+    /// forever by anybody who wants to.
+    ///
+    /// `head` absent means the working tree: a wave still running has
+    /// written files no checkpoint holds yet, and a list that ignored
+    /// them would describe the session as it was one fence ago.
+    Changes {
+        base: GitOid,
+        head: Option<GitOid>,
+    },
     RunView {
         run: RunId,
     },
@@ -673,6 +692,7 @@ impl Query {
         match *self {
             Self::History { .. } => "History",
             Self::RunHistory { .. } => "RunHistory",
+            Self::Changes { .. } => "Changes",
             Self::RunView { .. } => "RunView",
             Self::CityView => "CityView",
             Self::ApprovalQueue => "ApprovalQueue",
@@ -703,6 +723,19 @@ pub struct HistoryAnswer {
     /// Where to ask next to go further back. `None` means this slice
     /// reaches the first record the city ever wrote.
     pub earlier: Option<Seq>,
+}
+
+/// What moved between two checkpoints, one row per file, path order.
+///
+/// Path order rather than size order: somebody looking for one file finds
+/// it in the same place every time, and a list that reorders itself as
+/// the numbers change cannot be scanned twice.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangesAnswer {
+    pub base: GitOid,
+    /// Absent when the comparison ran against the working tree.
+    pub head: Option<GitOid>,
+    pub files: Vec<FileChange>,
 }
 
 /// The most records one `History` answer may carry. A page asking for
@@ -872,6 +905,7 @@ pub struct CostAnswer {
 #[serde(rename_all = "snake_case")]
 pub enum Answer {
     History(Box<HistoryAnswer>),
+    Changes(ChangesAnswer),
     City(CityAnswer),
     Run(Option<RunSummary>),
     Approvals(ApprovalsAnswer),
@@ -1092,6 +1126,10 @@ mod tests {
                 run: RunId::from_bytes([1u8; 16]),
                 before: None,
                 limit: 20,
+            },
+            Query::Changes {
+                base: kernel::GitOid::from_bytes([2u8; 20]),
+                head: None,
             },
             Query::RunView {
                 run: RunId::from_bytes([1u8; 16]),

@@ -25,6 +25,7 @@ pub channels::AcpProgress::turns: u32
 pub channels::Answer::Approvals(channels::ApprovalsAnswer)
 pub channels::Answer::Archive(channels::ArchiveAnswer)
 pub channels::Answer::Building(alloc::boxed::Box<channels::BuildingAnswer>)
+pub channels::Answer::Changes(channels::ChangesAnswer)
 pub channels::Answer::City(channels::CityAnswer)
 pub channels::Answer::Cost(alloc::boxed::Box<channels::CostAnswer>)
 pub channels::Answer::Discards(channels::DiscardAnswer)
@@ -70,6 +71,9 @@ pub channels::BuildingDoc::truncated: bool
 pub channels::BuildingProgress::addr: kernel::address::Address
 pub channels::BuildingProgress::problems: alloc::vec::Vec<alloc::string::String>
 pub channels::BuildingProgress::progress: kernel::completion::Progress
+pub channels::ChangesAnswer::base: kernel::locator::GitOid
+pub channels::ChangesAnswer::files: alloc::vec::Vec<kernel::change::FileChange>
+pub channels::ChangesAnswer::head: core::option::Option<kernel::locator::GitOid>
 pub channels::ChosenSummary::endpoint: alloc::string::String
 pub channels::ChosenSummary::max_output_tokens: u64
 pub channels::ChosenSummary::model: alloc::string::String
@@ -245,6 +249,9 @@ pub channels::Query::ArchiveSearch
 pub channels::Query::ArchiveSearch::needle: alloc::string::String
 pub channels::Query::BuildingView
 pub channels::Query::BuildingView::addr: kernel::address::Address
+pub channels::Query::Changes
+pub channels::Query::Changes::base: kernel::locator::GitOid
+pub channels::Query::Changes::head: core::option::Option<kernel::locator::GitOid>
 pub channels::Query::CityView
 pub channels::Query::CostView
 pub channels::Query::DiscardView
@@ -310,7 +317,7 @@ pub channels::Welcome::wire_v: u32
 pub const channels::COMMAND_NAMES: [&str; 22]
 pub const channels::HISTORY_MAX: u32
 pub const channels::HISTORY_SCAN: u64
-pub const channels::QUERY_NAMES: [&str; 13]
+pub const channels::QUERY_NAMES: [&str; 14]
 pub const channels::WIRE_V: u32
 pub enum channels::Answer
 pub enum channels::AssetReply
@@ -379,6 +386,7 @@ pub struct channels::ArchiveLine
 pub struct channels::BuildingAnswer
 pub struct channels::BuildingDoc
 pub struct channels::BuildingProgress
+pub struct channels::ChangesAnswer
 pub struct channels::ChosenSummary
 pub struct channels::CityAnswer
 pub struct channels::CityLabel(_)
@@ -426,8 +434,11 @@ pub use channels::Effort
 pub use channels::EventDraft
 pub use channels::EventKind
 pub use channels::EventRecord
+pub use channels::FileChange
 pub use channels::GitOid
+pub use channels::How
 pub use channels::IdemKey
+pub use channels::Lines
 pub use channels::Locator
 pub use channels::McpServer
 pub use channels::McpTransport

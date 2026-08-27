@@ -25,7 +25,7 @@
 //! is assumed, and a payload that does not match still produces a row -
 //! a client one version behind must not drop a call it cannot parse.
 
-use channels::{AxError, EventKind, EventRecord, Seq, Tokens, UsdMicros};
+use channels::{AxError, EventKind, EventRecord, GitOid, Seq, Tokens, UsdMicros};
 
 /// What a tool call has come to so far.
 ///
@@ -104,7 +104,12 @@ pub enum Note {
     /// parts a person needs; taking it apart here would be the second.
     Refused { error: AxError, at: Seq },
     /// A checkpoint fence went up, and this is the commit it made.
-    Fenced { oid: String, at: Seq },
+    ///
+    /// A `GitOid` and not the string it arrived as: the parse is
+    /// fail-closed on exactly forty lowercase hex digits, so a payload
+    /// this build cannot read produces no row rather than a row nothing
+    /// can be asked about. It is what the change list is addressed by.
+    Fenced { oid: GitOid, at: Seq },
     /// This turn stopped for a person. What waits and who answers is
     /// `web::approval`'s; copying it here would be a third authority.
     Waiting { at: Seq },
@@ -191,6 +196,23 @@ pub struct Turn {
 /// Taken from the tool definitions rather than guessed: `path` is what
 /// twelve of them take, and the rest name their one subject.
 const SUBJECT_KEYS: [&str; 4] = ["path", "addr", "program", "arm"];
+
+/// The checkpoint a session's changes are measured from.
+///
+/// The first fence of the session, because that is the tree as the work
+/// found it; measuring from the latest one would answer "what moved in
+/// the last wave", which is a different question and not the one a
+/// person opening a session is asking.
+#[must_use]
+pub fn opened_at(turns: &[Turn]) -> Option<GitOid> {
+    turns
+        .iter()
+        .flat_map(|turn| turn.notes.iter())
+        .find_map(|note| match *note {
+            Note::Fenced { oid, .. } => Some(oid),
+            _ => None,
+        })
+}
 
 /// Folds a session's events into turns, oldest first.
 ///
@@ -383,7 +405,10 @@ fn note_of(kind: EventKind, record: &EventRecord) -> Option<Note> {
                 .map(|error| Note::Refused { error, at })
         }
         EventKind::ApprovalRequested => Some(Note::Waiting { at }),
-        EventKind::CheckpointCommitted => text(map.get("oid")).map(|oid| Note::Fenced { oid, at }),
+        EventKind::CheckpointCommitted => text(map.get("oid"))
+            .as_deref()
+            .and_then(GitOid::parse)
+            .map(|oid| Note::Fenced { oid, at }),
         EventKind::SteerReceived | EventKind::SignalConsumed => Some(Note::Arrived {
             from: text(map.get("source"))
                 .or_else(|| text(map.get("from")))
@@ -426,8 +451,8 @@ fn subject_of(args: Option<&serde_json::Value>) -> Option<String> {
 mod tests {
     use super::{Note, OUTPUT_LINES, Outcome, turns};
     use channels::{
-        AxCode, AxError, B3Hash, EventDraft, EventKind, EventRecord, Payload, RunId, Seq, TimeMs,
-        Tokens, UsdMicros,
+        AxCode, AxError, B3Hash, EventDraft, EventKind, EventRecord, GitOid, Payload, RunId, Seq,
+        TimeMs, Tokens, UsdMicros,
     };
 
     fn record(seq: u64, kind: EventKind, data: serde_json::Value) -> EventRecord {
@@ -722,6 +747,30 @@ mod tests {
 
     #[test]
     fn a_checkpoint_inside_a_turn_names_the_commit_it_made() {
+        let spelled = "3f9a1c00112233445566778899aabbccddeeff00";
+        let events = [
+            asked(1),
+            record(
+                2,
+                EventKind::CheckpointCommitted,
+                serde_json::json!({ "oid": spelled, "scope": "lab", "files": [] }),
+            ),
+        ];
+        assert_eq!(
+            turns(&events)[0].notes,
+            vec![Note::Fenced {
+                oid: GitOid::parse(spelled).expect("forty hex digits"),
+                at: Seq::new(2)
+            }]
+        );
+    }
+
+    /// The oid is what a change list is addressed by, so a spelling this
+    /// build cannot parse leaves no row: a checkpoint nothing can be
+    /// asked about is worse than a checkpoint that is not shown, because
+    /// the first one looks like a working control.
+    #[test]
+    fn a_checkpoint_whose_oid_will_not_parse_leaves_no_row_to_click() {
         let events = [
             asked(1),
             record(
@@ -730,13 +779,7 @@ mod tests {
                 serde_json::json!({ "oid": "3f9a1c", "scope": "lab", "files": [] }),
             ),
         ];
-        assert_eq!(
-            turns(&events)[0].notes,
-            vec![Note::Fenced {
-                oid: "3f9a1c".to_owned(),
-                at: Seq::new(2)
-            }]
-        );
+        assert!(turns(&events)[0].notes.is_empty());
     }
 
     #[test]

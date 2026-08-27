@@ -212,6 +212,10 @@ pub fn LiveView(
     /// a run is already spending, which is exactly where a gesture
     /// nobody could take back would cost the most.
     steered: Option<String>,
+    /// What this session has changed on disk, when the server has been
+    /// asked and answered. `None` is "not asked yet", which is a
+    /// different thing from "changed nothing".
+    changes: Option<channels::ChangesAnswer>,
     /// Whether the socket is live; see `app::Root`. A page that asked
     /// before the handshake finished asked nobody.
     live: Signal<bool>,
@@ -241,6 +245,27 @@ pub fn LiveView(
                 run: id,
                 before: None,
                 limit: channels::HISTORY_MAX,
+            }));
+        }
+    }));
+    // What this session has changed on disk.
+    //
+    // Measured from the session's first fence to the working tree, so a
+    // wave still running counts: the tree is what a person is looking
+    // at, not the tree git last recorded. Asked once per base, because
+    // the base does not move while a session is open.
+    let opened = crate::turn::opened_at(&turns);
+    let fenced = use_signal(|| None::<channels::GitOid>);
+    use_effect(use_reactive!(|(opened, live)| {
+        let mut fenced = fenced;
+        if live()
+            && let Some(base) = opened
+            && fenced() != Some(base)
+        {
+            fenced.set(Some(base));
+            on_frame.call(ClientFrame::Query(channels::Query::Changes {
+                base,
+                head: None,
             }));
         }
     }));
@@ -321,6 +346,37 @@ pub fn LiveView(
             }
             if dropped > 0 {
                 p { class: "dropped", "{dropped_line}" }
+            }
+            // What this session did to the disk, which is the fastest way
+            // to see what an agent has been doing. The counts come from
+            // git between two real commits; nothing here is folded from
+            // an event, because the fence is the authority on what moved.
+            if let Some(ref moved) = changes {
+                details { class: "changed", open: true,
+                    summary {
+                        "{fill(word(Msg::ChangedFiles), &[(\"count\", &moved.files.len().to_string())])}"
+                    }
+                    if moved.files.is_empty() {
+                        p { class: "note", "{word(Msg::ChangedNothing)}" }
+                    }
+                    for file in moved.files.clone() {
+                        div { key: "{file.path}", class: "changed-file",
+                            span { class: "how", "{word(how_word(&file.how))}" }
+                            span { class: "path", "{file.path}" }
+                            match file.lines {
+                                channels::Lines::Counted { added, removed } => rsx! {
+                                    span { class: "added", "+{added}" }
+                                    span { class: "removed", "\u{2212}{removed}" }
+                                },
+                                // No count exists for these bytes, and a
+                                // zero would be a measurement nobody made.
+                                channels::Lines::Binary => rsx! {
+                                    span { class: "binary", "{word(Msg::ChangedBinary)}" }
+                                },
+                            }
+                        }
+                    }
+                }
             }
             // A turn is one row, and what it did is inside it. The event
             // stream is the Ledger's shape; this is the reader's, and
@@ -404,9 +460,9 @@ pub fn LiveView(
                                             span { class: "recovery", "{said.recovery}" }
                                         }
                                     }
-                                    crate::turn::Note::Fenced { ref oid, .. } => rsx! {
+                                    crate::turn::Note::Fenced { oid, .. } => rsx! {
                                         span { class: "what",
-                                            "{fill(word(Msg::NoteFenced), &[(\"oid\", oid)])}"
+                                            "{fill(word(Msg::NoteFenced), &[(\"oid\", &short_oid(oid))])}"
                                         }
                                     },
                                     crate::turn::Note::Waiting { .. } => rsx! {
@@ -586,6 +642,30 @@ fn cut_line(lang: crate::lang::Lang, cut: usize, at: Seq) -> String {
         say(lang, Msg::TurnOutputCut),
         &[("cut", &cut.to_string()), ("seq", &at.value().to_string())],
     )
+}
+
+/// What happened to one file, as a word rather than a symbol.
+///
+/// Colour cannot carry it: this design has two chromatic tokens and both
+/// already mean something else, so the status is a word and the counts
+/// are signs - the same instrument `Outcome::Failed` uses.
+fn how_word(how: &channels::How) -> Msg {
+    match *how {
+        channels::How::Added => Msg::ChangedAdded,
+        channels::How::Modified => Msg::ChangedModified,
+        channels::How::Deleted => Msg::ChangedDeleted,
+        channels::How::Renamed { .. } => Msg::ChangedRenamed,
+    }
+}
+
+/// A checkpoint, shortened the way every git tool shortens one.
+///
+/// Seven characters, because that is what a person reads and quotes; the
+/// whole oid is what the change list is addressed by and it never has to
+/// be on screen for that.
+fn short_oid(oid: channels::GitOid) -> String {
+    let full = oid.to_string();
+    full.chars().take(7).collect()
 }
 
 /// Where a branch would be taken from, said.

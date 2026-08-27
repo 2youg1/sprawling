@@ -77,6 +77,10 @@ pub use spine::{EvidenceCell, MEMO_OUTLINE_FIELDS, MemoShape, ROADMAP_STATUS_SPE
 pub use spine::{RoadmapRow, RoadmapShape, RoadmapStatus, ScopeChange, WriteMoment};
 pub use spine::{check_memo_shape, check_roadmap_shape, set_roadmap_status, tally};
 
+mod change;
+
+pub use change::{FileChange, How, Lines};
+
 mod discard;
 mod secret;
 
