@@ -9,6 +9,10 @@
 # They run on a schedule and on demand instead of on every push because a
 # gate nobody waits for is a gate nobody runs - and a twenty-minute wait
 # on every commit is how the fast gates stopped being read at all.
+#
+# Both are functions of the commit: judged twice, one commit gives one
+# verdict. So the schedule asks first whether main has moved, and a night
+# that changed nothing costs one checkout instead of two runners (P4.05).
 name: platforms
 on:
   schedule:
@@ -19,6 +23,37 @@ permissions:
   contents: read
 
 jobs:
+  # Has main moved since the last scheduled run? The window is 25 hours,
+  # one hour wider than the cron interval, so a commit that lands minutes
+  # before a run is never missed by an off-by-one. Asking by hand always
+  # runs: `workflow_dispatch` is itself the answer to "is this worth a
+  # runner". The commit date comes from git rather than from an API, so
+  # this job needs nothing but a checkout - it is why ubuntu is legal
+  # here despite P4.02, which ruled the platform out of *builds*.
+  moved:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      verdict: ${{ steps.head.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: head
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "verdict=run" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          if [ "$age" -lt 90000 ]; then
+            echo "verdict=run" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=skip" >> "$GITHUB_OUTPUT"
+            echo "main last moved $(( age / 3600 )) hours ago; nothing new to judge" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # The same commands ci.yml runs, on the platform ci.yml never sees.
   #
   # macOS alone: this matrix used to carry a windows leg as well, which
@@ -27,7 +62,10 @@ jobs:
   # runner an hour a night, so the leg is gone rather than kept for
   # symmetry.
   macos:
+    needs: moved
+    if: needs.moved.outputs.verdict == 'run'
     runs-on: macos-latest
+    timeout-minutes: 40
     steps:
       # `guard` and `apisync` read one commit and its parent; ci.yml
       # gives the reasoning.
@@ -60,14 +98,28 @@ jobs:
 
   kani:
     # V5: the kernel harnesses (cfg(kani)); Linux-only upstream - the one
-    # ubuntu job left in the pipeline, kept because it works and because
+    # ubuntu build left in the pipeline, kept because it works and because
     # there is no other platform the tool runs on. Everything else moved
     # to the platform the project is developed on.
+    needs: moved
+    if: needs.moved.outputs.verdict == 'run'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - name: install pinned toolchain
         run: rustup show
+      # `--default-unwind` is why this job can return at all. Seven of the
+      # eleven harnesses build a Vec, a String or a BTreeSet, and CBMC
+      # cannot derive a bound for the loops inside them: every run since
+      # the first unwound BTreeSet's dying-node walk past iteration 11,900
+      # and hit the platform's six-hour ceiling on the third harness, so
+      # V5 has never yet produced a verdict. A bound does not weaken the
+      # proof - kani asserts that its own bound was large enough, so a 32
+      # that is too small turns this job red rather than green - and a
+      # harness that needs more can carry its own `#[kani::unwind]`.
+      # 32 covers what the harnesses actually walk: a 20-digit u64 written
+      # out by `format!`, and a 17-character reserved address parsed.
       - uses: model-checking/kani-github-action@v1
         with:
-          args: -p kernel
+          args: -p kernel --default-unwind 32

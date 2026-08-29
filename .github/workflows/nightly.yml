@@ -1,8 +1,20 @@
-# The slow assurances: work that earns its place by running while nobody
-# waits for it. The freeze-leak scenarios (a thousand freeze cycles) run
-# inside `just check` too; here they run on a schedule so a regression
-# cannot hide between manual gate runs. Fuzz targets are smoke-length -
-# long campaigns belong to a dedicated runner, not a CI slot.
+# What earns a slot on a schedule, and what does not.
+#
+# A scheduled run answers the one question a push cannot: what changed
+# while nobody pushed. Exactly two inputs change that way - the world
+# outside this repository (an advisory published today, a version yanked
+# today) and a fresh draw of random bytes. Everything else is a function
+# of the commit, so running it tonight against the commit it judged last
+# night spends a runner to recompute an answer already on record.
+#
+# Gone by that rule (P4.05): the thousand-session freeze-leak job. It ran
+# citysim's `freeze_leak` binary, which `cargo nextest run --workspace
+# --all-features` in ci.yml already runs on every push - the same test,
+# the same commit, one platform apart. It was also the only job here that
+# built the whole workspace on Linux, where `keyring`'s secret-service
+# backend wants libdbus headers the runner does not carry, so it had
+# failed every night since it was written. platforms.yml states the rule
+# it broke: a gate that repeats a gate teaches nobody anything.
 name: nightly
 on:
   schedule:
@@ -13,54 +25,59 @@ permissions:
   contents: read
 
 jobs:
-  freeze-leak:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: install pinned toolchain
-        run: rustup show
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-      # --all-features, as everywhere else: without it these two commands
-      # resolve a feature set no other command in the repository ever
-      # builds, so they compile their own tree and can fail on their own.
-      - name: thousand-session freeze leak
-        run: cargo nextest run -p citysim --locked --all-features -E 'binary(freeze_leak)'
-      - name: long-batch simulation
-        run: cargo nextest run -p citysim --locked --all-features
-      - name: clear the trybuild scratch before the cache is saved
-        if: always()
-        run: rm -rf target/tests
-
+  # V4: hostile bytes against the three parse surfaces. A new draw of
+  # random input every night is what makes this a schedule rather than a
+  # push gate; sixty seconds a target is a smoke length, and a real
+  # campaign belongs on a dedicated runner rather than in a CI slot.
   fuzz-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - name: install pinned toolchain and nightly
         run: |
           rustup show
           rustup toolchain install nightly --profile minimal
+      # install-action carries no recipe for cargo-fuzz and falls back to
+      # cargo-binstall, which fetches the musl build. Which is fine, and
+      # is also why the next step names a target.
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
-      # `+nightly` explicitly: rust-toolchain.toml pins 1.97.1, so without
-      # it cargo-fuzz runs under the pinned stable toolchain and refuses
-      # the nightly-only flags it needs. That is what this job did.
+      # Three things this loop had to learn, each from a red night.
+      #
+      # `--target` is not optional. cargo-fuzz defaults it to the triple
+      # cargo-fuzz itself was built for, so the musl binary above asked a
+      # gnu runner for a musl `std` it does not have, and the sanitizer
+      # refused the statically linked libc besides (rust-fuzz/cargo-fuzz#398).
+      #
+      # The list is taken before the loop rather than in its header:
+      # under `bash -e` a command substitution that fails inside a `for`
+      # header yields an empty list and a green step, so "no fuzz target
+      # ran at all" would have looked exactly like success.
+      #
+      # `+nightly` explicitly: rust-toolchain.toml pins 1.97.1, and
+      # cargo-fuzz needs the nightly-only sanitizer flags.
       - name: each target, sixty seconds
+        shell: bash
         run: |
-          for target in $(cargo +nightly fuzz list --fuzz-dir fuzz); do
-            cargo +nightly fuzz run "$target" --fuzz-dir fuzz -- -max_total_time=60
+          set -euo pipefail
+          targets=$(cargo +nightly fuzz list --fuzz-dir fuzz)
+          test -n "$targets"
+          for target in $targets; do
+            cargo +nightly fuzz run "$target" --fuzz-dir fuzz \
+              --target x86_64-unknown-linux-gnu -- -max_total_time=60
           done
 
-  # Security advisories, on a schedule rather than on every push. An
-  # advisory is published by somebody else at a time of their choosing;
-  # a pull request that goes red because of one is red for a reason its
-  # author cannot act on, and a red build nobody can act on is a red
-  # build people learn to ignore. Here, red means "go and look today".
+  # Advisories and yanked versions: the one check in this repository whose
+  # input is written by other people at a time of their choosing. On a
+  # pull request it would turn a change red for a reason its author cannot
+  # act on, which is how people learn to ignore a red build; here red
+  # means "go and look today". It compiles nothing - it reads Cargo.lock -
+  # so it is also the cheapest job in the repository.
   advisories:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: taiki-e/install-action@v2

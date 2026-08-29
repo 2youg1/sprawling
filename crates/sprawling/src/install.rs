@@ -14,8 +14,12 @@
 //! rights.
 //!
 //! The judgements live in `plan_append` and `plan_remove`, which are
-//! pure functions over the search path string. Everything below them is
-//! a copy, a registry write and a broadcast.
+//! pure functions over the search path string. They compile on Windows
+//! alone, because Windows is the only platform whose installer edits
+//! that string: elsewhere the line a person would add travels back in
+//! the outcome instead, and a judgement with no caller is dead code the
+//! zero-warning build is right to refuse. Everything below them is a
+//! copy, a registry write and a broadcast.
 
 use kernel::{AxCode, AxError};
 use std::path::{Path, PathBuf};
@@ -34,6 +38,7 @@ const SEPARATOR: char = ':';
 ///
 /// Two states rather than a bool, because "it was already there" and "I
 /// put it there" are different things to tell a person afterwards.
+#[cfg(target_os = "windows")]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PathEdit {
     AlreadyPresent,
@@ -41,6 +46,7 @@ pub(crate) enum PathEdit {
 }
 
 /// What uninstalling does to the search path.
+#[cfg(target_os = "windows")]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PathRemoval {
     Absent,
@@ -60,6 +66,13 @@ pub(crate) enum PathOutcome {
     /// The search path already said what it needed to say.
     Unchanged,
     /// The search path was rewritten and running shells will not see it.
+    #[cfg_attr(
+        not(target_os = "windows"),
+        expect(
+            dead_code,
+            reason = "only the Windows search path is rewritten rather than handed back"
+        )
+    )]
     Rewritten,
     /// This platform does not have the search path edited for it; the
     /// line a person adds themselves travels with the outcome.
@@ -113,6 +126,7 @@ fn same_directory(entry: &str, dir: &str) -> bool {
 ///
 /// Appends rather than prepends: a directory a person installed into
 /// should not shadow what their system already resolves.
+#[cfg(target_os = "windows")]
 pub(crate) fn plan_append(current: &str, dir: &str) -> PathEdit {
     if on_search_path(current, dir) {
         return PathEdit::AlreadyPresent;
@@ -128,6 +142,7 @@ pub(crate) fn plan_append(current: &str, dir: &str) -> PathEdit {
 ///
 /// Every other entry survives byte for byte, including an empty one:
 /// this reverses one append and audits nothing else.
+#[cfg(target_os = "windows")]
 pub(crate) fn plan_remove(current: &str, dir: &str) -> PathRemoval {
     let kept: Vec<&str> = current
         .split(SEPARATOR)
@@ -430,91 +445,91 @@ use search_path::{extend, retract};
     reason = "test code"
 )]
 mod tests {
-    use super::{PathEdit, PathRemoval, SEPARATOR, plan_append, plan_remove, program_dir};
+    use super::program_dir;
     use std::path::{Path, PathBuf};
 
-    /// Stand-ins, not paths on any machine: the release gate refuses a
-    /// published file that names somebody's home directory, and a test
-    /// fixture is published like everything else.
-    fn dir() -> &'static str {
-        if SEPARATOR == ';' {
-            r"X:\elsewhere\Local\Programs\sprawling"
-        } else {
-            "/elsewhere/.local/bin"
-        }
-    }
-
-    fn other() -> String {
-        if SEPARATOR == ';' {
-            r"X:\unpacked\system32".to_owned()
-        } else {
-            "/unpacked/bin".to_owned()
-        }
-    }
-
-    #[test]
-    fn an_empty_search_path_becomes_the_one_directory() {
-        assert_eq!(plan_append("", dir()), PathEdit::Append(dir().to_owned()));
-    }
-
-    #[test]
-    fn a_directory_already_there_is_not_added_twice() {
-        let current = format!("{}{SEPARATOR}{}", other(), dir());
-        assert_eq!(plan_append(&current, dir()), PathEdit::AlreadyPresent);
-    }
-
-    #[test]
-    fn a_trailing_separator_does_not_make_a_second_entry() {
-        let current = format!("{}{SEPARATOR}{}{SEPARATOR}", other(), dir());
-        assert_eq!(plan_append(&current, dir()), PathEdit::AlreadyPresent);
-    }
-
-    /// Windows resolves paths case-insensitively, so a differently-cased
-    /// entry is the same entry and adding another is a duplicate.
+    /// The judgements compile on Windows alone, and the tests that
+    /// exercise them compile there too: a test of a function that does
+    /// not exist on this platform proves nothing about this platform.
+    /// Windows is where the push gate runs, so these run on every push.
     #[cfg(target_os = "windows")]
-    #[test]
-    fn a_differently_cased_entry_is_the_same_entry() {
-        let current = format!("{}{SEPARATOR}{}", other(), dir().to_uppercase());
-        assert_eq!(plan_append(&current, dir()), PathEdit::AlreadyPresent);
-    }
+    mod plan {
+        use crate::install::{PathEdit, PathRemoval, SEPARATOR, plan_append, plan_remove};
 
-    #[test]
-    fn a_directory_that_is_not_there_is_appended_after_what_was() {
-        let current = other();
-        let expected = format!("{}{SEPARATOR}{}", other(), dir());
-        assert_eq!(plan_append(&current, dir()), PathEdit::Append(expected));
-    }
+        /// Stand-ins, not paths on any machine: the release gate refuses
+        /// a published file that names somebody's home directory, and a
+        /// test fixture is published like everything else.
+        fn dir() -> &'static str {
+            r"X:\elsewhere\Local\Programs\sprawling"
+        }
 
-    #[test]
-    fn removing_a_directory_that_was_never_added_changes_nothing() {
-        assert_eq!(plan_remove(&other(), dir()), PathRemoval::Absent);
-    }
+        fn other() -> String {
+            r"X:\unpacked\system32".to_owned()
+        }
 
-    #[test]
-    fn removing_keeps_every_other_entry_including_an_empty_one() {
-        let current = format!("{}{SEPARATOR}{}{SEPARATOR}", other(), dir());
-        assert_eq!(
-            plan_remove(&current, dir()),
-            PathRemoval::Rewrite(format!("{}{SEPARATOR}", other()))
-        );
-    }
+        #[test]
+        fn an_empty_search_path_becomes_the_one_directory() {
+            assert_eq!(plan_append("", dir()), PathEdit::Append(dir().to_owned()));
+        }
 
-    /// The pair of properties the whole card rests on: installing twice
-    /// is installing once, and uninstalling returns the exact string.
-    #[test]
-    fn append_then_remove_returns_the_original_search_path() {
-        for current in ["", &other(), &format!("{}{SEPARATOR}", other())] {
-            let PathEdit::Append(extended) = plan_append(current, dir()) else {
-                panic!("{current:?} does not contain the directory yet");
-            };
-            assert_eq!(plan_append(&extended, dir()), PathEdit::AlreadyPresent);
-            let PathRemoval::Rewrite(back) = plan_remove(&extended, dir()) else {
-                panic!("the directory was just added");
-            };
+        #[test]
+        fn a_directory_already_there_is_not_added_twice() {
+            let current = format!("{}{SEPARATOR}{}", other(), dir());
+            assert_eq!(plan_append(&current, dir()), PathEdit::AlreadyPresent);
+        }
+
+        #[test]
+        fn a_trailing_separator_does_not_make_a_second_entry() {
+            let current = format!("{}{SEPARATOR}{}{SEPARATOR}", other(), dir());
+            assert_eq!(plan_append(&current, dir()), PathEdit::AlreadyPresent);
+        }
+
+        /// Windows resolves paths case-insensitively, so a differently-cased
+        /// entry is the same entry and adding another is a duplicate.
+        #[test]
+        fn a_differently_cased_entry_is_the_same_entry() {
+            let current = format!("{}{SEPARATOR}{}", other(), dir().to_uppercase());
+            assert_eq!(plan_append(&current, dir()), PathEdit::AlreadyPresent);
+        }
+
+        #[test]
+        fn a_directory_that_is_not_there_is_appended_after_what_was() {
+            let current = other();
+            let expected = format!("{}{SEPARATOR}{}", other(), dir());
+            assert_eq!(plan_append(&current, dir()), PathEdit::Append(expected));
+        }
+
+        #[test]
+        fn removing_a_directory_that_was_never_added_changes_nothing() {
+            assert_eq!(plan_remove(&other(), dir()), PathRemoval::Absent);
+        }
+
+        #[test]
+        fn removing_keeps_every_other_entry_including_an_empty_one() {
+            let current = format!("{}{SEPARATOR}{}{SEPARATOR}", other(), dir());
             assert_eq!(
-                back.trim_end_matches(SEPARATOR),
-                current.trim_end_matches(SEPARATOR)
+                plan_remove(&current, dir()),
+                PathRemoval::Rewrite(format!("{}{SEPARATOR}", other()))
             );
+        }
+
+        /// The pair of properties the whole card rests on: installing twice
+        /// is installing once, and uninstalling returns the exact string.
+        #[test]
+        fn append_then_remove_returns_the_original_search_path() {
+            for current in ["", &other(), &format!("{}{SEPARATOR}", other())] {
+                let PathEdit::Append(extended) = plan_append(current, dir()) else {
+                    panic!("{current:?} does not contain the directory yet");
+                };
+                assert_eq!(plan_append(&extended, dir()), PathEdit::AlreadyPresent);
+                let PathRemoval::Rewrite(back) = plan_remove(&extended, dir()) else {
+                    panic!("the directory was just added");
+                };
+                assert_eq!(
+                    back.trim_end_matches(SEPARATOR),
+                    current.trim_end_matches(SEPARATOR)
+                );
+            }
         }
     }
 

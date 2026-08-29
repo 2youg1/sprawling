@@ -49,6 +49,7 @@ Stage 2 追加：
 
 - 类型加固十项全部有型可指；trybuild 八反例全集编译失败（S2.11）。
 - kani 七 harness 入库（`#[cfg(kani)]`）：本机 Windows 无 kani 宿主支持，每条性质配 proptest 镜像本地可跑，kani 本体入 CI Linux job（CI 恢复时生效）。
+- **kani 的循环界（P4.05）**：十一条 harness 里有七条构造 `Vec`／`String`／`BTreeSet`，CBMC 推不出它们内部循环的上界——`platforms` 的每一次运行都在 `TaintSet` 那个 `BTreeSet` 的 dying-node 走查上展开到第 11,900 次以上，并在第三条 harness（`discard::verification::tainted_never_allows`）上撞满六小时上限，故 **V5 至今没有给出过判决**。CI 因此传 `--default-unwind 32`（`platforms.yml`），job 另设 45 分钟上限。**界不削弱证明**：kani 会断言自己的界够不够，界太小是判红而不是判绿；某条 harness 若需要更大的界，由它自己带 `#[kani::unwind]`。32 取自 harness 真正走过的长度：`format!` 写出的 20 位十进制 u64，与 17 字符的保留地址解析。
 - three-part refusal 矩阵：五门每条 Deny 路径的 refusal 三段非空且 alternative 可执行（S2.13）。
 - conformance feature 全量导出：Ledger＋Tool＋Model 三套件（sandbox 随 S3）。
 
