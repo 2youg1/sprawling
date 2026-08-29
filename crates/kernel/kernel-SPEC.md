@@ -49,7 +49,7 @@ Stage 2 追加：
 
 - 类型加固十项全部有型可指；trybuild 八反例全集编译失败（S2.11）。
 - kani 七 harness 入库（`#[cfg(kani)]`）：本机 Windows 无 kani 宿主支持，每条性质配 proptest 镜像本地可跑，kani 本体入 CI Linux job（CI 恢复时生效）。
-- **kani 的循环界（P4.05）**：十一条 harness 里有七条构造 `Vec`／`String`／`BTreeSet`，CBMC 推不出它们内部循环的上界——`platforms` 的每一次运行都在 `TaintSet` 那个 `BTreeSet` 的 dying-node 走查上展开到第 11,900 次以上，并在第三条 harness（`discard::verification::tainted_never_allows`）上撞满六小时上限，故 **V5 至今没有给出过判决**。CI 因此传 `--default-unwind 32`（`platforms.yml`），job 另设 45 分钟上限。**界不削弱证明**：kani 会断言自己的界够不够，界太小是判红而不是判绿；某条 harness 若需要更大的界，由它自己带 `#[kani::unwind]`。32 取自 harness 真正走过的长度：`format!` 写出的 20 位十进制 u64，与 17 字符的保留地址解析。
+- **CI 只证四条，理由不是成本而是信息（P4.05）**：十一条 harness 里有七条的输入面是具体值——一个 `Address::parse(".sprawling/ledger")`、一个 `TaintSource::new("web:x")`、两个布尔分支——那是单测穿了一层证明的外衣，而同文件的 `#[cfg(test)]` 里已经有同一命题（`write_domain::reserved_target_is_outside_even_for_an_empty_domain`、`gate::the_domain_door_*`、`discard::the_decision_table_holds_in_order`），其中两条的 proptest 输入面比 harness 更宽（`discard::allow_implies_every_guard_passed` 取任意 u64，harness 只固定一个值）。**这七条恰好就是构造 `Vec`／`String`／`BTreeSet` 的那七条**：CBMC 推不出它们内部循环的上界，无界跑了六小时、`--default-unwind 32` 又跑了 45 分钟，两次都卡在 `discard::verification::tainted_never_allows`，两次都没有给出判决——**全局 unwind 界已被实验证伪，不是这个问题的解法**。CI 因此只跑四条输入域无界的：`backpressure` 与 `budget`（任意 u64 的全函数性与单调性，上次各约两秒返回）、`secret` 两条（四字节任意输入与任意 u64 的定点 log2）。**不传全局 unwind**：这四条的循环界都是常数（`log2_q10` 十次、熵计数 256 次），CBMC 自己推得出来，传 32 反而会把熵那条卡死。剩下七条保留在源码里但不入 CI，它们的权威是旁边的测试；要么把它们改成真正符号化的 harness（不再构造堆集合），要么删掉——两者都需一条单独的裁决。
 - three-part refusal 矩阵：五门每条 Deny 路径的 refusal 三段非空且 alternative 可执行（S2.13）。
 - conformance feature 全量导出：Ledger＋Tool＋Model 三套件（sandbox 随 S3）。
 

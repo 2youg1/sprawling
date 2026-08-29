@@ -96,30 +96,45 @@ jobs:
         shell: bash
         run: rm -rf target/tests
 
+  # V5: the four propositions only a proof can hold. Linux-only upstream -
+  # the one ubuntu build left in the pipeline, kept because the tool runs
+  # nowhere else.
+  #
+  # Four, not eleven, and the two facts line up exactly. Seven harnesses
+  # assert something about one concrete address and one concrete taint
+  # source - `Address::parse(".sprawling/ledger")`, `TaintSource::new(
+  # "web:x")` - which is a unit test wearing a proof's clothing, and the
+  # file beside each one already holds that proposition as a `#[test]` or
+  # as a proptest with a wider domain than the harness has (discard's
+  # `allow_implies_every_guard_passed` takes any u64; the harness fixes
+  # one value). Those same seven are the ones that build a Vec, a String
+  # or a BTreeSet, whose loops CBMC cannot bound: they spent six hours,
+  # then forty-five minutes under `--default-unwind 32`, and returned
+  # nothing either time.
+  #
+  # These four carry a domain sampling cannot reach - every u64, every
+  # four-byte input - and their loops are constant-bounded, so no global
+  # unwind is passed: CBMC derives the bounds (`log2_q10` iterates ten
+  # times, the entropy count 256). Two of them last verified in about two
+  # seconds each. One matrix leg per harness, so a red names the
+  # proposition that broke rather than the tool that ran.
   kani:
-    # V5: the kernel harnesses (cfg(kani)); Linux-only upstream - the one
-    # ubuntu build left in the pipeline, kept because it works and because
-    # there is no other platform the tool runs on. Everything else moved
-    # to the platform the project is developed on.
     needs: moved
     if: needs.moved.outputs.verdict == 'run'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - backpressure::verification::admit_is_total_and_monotone_in_depth
+          - budget::verification::admit_spend_is_total_and_admit_means_every_layer_fits
+          - secret::verification::entropy_is_total_on_short_inputs
+          - secret::verification::log2_q10_is_total
     steps:
       - uses: actions/checkout@v5
       - name: install pinned toolchain
         run: rustup show
-      # `--default-unwind` is why this job can return at all. Seven of the
-      # eleven harnesses build a Vec, a String or a BTreeSet, and CBMC
-      # cannot derive a bound for the loops inside them: every run since
-      # the first unwound BTreeSet's dying-node walk past iteration 11,900
-      # and hit the platform's six-hour ceiling on the third harness, so
-      # V5 has never yet produced a verdict. A bound does not weaken the
-      # proof - kani asserts that its own bound was large enough, so a 32
-      # that is too small turns this job red rather than green - and a
-      # harness that needs more can carry its own `#[kani::unwind]`.
-      # 32 covers what the harnesses actually walk: a 20-digit u64 written
-      # out by `format!`, and a 17-character reserved address parsed.
       - uses: model-checking/kani-github-action@v1
         with:
-          args: -p kernel --default-unwind 32
+          args: -p kernel --harness ${{ matrix.harness }}
