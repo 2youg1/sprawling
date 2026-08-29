@@ -112,24 +112,36 @@ jobs:
   # then forty-five minutes under `--default-unwind 32`, and returned
   # nothing either time.
   #
-  # These four carry a domain sampling cannot reach - every u64, every
+  # These three carry a domain sampling cannot reach - every u64, every
   # four-byte input - and their loops are constant-bounded, so no global
   # unwind is passed: CBMC derives the bounds (`log2_q10` iterates ten
-  # times, the entropy count 256). Two of them last verified in about two
-  # seconds each. One matrix leg per harness, so a red names the
-  # proposition that broke rather than the tool that ran.
+  # times). They returned in 41, 53 and 54 seconds on 2026-08-29.
+  #
+  # A fourth, `secret::entropy_is_total_on_short_inputs`, is left out and
+  # not forgotten: `entropy_millibits_per_char` calls `log2_q10` once per
+  # slot of a 256-slot count table, and each call squares a u128 ten
+  # times, so the harness hands the solver some 2,560 symbolic non-linear
+  # multiplications and does not return inside fifteen minutes. Nothing
+  # about a bound fixes that. The arithmetic core is proved on its own by
+  # `log2_q10_is_total`; proving the whole function needs a harness over
+  # one slot rather than over the table (kernel-SPEC.md section 2).
+  #
+  # One matrix leg per harness, so a red names the proposition that broke
+  # rather than the tool that ran. The ceiling is a backstop rather than
+  # a budget: a leg that takes ten minutes is a leg that stopped
+  # converging, and it cannot be wrapped in `timeout` because the command
+  # belongs to the action.
   kani:
     needs: moved
     if: needs.moved.outputs.verdict == 'run'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         harness:
           - backpressure::verification::admit_is_total_and_monotone_in_depth
           - budget::verification::admit_spend_is_total_and_admit_means_every_layer_fits
-          - secret::verification::entropy_is_total_on_short_inputs
           - secret::verification::log2_q10_is_total
     steps:
       - uses: actions/checkout@v5

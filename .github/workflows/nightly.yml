@@ -58,6 +58,11 @@ jobs:
       #
       # `+nightly` explicitly: rust-toolchain.toml pins 1.97.1, and
       # cargo-fuzz needs the nightly-only sanitizer flags.
+      #
+      # The ceiling is inside the step rather than on the job: a job that
+      # `timeout-minutes` kills is reported as *cancelled*, which reads
+      # as "somebody stopped it" instead of "it broke". `timeout` exits
+      # 124, and 124 is red. The job keeps its own ceiling as a backstop.
       - name: each target, sixty seconds
         shell: bash
         run: |
@@ -65,7 +70,7 @@ jobs:
           targets=$(cargo +nightly fuzz list --fuzz-dir fuzz)
           test -n "$targets"
           for target in $targets; do
-            cargo +nightly fuzz run "$target" --fuzz-dir fuzz \
+            timeout 20m cargo +nightly fuzz run "$target" --fuzz-dir fuzz \
               --target x86_64-unknown-linux-gnu -- -max_total_time=60
           done
 
