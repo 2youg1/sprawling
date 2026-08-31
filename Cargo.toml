@@ -70,7 +70,7 @@ axum = "0.8"
 # two implementations of one protocol in one binary. `connect` without
 # TLS: a city's control surface is reached over `ws://`, and a city
 # reachable over TLS is a city behind something that terminates it.
-tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect", "handshake"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 # S4.01 conclusion book (crates/web/web-SPEC.md section 8.5): Dioxus, built
 # without `dx`. default-features off is load-bearing - it drops `asset` and
