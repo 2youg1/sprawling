@@ -44,7 +44,7 @@ publish = false
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
+toml = "1.1"
 # Stage 1 pins: blake3 is the library-wide sole hash;
 # uuid v7 is human-readable identity only (parse/format; no generation in kernel).
 blake3 = "1.8"
