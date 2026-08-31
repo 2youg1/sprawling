@@ -1,0 +1,32 @@
+# Dependency updates, opened as pull requests so every bump goes through
+# the same gates as any other change.
+#
+# Two ecosystems, because those are the two this repository has: npm is
+# absent by construction (the zerojs gate holds that), so listing it
+# would only produce a manifest-not-found error every week.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+    groups:
+      patch-and-minor:
+        update-types: ["patch", "minor"]
