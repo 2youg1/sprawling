@@ -6,6 +6,10 @@
 //! Run every gate in a fixed order and aggregate the findings. Order is
 //! cheap-and-local first, git last; violations from all gates are rendered
 //! together so a builder sees the full list, not the first stumble.
+//!
+//! The array below is the only authority for which gates run and in what
+//! order; `COUNT` is its length parameter, one token away. `report` owns
+//! what a run's outcome reads like and what it exits with.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -23,7 +27,7 @@ use crate::{
 pub(crate) const COUNT: usize = 13;
 
 pub(crate) fn run(root: &Path, range: Option<&str>) -> ExitCode {
-    let results: [(&str, Result<Vec<Violation>, XtaskError>); COUNT] = [
+    let results: [(&'static str, Result<Vec<Violation>, XtaskError>); COUNT] = [
         ("header", header::check(root)),
         ("lexicon", lexicon::check(root)),
         ("modmap", modmap::check(root)),
@@ -39,30 +43,5 @@ pub(crate) fn run(root: &Path, range: Option<&str>) -> ExitCode {
         ("guard", guard::check(root, range)),
     ];
 
-    let mut all = Vec::new();
-    for (name, result) in results {
-        match result {
-            Ok(violations) => {
-                println!("gate {name}: {}", summary(&violations));
-                all.extend(violations);
-            }
-            Err(err) => return report::internal_failure(&err),
-        }
-    }
-    if all.is_empty() {
-        println!("all gates green");
-        ExitCode::SUCCESS
-    } else {
-        report::render(&all);
-        println!("{} violation(s) across all gates", all.len());
-        ExitCode::FAILURE
-    }
-}
-
-fn summary(violations: &[Violation]) -> String {
-    if violations.is_empty() {
-        "ok".to_owned()
-    } else {
-        format!("{} violation(s)", violations.len())
-    }
+    report::finish_all(results)
 }

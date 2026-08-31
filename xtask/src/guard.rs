@@ -6,7 +6,8 @@
 //! Guard gate: the gates guard themselves. A commit that touches gate
 //! machinery (xtask/, lint config, CI, the justfile) or deletes a module-table
 //! row must carry a `Verdict:` trailer quoting the user's ruling — this closes
-//! the                        (fix the cause, not the gate)"loosen the gate to pass the gate" shortcut.
+//! the "loosen the gate to pass the gate" shortcut: fix the cause, not the
+//! gate.
 //!
 //! Scope: committed history only (default HEAD; CI passes `--range base..head`).
 //! Uncommitted edits are judged when they become commits — gates testify about

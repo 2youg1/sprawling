@@ -110,7 +110,7 @@ pub(crate) struct Violation {
 
 ## 9 工作流程
 
-`cargo xtask <gate>` → 定位仓库根（`CARGO_MANIFEST_DIR` 的父目录）→ 读数据面（ARCHITECTURE.md／lexicon.toml／git）→ 纯函数判定 → 渲染违规 → 退出码。`gates` 依序跑全部机器门（header→lexicon→modmap→depmap→zerojs→secret→color→budget→specalign→apisync→release→guard），聚合后统一渲染。**门数只住 `gates::COUNT`**，且它就是那张数组的长度类型参数——数目与清单相隔一个 token，故不可能各说各话；文档要说门数就去读它，不再自己写一个。
+`cargo xtask <gate>` → 定位仓库根（`CARGO_MANIFEST_DIR` 的父目录）→ 读数据面（ARCHITECTURE.md／lexicon.toml／git）→ 纯函数判定 → 渲染违规 → 退出码。`gates` 依序跑全部机器门，聚合后统一渲染。**门数与门序都只住 `gates::run` 里的那张数组**：`COUNT` 就是它的长度类型参数，数目与清单相隔一个 token，故不可能各说各话。本节此前另抄了一份门名清单，它漏掉 `length` 而没有任何机器发现——要知道跑了哪几道门、按什么次序，读那张数组，不要在文档里再养一份。
 
 ## 10 实现逻辑
 
@@ -131,6 +131,8 @@ pub(crate) struct Violation {
 ## 12 错误处理
 
 `XtaskError`（thiserror）：`Io{path}`｜`Doc{file,msg}`（数据面不可解析）｜`Cmd{cmd,msg}`（git/cargo 调用失败）｜`Usage`。数据面坏＝退出码 2（门自身故障），不伪装成 0 或 1——门坏了必须显性，静默通过是门的最坏失效。
+
+**一门判不动，不得连累其余各门的结论**（issue #5）。`gates` 的那张数组是急切求值的，十三门在第一行输出之前就已全部跑完；此前的循环一遇 `Err` 即 `return`，于是排在它后面的 `release` 与 `guard` 结论已在手里却从未被打印。缺 `cargo-public-api` 是 `docs/CONTRIBUTING.md` §7 明列的预期状态，而在那种机器上，一次带违规的运行与一次干净的运行输出逐字相同，承重的 `guard` 恰在被吞掉的那两道里。故聚合运行遍历到底，逐门报出 `ok`／`N violation(s)`／`could not judge` 三态之一，再统一渲染全部违规。**退出码取最重的一态**：任一门判不动＝2，否则有违规＝1，否则 0——判不动压过判有罪，因为「没判」与「判过且干净」同形正是本条要拆开的东西。
 
 ## 13 依赖选型
 

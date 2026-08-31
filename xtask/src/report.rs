@@ -59,7 +59,102 @@ pub(crate) fn finish(gate: &'static str, result: Result<Vec<Violation>, XtaskErr
     }
 }
 
+/// Render a whole run: one line per gate, then every finding, then one
+/// exit code.
+///
+/// A gate that could not judge does **not** stop the walk. The gates are
+/// all evaluated before the first line is printed, so the ones after the
+/// failure are already holding their findings, and returning early threw
+/// those away — which made "not judged" and "clean" the same output on
+/// any machine without `cargo-public-api` (xtask-SPEC.md section 12).
+pub(crate) fn finish_all(
+    results: impl IntoIterator<Item = (&'static str, Result<Vec<Violation>, XtaskError>)>,
+) -> ExitCode {
+    let mut findings = Vec::new();
+    let mut broken = 0_usize;
+    for (gate, result) in results {
+        match result {
+            Ok(violations) if violations.is_empty() => println!("gate {gate}: ok"),
+            Ok(violations) => {
+                println!("gate {gate}: {} violation(s)", violations.len());
+                findings.extend(violations);
+            }
+            Err(err) => {
+                println!("gate {gate}: could not judge");
+                say_internal_failure(&err);
+                broken = broken.saturating_add(1);
+            }
+        }
+    }
+    render(&findings);
+    if !findings.is_empty() {
+        println!("{} violation(s) across all gates", findings.len());
+    }
+    let outcome = RunOutcome::of(broken, findings.len());
+    match outcome {
+        RunOutcome::Green => println!("all gates green"),
+        RunOutcome::Refused => {}
+        RunOutcome::Broken => println!("{broken} gate(s) could not judge"),
+    }
+    outcome.code()
+}
+
+/// What one whole run concluded.
+///
+/// Ordered by severity, and the order is the point: exit 2 says the gate
+/// is broken, exit 1 says the tree is, and a run that hit both must say
+/// the first. Collapsing them lets a missing tool read as a clean tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunOutcome {
+    Green,
+    Refused,
+    Broken,
+}
+
+impl RunOutcome {
+    fn of(broken: usize, findings: usize) -> Self {
+        if broken > 0 {
+            Self::Broken
+        } else if findings > 0 {
+            Self::Refused
+        } else {
+            Self::Green
+        }
+    }
+
+    fn code(self) -> ExitCode {
+        match self {
+            Self::Green => ExitCode::SUCCESS,
+            Self::Refused => ExitCode::FAILURE,
+            Self::Broken => ExitCode::from(2),
+        }
+    }
+}
+
 pub(crate) fn internal_failure(err: &XtaskError) -> ExitCode {
-    eprintln!("xtask internal failure: {err}");
+    say_internal_failure(err);
     ExitCode::from(2)
+}
+
+/// The one wording for "a gate could not judge", so the single-gate path
+/// and the whole-run path cannot describe the same event differently.
+fn say_internal_failure(err: &XtaskError) {
+    eprintln!("xtask internal failure: {err}");
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, reason = "test code")]
+mod tests {
+    use super::RunOutcome;
+
+    #[test]
+    fn a_broken_gate_outranks_a_violation() {
+        // The regression this pins: `apisync` failing to run used to
+        // discard `guard`'s findings, so a commit that had loosened a
+        // gate printed the same thing as a commit that had not.
+        assert_eq!(RunOutcome::of(1, 7), RunOutcome::Broken);
+        assert_eq!(RunOutcome::of(1, 0), RunOutcome::Broken);
+        assert_eq!(RunOutcome::of(0, 7), RunOutcome::Refused);
+        assert_eq!(RunOutcome::of(0, 0), RunOutcome::Green);
+    }
 }
