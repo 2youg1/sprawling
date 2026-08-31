@@ -3544,7 +3544,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "gateway",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "kernel",
  "memory",
  "protocol",
