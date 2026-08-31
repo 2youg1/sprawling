@@ -99,6 +99,7 @@ pub fn memory::Worktrees::open(&std::path::Path) -> core::result::Result<memory:
 pub fn memory::Worktrees::plan_merge(&self, &memory::WorktreeName) -> core::result::Result<memory::PlannedMerge<'_>, memory::MemoryError>
 pub fn memory::Worktrees::release(&self, memory::WorktreeLease) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::between(&std::path::Path, kernel::locator::GitOid, memory::Head) -> core::result::Result<alloc::vec::Vec<kernel::change::FileChange>, memory::MemoryError>
+pub fn memory::ledger_segments_at(&std::path::Path) -> core::result::Result<alloc::vec::Vec<std::path::PathBuf>, memory::MemoryError>
 pub fn memory::open_restored(&std::path::Path, kernel::event::TimeMs) -> core::result::Result<std::path::PathBuf, memory::MemoryError>
 pub fn memory::read_raw_lines_at(&std::path::Path) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, memory::MemoryError>
 pub memory::AttributionReport::by_actor: alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros)>

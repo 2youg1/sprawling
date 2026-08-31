@@ -9,7 +9,10 @@
 mod jsonl;
 
 pub use jsonl::WriteObserver;
-pub use jsonl::{JsonlLedger, MemoryError, OpenReport, TailTruncation, read_raw_lines_at};
+// One line on purpose: the index-file rule permits single-line `use`
+// declarations only, and rustfmt wraps the list at 100 columns.
+#[rustfmt::skip]
+pub use jsonl::{JsonlLedger, MemoryError, OpenReport, TailTruncation, ledger_segments_at, read_raw_lines_at};
 
 #[cfg(any(test, feature = "fault"))]
 mod fault_fs;

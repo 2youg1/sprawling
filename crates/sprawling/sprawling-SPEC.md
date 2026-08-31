@@ -968,6 +968,8 @@ struct Underway<'desk> { desk: &'desk CommandDesk, key: Option<IdemKey> }
 
 build.rs 内 `Result<(), String>` 汇到 `cargo::error`；运行期无可失败路径（S0）。逐码消解：无新增码。
 
+**`replay <ledger-dir>`：「这里没有账本」不得与「验过且为空」同形**（issue #3）。本子命令的路径是人敲的，故它先问 `memory::ledger_segments_at`，一段都没有即报 `E_PATH_NOT_FOUND` 并给 recovery，不进验链。**判据为什么在这一层而不在 `runtime::replay`**：`verify_ledger_dir` 的四个生产调用方均自持城根算出路径，而已开未写的城就是一个无段目录（`JsonlLedger::open` 只建目录），在那一层报错会把合法启动打红，并迫使四个调用方各写一份相同的守卫。空账本仍然合法，故问的是「有没有段」而不是「有没有行」。参见 runtime-SPEC §8-1、memory-SPEC §8。
+
 ## 13 依赖选型
 
 零运行时依赖（见 10）。

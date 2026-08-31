@@ -58,7 +58,7 @@ commands:
   adopt <dir> <addr>           take an existing directory in as a building
   call <frame|-> [--at a]      send one wire frame, print every frame back
   enrol <realm>/<name>         read a credential from stdin, hand it to a city
-  replay <dir>                 verify a chain offline, read-only
+  replay <ledger-dir>          verify a chain offline, read-only
   export <city> <dest>         pack a whole city
   restore <bundle> <city>      unpack it on another machine";
 
@@ -730,15 +730,9 @@ fn replay(dir: Option<&String>) -> ExitCode {
         eprintln!("usage: sprawling replay <ledger-dir>");
         return ExitCode::from(2);
     };
-    match runtime::replay::verify_ledger_dir(std::path::Path::new(dir)) {
-        Ok(verified) => {
-            println!(
-                "chain verified: {} line(s), tail seq {}",
-                verified.raw_lines().len(),
-                verified
-                    .tail_seq()
-                    .map_or_else(|| "none".to_string(), |s| s.value().to_string())
-            );
+    match verified_chain(std::path::Path::new(dir)) {
+        Ok(line) => {
+            println!("{line}");
             ExitCode::SUCCESS
         }
         Err(err) => {
@@ -747,6 +741,41 @@ fn replay(dir: Option<&String>) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The line `replay` prints when the chain holds.
+///
+/// The path came from a person, so "there is no ledger here" is a thing
+/// that happens, and it must not read as "the chain verified": a scripted
+/// integrity check would otherwise score a mistyped argument as a pass.
+/// An empty ledger is a different fact and still verifies, which is why
+/// the question asked is whether a segment exists rather than whether a
+/// line does (sprawling-SPEC section 12).
+///
+/// # Errors
+/// `E_PATH_NOT_FOUND` when the directory holds no ledger segment, and
+/// whatever chain verification says about a ledger that is there.
+fn verified_chain(dir: &std::path::Path) -> Result<String, kernel::AxError> {
+    let segments = memory::ledger_segments_at(dir).map_err(memory::MemoryError::into_ax)?;
+    if segments.is_empty() {
+        return Err(kernel::AxError::failure(
+            kernel::AxCode::PathNotFound,
+            "verify ledger",
+            dir.display().to_string(),
+        )
+        .with_recovery(
+            "no ledger segment here; point at the ledger directory itself \
+             rather than at the city that contains it",
+        ));
+    }
+    let verified = runtime::replay::verify_ledger_dir(dir)?;
+    Ok(format!(
+        "chain verified: {} line(s), tail seq {}",
+        verified.raw_lines().len(),
+        verified
+            .tail_seq()
+            .map_or_else(|| "none".to_string(), |s| s.value().to_string())
+    ))
 }
 
 fn status(args: &[String]) -> ExitCode {
@@ -809,7 +838,25 @@ fn log_levels() -> String {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
-    use super::{CLIENT_COMPLETE, CLIENT_FILES, named};
+    use super::{CLIENT_COMPLETE, CLIENT_FILES, named, verified_chain};
+
+    /// A place with no ledger in it is not a verified chain.
+    ///
+    /// `replay` used to answer `chain verified: 0 line(s), tail seq none`
+    /// and exit 0 for an empty directory and for a city directory alike,
+    /// because a ledger with no events reads the same way. A scripted
+    /// integrity check pointed at the wrong argument scored a pass.
+    #[test]
+    fn a_place_holding_no_ledger_is_refused_rather_than_verified() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = verified_chain(dir.path()).unwrap_err();
+        assert_eq!(err.code(), &kernel::AxCode::PathNotFound);
+        assert!(
+            err.recovery().contains("ledger directory itself"),
+            "the recovery names the mistake that was actually made: {}",
+            err.recovery()
+        );
+    }
 
     /// A flag is not a path.
     ///

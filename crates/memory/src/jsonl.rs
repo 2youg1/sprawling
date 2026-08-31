@@ -791,13 +791,7 @@ impl JsonlLedger {
 pub fn read_raw_lines_at(dir: &Path) -> Result<Vec<Vec<u8>>, MemoryError> {
     let vfs = RealFs;
     let mut out = Vec::new();
-    let segments: Vec<PathBuf> = vfs
-        .list(dir)
-        .map_err(io_err("list ledger dir", dir))?
-        .into_iter()
-        .filter(|p| is_segment(p))
-        .collect();
-    for seg in segments {
+    for seg in ledger_segments_at(dir)? {
         let bytes = vfs.read(&seg).map_err(io_err("read segment", &seg))?;
         let (lines, _) = complete_lines(&bytes);
         for line in lines {
@@ -807,6 +801,24 @@ pub fn read_raw_lines_at(dir: &Path) -> Result<Vec<Vec<u8>>, MemoryError> {
         }
     }
     Ok(out)
+}
+
+/// The ledger segments in `dir`, in the order they must be read.
+///
+/// An empty result means the directory holds no ledger at all, which is a
+/// different fact from a ledger that holds no events, and only this face
+/// can tell them apart: `read_raw_lines_at` answers `Ok([])` to both. The
+/// caller that has to tell them apart is the one that took the path from
+/// a person - `sprawling replay` - and it asks here so that the segment
+/// naming rule is never spelled a second time somewhere else.
+pub fn ledger_segments_at(dir: &Path) -> Result<Vec<PathBuf>, MemoryError> {
+    let vfs = RealFs;
+    Ok(vfs
+        .list(dir)
+        .map_err(io_err("list ledger dir", dir))?
+        .into_iter()
+        .filter(|p| is_segment(p))
+        .collect())
 }
 
 impl kernel::Ledger for JsonlLedger {

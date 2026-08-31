@@ -108,6 +108,12 @@ impl JsonlLedger {
 }
 /// 只读读面（replay/夹具）：不走 open、不触发断尾与任何写——重演恒不修盘（runtime-SPEC §8-1）。
 pub fn read_raw_lines_at(dir: &Path) -> Result<Vec<Vec<u8>>, MemoryError>;
+/// 目录里的账本段，按应读顺序（`list` 已排序，段名零填充故字典序即时序）。
+/// 空结果的意思是「这里没有账本」，与「账本里没有事件」不是同一件事；
+/// `read_raw_lines_at` 对两者都答 `Ok([])`，故需要区分的调用方问这一面。
+/// 现在只有一个：`sprawling replay`，它的路径是人敲的（sprawling-SPEC §12）。
+/// 段名规则因此只住 `is_segment` 一处，不被谁再拼一遍。
+pub fn ledger_segments_at(dir: &Path) -> Result<Vec<PathBuf>, MemoryError>;
 impl kernel::Ledger for JsonlLedger { /* append = append_all(vec![d]) */ }
 #[cfg(feature = "conformance")] impl LedgerInspect for JsonlLedger { … }
 // 测试可调滚动阈：roll_bytes 字段＋#[cfg(test)] 设定器；生产恒为 SEGMENT_ROLL_BYTES。

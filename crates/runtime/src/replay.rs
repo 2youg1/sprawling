@@ -3,8 +3,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Copyright (c) 2026 2youg1 and the sprawling contributors
 
-//! Offline replay: re-verifies a Ledger without re-executing anything
-//!. The second and last minting point for EventRef.
+//! Offline replay: re-verifies a Ledger without re-executing anything.
+//! The second and last minting point for EventRef.
 //!
 //! Refusals are fail-closed and name the 1-based line: a higher `v` and
 //! an unknown kind without `ig:true` speak direction
@@ -159,6 +159,14 @@ pub fn verify_lines(lines: Vec<Vec<u8>>) -> Result<VerifiedLedger, AxError> {
 }
 
 /// A2 over a durable ledger directory; strictly read-only.
+///
+/// A directory holding no segment yields an empty `VerifiedLedger`, the
+/// same as a ledger holding no events. That is deliberate here: every
+/// caller of this function computes the path from a city root it already
+/// holds, and a city that has been opened but never written to has a
+/// ledger directory and no segment in it. Telling the two apart is the
+/// job of whoever took the path from a person - `sprawling replay` does
+/// it with `memory::ledger_segments_at` (sprawling-SPEC section 12).
 pub fn verify_ledger_dir(dir: &Path) -> Result<VerifiedLedger, AxError> {
     let lines = memory::read_raw_lines_at(dir).map_err(memory::MemoryError::into_ax)?;
     verify_lines(lines)

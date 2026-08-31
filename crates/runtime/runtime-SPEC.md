@@ -92,10 +92,16 @@ impl VerifiedLedger {
 /// seq gaps, non-canonical bytes, unknown kind without `ig:true`.
 pub fn verify_lines(lines: Vec<Vec<u8>>) -> Result<VerifiedLedger, AxError>;
 /// Convenience over a jsonl directory: memory::jsonl::read_raw_lines + verify.
+/// 无段目录与空账本在此同形（均得空 VerifiedLedger）——本函数的调用方均自持城根算出路径；
+/// 区分二者是「从人那里拿到路径」的一层的事（§11；sprawling-SPEC §12）。
 pub fn verify_ledger_dir(dir: &Path) -> Result<VerifiedLedger, AxError>;
 ```
 
 流程：逐行①envelope 探查（serde_json::Value：v/seq/prev/kind/ig 键）；②v 判向（>EVENT_LOG_V 即 `E_LOG_VERSION_UNSUPPORTED`）；③链续（`chain_hash` 复算对拍 prev，首行对 GENESIS_PREV）；④seq 连续（自 FIRST 起）；⑤kind 已知→`parse_line` 全解＋规范复验＋`to_ref`；未知＋`ig:true`→记 IgnoredUnknown；未知无 ig→`E_LOG_VERSION_UNSUPPORTED`（subject=kind＋行号）。链与 seq 对一切行（含 ignored）成立。
+
+**「没找到要验的东西」与「验过且为空」必须异形，但不在这一层异形**（issue #3）。`verify_ledger_dir` 的四个生产调用方（`fold`、`rebuild_views`、`startup_scan`、`fork`）均自持城根算出路径，而 `JsonlLedger::open` 只建目录、首次 append 才建段：**已开未写的城恰好是一个无段目录**，在此处报错会把一个合法启动打红（`fold` 早已以 `if ledger_dir.exists()` 记下这个状态）。若改成在此报错，四个调用方就各需一份同样的守卫——一条条件四份拷贝。
+
+故判据归给**拿到人输入路径的那一层**：`sprawling replay <ledger-dir>` 先问 `memory::ledger_segments_at`，一段都没有就报 `E_PATH_NOT_FOUND`（sprawling-SPEC §12）。先例取自本仓库：`xtask guard` 在无提交时说 `no commits yet, nothing to judge`，而不说通过。**空账本本身仍然合法**：`verify_lines(vec![])` 照旧返回空 `VerifiedLedger`。
 
 ### 8-2 runtime::fork（S1.10）
 
@@ -660,7 +666,7 @@ envelope 探查与全解共用 kernel 的解析（Value 探查仅取五键，不
 
 ## 11 边界枚举
 
-空序列（合法：VerifiedLedger 空，tail_seq=None；fork 于其上恒越界）；单行创世；`at_seq=FIRST`（前缀＝仅创世行）；`at_seq=tail_seq`（前缀＝全量）；ig:true 且 kind 已知（照常全解，ig 只授未知时的跳过权）；篡改中段一字节（链断于下一行报错）；两段夹具跨段验证（memory 读面已拼平）。
+空序列（合法：VerifiedLedger 空，tail_seq=None；fork 于其上恒越界）；**目录存在但不含任何账本段**（在本模块合法且与空账本同形；人输入路径的拒绝在 CLI）；单行创世；`at_seq=FIRST`（前缀＝仅创世行）；`at_seq=tail_seq`（前缀＝全量）；ig:true 且 kind 已知（照常全解，ig 只授未知时的跳过权）；篡改中段一字节（链断于下一行报错）；两段夹具跨段验证（memory 读面已拼平）。
 
 ## 12 错误处理（逐码答「能否定义掉」）
 
