@@ -1,0 +1,67 @@
+name: Bug report / 缺陷报告
+description: Something is broken or behaves wrongly. 报告一个坏行为或缺陷。
+title: "简述现象 / what is broken"
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        一份好报告回答三个问题：做了什么、发生了什么、为什么这是缺陷而不是偏好。
+        本仓库的既定形状是 **现象 / 定位 / 影响 / 可能的方向 / 环境**（CONTRIBUTING §2、§6）。
+        语言自由（CONTRIBUTING §4），但概念名用仓库词汇（docs/glossary.md）。
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 现象 — what happened
+      description: 你运行了什么、输出了什么、你期望什么。粘贴精确的命令与输出；确定性失败请给 seed。
+      placeholder: |
+        $ sprawling replay "D:/.../city"
+        chain verified: 0 line(s), tail seq none      # 期望：报 E_PATH_NOT_FOUND
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: 定位 — where it lives (optional)
+      description: 找不到没关系；找到了就把 `file:line` 与机制写出来。这一节决定修复是被接走还是被重查。
+      placeholder: crates/runtime/src/replay.rs:163 的 verify_ledger_dir …
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响 — why this is a defect
+      description: 谁、在什么场景下被它伤到：数据完整性？脚本化检查被误判为通过？合法启动变红？只写主观不悦的，不是缺陷报告。
+    validations:
+      required: true
+
+  - type: textarea
+    id: directions
+    attributes:
+      label: 可能的方向 (optional)
+      description: 2–3 个候选，各一句话。取舍权在维护者；给出方向的人不必是给出答案的人。
+      placeholder: |
+        1. 在 X 处报错并以非零退出
+        2. 接受城目录，自行向下定位 ledger
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: OS / 工具链版本 / release tag 或 commit SHA——足以复现的那部分。
+      placeholder: Windows 11 / rustc 1.97.1 / sprawling v0.0.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: fixtures
+    attributes:
+      label: 复现夹具 (optional)
+      description: 能单独复现的最小输入：seed、日志文件、目录布局。一个夹具胜过三段描述。
+    validations:
+      required: false

@@ -1,5 +1,5 @@
-# Ask the two provider-intelligence upstreams whether they moved, once a
-# week, and open one issue when one did.
+# Ask the two provider-intelligence upstreams whether they moved, every
+# day, and open one issue when one did.
 #
 # What is watched and what commit it is tracked to are facts of
 # `docs/third-party.md` section 1, not of this file: the workflow parses
@@ -14,7 +14,7 @@
 name: upstream-watch
 on:
   schedule:
-    - cron: "17 1 * * 1"
+    - cron: "17 1 * * *"
   workflow_dispatch:
 
 permissions:

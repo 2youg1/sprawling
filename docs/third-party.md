@@ -26,7 +26,7 @@ The split is by provider: codex covers the OpenAI side, pi covers Anthropic and 
 
 **How to re-check**: watch those two paths for changes rather than watching releases. An endpoint migration often arrives in a patch version with no mention in the changelog. Where two sources disagree, the provider's own documentation decides, not the majority.
 
-**The watch is automated.** Every Monday `upstream-watch` asks each path for its newest commit and compares it with `Tracked to`; a difference opens one issue naming the commit, a compare view, and what to re-check. `Tracked to` advances only in the PR that actually realigns the constants - the same change-set that carries the new facts, so the watermark never runs ahead of what the code knows.
+**The watch is automated.** Every day `upstream-watch` asks each path for its newest commit and compares it with `Tracked to`; a difference opens one issue naming the commit, a compare view, and what to re-check. `Tracked to` advances only in the PR that actually realigns the constants - the same change-set that carries the new facts, so the watermark never runs ahead of what the code knows.
 
 **Why follow intelligence and not code**, three reasons, the last one learned by measurement:
 

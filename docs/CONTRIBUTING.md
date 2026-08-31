@@ -70,7 +70,7 @@ The `guard` row is the load-bearing one: it closes the single universal escape h
 
 ## 3.1 Continuous integration
 
-Three platforms - Linux, macOS, Windows. The trigger is **manual** while the project is under construction; restoring push and pull-request triggers is a decision for the person.
+**`ci` runs on every push to `main` and on every pull request**; its five jobs together are exactly `just check` plus `just check-web` plus the supply-chain read, and nothing else - a green CI implies at least what a green `just check` implies. `platforms` and `nightly` answer questions no one waits for (macOS/kani, fuzz, advisories) and run on a schedule; `upstream-watch` asks the two provider-intelligence upstreams whether they moved, daily.
 
 Three things run there and not here: `cargo-deny` when it is not installed locally, the formal-verification job (Linux only, mirrored locally by properties), and the nightly fuzz and mutation batches. Everything else is `just check`.
 

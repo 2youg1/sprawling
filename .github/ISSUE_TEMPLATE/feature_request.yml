@@ -1,0 +1,64 @@
+name: Feature request / 功能或改进
+description: A capability that does not exist, or an existing one that should work differently. 提出新能力或改进。
+title: "简述目标 / what you want to be true"
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本仓库的施工节奏是「一件有界的工作」——一个 session 能完成、有可检验的完成定义
+        （CONTRIBUTING §2 五步；ARCHITECTURE.md「deep modules」）。这份表单问的就是
+        那三件事：给谁、改什么、怎么算是完了。语言自由（CONTRIBUTING §4）。
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标 — what this is for
+      description: 谁在什么场景下得到什么。写需求，不写实现；「我想要 X API」是需求，X 的具体签名是实现。
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_vs_expected
+    attributes:
+      label: 现状与期望
+      description: 现在是什么行为、期望是什么行为。差异要小到能一句话写清；写不清的差异通常意味着请求本身还没成形。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准 (optional)
+      description: 可观察、可检验的完成定义——「改动后，运行 X 得到 Y」。验收写得出来，工作边界就清楚了。
+      placeholder: 对一个含 3 行账本的城，replay 每行都报告 tail_seq=2 …
+    validations:
+      required: false
+
+  - type: textarea
+    id: blast_radius
+    attributes:
+      label: 影响面 (optional)
+      description: 会波及哪些 crate / 数据面 / 文档。写不出不必勉强——这正是 SPEC 节「影响面」先问的问题。
+    validations:
+      required: false
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: 规模判断
+      description: 你感觉它多大。这是给编排者的第一手信息，不是承诺。
+      options:
+        - 一个 session（推荐起点）
+        - 跨多个 session
+        - 不确定，需要先读代码
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考 (optional)
+      description: 相关文档、上游、已知的类似实现——把指路的信息放这里，而不是另起一帖。
+    validations:
+      required: false

@@ -1,17 +1,29 @@
 # Dependency updates, opened as pull requests so every bump goes through
 # the same gates as any other change.
 #
-# Two ecosystems, because those are the two this repository has: npm is
-# absent by construction (the zerojs gate holds that), so listing it
-# would only produce a manifest-not-found error every week.
+# Three entries, split by importance rather than by ecosystem. What the
+# repository pins deliberately is its direct dependencies, and a change to
+# one matters the way an upstream change does - so those are checked daily,
+# and a bump lands within a day of the release. Dependabot's finest
+# interval is daily and there is no event trigger, so "immediately" means
+# "on the next daily run"; a webhook-fired updater would be a second
+# mechanism with a second state, and this repository does not keep two
+# authorities for one thing.
+#
+# Transitive dependencies ride the weekly cadence: nobody designed them in,
+# and a weekly grouped PR is cheap to review while a daily transitive bump
+# would be noise. npm is absent by construction (the zerojs gate holds that
+# there is no package.json), so listing it would produce a
+# manifest-not-found error every run.
 version: 2
 
 updates:
+  # CI itself: a fix to the runner front is a fix to the gates' threshold,
+  # so it is treated like the direct class.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
@@ -19,11 +31,31 @@ updates:
       actions:
         patterns: ["*"]
 
+  # The direct class: checked daily, patch and minor in one grouped PR per
+  # day, major alone - a major is a decision, and a decision needs its own
+  # PR. Each is reviewed against `just check` like any other change.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: daily
+    allow:
+      - dependency-type: direct
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      patch-and-minor:
+        update-types: ["patch", "minor"]
+
+  # The transitive class: weekly, grouped. A version that only a dependency
+  # of a dependency pins is not a decision this repository made.
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
       day: monday
+    allow:
+      - dependency-type: indirect
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps"
