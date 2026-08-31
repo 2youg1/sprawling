@@ -125,13 +125,17 @@ jobs:
   gates:
     runs-on: windows-latest
     steps:
-      # `guard` judges HEAD and `apisync` judges the commit that changed a
-      # baseline: both read one commit and its parent, so two is the whole
-      # of the history they need. The full clone this used to take was
-      # bought for a range argument no workflow passes.
+      # `guard` and `apisync` judge every commit in a range, and the range
+      # is the whole change-set under review. This step used to take
+      # `fetch-depth: 2` under a note saying no workflow passed a range.
+      # The note was true and it was the hole: guard judged the tip commit
+      # alone, so a pull request could carry a gate-loosening commit in the
+      # middle and still go green, while xtask-SPEC.md section 3 had
+      # promised the range all along. No fixed depth replaces this, because
+      # a base branch can sit any distance back.
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: install pinned toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -146,8 +150,42 @@ jobs:
       # so a job without this line stops here instead of passing.
       - name: nightly toolchain (rustdoc JSON for apisync)
         run: rustup toolchain install nightly --profile minimal
+      # base..head for a pull request, before..after for a push. A push
+      # that rewrote history leaves `before` unreachable in a fresh clone,
+      # and a first push has no `before` at all; both fall back to HEAD and
+      # say which they did, because a range that cannot be resolved must
+      # not read as a range that was clean.
       - name: xtask gates
-        run: cargo xtask gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          reachable() { git cat-file -e "$1^{commit}" 2>/dev/null; }
+          range=""
+          case "${{ github.event_name }}" in
+            pull_request)
+              base='${{ github.event.pull_request.base.sha }}'
+              tip='${{ github.event.pull_request.head.sha }}'
+              if reachable "$base" && reachable "$tip"; then
+                range="$base..$tip"
+              else
+                echo "::error::pull request range $base..$tip is not in this clone"
+                exit 1
+              fi
+              ;;
+            push)
+              before='${{ github.event.before }}'
+              if reachable "$before"; then
+                range="$before..${{ github.sha }}"
+              fi
+              ;;
+          esac
+          if [ -n "$range" ]; then
+            echo "judging $range"
+            cargo xtask gates --range "$range"
+          else
+            echo "judging HEAD alone"
+            cargo xtask gates
+          fi
 
   # The two places `just check` cannot reach: web's wasm-only paths, and
   # channels built without its server feature.

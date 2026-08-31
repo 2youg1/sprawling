@@ -9,9 +9,11 @@
 //! the "loosen the gate to pass the gate" shortcut: fix the cause, not the
 //! gate.
 //!
-//! Scope: committed history only (default HEAD; CI passes `--range base..head`).
-//! Uncommitted edits are judged when they become commits — gates testify about
-//! decidable objects only (xtask-SPEC.md section 3).
+//! Scope: committed history only. The default is HEAD alone; CI passes
+//! `--range`, which is `base..head` for a pull request and `before..after`
+//! for a push, so a commit in the middle of a change-set is judged too and
+//! not just the tip. Uncommitted edits are judged when they become commits
+//! — gates testify about decidable objects only (xtask-SPEC.md section 3).
 
 use std::path::Path;
 use std::process::Command;
