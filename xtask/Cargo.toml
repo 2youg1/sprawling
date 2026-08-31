@@ -20,7 +20,7 @@ flate2 = "1"
 # brace counter gets `'{'`, a line-continued string and `#[cfg(test)]`
 # wrong, and each mistake produces a wrong list of offenders. Workspace
 # tooling only, never the product binary (xtask-SPEC.md section 13).
-syn = { version = "2", features = ["full", "parsing", "printing"] }
+syn = { version = "3", features = ["full", "parsing", "printing"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
 
