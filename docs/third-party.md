@@ -12,14 +12,21 @@ Two kinds of outside thing appear here, and the boundary differs, so they get a 
 
 Signing in to a provider requires knowing four things: the authorization endpoint, the token endpoint, the client id, and the scopes. Those are **facts** rather than works, and citing them creates no licence obligation. The source still has to be written down, or "check periodically whether upstream changed" is a discipline with no address to go to.
 
-| Project | Licence | What is followed | Where to look |
-|---|---|---|---|
-| [openai/codex](https://github.com/openai/codex) | Apache-2.0 | OpenAI's subscription login: endpoints, client id, scopes, device-code flow | `codex-rs/login/` |
-| [earendil-works/pi](https://github.com/earendil-works/pi) | MIT | the same intelligence for Anthropic and the other subscription providers | `auth/oauth/` in the `@earendil-works/pi-ai` package, one file per provider |
+| Project | Licence | What is followed | Where to look | Tracked to |
+|---|---|---|---|---|
+| [openai/codex](https://github.com/openai/codex) | Apache-2.0 | OpenAI's subscription login: endpoints, client id, scopes, device-code flow | `codex-rs/login/` | `13fe2bcb7a3b` |
+| [earendil-works/pi](https://github.com/earendil-works/pi) | MIT | the same intelligence for Anthropic and the other subscription providers | `packages/ai/src/auth/oauth/` | `55b0db4d3e90` |
+
+> **Machine authority**: `.github/workflows/upstream-watch.yml` parses the five
+> columns of the two rows above - project, watch path, tracked commit. The
+> column shape is fixed; the prose around them is not (cf. ARCHITECTURE.md
+> §3, §12 tables). |
 
 The split is by provider: codex covers the OpenAI side, pi covers Anthropic and the rest. **Only these two.** A third source would buy one cross-check and cost an extra place to read on every review, plus a round of judgement whenever the three disagree.
 
 **How to re-check**: watch those two paths for changes rather than watching releases. An endpoint migration often arrives in a patch version with no mention in the changelog. Where two sources disagree, the provider's own documentation decides, not the majority.
+
+**The watch is automated.** Every Monday `upstream-watch` asks each path for its newest commit and compares it with `Tracked to`; a difference opens one issue naming the commit, a compare view, and what to re-check. `Tracked to` advances only in the PR that actually realigns the constants - the same change-set that carries the new facts, so the watermark never runs ahead of what the code knows.
 
 **Why follow intelligence and not code**, three reasons, the last one learned by measurement:
 

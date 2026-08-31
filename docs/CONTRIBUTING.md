@@ -97,6 +97,8 @@ The first line is `card-<stage>.<index>: <what>`, for example `card-S4.02: the w
 
 The body records **what you found**, since what you did is already in the diff. Three findings are always worth the space: a gate that changed your design, a red-to-green transition that exposed a real defect, and a choice between two approaches whose reason is not obvious from the result.
 
+`deps:` is its own family and carries no card number: that prefix is what dependabot writes, and a bot does not plan work. A bump that touches a guarded path (a root `Cargo.toml`, a workflow file) still needs the `Verdict:` trailer like any other change to one; at merge time, the person merging supplies it.
+
 ## 6 Tests
 
 - Reach for properties before examples (`proptest`), `insta` for golden output, and `trybuild` when the point is that something cannot be expressed at all.

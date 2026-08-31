@@ -1,0 +1,75 @@
+# Ask the two provider-intelligence upstreams whether they moved, once a
+# week, and open one issue when one did.
+#
+# What is watched and what commit it is tracked to are facts of
+# `docs/third-party.md` section 1, not of this file: the workflow parses
+# the two table rows (project, path, tracked commit), so the doc stays the
+# single authority for both the list and the watermark. An endpoint
+# migration arrives in a patch version, so commits are compared rather
+# than releases; releases are exactly what this must not watch.
+#
+# The run writes nothing to the tree. `Tracked to` advances only in the
+# change-set that realigns the code with the new facts, so the commit a
+# person sees in a pull request is the commit the code has actually read.
+name: upstream-watch
+on:
+  schedule:
+    - cron: "17 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: ask each upstream whether it moved
+        run: |
+          set -euo pipefail
+          gh label create upstream-watch >/dev/null 2>&1 || true
+          rows=$(grep '^| \[' docs/third-party.md)
+          while IFS= read -r line; do
+            repo=$(printf '%s\n' "$line" |
+              sed -n 's/.*github.com\/\([^/)]*\/[^/)]*\).*/\1/p')
+            [ -z "$repo" ] && continue
+            path=$(printf '%s\n' "$line" | cut -d'|' -f5 | tr -d '` ')
+            tracked=$(printf '%s\n' "$line" | cut -d'|' -f6 | tr -d ' ')
+            head=$(curl -fsSL \
+              "https://api.github.com/repos/$repo/commits?path=$path&per_page=1" |
+              python3 -c "import json,sys; print(json.load(sys.stdin)[0]['sha'])")
+            if [[ "$head" == "$tracked"* ]]; then
+              echo "$repo: unchanged ($tracked)"
+              continue
+            fi
+            if gh issue list --state open --label upstream-watch \
+              --json title --limit 50 | grep -q "\"$repo\""; then
+              echo "$repo: moved ($head), issue already open"
+              continue
+            fi
+            gh issue create \
+              --title "upstream watch: $repo moved" \
+              --label upstream-watch \
+              --body "## What moved
+
+\`$path\` in [$repo](https://github.com/$repo) has a newer commit than
+\`$tracked\`, which is what this repository's constants have read so far:
+
+- new commit: [\`${head:0:12}\`](https://github.com/$repo/blob/$head)
+- compare: <https://github.com/$repo/compare/$tracked...$head>
+
+## What to do
+
+The provider intelligence this repo follows (see \`docs/third-party.md\`
+section 1) needs re-checking against that diff: endpoints, client id,
+scopes, device-code flow. Realigning the constants and setting the new
+commit in the \`Tracked to\` column belong to the **same** change-set, so
+the watermark never runs ahead of what the code knows. Where two sources
+disagree, the provider's own documentation decides, not the majority.
+"
+          done <<< "$rows"
