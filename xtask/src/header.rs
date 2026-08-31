@@ -1,8 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2026 2youg1
+// Copyright (c) 2026 2youg1 and the sprawling contributors
 
 //! MPL-2.0 header gate: every `.rs` in the repo opens with the exact
 //! Exhibit A notice, then the copyright line.
@@ -14,27 +13,41 @@
 //! is gated for the reason every other convention in this repo is gated -
 //! a line nothing checks is a line the next new file will not carry.
 //!
-//! The notice keeps the first three rows because MPL 2.0 section 3.4
+//! The notice takes the first three rows because MPL 2.0 section 3.4
 //! forbids altering the substance of a licence notice, so it is the part
-//! that must stay quotable and verbatim; the copyright follows it after a
-//! blank comment row rather than interrupting its three sentences.
+//! that must stay quotable and verbatim, and nothing may split it. The
+//! copyright line follows immediately, with no blank comment row between
+//! them: the four rows are one head, and a reader who has finished the
+//! third row is already at the name.
 //!
 //! The year is the year of first publication and does not advance with the
 //! calendar - a gate that demanded the current year would turn every
 //! January red across every file at once, which is a chore rather than a
 //! fact about the work.
+//!
+//! "and the sprawling contributors" names people who do not exist yet on
+//! purpose. Contributors hold copyright in what they write and grant it
+//! downstream themselves under section 2.1, so the clause transfers
+//! nothing; what it buys is that the first outside contribution does not
+//! oblige anyone to rewrite every header in the tree. Exhibit A allows
+//! "additional accurate notices of copyright ownership", and a standing
+//! class is accurate in a way an enumerated list is not - Mozilla dropped
+//! the per-file contributor list in the 1.1 to 2.0 upgrade because it was
+//! "neither a complete nor accurate list" and a source of merge conflicts.
+//!
+//! RefRain and kusanagi carry the same four rows with their own project
+//! name. Anyone changing the shape here changes it in all three.
 
 use std::path::Path;
 
 use crate::report::{Violation, XtaskError};
 use crate::walk;
 
-const EXPECTED: [&str; 5] = [
+const EXPECTED: [&str; 4] = [
     "// This Source Code Form is subject to the terms of the Mozilla Public",
     "// License, v. 2.0. If a copy of the MPL was not distributed with this",
     "// file, You can obtain one at https://mozilla.org/MPL/2.0/.",
-    "//",
-    "// Copyright (c) 2026 2youg1",
+    "// Copyright (c) 2026 2youg1 and the sprawling contributors",
 ];
 
 pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
@@ -52,8 +65,8 @@ pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
                 gate: "header",
                 location: rel,
                 rule: "every .rs file carries the MPL-2.0 notice and the copyright line".to_owned(),
-                violation: "the first five lines differ from the header".to_owned(),
-                alternative: "prepend the exact 5-line header; see any existing module".to_owned(),
+                violation: "the first four lines differ from the header".to_owned(),
+                alternative: "prepend the exact 4-line header; see any existing module".to_owned(),
             });
         }
     }

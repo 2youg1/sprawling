@@ -1,8 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2026 2youg1
+// Copyright (c) 2026 2youg1 and the sprawling contributors
 
 //! The run driver owns one sequence: dispatch, turns, freeze. These tests
 //! pin that sequence and the three ways a run can end, so a later change

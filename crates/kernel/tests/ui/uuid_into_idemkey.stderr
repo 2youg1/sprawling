@@ -1,7 +1,7 @@
 error[E0308]: mismatched types
-  --> tests/ui/uuid_into_idemkey.rs:13:55
+  --> tests/ui/uuid_into_idemkey.rs:12:55
    |
-13 |     let _key: kernel::IdemKey = kernel::IdemKey::from(run);
+12 |     let _key: kernel::IdemKey = kernel::IdemKey::from(run);
    |                                 --------------------- ^^^ expected `IdemKey`, found `RunId`
    |                                 |
    |                                 arguments to this function are incorrect

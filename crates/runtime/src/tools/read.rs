@@ -1,8 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2026 2youg1
+// Copyright (c) 2026 2youg1 and the sprawling contributors
 
 //! The read tool: one argument that is either a path this city lets a
 //! model choose, or a name its reading room already admitted.

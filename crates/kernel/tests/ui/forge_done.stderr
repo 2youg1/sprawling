@@ -1,7 +1,7 @@
 error[E0423]: cannot initialize a tuple struct which contains private fields
-  --> tests/ui/forge_done.rs:11:18
+  --> tests/ui/forge_done.rs:10:18
    |
-11 |     let forged = kernel::Evidence(vec![]);
+10 |     let forged = kernel::Evidence(vec![]);
    |                  ^^^^^^^^^^^^^^^^
    |
 note: constructor is not visible here due to private fields

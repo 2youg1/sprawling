@@ -1,7 +1,7 @@
 error[E0560]: struct `Artifact` has no field named `node`
-  --> tests/ui/verify_your_own_work.rs:12:9
+  --> tests/ui/verify_your_own_work.rs:11:9
    |
-12 |         node: collab::NodeId::parse("node-1").unwrap(),
+11 |         node: collab::NodeId::parse("node-1").unwrap(),
    |         ^^^^ `Artifact` does not have this field
    |
    = note: all struct fields are already assigned
