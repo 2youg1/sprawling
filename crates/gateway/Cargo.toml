@@ -20,7 +20,7 @@ zeroize.workspace = true
 # RFC 7636 mandates SHA-256 for the S256 challenge: an external protocol
 # fact, not a second internal hash authority (blake3 stays sole for
 # content addressing).
-sha2 = "0.10"
+sha2 = "0.11"
 
 [dev-dependencies]
 insta.workspace = true
