@@ -9,6 +9,7 @@
 //! failure mode a gate can have (xtask-SPEC.md section 12).
 
 mod apisync;
+mod ax;
 mod badge;
 mod budget;
 mod color;
@@ -46,6 +47,7 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("gates") => gates::run(&root, range.as_deref()),
         Some("color") => report::finish("color", color::check(&root)),
+        Some("ax") => report::finish("ax", ax::check(&root)),
         Some("budget") => match budget::report(&root) {
             Ok(text) => {
                 print!("{text}");
@@ -147,7 +149,7 @@ fn range_arg(args: &[String]) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|specalign|apisync|guard> [--range a..b] [--write]"
+        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|color|ax|specalign|apisync|guard> [--range a..b] [--write]"
     );
     eprintln!(
         "       cargo xtask spec <crate> | budget | badge [--write] | mem [pid] | sbom | package | repro [--full]"

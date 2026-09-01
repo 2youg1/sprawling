@@ -181,6 +181,51 @@ pub fn describe(record: &EventRecord) -> (Option<Msg>, String) {
     (msg, who)
 }
 
+/// What this session did to the disk.
+///
+/// The counts come from git between two real commits; nothing here is
+/// folded from an event, because the fence is the authority on what
+/// moved and a second reading of it would be a second answer.
+///
+/// `None` is "not asked yet", which is a different fact from "changed
+/// nothing" - so the block is absent rather than empty, and an empty
+/// answer says so in its own words.
+#[component]
+pub fn Changed(changes: Option<channels::ChangesAnswer>) -> Element {
+    let lang = use_context::<Signal<crate::lang::Lang>>();
+    let word = move |msg: Msg| say(lang(), msg);
+    let Some(moved) = changes else {
+        return rsx! {};
+    };
+    rsx! {
+        details { class: "changed", open: true,
+            summary {
+                "{fill(word(Msg::ChangedFiles), &[(\"count\", &moved.files.len().to_string())])}"
+            }
+            if moved.files.is_empty() {
+                p { class: "note", "{word(Msg::ChangedNothing)}" }
+            }
+            for file in moved.files.clone() {
+                div { key: "{file.path}", class: "changed-file",
+                    span { class: "how", "{word(how_word(&file.how))}" }
+                    span { class: "path", "{file.path}" }
+                    match file.lines {
+                        channels::Lines::Counted { added, removed } => rsx! {
+                            span { class: "added", "+{added}" }
+                            span { class: "removed", "\u{2212}{removed}" }
+                        },
+                        // No count exists for these bytes, and a zero
+                        // would be a measurement nobody made.
+                        channels::Lines::Binary => rsx! {
+                            span { class: "binary", "{word(Msg::ChangedBinary)}" }
+                        },
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// One line, said. `None` from [`describe`] falls back to the event's own
 /// kind, which is English in the Ledger and stays English here.
 #[must_use]
@@ -350,33 +395,7 @@ pub fn LiveView(
             // to see what an agent has been doing. The counts come from
             // git between two real commits; nothing here is folded from
             // an event, because the fence is the authority on what moved.
-            if let Some(ref moved) = changes {
-                details { class: "changed", open: true,
-                    summary {
-                        "{fill(word(Msg::ChangedFiles), &[(\"count\", &moved.files.len().to_string())])}"
-                    }
-                    if moved.files.is_empty() {
-                        p { class: "note", "{word(Msg::ChangedNothing)}" }
-                    }
-                    for file in moved.files.clone() {
-                        div { key: "{file.path}", class: "changed-file",
-                            span { class: "how", "{word(how_word(&file.how))}" }
-                            span { class: "path", "{file.path}" }
-                            match file.lines {
-                                channels::Lines::Counted { added, removed } => rsx! {
-                                    span { class: "added", "+{added}" }
-                                    span { class: "removed", "\u{2212}{removed}" }
-                                },
-                                // No count exists for these bytes, and a
-                                // zero would be a measurement nobody made.
-                                channels::Lines::Binary => rsx! {
-                                    span { class: "binary", "{word(Msg::ChangedBinary)}" }
-                                },
-                            }
-                        }
-                    }
-                }
-            }
+            Changed { changes: changes.clone() }
             // A turn is one row, and what it did is inside it. The event
             // stream is the Ledger's shape; this is the reader's, and
             // both are readings of the same records.
@@ -579,10 +598,14 @@ pub fn LiveView(
             // guess about which run was meant.
             if let Some(id) = run {
                 div { class: "interventions",
+                    // Stopping this session. Quiet and away from the box
+                    // a person types into: it cannot be taken back, and
+                    // the one control that cannot be taken back must not
+                    // sit where a hand is already moving fast.
                     button {
                         class: "quiet",
-                        onclick: move |_| on_frame.call(takeover_command(id)),
-                        "{word(Msg::LiveTakeover)}"
+                        onclick: move |_| on_frame.call(cancel_command(id)),
+                        "{word(Msg::CancelLastRun)}"
                     }
                     button {
                         class: "quiet",
@@ -691,16 +714,22 @@ pub fn short_run(run: RunId) -> String {
     full.split('-').next().unwrap_or(&full).to_owned()
 }
 
-/// Taking a run over: the person answers for it from here.
+/// Stopping this session, from the page that shows it.
 ///
-/// One of the five interventions `channels::control` classifies, and one
-/// of the two this client had no way to send at all. An interface for
-/// delegated work whose only verbs are "say something" and "stop" is not
-/// a control surface; it is a transcript with a kill switch.
+/// A run a person stopped ends as `cancelled` rather than `frozen`, and
+/// the list draws the two differently because they call for different
+/// next actions: one of them can be picked back up, and the other was
+/// already finished with.
+///
+/// **`Takeover` is not here, and that is deliberate.** The verb is on
+/// the wire and no city executes it, so a button for it would have had
+/// exactly one outcome: a refusal. A control that cannot succeed is
+/// worse than a missing one, because it spends a person's attention
+/// teaching them the interface lies.
 #[must_use]
-pub fn takeover_command(run: RunId) -> ClientFrame {
-    ClientFrame::Command(Box::new(channels::WireCommand::Takeover {
-        idem: channels::IdemKey::derive(&run, Seq::FIRST, b"takeover"),
+pub fn cancel_command(run: RunId) -> ClientFrame {
+    ClientFrame::Command(Box::new(channels::WireCommand::Cancel {
+        idem: channels::IdemKey::derive(&run, Seq::FIRST, b"cancel"),
         run,
     }))
 }

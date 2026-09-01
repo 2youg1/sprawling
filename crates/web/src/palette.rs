@@ -190,7 +190,7 @@ mod tests {
         Offer {
             label: label.to_owned(),
             kind,
-            going: View::Overview,
+            going: View::Sessions,
         }
     }
 

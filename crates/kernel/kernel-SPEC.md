@@ -1186,3 +1186,22 @@ memory::jsonl／memory::cas／runtime::replay／runtime::fork／citysim 全部�
 - 本文 §8-4／§8-1 两表是 S2 `xtask specalign` 的数据面：改 enum 必同集改表。
 - `consts_policy` 三项延后：随 S2.06（锁）、S2.08（Autonomy）、S2.09（时钟档）落地，§8-8 与 §14 已登。
 - 设计缺口（存储写失败码）：已消——S2 期初增 `E_STORAGE_FATAL`。
+
+
+### 模型端口多一扇门：说到一半的话（V3.12）
+
+```rust
+pub type Increments<'a> = &'a mut dyn FnMut(&str);
+
+pub trait Model {
+    fn call(&mut self, req: &ModelRequest) -> Result<ModelReturn, AxError>;
+    fn call_streaming(&mut self, req: &ModelRequest, onto: Increments<'_>)
+        -> Result<ModelReturn, AxError> { self.call(req) }
+}
+```
+
+**默认实现是承重的。** 它让「没有流的适配器」成为诚实的而不是坏的：调用方在同一时刻拿到同一个 `ModelReturn`，只是没看到任何增量。citysim 的脚本模型、离线重放、`gateway::native` 都不必改一个字。
+
+**`Increments` 一个参数、无返回值，是刻意的。** 增量不是判断：下游任何东西都不得据它分支，而一个能拒绝的 sink 会让一个显示细节有能力弄失败一次调用。
+
+**覆盖它的适配器欠同一个 `ModelReturn`，包括同样的失败。** 流被切断是一次读取错误，永远不是一个变短的回答——`ModelReturn` 恒不由增量拼出来。写进账本的那句话只从 `ModelReturn` 来，一次，在调用结算之后。

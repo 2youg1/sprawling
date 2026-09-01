@@ -29,38 +29,82 @@ use channels::{Address, ApprovalItem, EventKind, EventRecord, RunId, Seq, Tokens
 // that resolve against the prelude by bare name. This is the one glob import
 // in the crate, and it is a requirement of the macro, not a convenience.
 use crate::lang::Msg;
+use crate::phase::Phase;
 use dioxus::prelude::*;
 
-/// Which central region is showing. The five regions of the layout contract
-///; the top bar, left nav, right status and control
-/// surface are always present and are not routes.
+/// Which page the content region is showing (web-SPEC.md section 8-53
+/// B1). Three regions fill the window — top bar, left nav, content — and
+/// only the content region routes.
+///
+/// **Six destinations, and two shapes that are reached from them.** The
+/// previous set had eleven entries and no page for the one object this
+/// product has: a session. Eight of those eleven were a list of
+/// sessions, a history of sessions, or settings, and each had a nav
+/// entry of its own — so the interface asked a person to choose between
+/// eleven answers to a question they had not asked yet.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum View {
-    /// The first screen: how much of this city is working, on what, and
-    /// what is waiting on a person. It is the default because it is the
-    /// only page that answers the question somebody arrives with.
+    /// The list, and the box that starts work. Default because the
+    /// action a person arrives to take is on it.
     #[default]
-    Overview,
-    /// The isometric city, or its degenerate single-Building form at P0.
-    City,
-    /// One session, live. `None` is the page before a run is picked:
-    /// the destination exists whether or not anything is running, and a
-    /// page that says "nothing is running" is an answer, while a nav
-    /// entry that vanishes is a question about where it went.
-    Live(Option<RunId>),
-    Approvals,
-    /// What was discarded, and how each row comes back.
-    RecycleBin,
-    /// What the city wrote down: the shelves, and what was filed lately.
-    Archive,
-    Dashboard,
-    Ledger,
-    /// One building's own files and archive.
+    Sessions,
+    /// One session: a work line in one room, named by the name a person
+    /// gave it. The object page this interface never had.
+    Session(Address),
+    /// Everything that cannot move until a person answers.
+    Waiting,
+    /// One history, in three lenses. They were three pages with three
+    /// nav entries, and no reader ever had to choose between them
+    /// before knowing what they were looking for.
+    Record(Lens),
+    /// Spend, in five cuts.
+    Cost,
+    /// Where a provider is registered, and which language this reads in.
+    /// A region rather than a modal: registering is work, and work that
+    /// can be interrupted needs a place to return to.
+    Setup,
+    /// One building's own files and archive. Reached from a session and
+    /// from the city drawing, not from the nav: it is where sessions
+    /// live rather than a sixth thing to check.
     Building(Address),
-    /// Where a provider is registered. A region rather than a modal:
-    /// registering is work, and work that can be interrupted needs a
-    /// place to return to.
-    Settings,
+    /// A run named by a link written before sessions had addresses.
+    /// Held as its own view because the router is pure and the room a
+    /// run is in is a fact only the snapshot has; the page resolves it
+    /// and moves on, so this is a state the address bar passes through.
+    Run(RunId),
+}
+
+/// Which lens the record is read through.
+///
+/// One page, three lenses, because they are three questions about one
+/// history and a person picks the lens after deciding to look — not
+/// before. `Bin` is spelled short in the fragment and long on screen:
+/// the address bar is typed and the heading is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lens {
+    /// Every record, newest first.
+    #[default]
+    Ledger,
+    /// What was filed on the shelves, and what went there lately.
+    Archive,
+    /// What was discarded, and the way each row comes back.
+    Bin,
+}
+
+impl Lens {
+    /// Every lens, in the order the page offers them: the whole history,
+    /// then what was kept, then what was thrown away.
+    pub const ALL: [Lens; 3] = [Lens::Ledger, Lens::Archive, Lens::Bin];
+
+    /// What this lens is called on screen.
+    #[must_use]
+    pub fn word(self) -> Msg {
+        match self {
+            Self::Ledger => Msg::RecordLensLedger,
+            Self::Archive => Msg::RecordLensArchive,
+            Self::Bin => Msg::RecordLensBin,
+        }
+    }
 }
 
 /// How a provider is behaving, as the right-hand status shows it. An enum
@@ -103,36 +147,39 @@ impl ProviderHealth {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunRow {
     pub addr: Option<Address>,
+    /// What a person called this piece of work. Folded from the address
+    /// the run opened in, because the room *is* the name: `Dispatch`
+    /// takes a session name and the city opens a room of that name, so
+    /// the last segment of the address is the word a person typed.
+    pub session: Option<String>,
     /// The run that handed this work down, when one did. Folded from
     /// `run_started`, so a page and an offline replay draw the same
     /// tree.
     pub parent: Option<RunId>,
-    pub phase: RunPhase,
+    pub phase: Phase,
     pub steps_done: u32,
     pub steps_planned: Option<u32>,
     pub started_at_seq: Seq,
-}
-
-/// Where a Run is. Exhaustive: an interface that cannot name a state will
-/// show a blank where a person expected a word.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunPhase {
-    Running,
-    AwaitingApproval,
-    Frozen,
-    Halted,
-}
-
-impl RunPhase {
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Running => "running",
-            Self::AwaitingApproval => "awaiting approval",
-            Self::Frozen => "frozen",
-            Self::Halted => "halted",
-        }
-    }
+    /// The last record this client folded for this run. What the session
+    /// page needs in order to say how long ago something happened, and
+    /// what `Fork` needs in order to name a point a person can mean.
+    pub last_seq: Seq,
+    /// How many turns have closed. A turn is a model call and whatever
+    /// it caused, so this counts `model_returned` rather than records.
+    pub turns: u32,
+    /// The turn at which a handoff was last written, if one ever was.
+    pub handoff_at_turn: Option<u32>,
+    /// Which gate is holding this run, when one is. Named by the gate,
+    /// not by the request: a person asked "what is it stuck on" and the
+    /// answer is a door, not an identifier.
+    pub gate: Option<String>,
+    /// What this run has cost so far, in the two halves that are
+    /// separately knowable. `None` where no call has settled an amount.
+    pub spent: Option<UsdMicros>,
+    /// The last thing the model said, trimmed to one line. What a row in
+    /// the list shows so that a person can tell two sessions apart
+    /// without opening either.
+    pub said: Option<String>,
 }
 
 /// What the model calls consumed, and what the city may not claim to know
@@ -183,6 +230,16 @@ pub struct Snapshot {
     /// that arrives as an event is folded in one place.
     served: BTreeMap<String, Vec<String>>,
     halted: bool,
+    /// What a model is saying right now, per run, before the call it
+    /// belongs to has settled.
+    ///
+    /// **Discardable, and discarded.** It is not folded from the ledger,
+    /// it does not survive a reload, and `model_returned` throws the
+    /// run's buffer away and lets the record speak. Where an increment
+    /// and the settled text disagree — a provider that revised, a stream
+    /// that was cut — the record wins, because the record is the one a
+    /// replay produces.
+    saying: BTreeMap<RunId, String>,
     /// How many signal events have gone by. A count, never the queue: a
     /// page that folded the queue here would be a second answer to what
     /// waits in a room, and the room's queue is the city's to state. What
@@ -216,6 +273,108 @@ impl Snapshot {
     }
 
     /// What is waiting, oldest arrival first once the inbox groups it.
+    /// How many things cannot move until this person answers.
+    ///
+    /// What the nav badge shows and what the waiting page lists, from one
+    /// producer: a badge counting a set the page does not show is worse
+    /// than no badge, because a person who clicks it and finds nothing
+    /// stops believing the next one.
+    ///
+    /// Records this client could not read as items are counted in. One
+    /// that is not shown is still one that waits, and a badge quietly
+    /// short by one is wrong about the only fact it carries.
+    #[must_use]
+    pub fn waiting_on_you(&self) -> u32 {
+        self.approvals_pending()
+            .saturating_add(self.unreadable_approvals)
+    }
+
+    /// The room a run is in, when this client has folded its start.
+    ///
+    /// The one answer to "which session is this run", which is what a
+    /// link written as `#/live/<uuid>` needs before it can be shown as
+    /// the page a person can name.
+    #[must_use]
+    pub fn room_of(&self, id: &RunId) -> Option<&Address> {
+        self.runs.get(id)?.addr.as_ref()
+    }
+
+    /// The newest run in a room, and its id.
+    ///
+    /// Newest rather than every one, because a room is a work line: a
+    /// person who opens `lab/parser` means the current state of that
+    /// work, and its earlier runs are its history rather than its
+    /// siblings. Ordered by the sequence the run started at, so a replay
+    /// and a live fold pick the same one.
+    #[must_use]
+    pub fn session_at(&self, addr: &Address) -> Option<(RunId, &RunRow)> {
+        self.runs
+            .iter()
+            .filter(|(_, row)| row.addr.as_ref() == Some(addr))
+            .max_by_key(|(_, row)| row.started_at_seq)
+            .map(|(id, row)| (*id, row))
+    }
+
+    /// The three counts the top bar keeps on every page: what is moving,
+    /// what is stopped on a person, and how many buildings there are.
+    ///
+    /// Buildings are counted from the rooms this client has seen work
+    /// in, so the number is "buildings with work" rather than "folders on
+    /// disk" — the city answer holds the second one and says so.
+    #[must_use]
+    pub fn counts(&self) -> (u32, u32, u32) {
+        let mut running = 0u32;
+        let mut waiting = 0u32;
+        let mut buildings = std::collections::BTreeSet::new();
+        for row in self.runs.values() {
+            if row.phase.needs_a_person() {
+                waiting = waiting.saturating_add(1);
+            } else if row.phase.in_flight() {
+                running = running.saturating_add(1);
+            }
+            if let Some(addr) = row.addr.as_ref()
+                && let Some((building, _)) = addr.as_str().split_once('/')
+            {
+                buildings.insert(building.to_owned());
+            }
+        }
+        (
+            running,
+            waiting,
+            u32::try_from(buildings.len()).unwrap_or(u32::MAX),
+        )
+    }
+
+    /// The sequence this client has folded through, for the line that
+    /// says where an answer came from.
+    #[must_use]
+    pub fn applied_through(&self) -> Option<Seq> {
+        self.applied_through
+    }
+
+    /// Adds text a model is still saying to the run's display buffer.
+    ///
+    /// Not `apply`: an increment is not an event, so it does not move
+    /// `applied_through`, does not count as having gone live, and cannot
+    /// be replayed. A buffer for a run this client never saw start is
+    /// kept anyway — the increments arrived, so the run exists, and
+    /// discarding them would blank the page a person is watching.
+    pub fn is_saying(&mut self, delta: &channels::Delta) {
+        self.saying
+            .entry(delta.run)
+            .or_default()
+            .push_str(&delta.text);
+    }
+
+    /// What a model is saying in this run, while it is still saying it.
+    ///
+    /// `None` once the call has settled: the page then draws the record,
+    /// which is the text a replay would produce.
+    #[must_use]
+    pub fn saying(&self, run: &RunId) -> Option<&str> {
+        self.saying.get(run).map(String::as_str)
+    }
+
     #[must_use]
     pub fn approvals(&self) -> Vec<ApprovalItem> {
         self.approvals.values().cloned().collect()
@@ -338,23 +497,38 @@ impl Snapshot {
 
     fn absorb(&mut self, event: &EventRecord) {
         let run = event.run();
+        // Every record moves the run's high-water mark, whatever else it
+        // does. Held here rather than in each arm below, because a fact
+        // that is true of all of them written once cannot be forgotten
+        // by the next arm somebody adds.
+        if let Some(row) = self.runs.get_mut(&run) {
+            row.last_seq = event.seq();
+        }
         match event.kind() {
             EventKind::CityInitialized => self.city = event.addr().cloned(),
             EventKind::RunStarted | EventKind::RunForked => {
+                let addr = event.addr().cloned();
                 self.runs.insert(
                     run,
                     RunRow {
-                        addr: event.addr().cloned(),
+                        session: addr.as_ref().and_then(session_named_by),
+                        addr,
                         parent: event
                             .data()
                             .as_map()
                             .get("parent")
                             .and_then(serde_json::Value::as_str)
                             .and_then(|raw| RunId::parse(raw).ok()),
-                        phase: RunPhase::Running,
+                        phase: Phase::Running,
                         steps_done: 0,
                         steps_planned: None,
                         started_at_seq: event.seq(),
+                        last_seq: event.seq(),
+                        turns: 0,
+                        handoff_at_turn: None,
+                        gate: None,
+                        spent: None,
+                        said: None,
                     },
                 );
             }
@@ -364,25 +538,64 @@ impl Snapshot {
                 }
             }
             EventKind::ModelReturned => {
+                let said = event
+                    .data()
+                    .as_map()
+                    .get("message")
+                    .and_then(crate::turn::said_in);
+                let billed = event
+                    .data()
+                    .as_map()
+                    .get("billed_usd_micros")
+                    .and_then(serde_json::Value::as_u64);
+                // The call settled, so the buffer of what it was saying
+                // is thrown away and the record speaks. This is the
+                // whole of the rule that the settled text wins.
+                self.saying.remove(&run);
                 if let Some(row) = self.runs.get_mut(&run) {
                     row.steps_done = row.steps_done.saturating_add(1);
+                    // A turn is a model call and whatever it caused, so
+                    // the return is what closes one. Counting records
+                    // here would make a turn that ran six tools six
+                    // times longer than one that ran none.
+                    row.turns = row.turns.saturating_add(1);
+                    if let Some(said) = said {
+                        row.said = Some(said);
+                    }
+                    if let Some(billed) = billed {
+                        let held = row.spent.unwrap_or_default().get();
+                        row.spent = Some(UsdMicros::new(held.saturating_add(billed)));
+                    }
                 }
                 self.absorb_call(event);
+            }
+            // What a person asked for and did not get yet. The handoff is
+            // the scene the next holder finds, and how long ago it was
+            // written is what says whether that scene is still current.
+            EventKind::HandoffWritten => {
+                if let Some(row) = self.runs.get_mut(&run) {
+                    row.handoff_at_turn = Some(row.turns);
+                }
             }
             EventKind::ApprovalRequested => {
                 // The payload is the item, because that is what the writer
                 // serialised. A count would not survive a reload and could
                 // not be grouped; the item can do both.
                 let value = serde_json::Value::Object(event.data().as_map().clone());
+                let mut gate = None;
                 match serde_json::from_value::<ApprovalItem>(value) {
                     Ok(item) => {
+                        gate = Some(gate_named_by(&item));
                         self.approvals.insert(item.id.as_str().to_owned(), item);
                     }
                     Err(_) => {
                         self.unreadable_approvals = self.unreadable_approvals.saturating_add(1);
                     }
                 }
-                self.set_phase(&run, RunPhase::AwaitingApproval);
+                if let Some(row) = self.runs.get_mut(&run) {
+                    row.phase = Phase::Waiting;
+                    row.gate = gate;
+                }
             }
             EventKind::ApprovalResolved => {
                 if let Some(id) = event
@@ -393,15 +606,36 @@ impl Snapshot {
                 {
                     self.approvals.remove(id);
                 }
-                self.set_phase(&run, RunPhase::Running);
+                if let Some(row) = self.runs.get_mut(&run) {
+                    row.phase = Phase::Running;
+                    row.gate = None;
+                }
             }
-            EventKind::RunFrozen | EventKind::BudgetLimit => {
-                self.set_phase(&run, RunPhase::Frozen);
+            // The ending is in the record: `kernel::completion` writes
+            // which of the three it was, and a run a person stopped
+            // reads differently from one that ran out of turns. The
+            // client showed both as "frozen" while the word that told
+            // them apart was in the payload it was already folding.
+            EventKind::RunFrozen => {
+                let ending = event
+                    .data()
+                    .as_map()
+                    .get("completion")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned);
+                self.set_phase(&run, Phase::ended_as(ending.as_deref()));
             }
+            EventKind::BudgetLimit => self.set_phase(&run, Phase::Frozen),
             EventKind::CityHalted => {
                 self.halted = true;
+                // Only what was still moving. A session that ended
+                // yesterday did not stop because the city did, and
+                // rewriting its ending would lose the one a person needs
+                // in order to decide whether to pick it back up.
                 for row in self.runs.values_mut() {
-                    row.phase = RunPhase::Halted;
+                    if row.phase.in_flight() {
+                        row.phase = Phase::Halted;
+                    }
                 }
             }
             // Counted, not read. What waits in a room is the city's
@@ -448,7 +682,7 @@ impl Snapshot {
         }
     }
 
-    fn set_phase(&mut self, run: &RunId, phase: RunPhase) {
+    fn set_phase(&mut self, run: &RunId, phase: Phase) {
         if let Some(row) = self.runs.get_mut(run) {
             row.phase = phase;
         }
@@ -610,87 +844,67 @@ pub struct Destination {
     pub waiting: Option<u32>,
 }
 
-/// A heading in the left nav, and the destinations under it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NavGroup {
-    pub label: crate::lang::Msg,
-    pub places: Vec<Destination>,
-}
-
-/// Every destination the left nav offers, grouped by the question it
-/// answers, in reading order.
+/// Every destination the left nav offers, in reading order.
 ///
-/// One producer for the list, its wording, its grouping and its badges: a
-/// destination added here appears in the nav, in the router and in the
-/// test that walks them, and cannot appear in two of the three.
+/// One producer for the list, its wording and its badge: a destination
+/// added here appears in the nav, in the router and in the test that
+/// walks them, and cannot appear in two of the three.
 ///
-/// **The groups do not collapse.** Eight flat entries read as a menu to be
-/// searched rather than a place to go, and three headings fix that; a
-/// collapsed group would fix it by hiding pages, which is the same defect
-/// wearing a control.
+/// **Five, and flat.** The previous nav had nine entries under three
+/// headings, and the headings existed because nine entries read as a
+/// menu to be searched rather than a place to go. Five is inside the
+/// span a person holds without searching, so the headings are not
+/// replaced by better headings — they are not needed.
 #[must_use]
-pub fn destinations(snapshot: &Snapshot) -> Vec<NavGroup> {
-    let waiting = snapshot.approvals_pending();
+pub fn destinations(snapshot: &Snapshot) -> Vec<Destination> {
+    let waiting = snapshot.waiting_on_you();
     vec![
-        NavGroup {
-            label: crate::lang::Msg::NavHappeningNow,
-            places: vec![
-                Destination {
-                    view: View::Overview,
-                    label: crate::lang::Msg::NavOverview,
-                    waiting: None,
-                },
-                Destination {
-                    view: View::City,
-                    label: crate::lang::Msg::NavCity,
-                    waiting: None,
-                },
-                Destination {
-                    view: View::Live(latest_run(snapshot)),
-                    label: crate::lang::Msg::NavLive,
-                    waiting: None,
-                },
-                Destination {
-                    view: View::Approvals,
-                    label: crate::lang::Msg::NavApprovals,
-                    waiting: (waiting > 0).then_some(waiting),
-                },
-            ],
+        Destination {
+            view: View::Sessions,
+            label: crate::lang::Msg::NavSessions,
+            waiting: None,
         },
-        NavGroup {
+        // The one badge in this interface. It is here on every page
+        // because an unfinished thing that is out of sight stops being
+        // an unfinished thing and starts being a surprise.
+        Destination {
+            view: View::Waiting,
+            label: crate::lang::Msg::NavWaiting,
+            waiting: (waiting > 0).then_some(waiting),
+        },
+        Destination {
+            view: View::Record(Lens::Ledger),
             label: crate::lang::Msg::NavTheRecord,
-            places: vec![
-                Destination {
-                    view: View::Ledger,
-                    label: crate::lang::Msg::NavLedger,
-                    waiting: None,
-                },
-                Destination {
-                    view: View::Archive,
-                    label: crate::lang::Msg::NavArchive,
-                    waiting: None,
-                },
-                Destination {
-                    view: View::RecycleBin,
-                    label: crate::lang::Msg::NavRecycleBin,
-                    waiting: None,
-                },
-                Destination {
-                    view: View::Dashboard,
-                    label: crate::lang::Msg::NavCost,
-                    waiting: None,
-                },
-            ],
+            waiting: None,
         },
-        NavGroup {
-            label: crate::lang::Msg::NavSetup,
-            places: vec![Destination {
-                view: View::Settings,
-                label: crate::lang::Msg::NavSettings,
-                waiting: None,
-            }],
+        Destination {
+            view: View::Cost,
+            label: crate::lang::Msg::NavCost,
+            waiting: None,
+        },
+        Destination {
+            view: View::Setup,
+            label: crate::lang::Msg::NavSettings,
+            waiting: None,
         },
     ]
+}
+
+/// Whether this destination is the page being shown.
+///
+/// The record's three lenses are one destination, so the nav entry stays
+/// marked while a person moves between them: an entry that unhighlights
+/// when the reader is still inside it says they have left.
+#[must_use]
+pub fn showing(destination: &View, view: &View) -> bool {
+    match (destination, view) {
+        (View::Record(_), View::Record(_)) => true,
+        // A session and a building are reached from the list, and the
+        // list stays lit while a person is inside one: they went deeper
+        // into what the first entry offers rather than somewhere else.
+        (View::Sessions, View::Session(_) | View::Building(_) | View::Run(_)) => true,
+        (left, right) => left == right,
+    }
 }
 
 /// The building a person is looking at, if the city page has one
@@ -744,7 +958,7 @@ pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
                     // and stays quiet about a figure nobody sent.
                     budget: channels::BudgetUse::default(),
                 }),
-                row.phase == RunPhase::AwaitingApproval,
+                row.phase.needs_a_person(),
                 crate::progress::Subject::Run,
                 crate::lang::Lang::En,
             );
@@ -764,7 +978,7 @@ pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
                 id,
                 format!(
                     "{name} \u{b7} {} \u{b7} {}",
-                    row.phase.as_str(),
+                    crate::lang::say(crate::lang::Lang::En, row.phase.word()),
                     walked.label
                 ),
             )
@@ -779,20 +993,53 @@ pub fn watchable(snapshot: &Snapshot) -> Vec<(RunId, String)> {
 /// not seen falls back to the short hash, which is worse to read and
 /// still better than an empty button.
 fn session_of(id: &RunId, row: &RunRow) -> String {
-    let named = row.addr.as_ref().and_then(|addr| {
-        addr.as_str()
-            .rsplit('/')
-            .next()
-            .filter(|segment| !segment.is_empty())
-            .map(str::to_owned)
-    });
-    named.unwrap_or_else(|| crate::live::short_run(*id))
+    row.session
+        .clone()
+        .unwrap_or_else(|| crate::live::short_run(*id))
+}
+
+/// The name a person gave this piece of work, out of the address the run
+/// opened in.
+///
+/// `Dispatch` carries a session name and the city opens a room of that
+/// name, so the last segment of a room address is the word somebody
+/// typed. A bare building is not a session: work sent to `lab` with no
+/// name is answered in a room the city named, and reporting the
+/// building as the session name would put every unnamed run under one
+/// heading.
+fn session_named_by(addr: &Address) -> Option<String> {
+    let raw = addr.as_str();
+    let (building, room) = raw.rsplit_once('/')?;
+    (!building.is_empty() && !room.is_empty()).then(|| room.to_owned())
+}
+
+/// Which door a run is stopped at, named by the door.
+///
+/// A person who asks what a session is stuck on wants the gate, not the
+/// identifier of the request: `ApprovalId` is unique and says nothing,
+/// while the class is the one word that tells them whether this is
+/// theirs to answer now or later.
+fn gate_named_by(item: &ApprovalItem) -> String {
+    match item.cluster_key.class {
+        channels::ApprovalClass::Commitment => "commit",
+        channels::ApprovalClass::BudgetLimit => "budget",
+        channels::ApprovalClass::DiscardEscalate => "discard",
+        channels::ApprovalClass::AgentQuestion => "question",
+        channels::ApprovalClass::Governance => "governance",
+        channels::ApprovalClass::Delegation => "delegation",
+        // The class set is open on the wire, and a class this build has
+        // no word for is still a door this run is stopped at. Saying so
+        // beats saying nothing: the person learns the session needs them
+        // and the page they open names the request in full.
+        _ => "a gate this build cannot name",
+    }
+    .to_owned()
 }
 
 /// The efforts this bar offers, in the order it offers them: what the
 /// city already resolves, plus the one that leaves the answer to the
 /// layer above.
-const EFFORTS: [(&str, Msg); 6] = [
+pub(crate) const EFFORTS: [(&str, Msg); 6] = [
     ("", Msg::EffortInherited),
     ("low", Msg::EffortLow),
     ("medium", Msg::EffortMedium),
@@ -866,7 +1113,7 @@ pub fn started_here(record: &EventRecord, expecting: &str) -> Option<RunId> {
 pub fn latest_run(snapshot: &Snapshot) -> Option<RunId> {
     snapshot
         .runs()
-        .max_by_key(|(_, row)| (row.phase == RunPhase::Running, row.started_at_seq))
+        .max_by_key(|(_, row)| (row.phase == Phase::Running, row.started_at_seq))
         .map(|(id, _)| *id)
 }
 
@@ -962,33 +1209,53 @@ pub fn hold(
     }
 }
 
+/// The modes a person may pick between, in the order the control offers
+/// them.
+///
+/// `runtime::Mode` is the authority for the set and this is the
+/// authority for its spelling on the wire: `ModeTag::parse` accepts any
+/// string and `mode_of` reads an unknown one as planning, so a typo here
+/// would silently change what a run is allowed to do.
+pub const MODES: [&str; 5] = ["build", "up", "sc", "ud", "experiment"];
+
 /// Builds one Dispatch. The only place in the client that does.
 ///
 /// No budget travels from a person: `BudgetCap::default()` is what the
-/// wire carries, and what a run costs is reported after it runs.
+/// wire carries, and what a run costs is reported after it runs. This
+/// city has no budget lock, so the composer neither asks for a figure
+/// nor shows one.
 ///
-/// `session` is the word this person is calling the work by. Given one,
-/// the city opens a room of that name under the building in `addr` and
-/// the session has a folder nobody else writes into; left empty, `addr`
-/// is the room itself and the dispatch continues what is already there.
+/// **`room` is split, not sent whole.** `lab/parser` means the building
+/// `lab` and a session a person is calling `parser`, which is exactly
+/// what the wire's two fields say: given a session name the city opens a
+/// room of that name under the building, and two dispatches naming one
+/// room are one session continued. A bare `lab` sends no session name at
+/// all, which is the city's cue to work one out from the task.
+///
+/// **The goal is left empty, and that is a meaning rather than a gap.**
+/// A dispatch with no goal is already how this city spells "a person is
+/// at the other end": no job file is written and the frozen prefix says
+/// so. That is exactly what one sentence typed into the composer is, so
+/// the box sends no goal and the city reads it as it always did. A
+/// client that copied the task into the goal field would turn every
+/// conversation into a task nobody asked for.
 #[must_use]
 pub fn dispatch_command(
-    addr: &str,
+    room: &str,
     task: &str,
     goal: &str,
     mode: &str,
-    session: &str,
     effort: Option<channels::Effort>,
 ) -> Option<channels::ClientFrame> {
-    let (task, goal) = (task.trim(), goal.trim());
-    if task.is_empty() || goal.is_empty() {
+    let task = task.trim();
+    if task.is_empty() {
         return None;
     }
-    let session = match session.trim() {
-        "" => None,
-        named => Some(channels::SessionName::parse(named).ok()?),
+    let (building, session) = match room.trim().split_once('/') {
+        Some((building, named)) => (building, Some(channels::SessionName::parse(named).ok()?)),
+        None => (room.trim(), None),
     };
-    let addr = Address::parse(addr.trim()).ok()?;
+    let addr = Address::parse(building).ok()?;
     Some(channels::ClientFrame::Command(Box::new(
         channels::WireCommand::Dispatch {
             idem: channels::IdemKey::derive(
@@ -998,7 +1265,7 @@ pub fn dispatch_command(
             ),
             addr,
             task: task.to_owned(),
-            goal: goal.to_owned(),
+            goal: goal.trim().to_owned(),
             mode: channels::ModeTag::parse(mode).ok()?,
             budget: channels::BudgetCap::default(),
             session,
@@ -1033,9 +1300,17 @@ pub fn render_usd(amount: UsdMicros) -> String {
     format!("${dollars}.{cents:02}")
 }
 
-/// The root component: the five regions of the layout contract, and nothing
-/// that decides anything. Business state is the server's; this reads a
-/// snapshot handed to it.
+/// The root: three regions, and nothing that decides anything.
+///
+/// Business state is the server's; this reads a snapshot handed to it.
+///
+/// **Five regions became three.** The right-hand column carried a
+/// provider status that read "normal" almost always, and a steady
+/// "everything is fine" is the absence of a problem rather than a fact:
+/// it never changed anybody's next action, so it does not stay on
+/// screen. The three counts it also held do change the next action, so
+/// they moved into the top bar. The footer held a dispatch bar, which
+/// now stands at the top of the table its rows land in.
 #[component]
 pub fn Root(
     snapshot: Snapshot,
@@ -1048,25 +1323,23 @@ pub fn Root(
     inbox: Option<channels::InboxAnswer>,
     hits: Option<channels::ArchiveAnswer>,
     filed: Option<channels::RegistryAnswer>,
-    vitals: Option<channels::MetricsAnswer>,
     /// What the city last refused this person, if anything. Cleared by
     /// the person, never by the passage of time: an answer that fades
     /// before it is read is an answer nobody gave.
     refused: Option<crate::alert::Refused>,
     records: Vec<EventRecord>,
     selected: Option<String>,
-    /// What a drop wrote into the control surface. Held beside
-    /// `selected` because a drop aims and describes in one gesture, and
-    /// the two halves must arrive together or the bar shows an address
-    /// with somebody else's task under it.
+    /// A task line a drop wrote, on its way to the composer.
     dropped: Option<String>,
-    /// What a drop wrote into the session's own box. A separate field
-    /// from `dropped` because the two boxes take different gestures:
-    /// aiming new work, and saying something into work already running.
+    /// A line a drop wrote into an open session's box. Separate from
+    /// `dropped` because the two boxes take different gestures: aiming
+    /// new work, and saying something into work already running.
     steered: Option<String>,
+    /// What this city has written down, counted. Read by the record
+    /// page, which is the page those counts are about.
+    vitals: Option<channels::MetricsAnswer>,
     /// What the open session changed on disk, once the server has said.
     changes: Option<channels::ChangesAnswer>,
-    following: bool,
     /// Whether frames are flowing yet.
     ///
     /// A page asks its question when it mounts, and the first mount
@@ -1083,33 +1356,43 @@ pub fn Root(
     /// drag means is answered once.
     on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
     on_view: EventHandler<View>,
-    on_follow: EventHandler<bool>,
     on_dismiss: EventHandler<()>,
 ) -> Element {
     // The language every word on this page is said in. One signal for
     // the whole tree rather than a prop through twenty components: what
     // a person reads in is a fact about the page, not about a panel.
     let lang = use_context::<Signal<crate::lang::Lang>>();
-    let status = status_line(lang(), &snapshot);
-    let busy = busy_buildings(&snapshot);
-    let spots = destinations(&snapshot);
-    let running = latest_run(&snapshot);
     let word = move |msg: crate::lang::Msg| crate::lang::say(lang(), msg);
+    let spots = destinations(&snapshot);
+    let counts = crate::sessions::counts_said(lang(), &snapshot);
+    let unwell = !matches!(snapshot.provider(), ProviderHealth::Healthy);
+
+    // An old link naming a run is resolved here, where the room is
+    // known, and the address bar is rewritten to the name a person can
+    // read. The router stays pure; the redirect happens once, in the one
+    // place that holds the fact it needs.
+    let resolving = view.clone();
+    let resolved = crate::session::room_for_link(&snapshot, &resolving);
+    use_effect(use_reactive!(|(resolved,)| {
+        if let Some(landed) = resolved.clone() {
+            on_view.call(landed);
+        }
+    }));
+
     rsx! {
         main { class: "layout",
             header { class: "top-bar",
-                span { class: "address", "{status[0]}" }
-                // Halting the city is a fact about the city, so it stands
-                // where the city is named. It was beside the send button,
-                // which is the one place in this interface a person's hand
-                // is already moving fast.
-                button {
-                    class: "quiet halt",
-                    onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
-                    if snapshot.is_halted() {
-                        "{word(crate::lang::Msg::ReleaseCity)}"
-                    } else {
-                        "{word(crate::lang::Msg::HaltCity)}"
+                span { class: "address", "{page_named(lang(), &view)}" }
+                // Only when it is not normal. A steady "provider: fine"
+                // is a problem's absence, and an absence that occupies a
+                // permanent line teaches a reader to stop reading it.
+                if unwell {
+                    span { class: "unwell",
+                        if matches!(snapshot.provider(), ProviderHealth::Unknown) {
+                            "{word(crate::lang::Msg::CityUnwell)}"
+                        } else {
+                            "{word(snapshot.provider().word())}"
+                        }
                     }
                 }
                 if let Some(told) = refused.clone() {
@@ -1121,105 +1404,116 @@ pub fn Root(
                             class: "refusal-close",
                             "aria-label": "dismiss",
                             onclick: move |_| on_dismiss.call(()),
-                            "×"
+                            "\u{00d7}"
                         }
+                    }
+                }
+                span { class: "counts",
+                    for said in counts {
+                        span { key: "{said}", "{said}" }
                     }
                 }
             }
             nav { class: "left-nav",
-                for group in spots {
-                    div { key: "{group.label:?}", class: "nav-group",
-                        h2 { class: "nav-heading", "{word(group.label)}" }
-                        for spot in group.places {
-                            button {
-                                key: "{spot.label:?}",
-                                class: "nav-item",
-                                "aria-current": if spot.view == view { "page" } else { "false" },
-                                onclick: {
-                                    let going = spot.view.clone();
-                                    move |_| on_view.call(going.clone())
-                                },
-                                "{word(spot.label)}"
-                                if let Some(waiting) = spot.waiting {
-                                    span { class: "badge", "{waiting}" }
-                                }
+                // Anchors, not buttons. Writing the fragment is the only
+                // way a view changes, so an `<a href>` is already a whole
+                // navigation - and it arrives with the keyboard, the
+                // middle click, "copy link address" and the link role a
+                // screen reader announces, none of which a button with an
+                // onclick would have had.
+                div { class: "nav-group",
+                    for spot in spots {
+                        a {
+                            key: "{spot.label:?}",
+                            class: "nav-item",
+                            href: "{crate::route::to_fragment(&spot.view)}",
+                            "aria-current": if showing(&spot.view, &view) { "page" } else { "false" },
+                            "{word(spot.label)}"
+                            if let Some(waiting) = spot.waiting {
+                                span { class: "badge", "{waiting}" }
                             }
+                        }
+                    }
+                }
+                // What this whole city is doing, at the foot of the
+                // column that names its parts. Stopping it left the top
+                // bar because it stood beside the send button, which is
+                // the one place a person's hand is already moving fast.
+                div { class: "city-state",
+                    p { class: "standing", "{word(standing_of(&snapshot))}" }
+                    button {
+                        class: "quiet",
+                        r#type: "button",
+                        onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
+                        if snapshot.is_halted() {
+                            "{word(crate::lang::Msg::ReleaseCity)}"
+                        } else {
+                            "{word(crate::lang::Msg::HaltCity)}"
                         }
                     }
                 }
             }
             section { class: "centre",
                 match view {
-                    View::Overview => rsx! {
-                        crate::overview::OverviewView {
+                    // A run named by an old link, while the fold that
+                    // says which room it is in has not arrived. Said
+                    // rather than left blank: the link is not broken, the
+                    // answer is not here yet.
+                    View::Run(_) => rsx! {
+                        crate::panel::Panel {
+                            title: word(crate::lang::Msg::AskingWhatItHolds).to_owned(),
+                            scope: None,
+                            figure: None,
+                            source: word(crate::lang::Msg::SessionSource).to_owned(),
+                        }
+                    },
+                    View::Sessions => rsx! {
+                        crate::sessions::SessionsView {
                             snapshot: snapshot.clone(),
                             city: city.clone(),
+                            endpoints: endpoints.clone(),
+                            effort: DEFAULT_EFFORT.to_owned(),
+                            dropped: dropped.clone(),
                             live,
                             on_frame,
                             on_view,
-                            on_open: move |name: String| {
-                                if let Some(addr) = opened_building(Some(name.as_str())) {
-                                    on_view.call(View::Building(addr));
-                                }
-                            },
-                        }
-                    },
-                    View::City => rsx! {
-                        crate::city_view::CityView {
-                            city: city.clone(),
-                            busy: busy.clone(),
-                            selected: selected.clone(),
-                            live,
-                            on_frame,
-                            on_select,
-                            on_open: move |name: String| {
-                                if let Some(addr) = opened_building(Some(name.as_str())) {
-                                    on_view.call(View::Building(addr));
-                                }
-                            },
-                        }
-                    },
-                    View::Live(run) => rsx! {
-                        crate::live::LiveView {
-                            feed: crate::live::Feed::replay(records.iter(), run, following),
-                            turns: crate::turn::turns(
-                                records.iter().filter(|held| Some(held.run()) == run),
-                            ),
-                            run,
-                            runs: watchable(&snapshot),
-                            following,
-                            steered: steered.clone(),
-                            changes: changes.clone(),
-                            live,
-                            on_frame,
-                            on_follow,
                             on_drop,
-                            on_watch: move |id| on_view.call(View::Live(id)),
                         }
                     },
-                    View::Approvals => rsx! {
-                        crate::approval::ApprovalsView {
-                            items: snapshot.approvals(),
+                    View::Session(ref addr) => rsx! {
+                        crate::session::SessionView {
+                            addr: addr.clone(),
+                            snapshot: snapshot.clone(),
+                            records: records.clone(),
+                            changes: changes.clone(),
+                            cost: cost.clone(),
+                            building: building.clone(),
+                            steered: steered.clone(),
+                            live,
+                            on_frame,
+                            on_drop,
+                        }
+                    },
+                    View::Waiting => rsx! {
+                        crate::waiting::WaitingView {
+                            snapshot: snapshot.clone(),
                             live,
                             on_frame,
                         }
                     },
-                    View::RecycleBin => rsx! {
-                        crate::approval::RecycleBinView {
-                            answer: discards.clone(),
-                            live,
-                            on_frame,
-                        }
-                    },
-                    View::Archive => rsx! {
-                        crate::archive_search::ArchiveView {
+                    View::Record(lens) => rsx! {
+                        crate::record::RecordView {
+                            lens,
+                            records: records.clone(),
                             hits: hits.clone(),
                             filed: filed.clone(),
+                            discards: discards.clone(),
+                            vitals: vitals.clone(),
                             live,
                             on_frame,
                         }
                     },
-                    View::Dashboard => rsx! {
+                    View::Cost => rsx! {
                         crate::dashboard::CostsView {
                             answer: cost.clone(),
                             usage: snapshot.usage(),
@@ -1228,9 +1522,12 @@ pub fn Root(
                             on_frame,
                         }
                     },
-                    View::Ledger => rsx! {
-                        crate::ledger_view::LedgerView {
-                            records: records.clone(),
+                    View::Setup => rsx! {
+                        crate::settings::Settings {
+                            answer: endpoints.clone(),
+                            login_url: snapshot.login_url().map(str::to_owned),
+                            served: snapshot.served().clone(),
+                            live,
                             on_frame,
                         }
                     },
@@ -1246,310 +1543,57 @@ pub fn Root(
                             on_drop,
                         }
                     },
-                    View::Settings => rsx! {
-                        crate::settings::Settings {
-                            answer: endpoints.clone(),
-                            login_url: snapshot.login_url().map(str::to_owned),
-                            served: snapshot.served().clone(),
-                            live,
-                            on_frame,
-                        }
-                    },
-                }
-            }
-            aside { class: "right-status",
-                for item in status.iter().skip(1) {
-                    p { key: "{item}", class: "standing", "{item}" }
-                }
-                // The three counts no page states. They stand here rather
-                // than above one page's heading: they are facts about the
-                // city, they are true on every page, and the right-hand
-                // column is where facts that outlive a page belong.
-                crate::vitals::Vitals { answer: vitals.clone(), live, on_frame }
-            }
-            footer { class: "control-surface",
-                DispatchBar {
-                    addr: selected.clone(),
-                    dropped: dropped.clone(),
-                    on_drop,
-                    buildings: city
-                        .as_ref()
-                        .map(|answer| {
-                            answer
-                                .buildings
-                                .iter()
-                                .map(|raised| raised.addr.as_str().to_owned())
-                                .collect()
-                        })
-                        .unwrap_or_default(),
-                    on_frame,
-                    on_view,
-                }
-                // Stopping a run is not the same kind of act as starting
-                // one, and it used to sit against the send button where a
-                // slip reaches it. Quiet, and behind a rule.
-                if let Some(run) = running {
-                    button {
-                        class: "quiet cancel",
-                        onclick: move |_| on_frame.call(cancel_command(run)),
-                        "{word(crate::lang::Msg::CancelLastRun)}"
-                    }
                 }
             }
         }
     }
 }
 
-/// The control surface's one form: where work is started.
+/// How hard this city thinks when nobody has said otherwise.
 ///
-/// It asks for an address, a task, a goal and a mode - and for nothing
-/// about money. The four it asks for are the four a Run cannot be started
-/// without; a budget is not one of them, because the person typing here
-/// has no way to know the number and, on a subscription, neither has
-/// anybody else.
-#[component]
-fn DispatchBar(
-    addr: Option<String>,
-    /// A task line a drop wrote. It fills the box the person would have
-    /// typed into and stops there: a gesture that also pressed the
-    /// button would spend money nobody agreed to spend.
-    dropped: Option<String>,
-    /// Where a drag that landed on this bar goes. The same handler every
-    /// other zone uses, so one gesture has one meaning.
-    on_drop: EventHandler<(crate::drop::Target, crate::drop::Dropped)>,
-    /// The names this city already holds, offered under the address box.
-    /// A person should not have to remember what they raised.
-    buildings: Vec<String>,
-    on_frame: EventHandler<channels::ClientFrame>,
-    /// Where the person is taken once the frame is away. A control that
-    /// leaves the page exactly as it found it cannot be told apart from
-    /// one that did nothing.
-    on_view: EventHandler<View>,
-) -> Element {
-    let mut at = use_signal(|| addr.clone().unwrap_or_default());
-    // The bar follows what the person selected on the page above it: a
-    // building chosen in the city or opened on its own page arrives
-    // here. Reactive, because a `use_effect` that only closed over the
-    // first render's prop would leave the field showing whatever was
-    // selected when the window opened (web-SPEC.md section 8-17).
-    let chosen = addr.clone();
-    use_effect(use_reactive!(|chosen| {
-        let mut at = at;
-        if let Some(ref selected) = chosen
-            && !selected.is_empty()
-        {
-            at.set(selected.clone());
-        }
-    }));
-    let mut task = use_signal(String::new);
-    // Reactive for the same reason the address is: a line written by a
-    // drop after the first render would otherwise never reach the box.
-    let written = dropped.clone();
-    use_effect(use_reactive!(|written| {
-        let mut task = task;
-        if let Some(ref line) = written
-            && !line.is_empty()
-        {
-            task.set(line.clone());
-        }
-    }));
-    let mut goal = use_signal(String::new);
-    let mut mode = use_signal(|| "plan".to_owned());
-    let mut session = use_signal(String::new);
-    // How hard this session thinks. Beside the send button because a
-    // person chooses it once for the session they are starting, and
-    // because the layers above answer when they do not (user verdict,
-    // 2026-08-24).
-    let mut effort = use_signal(|| None::<channels::Effort>);
-    // Whether the four fields behind the resting line are showing.
-    //
-    // Seven controls stood open at all times, which asked a person to read
-    // the whole grammar of a dispatch before writing one word of it. Two
-    // are enough to start work; the other four have defaults that are
-    // right most of the time, so they wait behind one disclosure that says
-    // it is there. Opened by focus as well as by the control, because
-    // reaching the task box is already the gesture that means "I am
-    // writing one of these".
-    let mut open = use_signal(|| false);
-    // Whether a drag is over this bar right now.
-    //
-    // A `:hover` rule cannot answer this: for the whole of a drag the
-    // browser suppresses device input events, so the pointer state a
-    // hover rule reads is not being updated. `dragleave` always fires,
-    // even when the drag is cancelled, so the flag has a cleanup path
-    // that does not depend on the drop happening.
-    let mut over = use_signal(|| false);
-    let lang = use_context::<Signal<crate::lang::Lang>>();
-    let word = move |msg: Msg| crate::lang::say(lang(), msg);
-    rsx! {
-        form {
-            class: match (open(), over()) {
-                (true, true) => "dispatch open drop-zone over",
-                (true, false) => "dispatch open drop-zone",
-                (false, true) => "dispatch drop-zone over",
-                (false, false) => "dispatch drop-zone",
-            },
-            // Cancelling `dragover` is what elects this bar as a drop
-            // target. It also takes the gesture away from the browser:
-            // a bare text input is a valid drop target by default for
-            // `text/plain`, so without this a dragged selection was
-            // inserted raw and `drop::read` never ran - one gesture with
-            // two authorities, and the one nobody wrote was winning.
-            ondragover: move |event| event.prevent_default(),
-            ondragenter: move |event| {
-                event.prevent_default();
-                over.set(true);
-            },
-            ondragleave: move |_| over.set(false),
-            ondrop: move |event: Event<DragData>| {
-                event.prevent_default();
-                over.set(false);
-                on_drop.call((crate::drop::Target::Composer, crate::drop::from_event(&event)));
-            },
-            onsubmit: move |event| {
-                event.prevent_default();
-                let frame = dispatch_command(
-                    &at.read(),
-                    &task.read(),
-                    &goal.read(),
-                    &mode.read(),
-                    &session.read(),
-                    *effort.read(),
-                );
-                if let Some(frame) = frame {
-                    on_frame.call(frame);
-                    task.set(String::new());
-                    goal.set(String::new());
-                    session.set(String::new());
-                    // Back to the resting line: the next dispatch starts
-                    // from the same two fields this one did.
-                    open.set(false);
-                    // The run this frame starts reports itself on the
-                    // live page, so that is where the person who sent it
-                    // belongs. Which session they then watch stays their
-                    // choice (web-SPEC.md section 8-31).
-                    on_view.call(View::Live(None));
-                }
-            },
-            div { class: "field where",
-                label { r#for: "dispatch-addr", "{word(Msg::DispatchRoom)}" }
-                input {
-                    id: "dispatch-addr",
-                    name: "addr",
-                    // The city already knows every building it holds, so
-                    // the names are offered rather than remembered. A
-                    // `datalist` and not a `select`: a room inside a
-                    // building is still typed, and a control that only
-                    // offered what exists could not reach a new one.
-                    list: "raised-buildings",
-                    // Short, because the label above already said what
-                    // the field is: a placeholder wider than its column
-                    // teaches half a format.
-                    placeholder: "{word(Msg::DispatchRoomHint)}",
-                    value: "{at}",
-                    oninput: move |event| at.set(event.value()),
-                }
-                datalist { id: "raised-buildings",
-                    for name in buildings.clone() {
-                        option { key: "{name}", value: "{name}" }
-                    }
-                }
-            }
-            if open() {
-                div { class: "field",
-                    label { r#for: "dispatch-session", "{word(Msg::DispatchCallIt)}" }
-                    input {
-                        id: "dispatch-session",
-                        name: "session",
-                        placeholder: "{word(Msg::DispatchCallItHint)}",
-                        value: "{session}",
-                        oninput: move |event| session.set(event.value()),
-                    }
-                }
-            }
-            div { class: "field task",
-                label { r#for: "dispatch-task", "{word(Msg::DispatchTask)}" }
-                input {
-                    id: "dispatch-task",
-                    name: "task",
-                    placeholder: "{word(Msg::DispatchTaskHint)}",
-                    value: "{task}",
-                    // Reaching this box is already the gesture that means
-                    // a dispatch is being written, so it opens the rest
-                    // rather than making somebody ask for it twice.
-                    onfocus: move |_| open.set(true),
-                    oninput: move |event| task.set(event.value()),
-                }
-            }
-            if open() {
-                div { class: "field",
-                    label { r#for: "dispatch-goal", "{word(Msg::DispatchDoneWhen)}" }
-                    input {
-                        id: "dispatch-goal",
-                        name: "goal",
-                        placeholder: "{word(Msg::DispatchDoneWhenHint)}",
-                        value: "{goal}",
-                        oninput: move |event| goal.set(event.value()),
-                    }
-                }
-                div { class: "field",
-                    label { r#for: "dispatch-mode", "{word(Msg::DispatchMode)}" }
-                    select {
-                        id: "dispatch-mode",
-                        name: "mode",
-                        onchange: move |event| mode.set(event.value()),
-                        option { value: "plan", "plan" }
-                        option { value: "build", "build" }
-                        option { value: "review", "review" }
-                    }
-                }
-                div { class: "field",
-                    label { r#for: "dispatch-effort", "{word(Msg::DispatchEffort)}" }
-                    select {
-                        id: "dispatch-effort",
-                        name: "effort",
-                        onchange: move |event| effort.set(effort_named(&event.value())),
-                        for offered in EFFORTS {
-                            option {
-                                key: "{offered.0}",
-                                value: "{offered.0}",
-                                "{word(offered.1)}"
-                            }
-                        }
-                    }
-                }
-            }
-            // Says that there is more and how much, rather than hiding it.
-            button {
-                r#type: "button",
-                class: "quiet disclose",
-                "aria-expanded": if open() { "true" } else { "false" },
-                onclick: move |_| open.toggle(),
-                if open() {
-                    "{word(Msg::DispatchFewer)}"
-                } else {
-                    "{word(Msg::DispatchMore)}"
-                }
-            }
-            button {
-                r#type: "submit",
-                disabled: dispatch_command(
-                        &at.read(),
-                        &task.read(),
-                        &goal.read(),
-                        &mode.read(),
-                        &session.read(),
-                        *effort.read(),
-                    )
-                    .is_none(),
-                "{word(Msg::DispatchSend)}"
-            }
-        }
+/// The city's own ladder resolves effort per room, and this is only what
+/// the composer offers before a person opens that word - so a wrong
+/// guess here costs a click rather than a decision.
+pub const DEFAULT_EFFORT: &str = "medium";
+
+/// What the top bar calls the page being read.
+///
+/// The bar states this page, not this city: the city's name is true on
+/// every page, and spending the one line that could say where you are on
+/// something that never changes spends it on nothing.
+#[must_use]
+fn page_named(lang: crate::lang::Lang, view: &View) -> String {
+    let word = |msg: crate::lang::Msg| crate::lang::say(lang, msg).to_owned();
+    match view {
+        View::Sessions | View::Run(_) => word(crate::lang::Msg::NavSessions),
+        // The address itself, because it is the name a person gave the
+        // work and the one thing that tells two sessions apart.
+        View::Session(addr) | View::Building(addr) => addr.as_str().to_owned(),
+        View::Waiting => word(crate::lang::Msg::NavWaiting),
+        View::Record(_) => word(crate::lang::Msg::NavTheRecord),
+        View::Cost => word(crate::lang::Msg::NavCost),
+        View::Setup => word(crate::lang::Msg::NavSettings),
     }
 }
 
-/// Stopping and releasing the whole city, as one control with two states.
+/// What the city itself is doing, in one sentence at the foot of the nav.
+///
+/// Three states and no fourth: running, running with nothing to do, and
+/// stopped. "Nothing to do" is separated from "running" because a person
+/// looking at an empty table needs to know which of the two they are
+/// seeing, and the two call for opposite next actions.
 #[must_use]
+fn standing_of(snapshot: &Snapshot) -> crate::lang::Msg {
+    if snapshot.is_halted() {
+        return crate::lang::Msg::CityStopped;
+    }
+    let (running, waiting, _) = snapshot.counts();
+    if running == 0 && waiting == 0 {
+        return crate::lang::Msg::CityRunningIdle;
+    }
+    crate::lang::Msg::CityRunning
+}
+
 fn halt_command(halting: bool) -> channels::ClientFrame {
     let scope = channels::HaltScope::City;
     let idem =
@@ -1558,14 +1602,6 @@ fn halt_command(halting: bool) -> channels::ClientFrame {
         channels::WireCommand::Halt { scope, idem }
     } else {
         channels::WireCommand::Release { scope, idem }
-    }))
-}
-
-#[must_use]
-fn cancel_command(run: RunId) -> channels::ClientFrame {
-    channels::ClientFrame::Command(Box::new(channels::WireCommand::Cancel {
-        idem: channels::IdemKey::derive(&run, Seq::FIRST, b"cancel-from-the-control-surface"),
-        run,
     }))
 }
 
@@ -1609,7 +1645,6 @@ pub fn App() -> Element {
     let inbox = use_signal(|| None::<channels::InboxAnswer>);
     let hits = use_signal(|| None::<channels::ArchiveAnswer>);
     let filed = use_signal(|| None::<channels::RegistryAnswer>);
-    let vitals = use_signal(|| None::<channels::MetricsAnswer>);
     let records = use_signal(Vec::<EventRecord>::new);
     let mut refused = use_signal(|| None::<crate::alert::Refused>);
     // The address bar is the authority for which page is showing, and the
@@ -1623,11 +1658,9 @@ pub fn App() -> Element {
     // A line a drop wrote into the session's box, held here for the same
     // reason `dropped` is: the box belongs to a view that a drop can
     // reach from outside it.
-    let mut steered = use_signal(|| None::<String>);
     // What the open session changed on disk. An answer, so it is held
     // beside the others and a reload asks again rather than trusting it.
     let changes = use_signal(|| None::<channels::ChangesAnswer>);
-    let mut following = use_signal(|| true);
     let live = use_signal(|| false);
     // What the keyboard opened. Held here rather than inside `Root`
     // because the listener that sets them is registered once for the
@@ -1644,6 +1677,10 @@ pub fn App() -> Element {
     // The room the last dispatch asked for, so its run can be opened
     // when it starts rather than left for the person to find among the
     // others.
+    // What the record page's ledger lens states about the whole history.
+    let vitals = use_signal(|| None::<channels::MetricsAnswer>);
+    // A line a drop wrote into an open session's box, on its way there.
+    let mut steered = use_signal(|| None::<String>);
     let mut expecting = use_signal(|| None::<String>);
     #[cfg(target_arch = "wasm32")]
     let outbound = connect(Wiring {
@@ -1679,14 +1716,13 @@ pub fn App() -> Element {
             inbox: inbox(),
             hits: hits(),
             filed: filed(),
-            vitals: vitals(),
             refused: refused(),
             records: records(),
             selected: selected(),
             dropped: dropped(),
             steered: steered(),
+            vitals: vitals(),
             changes: changes(),
-            following: following(),
             live,
             on_frame: move |frame: channels::ClientFrame| {
                 if let Some(room) = room_asked_for(&frame) {
@@ -1729,7 +1765,7 @@ pub fn App() -> Element {
                 #[cfg(not(target_arch = "wasm32"))]
                 view.set(next);
             },
-            on_follow: move |on| following.set(on),
+
             on_dismiss: move |()| refused.set(None),
         }
         if palette() {
@@ -1766,7 +1802,6 @@ fn reachable(
 ) -> Vec<crate::palette::Offer> {
     let mut offers: Vec<crate::palette::Offer> = destinations(snapshot)
         .into_iter()
-        .flat_map(|group| group.places)
         .map(|spot| crate::palette::Offer {
             label: crate::lang::say(lang, spot.label).to_owned(),
             kind: crate::palette::Kind::Page,
@@ -1789,7 +1824,7 @@ fn reachable(
             .map(|(id, said)| crate::palette::Offer {
                 label: said,
                 kind: crate::palette::Kind::Session,
-                going: View::Live(Some(id)),
+                going: View::Run(id),
             }),
     );
     offers
@@ -1835,10 +1870,10 @@ fn KeyMap(on_close: EventHandler<()>) -> Element {
 /// than asked of the server: the event stream already says it, and a
 /// second question would be a second answer.
 #[must_use]
-fn busy_buildings(snapshot: &Snapshot) -> std::collections::BTreeSet<Address> {
+pub(crate) fn busy_buildings(snapshot: &Snapshot) -> std::collections::BTreeSet<Address> {
     snapshot
         .runs()
-        .filter(|(_, row)| matches!(row.phase, RunPhase::Running | RunPhase::AwaitingApproval))
+        .filter(|(_, row)| matches!(row.phase, Phase::Running | Phase::Waiting))
         .filter_map(|(_, row)| row.addr.clone())
         .filter_map(|addr| building_of(&addr))
         .collect()
@@ -1993,11 +2028,11 @@ struct Keyboard {
 )]
 fn place_view(place: crate::keys::Place) -> View {
     match place {
-        crate::keys::Place::Overview => View::Overview,
-        crate::keys::Place::City => View::City,
-        crate::keys::Place::Sessions => View::Live(None),
-        crate::keys::Place::Approvals => View::Approvals,
-        crate::keys::Place::Ledger => View::Ledger,
+        crate::keys::Place::Sessions => View::Sessions,
+        crate::keys::Place::Waiting => View::Waiting,
+        crate::keys::Place::Record => View::Record(Lens::Ledger),
+        crate::keys::Place::Cost => View::Cost,
+        crate::keys::Place::Setup => View::Setup,
     }
 }
 
@@ -2257,6 +2292,9 @@ fn connect(wiring: Wiring) -> Outbound {
                     crate::socket::LinkAction::Report(error) => {
                         buffer.push(crate::pace::Arrived::Refusal(error));
                     }
+                    crate::socket::LinkAction::Saying(delta) => {
+                        buffer.push(crate::pace::Arrived::Saying(delta));
+                    }
                     // The retry ladder is not history either, and
                     // closing on the way out of view is the transport
                     // layer's to carry out; here they are the same as
@@ -2350,6 +2388,122 @@ fn install_theme() {
     };
     style.set_text_content(Some(&crate::theme::custom_properties()));
     let _ = head.append_child(&style);
+}
+
+/// A snapshot holding the named sessions, folded from real records.
+///
+/// The production door and nothing beside it: every row here arrives
+/// through [`Snapshot::apply`], so a test that seats a session is also
+/// exercising the fold that seats one in a browser. A setter that wrote
+/// into `runs` directly would let these tests pass while the fold was
+/// broken, which is the failure they exist to catch.
+#[cfg(test)]
+pub(crate) fn seated(rows: &[(Option<&str>, Phase, u64)]) -> Snapshot {
+    let mut snapshot = Snapshot::new();
+    for (index, (addr, phase, seq)) in rows.iter().enumerate() {
+        let mut run = [0u8; 16];
+        // The index is what makes two rows two runs. Truncation cannot
+        // happen below 256 rows and would only collide two fixtures.
+        run[0] = u8::try_from(index).unwrap_or(u8::MAX);
+        let id = RunId::from_bytes(run);
+        snapshot.apply(&started(id, *addr, *seq));
+        for record in ending(id, *phase, seq.saturating_add(1)) {
+            snapshot.apply(&record);
+        }
+    }
+    snapshot
+}
+
+/// A `model_returned` record carrying one text block, through the same
+/// shape `runtime::turn` writes.
+#[cfg(test)]
+pub(crate) fn returned_for_test(run: RunId, said: &str, seq: u64) -> EventRecord {
+    let mut data = serde_json::Map::new();
+    data.insert(
+        "message".to_owned(),
+        serde_json::json!({ "content": [{ "kind": "text", "text": said }] }),
+    );
+    EventRecord::from_draft(
+        channels::EventDraft {
+            run,
+            t: channels::TimeMs::new(1_000),
+            who: "test".to_owned(),
+            addr: None,
+            kind: EventKind::ModelReturned,
+            data: channels::Payload::new(data).unwrap_or_else(|_| channels::Payload::empty()),
+            ig: false,
+        },
+        Seq::new(seq),
+        channels::B3Hash::digest(b"prev"),
+    )
+}
+
+#[cfg(test)]
+fn started(run: RunId, addr: Option<&str>, seq: u64) -> EventRecord {
+    EventRecord::from_draft(
+        channels::EventDraft {
+            run,
+            t: channels::TimeMs::new(1_000),
+            who: "test".to_owned(),
+            addr: addr.and_then(|raw| Address::parse(raw).ok()),
+            kind: EventKind::RunStarted,
+            data: channels::Payload::empty(),
+            ig: false,
+        },
+        Seq::new(seq),
+        channels::B3Hash::digest(b"prev"),
+    )
+}
+
+/// The records that put a run into the phase named, through the same
+/// arms a live stream would take.
+#[cfg(test)]
+fn ending(run: RunId, phase: Phase, seq: u64) -> Vec<EventRecord> {
+    let froze = |completion: &str| {
+        let mut data = serde_json::Map::new();
+        data.insert(
+            "completion".to_owned(),
+            serde_json::Value::String(completion.to_owned()),
+        );
+        vec![EventRecord::from_draft(
+            channels::EventDraft {
+                run,
+                t: channels::TimeMs::new(1_000),
+                who: "test".to_owned(),
+                addr: None,
+                kind: EventKind::RunFrozen,
+                data: channels::Payload::new(data).unwrap_or_else(|_| channels::Payload::empty()),
+                ig: false,
+            },
+            Seq::new(seq),
+            channels::B3Hash::digest(b"prev"),
+        )]
+    };
+    match phase {
+        Phase::Running => Vec::new(),
+        Phase::Frozen => froze("done"),
+        Phase::Cancelled => froze("cancelled"),
+        Phase::Waiting | Phase::Halted => {
+            let kind = if phase == Phase::Waiting {
+                EventKind::ApprovalRequested
+            } else {
+                EventKind::CityHalted
+            };
+            vec![EventRecord::from_draft(
+                channels::EventDraft {
+                    run,
+                    t: channels::TimeMs::new(1_000),
+                    who: "test".to_owned(),
+                    addr: None,
+                    kind,
+                    data: channels::Payload::empty(),
+                    ig: false,
+                },
+                Seq::new(seq),
+                channels::B3Hash::digest(b"prev"),
+            )]
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2536,7 +2690,7 @@ mod tests {
         snapshot.apply(&record(3, EventKind::CityHalted, [3u8; 16]));
         assert!(snapshot.is_halted());
         for (_, row) in snapshot.runs() {
-            assert_eq!(row.phase, RunPhase::Halted);
+            assert_eq!(row.phase, Phase::Halted);
         }
     }
 
@@ -2594,14 +2748,14 @@ mod tests {
 
     #[test]
     fn the_default_view_answers_the_question_somebody_arrives_with() {
-        // The city page answers "where is everything"; a person opening
-        // this product is asking "is anything happening, and does any of
-        // it need me". Those are different questions, and only the
-        // second one is asked on arrival.
-        assert_eq!(View::default(), View::Overview);
+        // A person opening this product is asking "is anything
+        // happening, does any of it need me, and how do I start
+        // something". One page answers all three, and it is the page the
+        // bare fragment lands on.
+        assert_eq!(View::default(), View::Sessions);
         assert_eq!(
             crate::route::from_fragment("#/"),
-            Some(View::Overview),
+            Some(View::Sessions),
             "the bare fragment and the default view are the same page"
         );
     }
@@ -2798,16 +2952,15 @@ mod tests {
                 hits: None,
                 filed: Some(registry_answer()),
                 vitals: Some(metrics_answer()),
+                steered: None,
                 refused,
                 records,
                 selected: None,
                 dropped: None,
-                following: true,
                 on_frame: move |_| {},
                 on_select: move |_| {},
                 on_drop: move |_| {},
                 on_view: move |_| {},
-                on_follow: move |_| {},
                 on_dismiss: move |()| {},
             }
         }
@@ -2963,38 +3116,43 @@ mod tests {
     /// compile until a new variant states what it draws.
     fn evidence_of(view: &View) -> Vec<(&'static str, &'static str)> {
         match *view {
-            // The two counts, and the list a person walks into. The
-            // headline is the page: if it renders nothing, the first
-            // screen is a blank one.
-            View::Overview => vec![("overview", "in flight"), ("in-flight", "phase")],
-            View::City => vec![
-                ("city-view", "raise a building"),
-                ("index", "read it"),
-                // The one place the length of the Ledger is stated.
-                ("vitals", "records in the Ledger"),
+            // The box work starts in, and the table its rows land in.
+            // If either renders nothing, the first screen is a blank one.
+            View::Sessions => vec![
+                ("composer", "what needs doing?"),
+                ("composer-plan", "send it to"),
             ],
-            // The picker, because "the latest run" is a coin toss once two
-            // are in flight, and the paging controls, because a browser
-            // onto a history that cannot go back one page is a window
-            // painted on a wall.
-            View::Live(_) => vec![("runs", "everything"), ("live", "follow the end")],
-            View::Approvals => vec![("approvals", "push to the remote")],
-            View::RecycleBin => vec![("recycle-bin", "restore from the checkpoint")],
-            // Both halves, because the page's whole point is that the
-            // disk and the record are different sources.
-            View::Archive => vec![
-                ("archive-search", "a word the archives may hold"),
-                ("filed", "filed lately"),
-            ],
-            View::Dashboard => vec![("dashboard", "exec")],
-            View::Ledger => vec![("ledger", "sprawling replay"), ("paging", "older")],
-            // The room tab, because a room is a face of a building and
-            // the page lists them in exactly one place.
-            View::Building(_) => vec![("building", "Roadmap.md"), ("room", "room1/")],
-            View::Settings => vec![
+            // The head's four facts, and the tabs under them. The third
+            // fact is the em rule, which is asserted in `web::session`
+            // against a value rather than against markup.
+            View::Session(_) => vec![("session-head", "all sessions"), ("session-tabs", "turns")],
+            View::Waiting => vec![("approvals", "push to the remote")],
+            // The lens switch, because the record is one page with three
+            // readings and a page that cannot change lens is one reading.
+            View::Record(lens) => match lens {
+                Lens::Ledger => vec![
+                    ("session-tabs", "the archive"),
+                    ("ledger", "sprawling replay"),
+                ],
+                Lens::Archive => vec![
+                    ("session-tabs", "the ledger"),
+                    ("archive-search", "filed lately"),
+                ],
+                Lens::Bin => vec![
+                    ("session-tabs", "the ledger"),
+                    ("recycle-bin", "the way back to each of it"),
+                ],
+            },
+            View::Cost => vec![("dashboard", "exec")],
+            View::Setup => vec![
                 ("settings", "put the key in the vault"),
                 ("subscription", "start the login"),
             ],
+            // The room tab, because a room is a face of a building and
+            // the page lists them in exactly one place.
+            View::Building(_) => vec![("building", "Roadmap.md"), ("room", "room1/")],
+            // An old link, before the fold that names its room arrives.
+            View::Run(_) => vec![("panel", "asking the city what it holds")],
         }
     }
 
@@ -3005,24 +3163,22 @@ mod tests {
         // module test stayed green because it called the module's pure
         // functions directly. A page is not mounted until the tree says
         // so, and this is the only test in the crate that asks the tree.
-        let mut snapshot = Snapshot::new();
-        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
+        let mut snapshot = seated(&[(Some("lab/room1"), Phase::Running, 1)]);
         snapshot.adopt_approvals(vec![waiting_item()]);
-        let records = vec![record(2, EventKind::ToolCalled, [1u8; 16])];
-        let run = latest_run(&snapshot);
+        let records = vec![record(2, EventKind::ToolCalled, [0u8; 16])];
 
         let every_view = [
-            View::Overview,
-            View::City,
-            View::Live(run),
-            View::Approvals,
-            View::RecycleBin,
-            View::Archive,
-            View::Dashboard,
-            View::Ledger,
+            View::Sessions,
+            View::Session(Address::parse("lab/room1").unwrap()),
+            View::Waiting,
+            View::Record(Lens::Ledger),
+            View::Record(Lens::Archive),
+            View::Record(Lens::Bin),
+            View::Cost,
+            View::Setup,
             View::Building(Address::parse("lab").unwrap()),
-            View::Settings,
         ];
+
         for (view, (marker, sentence)) in every_view
             .iter()
             .flat_map(|view| evidence_of(view).into_iter().map(move |ev| (view, ev)))
@@ -3046,7 +3202,7 @@ mod tests {
         // what it cost, so the authoritative total is zero while four runs
         // sit in the attribution. Rendering that as $0.00 five times over
         // is the interface answering a question nobody can answer.
-        let painted = paint(View::Dashboard, Snapshot::new(), Vec::new());
+        let painted = paint(View::Cost, Snapshot::new(), Vec::new());
         if painted.says("no provider reported a price") {
             assert!(
                 painted.says("unpriced"),
@@ -3061,28 +3217,29 @@ mod tests {
     }
 
     #[test]
-    fn a_person_can_reach_every_intervention_the_wire_classifies() {
-        // `channels::control` names five interventions. Before F2.05 this
-        // client could send two of them, so an interface for delegated
-        // work offered "say something" and "stop" and nothing else. This
-        // asserts the pages that own each verb actually render it; the
-        // scopes that own Halt and Release are the control surface, which
-        // the nav test already walks.
-        let mut snapshot = Snapshot::new();
-        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
-        let run = latest_run(&snapshot);
-        let live = paint(
-            View::Live(run),
+    fn every_verb_this_client_offers_is_one_the_city_executes() {
+        // The rule this asserts is the one the audit produced: a control
+        // whose command reaches `assembly`'s catch-all can only ever
+        // produce a refusal, and a button that cannot succeed is worse
+        // than a missing one. Takeover, Rollback and CreatePolicy were
+        // all offered and all unexecuted.
+        let snapshot = seated(&[(Some("lab/room1"), Phase::Running, 1)]);
+        let session = paint(
+            View::Session(Address::parse("lab/room1").unwrap()),
             snapshot.clone(),
-            vec![record(2, EventKind::ToolCalled, [1u8; 16])],
+            vec![record(2, EventKind::ToolCalled, [0u8; 16])],
         );
-        assert!(live.says("answer for this run from here"), "Takeover");
-        assert!(live.says("branch a new run from step"), "Fork");
-        assert!(live.says("send at the next safe point"), "Steer");
-        let bin = paint(View::RecycleBin, snapshot, Vec::new());
+        assert!(session.says("branch a new run from step"), "Fork");
+        assert!(session.says("send at the next safe point"), "Steer");
+        assert!(session.says("stop this session"), "Cancel");
         assert!(
-            bin.says("put the whole worktree back to that checkpoint"),
-            "Rollback, and only where the way back really is a checkpoint"
+            !session.says("answer for this run from here"),
+            "Takeover has no executor, so it may not be offered"
+        );
+        let waiting = paint(View::Waiting, snapshot, Vec::new());
+        assert!(
+            !waiting.says("and stop asking"),
+            "CreatePolicy has no executor, so it may not be offered"
         );
     }
 
@@ -3092,7 +3249,7 @@ mod tests {
         // existed only on wasm, so no host test could see whether the
         // picture had been drawn at all - which is how it once shipped
         // painting the ground and no buildings.
-        let painted = paint(View::City, Snapshot::new(), Vec::new());
+        let painted = paint(View::Sessions, Snapshot::new(), Vec::new());
         assert!(painted.tags.iter().any(|tag| tag == "svg"));
         assert!(painted.tags.iter().any(|tag| tag == "polygon"));
         assert!(
@@ -3117,21 +3274,18 @@ mod tests {
         // what produced it. It is asserted here, over every view at once,
         // rather than in `panel` - what matters is not that the markup
         // renders but that no page escapes it.
-        let mut snapshot = Snapshot::new();
-        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
+        let mut snapshot = seated(&[(Some("lab/room1"), Phase::Running, 1)]);
         snapshot.adopt_approvals(vec![waiting_item()]);
-        let run = latest_run(&snapshot);
         for view in [
-            View::Overview,
-            View::City,
-            View::Live(run),
-            View::Approvals,
-            View::RecycleBin,
-            View::Archive,
-            View::Dashboard,
-            View::Ledger,
+            View::Sessions,
+            View::Session(Address::parse("lab/room1").unwrap()),
+            View::Waiting,
+            View::Record(Lens::Ledger),
+            View::Record(Lens::Archive),
+            View::Record(Lens::Bin),
+            View::Cost,
+            View::Setup,
             View::Building(Address::parse("lab").unwrap()),
-            View::Settings,
         ] {
             let painted = paint(view.clone(), snapshot.clone(), Vec::new());
             assert!(
@@ -3149,7 +3303,7 @@ mod tests {
     fn a_begun_login_puts_the_url_on_the_page_and_a_finished_one_takes_it_away() {
         let mut snapshot = Snapshot::new();
         assert!(
-            paint(View::Settings, snapshot.clone(), Vec::new()).says("no login is waiting"),
+            paint(View::Setup, snapshot.clone(), Vec::new()).says("no login is waiting"),
             "a page with no login pending says so rather than showing an empty box"
         );
 
@@ -3166,7 +3320,7 @@ mod tests {
         draft.data = Payload::new(data).unwrap();
         let begun = EventRecord::from_draft(draft, Seq::new(3), B3Hash::digest(b"prev"));
         snapshot.apply(&begun);
-        let painted = paint(View::Settings, snapshot.clone(), Vec::new());
+        let painted = paint(View::Setup, snapshot.clone(), Vec::new());
         assert!(
             painted.says("https://example.invalid/authorize?state=x"),
             "the url a person must open is the one the server recorded"
@@ -3175,7 +3329,7 @@ mod tests {
 
         snapshot.apply(&record(4, EventKind::SecretCaptured, [2u8; 16]));
         assert!(
-            paint(View::Settings, snapshot, Vec::new()).says("no login is waiting"),
+            paint(View::Setup, snapshot, Vec::new()).says("no login is waiting"),
             "a credential in the vault ends the step that was asking for it"
         );
     }
@@ -3184,24 +3338,17 @@ mod tests {
     fn the_left_nav_carries_every_destination_and_says_how_many_wait() {
         let mut snapshot = Snapshot::new();
         snapshot.adopt_approvals(vec![waiting_item()]);
-        let painted = paint(View::City, snapshot.clone(), Vec::new());
+        let painted = paint(View::Sessions, snapshot.clone(), Vec::new());
         // In the language the harness renders in, which is this
         // client's own: what matters here is that every destination
         // reaches the page, and `lang` holds that both languages exist.
         let word = |msg| crate::lang::say(crate::lang::Lang::En, msg);
-        for group in destinations(&snapshot) {
+        for spot in destinations(&snapshot) {
             assert!(
-                painted.says(word(group.label)),
-                "the nav does not head {:?}",
-                group.label
+                painted.says(word(spot.label)),
+                "the nav does not offer {:?}",
+                spot.label
             );
-            for spot in group.places {
-                assert!(
-                    painted.says(word(spot.label)),
-                    "the nav does not offer {:?}",
-                    spot.label
-                );
-            }
         }
         assert!(
             painted.has_class("badge"),
@@ -3217,12 +3364,19 @@ mod tests {
     /// selection went in raw and `drop::read` never ran. Cancelling
     /// `dragover` is what takes the gesture back.
     #[test]
-    fn work_can_be_aimed_by_dropping_onto_the_bar_it_is_written_in() {
-        let painted = paint(View::City, Snapshot::new(), Vec::new());
+    fn work_can_be_aimed_by_dropping_onto_the_box_it_is_written_in() {
+        let painted = paint(View::Sessions, Snapshot::new(), Vec::new());
         assert!(
-            painted.has_class("dispatch drop-zone"),
-            "the control surface takes no drop: {:?}",
-            painted.attrs
+            painted.has_class("composer-task"),
+            "the box work is written in is not on the page: {:?}",
+            painted.classes
+        );
+        assert!(
+            painted
+                .attrs
+                .iter()
+                .any(|value| value.contains("measure every read path")),
+            "the placeholder is not one whole real task, so it teaches nothing about size"
         );
     }
 
@@ -3251,16 +3405,15 @@ mod tests {
     }
 
     #[test]
-    fn the_control_surface_asks_for_work_and_not_for_a_budget() {
+    fn the_box_that_starts_work_asks_for_work_and_not_for_a_budget() {
         // A person cannot say what a task is worth before it runs, and a
         // subscription has no unit price to say it in (user verdict,
-        // 2026-08-22). Whatever the bar shows, it never shows a price.
-        let painted = paint(View::City, Snapshot::new(), Vec::new());
-        assert!(painted.has_class("dispatch"));
-        assert!(painted.says("what to produce"));
+        // 2026-08-22). Whatever the box shows, it never shows a price.
+        let painted = paint(View::Sessions, Snapshot::new(), Vec::new());
+        assert!(painted.has_class("panel composer"));
         assert!(
             !painted.says("budget") && !painted.says("how much"),
-            "the dispatch bar asks for money: {:?} / {:?}",
+            "the box that starts work asks for money: {:?} / {:?}",
             painted.text,
             painted.attrs
         );
@@ -3310,7 +3463,7 @@ mod tests {
             )
             .with_recovery("the base url needs its /v1"),
         );
-        let painted = painted_with(View::City, Snapshot::new(), Vec::new(), Some(told));
+        let painted = painted_with(View::Sessions, Snapshot::new(), Vec::new(), Some(told));
         assert!(
             painted.classes.iter().any(|c| c == "refusal"),
             "the refusal has nowhere to appear: {:?}",
@@ -3330,7 +3483,7 @@ mod tests {
     /// that is always there is a banner nobody reads.
     #[test]
     fn a_page_with_nothing_refused_carries_no_strip() {
-        let painted = painted_with(View::City, Snapshot::new(), Vec::new(), None);
+        let painted = painted_with(View::Sessions, Snapshot::new(), Vec::new(), None);
         assert!(!painted.classes.iter().any(|c| c == "refusal"));
     }
 
@@ -3411,7 +3564,7 @@ mod tests {
             Seq::new(1),
             B3Hash::digest(b"prev"),
         ));
-        let run = latest_run(&snapshot).expect("one run started");
+        let _run = latest_run(&snapshot).expect("one run started");
 
         let offered = watchable(&snapshot);
         let (_, label) = offered.first().expect("the run is offered");
@@ -3420,10 +3573,14 @@ mod tests {
             "the picker does not name the session: {label}"
         );
 
-        let painted = paint(View::Live(Some(run)), snapshot, Vec::new());
+        let painted = paint(
+            View::Session(Address::parse("lab/refactor-the-ledger").unwrap()),
+            snapshot,
+            Vec::new(),
+        );
         assert!(
             painted.says("refactor-the-ledger"),
-            "the page being watched does not say which session it is"
+            "the page being read does not say which session it is"
         );
     }
 
@@ -3471,7 +3628,7 @@ mod tests {
 
     #[test]
     fn the_settings_page_leads_with_the_step_a_new_city_cannot_skip() {
-        let painted = paint(View::Settings, Snapshot::new(), Vec::new());
+        let painted = paint(View::Setup, Snapshot::new(), Vec::new());
         let attach = painted
             .wrote("Attach a provider")
             .expect("the page never offers to attach a provider");
@@ -3487,42 +3644,50 @@ mod tests {
         );
     }
 
-    /// Every control the dispatch bar shows carries a label, not only a
-    /// placeholder - this repository's own stylesheet says why, and the
-    /// bar was the one form in the client that ignored it.
+    /// At rest the box asks one question, and everything else it needs
+    /// is written out as a sentence a person can disagree with.
+    ///
+    /// The bar this replaced stood seven controls open at once, which
+    /// asked a person to read the whole grammar of a dispatch before
+    /// writing one word of it.
     #[test]
-    fn the_dispatch_bar_names_its_fields_where_the_name_survives_typing() {
-        let painted = paint(View::Overview, Snapshot::new(), Vec::new());
-        for label in ["room", "task"] {
+    fn at_rest_the_box_is_one_field_and_one_sentence() {
+        let painted = paint(View::Sessions, Snapshot::new(), Vec::new());
+        let fields = painted
+            .classes
+            .iter()
+            .filter(|held| *held == "composer-task" || *held == "composer-field")
+            .count();
+        assert_eq!(fields, 1, "more than one control stands open at rest");
+        for word in ["send it to ", "as ", "think "] {
             assert!(
-                painted.text.iter().any(|line| line == label),
-                "the dispatch bar has no label {label:?}: {:?}",
+                painted.text.iter().any(|line| line == word),
+                "the inferred sentence does not say {word:?}: {:?}",
                 painted.text
             );
         }
     }
 
-    /// Two fields start work; the rest wait behind something that says so.
+    /// Nothing is hidden and nothing is asked.
     ///
-    /// Seven controls stood open at all times, which asked a person to
-    /// read the whole grammar of a dispatch before writing one word of it.
-    /// The four with usable defaults fold away - and the fold is announced
-    /// rather than hidden, because a control nobody can see is a control
-    /// nobody finds.
+    /// The replaced bar folded four controls behind a "more" disclosure,
+    /// which is the same defect wearing a control: a page that hides what
+    /// it decided is a page answering on the reader's behalf. Every
+    /// decision is on screen, as a word that can be clicked.
     #[test]
-    fn the_resting_bar_is_two_fields_and_says_where_the_rest_went() {
-        let painted = paint(View::Overview, Snapshot::new(), Vec::new());
+    fn every_decision_the_city_made_is_on_screen_and_can_be_changed() {
+        let painted = paint(View::Sessions, Snapshot::new(), Vec::new());
         assert!(
-            painted.text.iter().any(|line| line == "more"),
-            "the fold is silent: {:?}",
+            !painted.text.iter().any(|line| line == "more"),
+            "something is folded away: {:?}",
             painted.text
         );
-        for folded in ["done when", "mode", "how hard it thinks", "call it"] {
-            assert!(
-                !painted.text.iter().any(|line| line == folded),
-                "{folded:?} is still open at rest"
-            );
-        }
+        let words = painted
+            .classes
+            .iter()
+            .filter(|held| *held == "guess" || *held == "chosen")
+            .count();
+        assert_eq!(words, 3, "the sentence does not offer all three decisions");
     }
 
     /// Stopping is not the same kind of act as starting, and it used to
@@ -3535,29 +3700,16 @@ mod tests {
     /// the placement was checked by looking at the running client.
     #[test]
     fn stopping_the_city_is_never_dressed_as_the_thing_that_starts_work() {
-        let painted = paint(View::Overview, Snapshot::new(), Vec::new());
+        let painted = paint(View::Sessions, Snapshot::new(), Vec::new());
         assert!(painted.says("stop the city"), "the city cannot be stopped");
         assert!(
-            painted.has_class("quiet halt"),
+            painted.has_class("quiet"),
             "the halt control is dressed as a primary action: {:?}",
             painted.classes
         );
-    }
-
-    /// A steer box with no session chosen sent nothing, said nothing,
-    /// and looked exactly like one that would work.
-    #[test]
-    fn a_session_nobody_chose_gets_a_sentence_rather_than_a_dead_input() {
-        let mut snapshot = Snapshot::new();
-        snapshot.apply(&record(1, EventKind::RunStarted, [1u8; 16]));
-        let painted = paint(View::Live(None), snapshot, Vec::new());
         assert!(
-            painted.says("pick a session above to speak into it"),
-            "the page offers no way to learn what to do next"
-        );
-        assert!(
-            !painted.says("say something into this run"),
-            "a box that cannot send is still on the page"
+            painted.has_class("city-state"),
+            "stopping the city stands away from the box that starts work"
         );
     }
 
@@ -3647,8 +3799,20 @@ fn apply_frame(
         mut refused,
         lang,
     } = wiring;
-    let (events, answers, refusal) = paint.into_parts();
+    let (events, answers, refusal, saying) = paint.into_parts();
     let said = lang();
+    // Increments first, and into the snapshot's own discardable buffer.
+    // Before the events on purpose: `model_returned` in this same burst
+    // throws the buffer away, so a call that both streamed and settled
+    // inside one frame ends with the record showing rather than the
+    // increments that preceded it.
+    if !saying.is_empty() {
+        snapshot.with_mut(|held| {
+            for delta in &saying {
+                held.is_saying(delta);
+            }
+        });
+    }
     // Everything the burst adds to history, folded and kept in one write
     // each rather than in one write each per event.
     let mut keep: Vec<channels::EventRecord> = Vec::new();
@@ -3675,11 +3839,15 @@ fn apply_frame(
         // at all in a host test.
         let waiting = expecting.read().clone();
         if let Some(waiting) = waiting
-            && let Some(run) = started_here(&event, &waiting)
+            && started_here(&event, &waiting).is_some()
+            && let Some(addr) = event.addr().cloned()
         {
+            // The room, not the run: a session opened by this person is
+            // named by the name they gave it, and that is the address
+            // this build puts in the bar.
             expecting.set(None);
-            view.set(View::Live(Some(run)));
-            crate::route::go(&View::Live(Some(run)));
+            view.set(View::Session(addr.clone()));
+            crate::route::go(&View::Session(addr));
         }
         if snapshot.write().apply(&event) {
             keep.push(event);
@@ -3687,8 +3855,9 @@ fn apply_frame(
     }
     // Which session the person has open, so a store at its bound gives
     // way in what they are not reading rather than in what they are.
-    let reading = match *view.read() {
-        View::Live(run) => run,
+    let reading = match &*view.read() {
+        View::Session(addr) => snapshot.read().session_at(addr).map(|(run, _)| run),
+        View::Run(run) => Some(*run),
         _ => None,
     };
     if !keep.is_empty() {

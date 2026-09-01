@@ -186,6 +186,7 @@ fn a_run_that_finishes_writes_dispatch_turns_and_freeze_in_that_order() {
         interrupt: &mut interrupt,
         fence: None,
         invoke: &mut invoke,
+        deltas: None,
     };
 
     let frozen = drive(plan(4), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();
@@ -239,6 +240,7 @@ fn a_budget_that_runs_out_freezes_at_limit_rather_than_running_on() {
         interrupt: &mut interrupt,
         fence: None,
         invoke: &mut invoke,
+        deltas: None,
     };
 
     let frozen = drive(plan(2), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();
@@ -272,6 +274,7 @@ fn a_cancel_at_a_safe_point_freezes_inside_the_interrupted_turn() {
         interrupt: &mut interrupt,
         fence: None,
         invoke: &mut invoke,
+        deltas: None,
     };
 
     let frozen = drive(plan(4), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();
@@ -314,6 +317,7 @@ fn a_fence_runs_before_the_wave_and_carries_the_turns_stamp() {
             interrupt: &mut interrupt,
             fence: Some(&mut fence),
             invoke: &mut invoke,
+            deltas: None,
         };
         let frozen = drive(plan(4), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();
         assert!(matches!(frozen.completion(), Completion::Done(_)));
@@ -346,6 +350,7 @@ fn advance_reports_each_turn_so_a_caller_can_stop_between_them() {
         interrupt: &mut interrupt,
         fence: None,
         invoke: &mut invoke,
+        deltas: None,
     };
 
     let mut run = Run::dispatch(plan(4), &mut ledger, &mut hooks).unwrap();
@@ -391,6 +396,7 @@ fn a_steer_at_a_safe_point_reaches_the_next_window_and_not_only_the_ledger() {
         interrupt: &mut interrupt,
         fence: None,
         invoke: &mut invoke,
+        deltas: None,
     };
 
     drive(plan(4), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();
@@ -439,6 +445,7 @@ fn a_cancel_after_the_wave_stops_the_run_before_anything_it_handed_down_starts()
         interrupt: &mut interrupt,
         fence: None,
         invoke: &mut invoke,
+        deltas: None,
     };
 
     let frozen = drive(plan(4), &mut ledger, &mut model, &mut hooks, &handoff()).unwrap();

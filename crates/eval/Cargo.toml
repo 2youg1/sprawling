@@ -10,6 +10,11 @@ publish.workspace = true
 # taken: this crate decides, and the register it decides about is read by
 # whoever calls it.
 kernel = { path = "../kernel" }
+# The three formats the nesting suite grades. Read rather than written:
+# this crate decides which shape a model edits best, and the answer is a
+# number, so both parsers are used only to find a document's leaves.
+serde_json = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true

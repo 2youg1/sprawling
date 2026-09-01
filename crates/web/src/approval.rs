@@ -176,16 +176,6 @@ pub fn ApprovalsView(
                                 },
                                 "refuse"
                             }
-                            if policy_admits(&item) {
-                                button {
-                                    class: "policy",
-                                    onclick: {
-                                        let id = item.id.clone();
-                                        move |_| on_frame.call(policy_command(&id))
-                                    },
-                                    "{word(Msg::ApprovalAndStopAsking)}"
-                                }
-                            }
                         }
                     }
                 }
@@ -195,12 +185,16 @@ pub fn ApprovalsView(
     }
 }
 
-/// Whether a standing policy may be built from this item.
+/// Whether a standing policy could be built from this item.
 ///
-/// One class admits policies; the rest are never
-/// waivable, and the button is absent rather than offered and refused -
-/// an interface that offers what the far side will reject teaches people
-/// to ignore refusals.
+/// One class admits policies; the rest are never waivable. Kept as a
+/// judgement without a control beside it: `CreatePolicy` is on the wire
+/// and no city executes it, so the button was offering a person an
+/// action whose only outcome was a refusal.
+///
+/// The rule is the half worth keeping, and it is the half that decides
+/// whether the control returns: when an executor lands, this already
+/// says which items may show it.
 #[must_use]
 pub fn policy_admits(item: &ApprovalItem) -> bool {
     !item.tainted && matches!(item.cluster_key.class, ApprovalClass::AgentQuestion)
@@ -215,17 +209,6 @@ fn answer_command(id: &channels::ApprovalId, verdict: PolicyVerdict) -> ClientFr
         ),
         item: id.clone(),
         verdict,
-    }))
-}
-
-fn policy_command(id: &channels::ApprovalId) -> ClientFrame {
-    ClientFrame::Command(Box::new(channels::WireCommand::CreatePolicy {
-        idem: channels::IdemKey::derive(
-            &channels::RunId::CITY,
-            channels::Seq::FIRST,
-            format!("policy-{}", id.as_str()).as_bytes(),
-        ),
-        from_item: id.clone(),
     }))
 }
 
@@ -331,34 +314,12 @@ pub fn bin_rows(answer: &channels::DiscardAnswer) -> Vec<BinRow> {
 /// The Recycle Bin: what was discarded, newest first, each row stating
 /// how it comes back.
 ///
-/// There is no restore button. The wire carries no such Command, and a
-/// button that does nothing when pressed is worse than an instruction a
-/// person can act on - which is what [`ReturnPath::sentence`] gives.
-/// Rolling a worktree back to a checkpoint.
-///
-/// **It is not a file restore, and the button says so.** `Rollback` names
-/// a git checkpoint and moves the whole tree to it; a row whose way back
-/// is a content address or a rebuild instruction gets no button, because
-/// the wire carries no command for those and offering one would be the
-/// interface promising something it cannot do.
-///
-/// `None` when the recorded checkpoint is not an object id this build can
-/// parse: fail-closed, exactly as the `Undescribed` return path is.
-#[must_use]
-pub fn rollback_command(checkpoint: &str) -> Option<ClientFrame> {
-    let oid = channels::GitOid::parse(checkpoint.trim())?;
-    Some(ClientFrame::Command(Box::new(
-        channels::WireCommand::Rollback {
-            idem: channels::IdemKey::derive(
-                &channels::RunId::CITY,
-                channels::Seq::FIRST,
-                checkpoint.trim().as_bytes(),
-            ),
-            checkpoint: oid,
-        },
-    )))
-}
-
+/// There is no button on any row of this page. Two commands could have
+/// carried one - `Rollback` for a checkpoint, and nothing at all for a
+/// content address - and no city executes `Rollback`, so both rows would
+/// have ended in a refusal. What a person gets instead is the sentence
+/// [`ReturnPath::sentence`] writes: an instruction they can act on,
+/// which is more than a button that only ever fails.
 #[component]
 pub fn RecycleBinView(
     answer: Option<channels::DiscardAnswer>,
@@ -414,19 +375,6 @@ pub fn RecycleBinView(
                     span { class: "way-back", "{row.return_path.sentence(lang())}" }
                     if row.restored {
                         span { class: "note", "{word(Msg::BinAlreadyRestored)}" }
-                    } else if let ReturnPath::FromCheckpoint(ref oid) = row.return_path {
-                        button {
-                            class: "quiet",
-                            onclick: {
-                                let at = oid.clone();
-                                move |_| {
-                                    if let Some(frame) = rollback_command(&at) {
-                                        on_frame.call(frame);
-                                    }
-                                }
-                            },
-                            "{word(Msg::BinRollback)}"
-                        }
                     }
                 }
             }

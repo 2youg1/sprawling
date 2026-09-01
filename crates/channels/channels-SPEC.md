@@ -21,7 +21,7 @@
 
 - **wire**：Command 恰 18 个 variant（P4.08 增 `Wake`）、Query 恰 14 个（计数断言，对本 SPEC §8-1 两表逐名核对）；每个改状态 Command 携 `IdemKey`（类型强制，无可省字段）；`PutSecret` 的 `value: Sealed<String>` 不实现 `Serialize`——**「远程录凭证」这条帧编译不出来**，以 trybuild 反例钉死。
 - **握手**：版本＋schema 哈希不配即断连并回 `E_WIRE_MISMATCH`（装载期码，无 carrier）；schema 哈希由 wire 类型集派生，改一个 variant 即变。golden 钉住当前哈希，改哈希必须与本 SPEC 同集变更。
-  **当前 golden**（ux-14 起）：`78fdb74d2bde3f5164e97da2cef6bb98c67d567d937b5ff02e5d516c86dd0126`；**WIRE_V ＝ 11**（新增 `Query::Changes`）。前值 `1de1a1ae…`（ux-13，WIRE_V 10：新增 `Query::RunHistory`）、`c7b41d50…`（P3.04，WIRE_V 9：新增 `Query::History`）、`0a600659…`（P3.02，WIRE_V 8：新增 `ConfigureBuilding`）、`4bb71c0b…`（P3.01，WIRE_V 7：新增 `ProbeEndpoint`，`AttachEndpoint` 长出 `admit`）、`c059c6e2…`（F2.16–P2.01，WIRE_V 6）、`d825e83a…`（F2.11–F2.15，WIRE_V 5）、 `aa57cb7e…`（F1.01–F2.10，WIRE_V 4）、 `941ede9f…`（R1.16–R1.18，WIRE_V 3）、`defe9a75…`（R1.14–R1.15，WIRE_V 2）、 `85705c03…`（R1.11–R1.13，WIRE_V 1）、`238f11b2…`（P1.11–R1.10）、`692b5f96…`（S4.02–P1.10）。
+  **当前 golden**（V3.13 起）：`4ac1b7b375c9a944a32920129e703673fe3d0092c3cea22c44da411f10855aac`；**WIRE_V ＝ 12**（新增 `ServerFrame::Delta`）。前值 `78fdb74d…`（ux-14，WIRE_V 11：新增 `Query::Changes`）、 `1de1a1ae…`（ux-13，WIRE_V 10：新增 `Query::RunHistory`）、`c7b41d50…`（P3.04，WIRE_V 9：新增 `Query::History`）、`0a600659…`（P3.02，WIRE_V 8：新增 `ConfigureBuilding`）、`4bb71c0b…`（P3.01，WIRE_V 7：新增 `ProbeEndpoint`，`AttachEndpoint` 长出 `admit`）、`c059c6e2…`（F2.16–P2.01，WIRE_V 6）、`d825e83a…`（F2.11–F2.15，WIRE_V 5）、 `aa57cb7e…`（F1.01–F2.10，WIRE_V 4）、 `941ede9f…`（R1.16–R1.18，WIRE_V 3）、`defe9a75…`（R1.14–R1.15，WIRE_V 2）、 `85705c03…`（R1.11–R1.13，WIRE_V 1）、`238f11b2…`（P1.11–R1.10）、`692b5f96…`（S4.02–P1.10）。
   P1.11 增三帧：`AttachEndpoint`／`SelectModel` 两个 Command（十九），`EndpointView` 一个 Query（十）。`PutSecret` 仍无线格式——它经 `/enroll` 路由在进程内成形，见 §8-2 录入口。
 
 **ux-13 增：`Query::RunHistory { run, before, limit }` → `Answer::History`，WIRE_V 9→10。**
@@ -446,3 +446,24 @@ pub struct SessionName(String);                // 形状 2；一个构造点，�
 - AGENTS.md：若新增命令面配方则同步命令表。
 - 依赖钉版表「axum 或同类 / tokio-tungstenite」行：回填实际选定版本。
 - `crates/sprawling/sprawling-SPEC.md`：`serve` 子命令的装配面。
+
+### 8-8 第三类帧：模型还在说的时候（V3.13；形状 2 值类型）
+
+**一个 token 增量不是效果，所以它不是事件。** 事件是发生过的事：有序号、进账本、可重放、可离线验。增量没有序号、永不落盘、无法重放，而且一个客户端漏掉一条什么也没丢。把它折进事件流，等于给「模型说了什么」造第二份、不可验证的历史——而这座城全部的主张就是那份历史可验。
+
+于是它是 `ServerFrame` 的第四个取值：
+
+```rust
+pub enum ServerFrame { Welcome(..), Event(..), Answer(..), Refusal(..), Delta(Delta) }
+pub struct Delta { pub run: RunId, pub text: String }
+```
+
+`WIRE_V` 11 → 12，schema 哈希随之变（`ServerFrame` 不进名字表，故这是「语法换形而名字没换」那一类，版本进位、旧页面在握手期被明确拒绝）。
+
+**三条口径，各自都是承重的：**
+
+1. **携 `RunId` 而不携序号。** 客户端据此把缓冲挂在一个 run 名下，并在该 run 的 `model_returned` 到达时整个丢掉。这就是「结算文本赢」的全部机制——一条断言钉住它（`web::session`）。
+2. **两条广播通道而不是一条。** 增量与事件的丢弃语义相反：漏掉的增量什么都不是，漏掉的事件是必须从账本补回的历史。共用一条通道会让一次话多的模型把记录挤出慢读者的窗口。
+3. **没人看时不开流。** 装配层只在有客户端时装 sink；`RunHooks.deltas` 为 `None` 的 run 走原本的阻塞调用，字节不差。于是 citysim 与离线重放的路径一字未改。
+
+**服务端半边（V3.12）在 `gateway`：** `kernel::Model` 多一个 `call_streaming(req, onto)`，默认实现就是 `call` 并且不报告任何增量——一个没有流的适配器因此是诚实的而不是坏的。`gateway::endpoint` 覆盖它：请求带 `stream: true`，逐行读 SSE，`dialect::increment_of` 只认各 dialect 用于助手散文的那个字段（工具参数与 thinking 块一律不报——半个工具参数不是短一点的工具参数），最后 `dialect::settled_from_stream` 把帧重装成**非流式的那个形状**，交给同一个 `response_from_wire`。**结算答案因此只有一个解析器**：流式调用与阻塞调用不可能对同一个回复得出两个结论。流被切断仍然表现为读取错误，永不表现为一个变短的回答。

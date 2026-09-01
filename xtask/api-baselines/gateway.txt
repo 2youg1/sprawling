@@ -34,6 +34,7 @@ pub fn gateway::Custodian::resolve(&self, &kernel::secret::SecretRef) -> core::r
 pub fn gateway::Custodian::set(&mut self, &kernel::secret::SecretRef, zeroize::Zeroizing<alloc::string::String>) -> core::result::Result<(), kernel::error::AxError>
 pub fn gateway::Custodian::with_env_reader(self, gateway::EnvReader) -> gateway::Custodian
 pub fn gateway::Endpoint::call(&mut self, &kernel::model::ModelRequest) -> core::result::Result<kernel::model::ModelReturn, kernel::error::AxError>
+pub fn gateway::Endpoint::call_streaming(&mut self, &kernel::model::ModelRequest, kernel::model::Increments<'_>) -> core::result::Result<kernel::model::ModelReturn, kernel::error::AxError>
 pub fn gateway::Endpoint::list_models(&self, &str) -> core::result::Result<alloc::vec::Vec<alloc::string::String>, kernel::error::AxError>
 pub fn gateway::Endpoint::new(gateway::EndpointConfig, gateway::SecretResolver) -> core::result::Result<gateway::Endpoint, kernel::error::AxError>
 pub fn gateway::EndpointBook::apply(&mut self, &kernel::event::EventRecord) -> core::result::Result<(), kernel::error::AxError>
@@ -53,6 +54,7 @@ pub fn gateway::Native::call(&mut self, &kernel::model::ModelRequest) -> core::r
 pub fn gateway::Native::new(gateway::NativeConfig) -> core::result::Result<gateway::Native, kernel::error::AxError>
 pub fn gateway::OauthTokens::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn gateway::attached_payload(&gateway::AttachedEndpoint) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
+pub fn gateway::increment_of(kernel::model::DialectKind, &serde_json::value::Value) -> core::option::Option<alloc::string::String>
 pub fn gateway::oauth_begin(&gateway::OauthProfile, alloc::string::String, alloc::string::String) -> core::result::Result<gateway::OauthPending, kernel::error::AxError>
 pub fn gateway::oauth_random(&[u8]) -> alloc::string::String
 pub fn gateway::oauth_redeem(&gateway::OauthProfile, &gateway::OauthPending, &str, u64) -> core::result::Result<gateway::OauthTokens, kernel::error::AxError>
@@ -64,6 +66,7 @@ pub fn gateway::response_from_wire(kernel::model::DialectKind, &serde_json::valu
 pub fn gateway::response_wire(kernel::model::DialectKind, &kernel::model::ChatResponse) -> core::result::Result<serde_json::value::Value, kernel::error::AxError>
 pub fn gateway::selected_payload(kernel::model::ModelTag, &str, &gateway::ModelEntry) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
 pub fn gateway::settle(&kernel::model::ModelUsage, core::option::Option<kernel::budget::UsdMicros>, &gateway::ModelEntry) -> core::result::Result<gateway::CallCost, kernel::error::AxError>
+pub fn gateway::settled_from_stream(kernel::model::DialectKind, &[serde_json::value::Value]) -> core::result::Result<serde_json::value::Value, kernel::error::AxError>
 pub gateway::AdmissionVerdict::Admit
 pub gateway::AdmissionVerdict::Hold
 pub gateway::AdmissionVerdict::Hold::until: kernel::event::TimeMs

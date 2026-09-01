@@ -8,19 +8,23 @@ impl web::Camera
 impl web::Cluster
 impl web::CostDimension
 impl web::Feed
+impl web::Field
 impl web::Filter
 impl web::Frame
 impl web::Kind
 impl web::Lang
+impl web::Lens
 impl web::Link
 impl web::Note
 impl web::Outcome
 impl web::Paint
+impl web::Phase
 impl web::Phrase
+impl web::Plan
 impl web::ProviderHealth
 impl web::ReturnPath
-impl web::RunPhase
 impl web::Snapshot
+impl web::Tab
 impl web::Trend
 pub const fn web::Camera::tiles() -> Self
 pub const web::ACCENT_CHROMA_PERCENT: u16
@@ -28,7 +32,11 @@ pub const web::ALERT_CHROMA_PERCENT: u16
 pub const web::CHROMA_COEFFICIENT: &str
 pub const web::COLOUR_TOKENS: [(&str, u16, u16, u16); 5]
 pub const web::CORNER_SCALES: [(&str, u16, u16); 4]
+pub const web::DEFAULT_EFFORT: &str
+pub const web::DEFAULT_MODE: &str
+pub const web::ENDED_ROWS: usize
 pub const web::FILED_LATELY_MAX: usize
+pub const web::Field::ALL: [web::Field; 3]
 pub const web::GRAY_CHROMA: u16
 pub const web::GRAY_RAMP: [(&str, u16); 11]
 pub const web::HELD_RECORDS: usize
@@ -38,12 +46,15 @@ pub const web::INFORMATION_FLOOR: &str
 pub const web::L_CEILING: u16
 pub const web::L_FLOOR: u16
 pub const web::Lang::ALL: [web::Lang; 2]
+pub const web::Lens::ALL: [web::Lens; 3]
 pub const web::MARGIN: i32
+pub const web::MODES: [&str; 5]
 pub const web::MOTION_QUICK_MS: u16
 pub const web::NAMED_FILES: usize
 pub const web::OUTPUT_LINES: usize
 pub const web::PAGE_ROWS: usize
 pub const web::PROGRESS_DONE: (&str, &str)
+pub const web::READING_ORDER: [web::Phase; 5]
 pub const web::SERIES_DASHES: [&str; 4]
 pub const web::SERIES_PER_CHART_MAX: usize
 pub const web::SERIES_WIDTHS: [&str; 4]
@@ -51,6 +62,7 @@ pub const web::TEXT_SURFACE_CEILING: &str
 pub const web::TEXT_TOKENS: [(&str, u16, u16); 4]
 pub const web::TILE_WIDTH: u32
 pub const web::TYPE_SCALE: [(&str, u16, u16, u16); 6]
+pub const web::Tab::ALL: [web::Tab; 4]
 pub const web::WINDOW: usize
 pub const web::ZOOM_STOPS: [u32; 3]
 pub enum web::Act
@@ -63,9 +75,11 @@ pub enum web::Chord
 pub enum web::CostDimension
 pub enum web::Dropped
 pub enum web::Enrolment
+pub enum web::Field
 pub enum web::Kind
 pub enum web::Lang
 pub enum web::Leaf
+pub enum web::Lens
 pub enum web::LinkAction
 pub enum web::LinkEvent
 pub enum web::LinkState
@@ -73,13 +87,14 @@ pub enum web::Meaning
 pub enum web::Msg
 pub enum web::Note
 pub enum web::Outcome
+pub enum web::Phase
 pub enum web::Place
 pub enum web::ProviderHealth
 pub enum web::Raise
 pub enum web::ReturnPath
 pub enum web::RoomQueue
-pub enum web::RunPhase
 pub enum web::Subject
+pub enum web::Tab
 pub enum web::Target
 pub enum web::Trend
 pub enum web::View
@@ -112,6 +127,9 @@ pub fn web::Feed::new() -> Self
 pub fn web::Feed::push(&mut self, &kernel::event::EventRecord) -> bool
 pub fn web::Feed::replay<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>, core::option::Option<kernel::event::RunId>, bool) -> web::Feed
 pub fn web::Feed::stop_following(&mut self)
+pub fn web::Field::label(self) -> web::Msg
+pub fn web::Field::sentence(self) -> web::Msg
+pub fn web::Field::slot(self) -> &'static str
 pub fn web::Filter::keeps(&self, &kernel::event::EventRecord) -> bool
 pub fn web::Frame::attr(&self) -> alloc::string::String
 pub fn web::Kind::word(self) -> web::Msg
@@ -120,6 +138,7 @@ pub fn web::Lang::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn web::Lang::of(&str) -> web::Lang
 pub fn web::Lang::tag(self) -> &'static str
 pub fn web::LedgerView(web::ledger_view::LedgerViewProps) -> dioxus_core::innerlude::Element
+pub fn web::Lens::word(self) -> web::Msg
 pub fn web::Link::advance(&mut self, web::LinkEvent) -> web::LinkAction
 pub fn web::Link::city(&self) -> core::option::Option<&kernel::address::Address>
 pub fn web::Link::connect(&mut self) -> web::LinkAction
@@ -131,58 +150,81 @@ pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Elemen
 pub fn web::Note::at(&self) -> kernel::event::Seq
 pub fn web::Outcome::class(self) -> &'static str
 pub fn web::Outcome::word(self) -> web::Msg
-pub fn web::OverviewView(web::overview::OverviewViewProps) -> dioxus_core::innerlude::Element
-pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::wire::Answer>, core::option::Option<kernel::error::AxError>)
+pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::wire::Answer>, core::option::Option<kernel::error::AxError>, alloc::vec::Vec<channels::wire::Delta>)
 pub fn web::Paint::is_empty(&self) -> bool
 pub fn web::Paint::superseded(&self) -> usize
 pub fn web::Palette(web::palette::PaletteProps) -> dioxus_core::innerlude::Element
+pub fn web::Phase::ended_as(core::option::Option<&str>) -> Self
+pub fn web::Phase::in_flight(self) -> bool
+pub fn web::Phase::needs_a_person(self) -> bool
+pub fn web::Phase::token(self) -> &'static str
+pub fn web::Phase::word(self) -> web::Msg
 pub fn web::Phrase::in_lang(self, web::Lang) -> &'static str
+pub fn web::Plan::choose(&mut self, web::Field, alloc::string::String)
+pub fn web::Plan::guessed(&web::Snapshot, &str) -> Self
+pub fn web::Plan::ink(&self, web::Field) -> &'static str
+pub fn web::Plan::is_chosen(&self, web::Field) -> bool
+pub fn web::Plan::value(&self, web::Field) -> &str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::word(self) -> web::Msg
 pub fn web::ReachForm(web::reach::ReachFormProps) -> dioxus_core::innerlude::Element
+pub fn web::RecordView(web::record::RecordViewProps) -> dioxus_core::innerlude::Element
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ReturnPath::of(&kernel::discard::Restoration) -> Self
 pub fn web::ReturnPath::sentence(&self, web::Lang) -> alloc::string::String
 pub fn web::Root(web::app::RootProps) -> dioxus_core::innerlude::Element
-pub fn web::RunPhase::as_str(self) -> &'static str
+pub fn web::SessionView(web::session::SessionViewProps) -> dioxus_core::innerlude::Element
+pub fn web::SessionsView(web::sessions::SessionsViewProps) -> dioxus_core::innerlude::Element
 pub fn web::Snapshot::adopt_approvals(&mut self, alloc::vec::Vec<kernel::approval::ApprovalItem>)
 pub fn web::Snapshot::adopt_city(&mut self, kernel::address::Address)
+pub fn web::Snapshot::applied_through(&self) -> core::option::Option<kernel::event::Seq>
 pub fn web::Snapshot::apply(&mut self, &kernel::event::EventRecord) -> bool
 pub fn web::Snapshot::approvals(&self) -> alloc::vec::Vec<kernel::approval::ApprovalItem>
 pub fn web::Snapshot::approvals_pending(&self) -> u32
 pub fn web::Snapshot::backfill(&mut self, &[kernel::event::EventRecord]) -> web::Backfill
 pub fn web::Snapshot::city(&self) -> core::option::Option<&kernel::address::Address>
+pub fn web::Snapshot::counts(&self) -> (u32, u32, u32)
 pub fn web::Snapshot::is_halted(&self) -> bool
+pub fn web::Snapshot::is_saying(&mut self, &channels::wire::Delta)
 pub fn web::Snapshot::login_url(&self) -> core::option::Option<&str>
 pub fn web::Snapshot::new() -> Self
 pub fn web::Snapshot::provider(&self) -> web::ProviderHealth
 pub fn web::Snapshot::resume_from(&self) -> core::option::Option<kernel::event::Seq>
+pub fn web::Snapshot::room_of(&self, &kernel::event::RunId) -> core::option::Option<&kernel::address::Address>
 pub fn web::Snapshot::run(&self, &kernel::event::RunId) -> core::option::Option<&web::RunRow>
 pub fn web::Snapshot::runs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&kernel::event::RunId, &web::RunRow)>
+pub fn web::Snapshot::saying(&self, &kernel::event::RunId) -> core::option::Option<&str>
 pub fn web::Snapshot::served(&self) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::vec::Vec<alloc::string::String>>
+pub fn web::Snapshot::session_at(&self, &kernel::address::Address) -> core::option::Option<(kernel::event::RunId, &web::RunRow)>
 pub fn web::Snapshot::signals_seen(&self) -> u64
 pub fn web::Snapshot::spent(&self) -> kernel::budget::UsdMicros
 pub fn web::Snapshot::unreadable_approvals(&self) -> u32
 pub fn web::Snapshot::usage(&self) -> web::Usage
+pub fn web::Snapshot::waiting_on_you(&self) -> u32
+pub fn web::Tab::word(self) -> web::Msg
 pub fn web::Trend::between(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> Self
 pub fn web::Trend::mark(self) -> &'static str
 pub fn web::Vitals(web::vitals::VitalsProps) -> dioxus_core::innerlude::Element
+pub fn web::WaitingView(web::waiting::WaitingViewProps) -> dioxus_core::innerlude::Element
 pub fn web::absorb(web::Lang, &mut web::Alerts, &kernel::event::EventRecord) -> web::Raise
 pub fn web::alert_for(web::Lang, &kernel::event::EventRecord) -> core::option::Option<web::Alert>
 pub fn web::backoff_ms(u32) -> u64
 pub fn web::bar(&kernel::completion::Progress, bool, web::Subject, web::Lang) -> web::Bar
 pub fn web::bin_rows(&channels::wire::DiscardAnswer) -> alloc::vec::Vec<web::BinRow>
+pub fn web::building_of(&kernel::address::Address) -> core::option::Option<kernel::address::Address>
 pub fn web::can_dispatch(&channels::wire::EndpointsAnswer) -> bool
+pub fn web::cancel_command(kernel::event::RunId) -> channels::wire::ClientFrame
 pub fn web::cleared_by(&kernel::event::EventRecord) -> core::option::Option<alloc::string::String>
 pub fn web::configure_command(&kernel::address::Address, kernel::config::SandboxLimits, alloc::vec::Vec<kernel::config::McpServer>) -> channels::wire::WireCommand
 pub fn web::continuity_order(u16) -> u16
 pub fn web::cost_rows(alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros, kernel::budget::UsdMicros)>, kernel::budget::UsdMicros) -> alloc::vec::Vec<web::CostRow>
+pub fn web::counts_said(web::Lang, &web::Snapshot) -> [alloc::string::String; 3]
 pub fn web::custom_properties() -> alloc::string::String
 pub fn web::day_label(u64) -> alloc::string::String
 pub fn web::describe(&kernel::event::EventRecord) -> (core::option::Option<web::Msg>, alloc::string::String)
 pub fn web::describe_in(web::Lang, &kernel::event::EventRecord) -> alloc::string::String
-pub fn web::destinations(&web::Snapshot) -> alloc::vec::Vec<web::NavGroup>
-pub fn web::dispatch_command(&str, &str, &str, &str, &str, core::option::Option<kernel::model::Effort>) -> core::option::Option<channels::wire::ClientFrame>
+pub fn web::destinations(&web::Snapshot) -> alloc::vec::Vec<web::Destination>
+pub fn web::dispatch_command(&str, &str, &str, &str, core::option::Option<kernel::model::Effort>) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::distinguishable_without_colour() -> bool
 pub fn web::done_band_of(&web::Camera, &web::Prism) -> alloc::vec::Vec<web::Face>
 pub fn web::draw(&web::Camera, alloc::vec::Vec<web::Prism>, core::option::Option<&str>) -> web::DisplayList
@@ -202,15 +244,16 @@ pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::
 pub fn web::from_event(&dioxus_core::events::Event<dioxus_html::events::drag::DragData>) -> web::Dropped
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
-pub fn web::headline(&web::Working) -> (web::Msg, alloc::vec::Vec<(&'static str, alloc::string::String)>)
+pub fn web::head_facts(web::Lang, &web::RunRow) -> [web::Fact; 4]
 pub fn web::hold(&mut alloc::vec::Vec<kernel::event::EventRecord>, impl core::iter::traits::collect::IntoIterator<Item = kernel::event::EventRecord>, core::option::Option<kernel::event::RunId>)
 pub fn web::inbox(alloc::vec::Vec<kernel::approval::ApprovalItem>) -> alloc::vec::Vec<web::Cluster>
 pub fn web::invalidated_by(kernel::event::EventKind) -> core::option::Option<channels::wire::Query>
 pub fn web::kind_name(kernel::event::EventKind) -> alloc::string::String
 pub fn web::kind_named(&str) -> core::option::Option<kernel::event::EventKind>
+pub fn web::latest_room(&web::Snapshot) -> core::option::Option<alloc::string::String>
 pub fn web::latest_run(&web::Snapshot) -> core::option::Option<kernel::event::RunId>
+pub fn web::listing(&web::Snapshot) -> (alloc::vec::Vec<web::SeatRow>, alloc::vec::Vec<web::SeatRow>)
 pub fn web::matching(&str, alloc::vec::Vec<web::Offer>) -> alloc::vec::Vec<web::Offer>
-pub fn web::needs_you(&web::Snapshot) -> alloc::vec::Vec<web::Attention>
 pub fn web::opened_at(&[web::Turn]) -> core::option::Option<kernel::locator::GitOid>
 pub fn web::opened_building(core::option::Option<&str>) -> core::option::Option<kernel::address::Address>
 pub fn web::opening_leaf(&channels::wire::BuildingAnswer) -> web::Leaf
@@ -235,9 +278,9 @@ pub fn web::refused(web::Lang, &kernel::error::AxError) -> web::Refused
 pub fn web::render_tokens(kernel::budget::Tokens) -> alloc::string::String
 pub fn web::render_usd(kernel::budget::UsdMicros) -> alloc::string::String
 pub fn web::resolved_chroma(u16, u16, u16) -> u16
-pub fn web::rollback_command(&str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::room_addr(&kernel::address::Address, &str) -> core::option::Option<kernel::address::Address>
 pub fn web::room_asked_for(&channels::wire::ClientFrame) -> core::option::Option<alloc::string::String>
+pub fn web::room_for_link(&web::Snapshot, &web::View) -> core::option::Option<web::View>
 pub fn web::say(web::Lang, web::Msg) -> &'static str
 pub fn web::searchable(&str) -> core::option::Option<alloc::string::String>
 pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> u16
@@ -245,14 +288,16 @@ pub fn web::shelves(&channels::wire::ArchiveAnswer) -> alloc::vec::Vec<web::Shel
 pub fn web::short_run(kernel::event::RunId) -> alloc::string::String
 pub fn web::show_mounts(&[kernel::address::Address]) -> alloc::string::String
 pub fn web::show_servers(&[kernel::config::McpServer]) -> alloc::string::String
+pub fn web::showing(&web::View, &web::View) -> bool
 pub fn web::signs(&channels::wire::MetricsAnswer) -> [web::Sign; 3]
 pub fn web::spend_line(web::Lang, &web::Snapshot) -> alloc::string::String
+pub fn web::spent_of(web::Lang, core::option::Option<kernel::budget::UsdMicros>) -> alloc::string::String
+pub fn web::stalled(&web::Snapshot) -> alloc::vec::Vec<web::Stalled>
 pub fn web::started_here(&kernel::event::EventRecord, &str) -> core::option::Option<kernel::event::RunId>
 pub fn web::status_line(web::Lang, &web::Snapshot) -> [alloc::string::String; 4]
 pub fn web::storeys(u64) -> u32
 pub fn web::superellipse_tenths(u16) -> u16
 pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
-pub fn web::takeover_command(kernel::event::RunId) -> channels::wire::ClientFrame
 pub fn web::to_fragment(&web::View) -> alloc::string::String
 pub fn web::token_in(&str) -> core::option::Option<alloc::string::String>
 pub fn web::track_token() -> &'static str
@@ -262,12 +307,10 @@ pub fn web::view_box(&web::DisplayList, usize, (i32, i32)) -> web::Frame
 pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
 pub fn web::waiting_line(web::Lang, &web::Snapshot) -> alloc::string::String
 pub fn web::watchable(&web::Snapshot) -> alloc::vec::Vec<(kernel::event::RunId, alloc::string::String)>
-pub fn web::working(&web::Snapshot, core::option::Option<&channels::wire::CityAnswer>) -> web::Working
 pub mod web
 pub struct web::Alert
 pub struct web::Alerts
 pub struct web::AttachForm
-pub struct web::Attention
 pub struct web::Bar
 pub struct web::BinRow
 pub struct web::Call
@@ -278,31 +321,33 @@ pub struct web::Destination
 pub struct web::DisplayList
 pub struct web::EndpointRow
 pub struct web::Face
+pub struct web::Fact
 pub struct web::Feed
 pub struct web::Filter
 pub struct web::Frame
 pub struct web::Line
 pub struct web::Link
-pub struct web::NavGroup
 pub struct web::Offer
 pub struct web::Output
 pub struct web::Page
 pub struct web::Paint
 pub struct web::Phrase
+pub struct web::Plan
 pub struct web::Prism
 pub struct web::Refused
 pub struct web::Row
 pub struct web::RunRow
 pub struct web::SavingsRow
+pub struct web::SeatRow
 pub struct web::Shelf
 pub struct web::Sign
 pub struct web::Snapshot
+pub struct web::Stalled
 pub struct web::Stroke<'a>
 pub struct web::TagRow
 pub struct web::Turn
 pub struct web::Usage
 pub struct web::Used
-pub struct web::Working
 pub use web::App
 pub use web::ApprovalsView
 pub use web::ArchiveView
@@ -310,13 +355,16 @@ pub use web::BuildingView
 pub use web::CostsView
 pub use web::LedgerView
 pub use web::LiveView
-pub use web::OverviewView
 pub use web::Palette
 pub use web::ProgressBar
 pub use web::ReachForm
+pub use web::RecordView
 pub use web::RecycleBinView
 pub use web::Root
+pub use web::SessionView
+pub use web::SessionsView
 pub use web::Vitals
+pub use web::WaitingView
 pub web::Act::Compose
 pub web::Act::Dismiss
 pub web::Act::Go(web::Place)
@@ -333,6 +381,7 @@ pub web::AlertKind::RunFrozen
 pub web::Arrived::Answer(alloc::boxed::Box<channels::wire::Answer>)
 pub web::Arrived::Event(alloc::boxed::Box<kernel::event::EventRecord>)
 pub web::Arrived::Refusal(alloc::boxed::Box<kernel::error::AxError>)
+pub web::Arrived::Saying(channels::wire::Delta)
 pub web::AttachForm::admit: alloc::vec::Vec<alloc::string::String>
 pub web::AttachForm::base_url: alloc::string::String
 pub web::AttachForm::dialect: core::option::Option<kernel::model::DialectKind>
@@ -343,10 +392,6 @@ pub web::AttachReadiness::NeedsName
 pub web::AttachReadiness::NeedsUrl
 pub web::AttachReadiness::Ready
 pub web::AttachReadiness::UrlNotSafe
-pub web::Attention::count: u32
-pub web::Attention::slots: alloc::vec::Vec<(&'static str, alloc::string::String)>
-pub web::Attention::view: web::View
-pub web::Attention::what: web::Msg
 pub web::Backfill::AlreadyLive
 pub web::Backfill::Folded(usize)
 pub web::Bar::filled: core::option::Option<u16>
@@ -404,6 +449,11 @@ pub web::Enrolment::Stored::reference: alloc::string::String
 pub web::Face::id: alloc::string::String
 pub web::Face::points: [(i32, i32); 4]
 pub web::Face::token: &'static str
+pub web::Fact::known: bool
+pub web::Fact::said: alloc::string::String
+pub web::Field::Effort
+pub web::Field::Mode
+pub web::Field::Room
 pub web::Filter::actor: alloc::string::String
 pub web::Filter::kinds: alloc::vec::Vec<kernel::event::EventKind>
 pub web::Filter::since: core::option::Option<kernel::event::TimeMs>
@@ -421,6 +471,9 @@ pub web::Leaf::Archive
 pub web::Leaf::Doc(alloc::string::String)
 pub web::Leaf::Reach
 pub web::Leaf::Room(alloc::string::String)
+pub web::Lens::Archive
+pub web::Lens::Bin
+pub web::Lens::Ledger
 pub web::Line::from_person: bool
 pub web::Line::kind: kernel::event::EventKind
 pub web::Line::msg: core::option::Option<web::Msg>
@@ -432,6 +485,7 @@ pub web::LinkAction::Deliver(alloc::boxed::Box<kernel::event::EventRecord>)
 pub web::LinkAction::Nothing
 pub web::LinkAction::OpenSocket
 pub web::LinkAction::Report(alloc::boxed::Box<kernel::error::AxError>)
+pub web::LinkAction::Saying(channels::wire::Delta)
 pub web::LinkAction::Send(alloc::boxed::Box<channels::wire::Hello>)
 pub web::LinkAction::WaitMs(u64)
 pub web::LinkEvent::Backgrounded
@@ -469,7 +523,6 @@ pub web::Msg::AlertRefused
 pub web::Msg::AlertRunFrozen
 pub web::Msg::AlertRunStopped
 pub web::Msg::AlertSomethingWaiting
-pub web::Msg::ApprovalAndStopAsking
 pub web::Msg::ApprovalNoneEscalated
 pub web::Msg::ApprovalNoneEscalatedWhat
 pub web::Msg::ApprovalNothingWaiting
@@ -548,20 +601,33 @@ pub web::Msg::CityMoveDown
 pub web::Msg::CityMoveLeft
 pub web::Msg::CityMoveRight
 pub web::Msg::CityMoveUp
+pub web::Msg::CityNoBuildings
 pub web::Msg::CityNoBuildingsWhat
 pub web::Msg::CityRaiseBuilding
 pub web::Msg::CityReadWhat
+pub web::Msg::CityRunning
+pub web::Msg::CityRunningIdle
 pub web::Msg::CityScope
 pub web::Msg::CitySendWorkHere
 pub web::Msg::CitySource
 pub web::Msg::CityStageLabel
 pub web::Msg::CityStanding
+pub web::Msg::CityStopped
 pub web::Msg::CityTowerNote
+pub web::Msg::CityUnwell
 pub web::Msg::CityWhatCountsAsDone
 pub web::Msg::CityWhatShouldHappen
-pub web::Msg::ColumnPhase
-pub web::Msg::ColumnSteps
-pub web::Msg::ColumnWhere
+pub web::Msg::ComposerAs
+pub web::Msg::ComposerEffortFor
+pub web::Msg::ComposerExample
+pub web::Msg::ComposerKeys
+pub web::Msg::ComposerModeFor
+pub web::Msg::ComposerRoomFor
+pub web::Msg::ComposerScope
+pub web::Msg::ComposerSendTo
+pub web::Msg::ComposerSource
+pub web::Msg::ComposerThink
+pub web::Msg::ComposerTitle
 pub web::Msg::CostAskingSpent
 pub web::Msg::CostAskingSpentWhat
 pub web::Msg::CostCutEmpty
@@ -573,19 +639,10 @@ pub web::Msg::CostSource
 pub web::Msg::CostUnpricedScope
 pub web::Msg::CostUnpricedTitle
 pub web::Msg::CostWhereMoneyWent
-pub web::Msg::DispatchCallIt
-pub web::Msg::DispatchCallItHint
-pub web::Msg::DispatchDoneWhen
-pub web::Msg::DispatchDoneWhenHint
-pub web::Msg::DispatchEffort
-pub web::Msg::DispatchFewer
-pub web::Msg::DispatchMode
-pub web::Msg::DispatchMore
-pub web::Msg::DispatchRoom
-pub web::Msg::DispatchRoomHint
+pub web::Msg::CountBuildings
+pub web::Msg::CountRunning
+pub web::Msg::CountWaiting
 pub web::Msg::DispatchSend
-pub web::Msg::DispatchTask
-pub web::Msg::DispatchTaskHint
 pub web::Msg::DropAction
 pub web::Msg::DropHere
 pub web::Msg::DropNotAPlace
@@ -597,6 +654,23 @@ pub web::Msg::EffortLow
 pub web::Msg::EffortMax
 pub web::Msg::EffortMedium
 pub web::Msg::EffortXHigh
+pub web::Msg::FirstDispatchKeys
+pub web::Msg::FirstDispatchScope
+pub web::Msg::FirstDispatchSource
+pub web::Msg::FirstDispatchTitle
+pub web::Msg::FirstNoBuildingScope
+pub web::Msg::FirstNoBuildingSource
+pub web::Msg::FirstNoBuildingStatus
+pub web::Msg::FirstNoBuildingTitle
+pub web::Msg::FirstNoBuildingWay
+pub web::Msg::FirstNoBuildingWhat
+pub web::Msg::FirstNoModelScope
+pub web::Msg::FirstNoModelSource
+pub web::Msg::FirstNoModelStatus
+pub web::Msg::FirstNoModelSubscription
+pub web::Msg::FirstNoModelTitle
+pub web::Msg::FirstNoModelWay
+pub web::Msg::FirstNoModelWhat
 pub web::Msg::HaltCity
 pub web::Msg::KeysCompose
 pub web::Msg::KeysDismiss
@@ -650,71 +724,68 @@ pub web::Msg::LiveScope
 pub web::Msg::LiveSource
 pub web::Msg::LiveSteerPlaceholder
 pub web::Msg::LiveSteerSend
-pub web::Msg::LiveTakeover
-pub web::Msg::NavApprovals
-pub web::Msg::NavArchive
 pub web::Msg::NavCity
 pub web::Msg::NavCost
-pub web::Msg::NavHappeningNow
-pub web::Msg::NavLedger
-pub web::Msg::NavLive
-pub web::Msg::NavOverview
-pub web::Msg::NavRecycleBin
+pub web::Msg::NavSessions
 pub web::Msg::NavSettings
-pub web::Msg::NavSetup
 pub web::Msg::NavTheRecord
+pub web::Msg::NavWaiting
 pub web::Msg::NoteArrived
 pub web::Msg::NoteDiscarded
 pub web::Msg::NoteFenced
 pub web::Msg::NoteWaiting
-pub web::Msg::OverviewBuildingsHeld
-pub web::Msg::OverviewBuildingsScope
-pub web::Msg::OverviewBuildingsSource
-pub web::Msg::OverviewEarlierRuns
-pub web::Msg::OverviewFrozenRuns
-pub web::Msg::OverviewGoToCity
-pub web::Msg::OverviewHalted
-pub web::Msg::OverviewInFlightScope
-pub web::Msg::OverviewInFlightSource
-pub web::Msg::OverviewItsBuildings
-pub web::Msg::OverviewManyRunning
-pub web::Msg::OverviewNeverStarted
-pub web::Msg::OverviewNoBuildingRaised
-pub web::Msg::OverviewNoBuildings
-pub web::Msg::OverviewNoWorkSent
-pub web::Msg::OverviewNoneWorkingNow
-pub web::Msg::OverviewNothingRunning
-pub web::Msg::OverviewNothingRunningFrozen
-pub web::Msg::OverviewNothingWaiting
-pub web::Msg::OverviewNothingWaitingWhat
-pub web::Msg::OverviewNothingWorkingNow
-pub web::Msg::OverviewOneRunning
-pub web::Msg::OverviewProviderDegraded
-pub web::Msg::OverviewProviderLost
-pub web::Msg::OverviewRaiseOneOnCity
-pub web::Msg::OverviewScope
-pub web::Msg::OverviewSendSome
-pub web::Msg::OverviewSource
-pub web::Msg::OverviewStepsOf
-pub web::Msg::OverviewStepsSoFar
-pub web::Msg::OverviewUnreadable
-pub web::Msg::OverviewWaitingApprovals
-pub web::Msg::OverviewWorkedOn
 pub web::Msg::PaletteKindBuilding
 pub web::Msg::PaletteKindPage
 pub web::Msg::PaletteKindSession
 pub web::Msg::PaletteNothing
 pub web::Msg::PaletteNothingWhat
 pub web::Msg::PalettePlaceholder
+pub web::Msg::PhaseCancelled
+pub web::Msg::PhaseFrozen
+pub web::Msg::PhaseHalted
+pub web::Msg::PhaseRunning
+pub web::Msg::PhaseWaiting
 pub web::Msg::ProgressNoPlan
 pub web::Msg::ProviderDegraded
 pub web::Msg::ProviderHealthy
 pub web::Msg::ProviderLost
 pub web::Msg::ProviderUnknown
 pub web::Msg::ReadIt
+pub web::Msg::RecordLensArchive
+pub web::Msg::RecordLensBin
+pub web::Msg::RecordLensLedger
+pub web::Msg::RecordScope
 pub web::Msg::ReleaseCity
 pub web::Msg::RouteNoSuchPage
 pub web::Msg::RouteNoSuchPageRecovery
+pub web::Msg::SessionAllSessions
+pub web::Msg::SessionAtGate
+pub web::Msg::SessionContextScope
+pub web::Msg::SessionContextUnknown
+pub web::Msg::SessionHandoffAt
+pub web::Msg::SessionHandoffJust
+pub web::Msg::SessionHandoffNone
+pub web::Msg::SessionNoGate
+pub web::Msg::SessionScope
+pub web::Msg::SessionSource
+pub web::Msg::SessionSpentIs
+pub web::Msg::SessionTabChanges
+pub web::Msg::SessionTabCost
+pub web::Msg::SessionTabDocs
+pub web::Msg::SessionTabTurns
+pub web::Msg::SessionTurnOrdinal
+pub web::Msg::SessionUnknown
+pub web::Msg::SessionUnknownWhat
+pub web::Msg::SessionsCityScope
+pub web::Msg::SessionsEnded
+pub web::Msg::SessionsEndedScope
+pub web::Msg::SessionsEndedSource
+pub web::Msg::SessionsNothingWhat
+pub web::Msg::SessionsNothingYet
+pub web::Msg::SessionsScope
+pub web::Msg::SessionsSource
+pub web::Msg::SessionsTurnCount
+pub web::Msg::SessionsUnpriced
 pub web::Msg::SettingsAdmitAll
 pub web::Msg::SettingsAskWhatItServes
 pub web::Msg::SettingsAsking
@@ -781,8 +852,6 @@ pub web::Msg::SettingsWhichModel
 pub web::Msg::SettingsWhichProvider
 pub web::Msg::SettingsWhichWire
 pub web::Msg::SettingsWithCredential
-pub web::Msg::StateIdle
-pub web::Msg::StateWorking
 pub web::Msg::StatusAwaitingAndUnreadable
 pub web::Msg::StatusAwaitingYou
 pub web::Msg::StatusNoCity
@@ -805,8 +874,11 @@ pub web::Msg::VitalsAsking
 pub web::Msg::VitalsDiscards
 pub web::Msg::VitalsRecords
 pub web::Msg::VitalsSignals
-pub web::NavGroup::label: web::Msg
-pub web::NavGroup::places: alloc::vec::Vec<web::Destination>
+pub web::Msg::WaitingFrozenHeading
+pub web::Msg::WaitingNothing
+pub web::Msg::WaitingNothingWhat
+pub web::Msg::WaitingScope
+pub web::Msg::WaitingSource
 pub web::Note::Arrived
 pub web::Note::Arrived::at: kernel::event::Seq
 pub web::Note::Arrived::from: alloc::string::String
@@ -833,13 +905,21 @@ pub web::Output::head: alloc::string::String
 pub web::Page::filtered_out: usize
 pub web::Page::next_from: core::option::Option<kernel::event::Seq>
 pub web::Page::rows: alloc::vec::Vec<web::Row>
+pub web::Phase::Cancelled
+pub web::Phase::Frozen
+pub web::Phase::Halted
+pub web::Phase::Running
+pub web::Phase::Waiting
 pub web::Phrase::en: &'static str
 pub web::Phrase::zh: &'static str
-pub web::Place::Approvals
-pub web::Place::City
-pub web::Place::Ledger
-pub web::Place::Overview
+pub web::Place::Cost
+pub web::Place::Record
 pub web::Place::Sessions
+pub web::Place::Setup
+pub web::Place::Waiting
+pub web::Plan::effort: alloc::string::String
+pub web::Plan::mode: alloc::string::String
+pub web::Plan::room: alloc::string::String
 pub web::Prism::active: bool
 pub web::Prism::done: u32
 pub web::Prism::id: alloc::string::String
@@ -869,28 +949,43 @@ pub web::Row::kind: kernel::event::EventKind
 pub web::Row::locator: core::option::Option<alloc::string::String>
 pub web::Row::seq: kernel::event::Seq
 pub web::Row::who: alloc::string::String
-pub web::RunPhase::AwaitingApproval
-pub web::RunPhase::Frozen
-pub web::RunPhase::Halted
-pub web::RunPhase::Running
 pub web::RunRow::addr: core::option::Option<kernel::address::Address>
+pub web::RunRow::gate: core::option::Option<alloc::string::String>
+pub web::RunRow::handoff_at_turn: core::option::Option<u32>
+pub web::RunRow::last_seq: kernel::event::Seq
 pub web::RunRow::parent: core::option::Option<kernel::event::RunId>
-pub web::RunRow::phase: web::RunPhase
+pub web::RunRow::phase: web::Phase
+pub web::RunRow::said: core::option::Option<alloc::string::String>
+pub web::RunRow::session: core::option::Option<alloc::string::String>
+pub web::RunRow::spent: core::option::Option<kernel::budget::UsdMicros>
 pub web::RunRow::started_at_seq: kernel::event::Seq
 pub web::RunRow::steps_done: u32
 pub web::RunRow::steps_planned: core::option::Option<u32>
+pub web::RunRow::turns: u32
 pub web::SavingsRow::label: alloc::string::String
 pub web::SavingsRow::saved: kernel::budget::UsdMicros
 pub web::SavingsRow::tokens_saved: u64
+pub web::SeatRow::addr: kernel::address::Address
+pub web::SeatRow::phase: web::Phase
+pub web::SeatRow::said: core::option::Option<alloc::string::String>
+pub web::SeatRow::spent: core::option::Option<kernel::budget::UsdMicros>
+pub web::SeatRow::turns: u32
 pub web::Shelf::building: kernel::address::Address
 pub web::Shelf::hits: alloc::vec::Vec<channels::wire::ArchiveHit>
 pub web::Sign::count: u64
 pub web::Sign::what: web::Msg
+pub web::Stalled::addr: kernel::address::Address
+pub web::Stalled::phase: web::Phase
+pub web::Stalled::turns: u32
 pub web::Stroke::command: bool
 pub web::Stroke::in_text: bool
 pub web::Stroke::key: &'a str
 pub web::Subject::Plan
 pub web::Subject::Run
+pub web::Tab::Changes
+pub web::Tab::Cost
+pub web::Tab::Docs
+pub web::Tab::Turns
 pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>
 pub web::TagRow::consequence: web::Msg
 pub web::TagRow::tag: kernel::model::ModelTag
@@ -917,18 +1012,11 @@ pub web::Usage::unpriced_calls: u32
 pub web::Used::cached: kernel::budget::Tokens
 pub web::Used::input: kernel::budget::Tokens
 pub web::Used::output: kernel::budget::Tokens
-pub web::View::Approvals
-pub web::View::Archive
 pub web::View::Building(kernel::address::Address)
-pub web::View::City
-pub web::View::Dashboard
-pub web::View::Ledger
-pub web::View::Live(core::option::Option<kernel::event::RunId>)
-pub web::View::Overview
-pub web::View::RecycleBin
-pub web::View::Settings
-pub web::Working::buildings: usize
-pub web::Working::frozen: usize
-pub web::Working::known: usize
-pub web::Working::raised: usize
-pub web::Working::runs: usize
+pub web::View::Cost
+pub web::View::Record(web::Lens)
+pub web::View::Run(kernel::event::RunId)
+pub web::View::Session(kernel::address::Address)
+pub web::View::Sessions
+pub web::View::Setup
+pub web::View::Waiting

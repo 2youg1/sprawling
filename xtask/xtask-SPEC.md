@@ -14,7 +14,7 @@
 | modmap | `crates/**/src/**/*.rs` ↔ ARCHITECTURE.md §6 模块表一一对应；状态列一致性；索引文件零逻辑 |
 | depmap | crate 依赖边 ⊆ §2 depmap 块；`pub trait` 仅现于 §3 缝清单文件 |
 | guard | 触及门自身的提交必须携 `Verdict:` 尾注 |
-| zerojs | 仓库无 JS/TS 源文件；我们的命令面（justfile／CI 步骤／build.rs／*.sh）不调用 npm/node 族 |
+| ax | 仓库无 JS/TS 源文件；我们的命令面（justfile／CI 步骤／build.rs／*.sh）不调用 npm/node 族 |
 | spec | 生成 `<crate>-SPEC.md` 骨架（Daily Loop 的 `just spec`） |
 | secret（S2.12 上线） | 全仓＋夹具扫 secret shape（判定复用 `kernel::secret::scan`，无内联豁免）；兼查 `Sealed::expose` 调用点白名单 |
 | specalign（S2.12 上线） | kernel 枚举 ↔ kernel-SPEC §8-1／§8-4 表逐 variant：消费真 enum（AxCode::ALL／EventKind::ALL）对表作证，计数、归属、carrier／窗类逐项同 |
@@ -35,7 +35,7 @@
 | 放宽 lint／改门过门／删表行 | guard | 门自身变更必须携用户 verdict 尾注 |
 | 词汇漂移、自造同义词 | lexicon | 附录 A 禁用词的机器子集，命中即红 |
 | 忘记许可头或版权行 | header | 五行逐字节比对 |
-| 引入 JS/TS 或 node 构建步 | zerojs | 扩展名扫描＋命令面 token 扫描（C1） |
+| 引入 JS/TS 或 node 构建步 | ax | 扩展名扫描＋命令面 token 扫描（C1） |
 | stub／todo!／unwrap 蒙混 | （不在本 crate）workspace lints | clippy deny 已覆盖，本 crate 不重复 |
 | 一个函数里塞进整条流程（模型最常见的结构失效） | length | 超过行数预算即红，报出函数名、行数与预算 |
 
@@ -63,11 +63,11 @@
 
 ## 6 命名统一
 
-gate／Violation／rule／violation／alternative（three-part refusal 的施工侧同构）；模块名与子命令名一致：header、lexicon、modmap、depmap、guard、zerojs、spec、gates。
+gate／Violation／rule／violation／alternative（three-part refusal 的施工侧同构）；模块名与子命令名一致：header、lexicon、modmap、depmap、guard、ax、spec、gates。
 
 ## 7 模块边界
 
-一门一文件：`main`（分发）｜`report`（Violation 与渲染）｜`walk`（确定性文件遍历）｜`header`｜`lexicon`｜`modmap`｜`length`｜`depmap`｜`guard`｜`zerojs`｜`secret`｜`specalign`｜`apisync`｜`spec`｜`badge`（渲染与陈旧判定，被 `budget` 调用）。
+一门一文件：`main`（分发）｜`report`（Violation 与渲染）｜`walk`（确定性文件遍历）｜`header`｜`lexicon`｜`modmap`｜`length`｜`depmap`｜`guard`｜`ax`｜`secret`｜`specalign`｜`apisync`｜`spec`｜`badge`（渲染与陈旧判定，被 `budget` 调用）。
 
 **length 门的形状属于 modmap 而不属于自己**：形状列的解析只住 `modmap::shapes`，因为模块表只应有一个读者——列格式一变，只有一处要改。
 
@@ -114,7 +114,7 @@ pub(crate) struct Violation {
 
 ## 10 实现逻辑
 
-1. **walk**：手写递归（不引 walkdir），跳过 `.git`／`target`／`node_modules`，输出按路径字符串排序——报告顺序确定，diff 可比。路径统一正斜杠（Windows 反斜杠归一），因为模块表以正斜杠书写。**隔离区**：仓库根 `local/`（gitignore，恒不入库）存 Handoff 与本机备忘；从仓库根扫描的三门（header／lexicon／zerojs）排除它——门只对入库对象作证，非入库物可引用历史词汇与本机路径。modmap／depmap 只扫 `crates/`，嵌套的 `crates/**/local` 仍被封闭清单咬住，无洞。
+1. **walk**：手写递归（不引 walkdir），跳过 `.git`／`target`／`node_modules`，输出按路径字符串排序——报告顺序确定，diff 可比。路径统一正斜杠（Windows 反斜杠归一），因为模块表以正斜杠书写。**隔离区**：仓库根 `local/`（gitignore，恒不入库）存 Handoff 与本机备忘；从仓库根扫描的三门（header／lexicon／ax）排除它——门只对入库对象作证，非入库物可引用历史词汇与本机路径。modmap／depmap 只扫 `crates/`，嵌套的 `crates/**/local` 仍被封闭清单咬住，无洞。
 2. **modmap**：模块行判据＝竖线表行、第 2 列以 `crates/` 开头以 `.rs` 结尾、第 1 列含 `::`、恰六列、第 6 列 ∈ 状态枚举——这组条件把 §3 缝表（四列）与 §10 卡（清单行）天然排除。双向对账：表有文件无（状态≠未建 才要求在盘）；盘有表无（lib.rs 与索引文件豁免）；盘有且状态＝未建 → 「状态未翻转」。索引文件判据：文件名去 `.rs` 后与同目录某子目录同名，且该子目录内有表内文件。
 3. **depmap**：§2 围栏块 ```` ```depmap ```` 为机器权威；`cargo metadata --format-version 1 --no-deps` 输出经 serde_json::Value 读取；只查 normal＋build 依赖（dev 依赖留给测试自由）。子集断言而非相等断言——空壳期合法。
 4. **guard**：`git rev-list` 取区间（缺省 HEAD 单枚；无提交则跳过并说明），`git diff-tree --root` 取动过的文件，`git show -s --format=%B` 取信息；保护路径命中或 ARCHITECTURE 模块行被**移除**而信息无 `Verdict:` 行首 → 红。移除的定义是路径级的：某 `crates/**.rs` 路径出现在删除行（`-|`）且不出现在任何新增行（`+|`）——状态翻转在 diff 里是「删一行加一行」，它是最高频的合法编辑，若被误判为删行索 verdict，门就在训练绕门习惯。
@@ -126,7 +126,7 @@ pub(crate) struct Violation {
 
 ## 11 边界枚举
 
-词汇表粗体词一个都解析不出（表结构变了→ Doc 错误而非静默通过）；空仓库（无提交→guard 跳过）；表行路径重复；状态列取值非法；围栏块缺失（→ Doc 错误，非零违规）；CRLF 行尾（比对前 trim `\r`）；非 UTF-8 文件（lossy 读，不 panic）；merge 提交（diff-tree -r 照常）；initial commit（`--root`）；**命令面的注释行不参与 zerojs token 扫描**（`#`／`//` 打头的行不可执行，把它们当命令判是把说明文字当成了行为——首跑即被自身 CI 注释命中的实例回填此条）。
+词汇表粗体词一个都解析不出（表结构变了→ Doc 错误而非静默通过）；空仓库（无提交→guard 跳过）；表行路径重复；状态列取值非法；围栏块缺失（→ Doc 错误，非零违规）；CRLF 行尾（比对前 trim `\r`）；非 UTF-8 文件（lossy 读，不 panic）；merge 提交（diff-tree -r 照常）；initial commit（`--root`）；**命令面的注释行不参与 ax token 扫描**（`#`／`//` 打头的行不可执行，把它们当命令判是把说明文字当成了行为——首跑即被自身 CI 注释命中的实例回填此条）。
 
 ## 12 错误处理
 
@@ -154,7 +154,7 @@ CI 与 justfile 调用面；ARCHITECTURE.md §6/§2/§3 的表格式即本 crate
 
 ## 16 测试与约束
 
-单测：modmap 行解析（正例/六列不齐/状态非法/缝表不误伤）；索引文件判定；lexicon 命中与 `lexicon-ok:` 豁免；depmap 块解析；zerojs token 化（`node_modules` 不误伤 `node`）；header 比对（CRLF）；隔离区前缀判定（`local/` 命中、`localx/` 不命中）。约束：全门无网络、无写盘（spec 子命令除外——它只新建不覆盖）；输出顺序确定。
+单测：modmap 行解析（正例/六列不齐/状态非法/缝表不误伤）；索引文件判定；lexicon 命中与 `lexicon-ok:` 豁免；depmap 块解析；ax token 化（`node_modules` 不误伤 `node`）；header 比对（CRLF）；隔离区前缀判定（`local/` 命中、`localx/` 不命中）。约束：全门无网络、无写盘（spec 子命令除外——它只新建不覆盖）；输出顺序确定。
 
 ## 17 模型体验
 
@@ -163,3 +163,13 @@ CI 与 justfile 调用面；ARCHITECTURE.md §6/§2/§3 的表格式即本 crate
 ## 18 文档同步
 
 新增门或改保护路径时：AGENTS.md 的规则表、`docs/CONTRIBUTING.md` §3 同集更新。
+
+### 第十三道门：`ax`（V3.15）
+
+**它抓的是真发生过的那种漂移。** 四步法在 HTML 里定稿、翻译、只补绑定——而第三步丢掉一个 `role`、一个 `aria-label` 或一个 `aria-current` 是隐形的：页面照样渲染，像素照样对，丢掉的只是「一个看不见像素的人本来会被告知的东西」。这个仓库里没有任何别的东西会注意到。
+
+**它不是计算出来的无障碍树，也不声称是。** 计算树要浏览器，浏览器要一个本构建不发布的二进制，而一道跑不起来的门就是一道不再跑的门。它比的是**被写下来的**那部分：角色、可及名、当前页标记、地标元素。这些正是翻译会丢的那些。计算树仍然值得对着运行中的客户端查一次，那是一个人开着浏览器的活，不是一道门的活。
+
+**名字按存在比，角色按值比。** 可及名是内容，会被翻译：定稿屏用中文写它，客户端从 `web::lang` 取。逐字比会逼客户端把定稿屏的中文硬编码进去，而那正是短语表存在要防的缺陷。`role` 与 `aria-current` 取自封闭词汇、永不翻译，所以按值比——把 `role="img"` 写成 `role="button"` 是真缺陷，按存在比会放它过去。
+
+`crates/web/screens/` 不存在时这道门什么也不说：那是写第一张定稿屏之前仓库的样子，一道会因此变红的门必须先被关掉才能开工。

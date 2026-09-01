@@ -118,6 +118,17 @@ pub struct RunHooks<'a> {
     /// caller that sampled its own clock there would be a second time
     /// source inside one turn.
     pub invoke: &'a mut dyn FnMut(&ToolCall, TimeMs) -> Result<ToolOutcome, AxError>,
+    /// Where text goes while the model is still saying it.
+    ///
+    /// `None` runs the model without asking for a stream, which is what
+    /// citysim and every offline replay do: an increment changes nothing
+    /// a run decides, so a driver with nowhere to put one asks for none
+    /// and the call is byte-identical to what it always was.
+    ///
+    /// It takes no result, because nothing here may fail a call. What
+    /// arrives is a thing to look at; the record of what was said is
+    /// written from `model_returned`, once, afterwards.
+    pub deltas: Option<&'a mut (dyn FnMut(&str) + 'a)>,
 }
 
 /// An active run: turns may still be taken.
@@ -240,7 +251,15 @@ impl Run<Active> {
         };
         let calling = (hooks.interrupt)(SafePoint::BeforeCall { turn: index });
         fold_steer(&mut self.state.window, &calling);
-        let turn = match turn.call(calling, ledger, model, &self.plan.policy)? {
+        let turn = match turn.call(
+            calling,
+            ledger,
+            model,
+            &self.plan.policy,
+            // Reborrowed rather than moved: the sink belongs to the
+            // hooks and every later turn needs it too.
+            hooks.deltas.as_deref_mut(),
+        )? {
             PhaseOutcome::Advanced(next) => next,
             PhaseOutcome::Cancelled(_) => return Ok(Advance::Concluded(Completion::Cancelled)),
         };

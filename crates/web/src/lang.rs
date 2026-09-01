@@ -141,29 +141,100 @@ impl Phrase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Msg {
     // The left-hand navigation.
-    NavHappeningNow,
+    CityNoBuildings,
     NavTheRecord,
-    NavSetup,
-    NavOverview,
     NavCity,
-    NavLive,
-    NavApprovals,
-    NavLedger,
-    NavArchive,
-    NavRecycleBin,
     NavCost,
     NavSettings,
+    // The five phases a session is read in (web::phase is the only producer).
+    PhaseRunning,
+    PhaseWaiting,
+    PhaseFrozen,
+    PhaseCancelled,
+    PhaseHalted,
+    // The six destinations of the v0.0.3 information architecture.
+    NavSessions,
+    NavWaiting,
+    // The composer: the one box that starts work.
+    ComposerTitle,
+    ComposerScope,
+    ComposerExample,
+    ComposerSendTo,
+    ComposerAs,
+    ComposerThink,
+    ComposerKeys,
+    ComposerSource,
+    ComposerRoomFor,
+    ComposerModeFor,
+    ComposerEffortFor,
+    // The sessions list.
+    SessionsScope,
+    SessionsSource,
+    SessionsEnded,
+    SessionsEndedScope,
+    SessionsEndedSource,
+    SessionsNothingYet,
+    SessionsNothingWhat,
+    SessionsTurnCount,
+    SessionsUnpriced,
+    SessionsCityScope,
+    // One session: the object page.
+    SessionAllSessions,
+    SessionTurnOrdinal,
+    SessionSpentIs,
+    SessionAtGate,
+    SessionNoGate,
+    SessionContextUnknown,
+    SessionContextScope,
+    SessionHandoffAt,
+    SessionHandoffNone,
+    SessionHandoffJust,
+    SessionTabTurns,
+    SessionTabChanges,
+    SessionTabCost,
+    SessionTabDocs,
+    SessionScope,
+    SessionSource,
+    SessionUnknown,
+    SessionUnknownWhat,
+    // What waits on a person.
+    WaitingScope,
+    WaitingSource,
+    WaitingNothing,
+    WaitingNothingWhat,
+    WaitingFrozenHeading,
+    // The record.
+    RecordScope,
+    RecordLensLedger,
+    RecordLensArchive,
+    RecordLensBin,
+    // The three-rung readiness ladder (empty states, not wizard steps).
+    FirstNoModelTitle,
+    FirstNoModelScope,
+    FirstNoModelStatus,
+    FirstNoModelWhat,
+    FirstNoModelWay,
+    FirstNoModelSubscription,
+    FirstNoModelSource,
+    FirstNoBuildingTitle,
+    FirstNoBuildingScope,
+    FirstNoBuildingStatus,
+    FirstNoBuildingWhat,
+    FirstNoBuildingWay,
+    FirstNoBuildingSource,
+    FirstDispatchTitle,
+    FirstDispatchScope,
+    FirstDispatchKeys,
+    FirstDispatchSource,
+    // The city's own standing, at the foot of the nav.
+    CityRunning,
+    CityRunningIdle,
+    CityStopped,
+    CityUnwell,
+    CountRunning,
+    CountWaiting,
+    CountBuildings,
     // The control surface: the one place work is started.
-    DispatchRoom,
-    DispatchRoomHint,
-    DispatchCallIt,
-    DispatchCallItHint,
-    DispatchTask,
-    DispatchTaskHint,
-    DispatchDoneWhen,
-    DispatchDoneWhenHint,
-    DispatchMode,
-    DispatchEffort,
     EffortInherited,
     EffortLow,
     EffortMedium,
@@ -178,49 +249,11 @@ pub enum Msg {
     VitalsSignals,
     VitalsDiscards,
     VitalsAsking,
-    OverviewNoBuildings,
-    OverviewNothingRunningFrozen,
-    OverviewNothingRunning,
-    OverviewOneRunning,
-    OverviewManyRunning,
-    OverviewWaitingApprovals,
-    OverviewUnreadable,
-    OverviewFrozenRuns,
-    OverviewProviderDegraded,
-    OverviewProviderLost,
     ProviderUnknown,
     ProviderHealthy,
     ProviderDegraded,
     ProviderLost,
-    OverviewScope,
-    OverviewSource,
-    OverviewHalted,
-    OverviewNothingWaiting,
-    OverviewNothingWaitingWhat,
-    OverviewWorkedOn,
-    OverviewNeverStarted,
-    OverviewNoneWorkingNow,
-    OverviewInFlightScope,
-    OverviewInFlightSource,
-    OverviewNoWorkSent,
-    OverviewNothingWorkingNow,
-    OverviewSendSome,
-    OverviewEarlierRuns,
-    ColumnWhere,
-    ColumnPhase,
-    ColumnSteps,
-    OverviewStepsOf,
-    OverviewStepsSoFar,
-    OverviewNoBuildingRaised,
-    OverviewBuildingsHeld,
-    OverviewBuildingsScope,
-    OverviewBuildingsSource,
     AskingWhatItHolds,
-    OverviewItsBuildings,
-    OverviewRaiseOneOnCity,
-    OverviewGoToCity,
-    StateWorking,
-    StateIdle,
     LineToolCalled,
     LineToolResult,
     LineModelCalled,
@@ -245,7 +278,6 @@ pub enum Msg {
     LivePickASession,
     LiveSteerPlaceholder,
     LiveSteerSend,
-    LiveTakeover,
     LiveForkFrom,
     LiveNothingToBranch,
     LiveInterventionNote,
@@ -293,7 +325,6 @@ pub enum Msg {
     ApprovalNoneEscalated,
     ApprovalNoneEscalatedWhat,
     ApprovalTainted,
-    ApprovalAndStopAsking,
     BinRestoreCheckpoint,
     BinRestoreStored,
     BinRebuild,
@@ -380,8 +411,6 @@ pub enum Msg {
     ChangedRenamed,
     ChangedBinary,
     LiveEveryEvent,
-    DispatchMore,
-    DispatchFewer,
     PalettePlaceholder,
     PaletteNothing,
     PaletteNothingWhat,
@@ -495,9 +524,9 @@ pub enum Msg {
 #[must_use]
 pub fn phrase(msg: Msg) -> Phrase {
     match msg {
-        Msg::NavHappeningNow => Phrase {
-            en: "happening now",
-            zh: "正在发生",
+        Msg::CityNoBuildings => Phrase {
+            en: "no building has been raised yet",
+            zh: "还没有立起一栋楼",
         },
         Msg::NavTheRecord => Phrase {
             en: "the record",
@@ -509,14 +538,6 @@ pub fn phrase(msg: Msg) -> Phrase {
         // actually true of everything here is that it belongs to this
         // installation rather than to the city - the key vault is on this
         // disk, and so is the reading language.
-        Msg::NavSetup => Phrase {
-            en: "this machine",
-            zh: "这台机器",
-        },
-        Msg::NavOverview => Phrase {
-            en: "overview",
-            zh: "总览",
-        },
         Msg::NavCity => Phrase {
             en: "city",
             zh: "城市",
@@ -524,26 +545,6 @@ pub fn phrase(msg: Msg) -> Phrase {
         // `Run` is the identifier; 会话 is what a reader of Claude Code or
         // Codex already calls one, and section 8.1 keeps one word per
         // concept in each column.
-        Msg::NavLive => Phrase {
-            en: "sessions",
-            zh: "会话",
-        },
-        Msg::NavApprovals => Phrase {
-            en: "approvals",
-            zh: "审批",
-        },
-        Msg::NavLedger => Phrase {
-            en: "ledger",
-            zh: "账本",
-        },
-        Msg::NavArchive => Phrase {
-            en: "archive",
-            zh: "归档",
-        },
-        Msg::NavRecycleBin => Phrase {
-            en: "recycle bin",
-            zh: "回收站",
-        },
         Msg::NavCost => Phrase {
             en: "cost",
             zh: "成本",
@@ -552,45 +553,321 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "settings",
             zh: "设置",
         },
-        Msg::DispatchRoom => Phrase {
-            en: "room",
-            zh: "去哪",
+        Msg::PhaseRunning => Phrase {
+            en: "running",
+            zh: "在跑",
         },
-        Msg::DispatchRoomHint => Phrase {
-            en: "lab",
-            zh: "楼名，或 楼/房间",
+        Msg::PhaseWaiting => Phrase {
+            en: "needs you",
+            zh: "等你",
         },
-        Msg::DispatchCallIt => Phrase {
-            en: "call it",
-            zh: "叫什么",
+        Msg::PhaseFrozen => Phrase {
+            en: "frozen",
+            zh: "已冻结",
         },
-        Msg::DispatchCallItHint => Phrase {
-            en: "give it a name",
-            zh: "给这次会话取个名字",
+        Msg::PhaseCancelled => Phrase {
+            en: "you stopped it",
+            zh: "你取消了它",
         },
-        Msg::DispatchTask => Phrase {
-            en: "task",
-            zh: "干什么",
+        Msg::PhaseHalted => Phrase {
+            en: "the city stopped",
+            zh: "城停了",
         },
-        Msg::DispatchTaskHint => Phrase {
-            en: "what to produce, in one line",
-            zh: "一句话说清要产出什么",
+        Msg::NavSessions => Phrase {
+            en: "what's happening",
+            zh: "在做的事",
         },
-        Msg::DispatchDoneWhen => Phrase {
-            en: "done when",
-            zh: "何时算完",
+        Msg::NavWaiting => Phrase {
+            en: "waiting on you",
+            zh: "等我的",
         },
-        Msg::DispatchDoneWhenHint => Phrase {
-            en: "what counts as done, and when to stop",
-            zh: "什么算做完，什么时候停",
+        Msg::ComposerTitle => Phrase {
+            en: "what needs doing?",
+            zh: "要做什么？",
         },
-        Msg::DispatchMode => Phrase {
-            en: "mode",
-            zh: "模式",
+        Msg::ComposerScope => Phrase {
+            en: "one sentence is enough. where it goes and how it runs are both in the line below.",
+            zh: "写一句话就够。送到哪、算什么模式，下面那句里都说了。",
         },
-        Msg::DispatchEffort => Phrase {
-            en: "thinking",
-            zh: "思考强度",
+        Msg::ComposerExample => Phrase {
+            en: "measure every read path in the ledger, find the slowest one, and write down the numbers you got",
+            zh: "把账本的读取路径量一遍，找出最慢的那一处，并写下测出来的数",
+        },
+        Msg::ComposerSendTo => Phrase {
+            en: "send it to {room}",
+            zh: "送到 {room}",
+        },
+        Msg::ComposerAs => Phrase {
+            en: "as {mode}",
+            zh: "以 {mode}",
+        },
+        Msg::ComposerThink => Phrase {
+            en: "think {effort}",
+            zh: "想 {effort}",
+        },
+        Msg::ComposerKeys => Phrase {
+            en: "Enter sends it, Shift+Enter makes a new line.",
+            zh: "Enter 送出，Shift+Enter 换行。",
+        },
+        Msg::ComposerSource => Phrase {
+            en: "a dotted word is one this city guessed, from where you sent work last and what this city defaults to; a solid one you set yourself. Click any word to change it.",
+            zh: "带点线的词是这座城猜的，来自你上一次派活与城的默认；实线的是你自己设的。点任意一个词可以改它。",
+        },
+        Msg::ComposerRoomFor => Phrase {
+            en: "which room",
+            zh: "送到哪间房",
+        },
+        Msg::ComposerModeFor => Phrase {
+            en: "which mode",
+            zh: "算什么模式",
+        },
+        Msg::ComposerEffortFor => Phrase {
+            en: "how hard to think",
+            zh: "想多深",
+        },
+        Msg::SessionsScope => Phrase {
+            en: "sessions that are running, or stopped waiting on you. What has ended is in the section below.",
+            zh: "在跑的与在等你的会话（一间房里的一条工作线）。已经结束的在下面一节。",
+        },
+        Msg::SessionsSource => Phrase {
+            en: "from the event stream, through seq {seq}.",
+            zh: "来自事件流，最后一条 seq {seq}。",
+        },
+        Msg::SessionsEnded => Phrase {
+            en: "what has ended",
+            zh: "已经结束的",
+        },
+        Msg::SessionsEndedScope => Phrase {
+            en: "the last eight. Any of them can be branched from any one of its turns.",
+            zh: "最近八件。每一件都可以从任意一轮分出一支接着做。",
+        },
+        Msg::SessionsEndedSource => Phrase {
+            en: "the same event stream; frozen and cancelled are its two endings.",
+            zh: "同一条事件流，冻结与取消两种收尾。",
+        },
+        Msg::SessionsNothingYet => Phrase {
+            en: "nothing has been sent out yet.",
+            zh: "还没有派出过活。",
+        },
+        Msg::SessionsNothingWhat => Phrase {
+            en: "the box above is where work starts; what you send appears here as a row.",
+            zh: "上面那个框就是活的起点；送出去的东西会在这里变成一行。",
+        },
+        Msg::SessionsTurnCount => Phrase {
+            en: "{n} turns",
+            zh: "{n} 轮",
+        },
+        Msg::SessionsUnpriced => Phrase {
+            en: "not priced",
+            zh: "未报价",
+        },
+        Msg::SessionsCityScope => Phrase {
+            en: "which buildings are busy. One block, not a page of its own.",
+            zh: "哪几栋楼在忙。它是一块，不是一页。",
+        },
+        Msg::SessionAllSessions => Phrase {
+            en: "all sessions",
+            zh: "全部会话",
+        },
+        Msg::SessionTurnOrdinal => Phrase {
+            en: "turn {n}",
+            zh: "第 {n} 轮",
+        },
+        Msg::SessionSpentIs => Phrase {
+            en: "spent {amount}",
+            zh: "花了 {amount}",
+        },
+        Msg::SessionAtGate => Phrase {
+            en: "stopped at the {gate} gate",
+            zh: "停在 {gate} 这道门",
+        },
+        Msg::SessionNoGate => Phrase {
+            en: "no gate is holding it",
+            zh: "没有门拦着它",
+        },
+        Msg::SessionContextUnknown => Phrase {
+            en: "context ——",
+            zh: "上下文 ——",
+        },
+        Msg::SessionContextScope => Phrase {
+            en: "context left is the one of these four the wire cannot carry yet: the city measures it, and no query returns it.",
+            zh: "上下文余量是这四格里唯一线上还没有的：城里量得到，没有任何查询答得出它。",
+        },
+        Msg::SessionHandoffAt => Phrase {
+            en: "handoff written {n} turns ago",
+            zh: "Handoff {n} 轮前写过",
+        },
+        Msg::SessionHandoffNone => Phrase {
+            en: "no handoff written yet",
+            zh: "还没写过 Handoff",
+        },
+        Msg::SessionHandoffJust => Phrase {
+            en: "handoff written this turn",
+            zh: "Handoff 这一轮刚写过",
+        },
+        Msg::SessionTabTurns => Phrase {
+            en: "turns",
+            zh: "轮次",
+        },
+        Msg::SessionTabChanges => Phrase {
+            en: "changes",
+            zh: "改动",
+        },
+        Msg::SessionTabCost => Phrase {
+            en: "spend",
+            zh: "花费",
+        },
+        Msg::SessionTabDocs => Phrase {
+            en: "documents",
+            zh: "文档",
+        },
+        Msg::SessionScope => Phrase {
+            en: "one work line in one room. Everything it did is under the tabs.",
+            zh: "一间房里的一条工作线。它做过的一切在下面的标签里。",
+        },
+        Msg::SessionSource => Phrase {
+            en: "from this session's own slice of the event stream.",
+            zh: "来自这条会话在事件流里的那一段。",
+        },
+        Msg::SessionUnknown => Phrase {
+            en: "this city has no session at that address.",
+            zh: "这座城在那个地址上没有会话。",
+        },
+        Msg::SessionUnknownWhat => Phrase {
+            en: "it may have been opened by another city, or the link may predate this one.",
+            zh: "它可能属于另一座城，也可能这条链接比这座城还老。",
+        },
+        Msg::WaitingScope => Phrase {
+            en: "everything that cannot move until you answer.",
+            zh: "所有在你回答之前动不了的东西。",
+        },
+        Msg::WaitingSource => Phrase {
+            en: "approvals from the queue, frozen sessions from the stream.",
+            zh: "审批来自队列，冻结的会话来自事件流。",
+        },
+        Msg::WaitingNothing => Phrase {
+            en: "nothing is waiting on you.",
+            zh: "没有东西在等你。",
+        },
+        Msg::WaitingNothingWhat => Phrase {
+            en: "approvals, gates raised to a person, and a stopped city would all appear here.",
+            zh: "审批、升给人的门、停住的城，都会出现在这里。",
+        },
+        Msg::WaitingFrozenHeading => Phrase {
+            en: "stopped, and not by you",
+            zh: "停住了，而不是你停的",
+        },
+        Msg::RecordScope => Phrase {
+            en: "what this city wrote down, in three lenses over one history.",
+            zh: "这座城写下来的东西，一段历史的三个镜头。",
+        },
+        Msg::RecordLensLedger => Phrase {
+            en: "the ledger",
+            zh: "账本",
+        },
+        Msg::RecordLensArchive => Phrase {
+            en: "the archive",
+            zh: "归档",
+        },
+        Msg::RecordLensBin => Phrase {
+            en: "the recycle bin",
+            zh: "回收站",
+        },
+        Msg::FirstNoModelTitle => Phrase {
+            en: "this city cannot send work out yet",
+            zh: "这座城还派不出活",
+        },
+        Msg::FirstNoModelScope => Phrase {
+            en: "the first step is one thing: tell it which model to ask. A key on this machine never leaves this machine.",
+            zh: "第一步只有一件事：告诉它去问哪个模型。这台机器上的密钥不会离开这台机器。",
+        },
+        Msg::FirstNoModelStatus => Phrase {
+            en: "no model answers for {tag}.",
+            zh: "没有模型回答 {tag} 这个用途。",
+        },
+        Msg::FirstNoModelWhat => Phrase {
+            en: "once one does, you write a sentence and it goes out to be done.",
+            zh: "接上之后，你写一句话，它就能派出去做。",
+        },
+        Msg::FirstNoModelWay => Phrase {
+            en: "attach a model service",
+            zh: "去接一个模型服务",
+        },
+        Msg::FirstNoModelSubscription => Phrase {
+            en: "I have a subscription, not an API key",
+            zh: "我用的是订阅，不是 API key",
+        },
+        Msg::FirstNoModelSource => Phrase {
+            en: "read from the endpoints registered on this machine and the jobs each one answers for.",
+            zh: "读的是这台机器上已注册的 endpoint 与它们各自答应的用途。",
+        },
+        Msg::FirstNoBuildingTitle => Phrase {
+            en: "there is nowhere to put work yet",
+            zh: "还没有地方放活",
+        },
+        Msg::FirstNoBuildingScope => Phrase {
+            en: "a building is one line of business, and on disk it is one folder; sending work out opens a room inside it.",
+            zh: "楼（一条业务线，磁盘上就是一个文件夹）是活落脚的地方；一次派活会在楼里开一间房。",
+        },
+        Msg::FirstNoBuildingStatus => Phrase {
+            en: "this city has no buildings at all.",
+            zh: "这座城一栋楼都没有。",
+        },
+        Msg::FirstNoBuildingWhat => Phrase {
+            en: "make one, say {example}; after that every piece of work lives in a room under it, named by what you called the work.",
+            zh: "建一栋，比如 {example}；之后每一件活都住在它下面的一间房里，房间名就是你给这件活取的名字。",
+        },
+        Msg::FirstNoBuildingWay => Phrase {
+            en: "make the first building",
+            zh: "建第一栋楼",
+        },
+        Msg::FirstNoBuildingSource => Phrase {
+            en: "read from the buildings already under the city root.",
+            zh: "读的是城根目录下已有的楼。",
+        },
+        Msg::FirstDispatchTitle => Phrase {
+            en: "send out the first piece of work",
+            zh: "派出第一件活",
+        },
+        Msg::FirstDispatchScope => Phrase {
+            en: "one sentence is enough; the rest is in the line below. What happens goes into the ledger — this city's whole history, append-only, verifiable offline.",
+            zh: "写一句话就够，剩下的下面那句里都说了。做完之后，它会把过程完整记进账本（这座城的全部历史，只能追加，可以离线验）。",
+        },
+        Msg::FirstDispatchKeys => Phrase {
+            en: "Enter sends it, Shift+Enter makes a new line. The grey sentence is the size one piece of work should be.",
+            zh: "Enter 送出，Shift+Enter 换行。灰框里那句就是一件活该有的大小。",
+        },
+        Msg::FirstDispatchSource => Phrase {
+            en: "nothing has been sent out yet, so all three words are guesses: the only building there is, mode build, and this city's default depth.",
+            zh: "还没有派过活，所以三个词全是猜的：楼取城里唯一的一栋，模式取 build，思考深度取城的默认。",
+        },
+        Msg::CityRunning => Phrase {
+            en: "this city is running.",
+            zh: "这座城在运转。",
+        },
+        Msg::CityRunningIdle => Phrase {
+            en: "this city is running, with nothing to do.",
+            zh: "这座城在运转，只是还没有活可做。",
+        },
+        Msg::CityStopped => Phrase {
+            en: "this city is stopped.",
+            zh: "这座城停住了。",
+        },
+        Msg::CityUnwell => Phrase {
+            en: "no model service is attached",
+            zh: "还没有接上模型服务",
+        },
+        Msg::CountRunning => Phrase {
+            en: "{n} running",
+            zh: "{n} 在跑",
+        },
+        Msg::CountWaiting => Phrase {
+            en: "{n} waiting on you",
+            zh: "{n} 等你",
+        },
+        Msg::CountBuildings => Phrase {
+            en: "{n} buildings",
+            zh: "{n} 栋楼",
         },
         Msg::EffortInherited => Phrase {
             en: "as the city says",
@@ -629,8 +906,8 @@ pub fn phrase(msg: Msg) -> Phrase {
             zh: "放行",
         },
         Msg::CancelLastRun => Phrase {
-            en: "cancel the last run",
-            zh: "取消最近一次会话",
+            en: "stop this session",
+            zh: "停下这条会话",
         },
         Msg::VitalsRecords => Phrase {
             en: "records in the Ledger",
@@ -648,46 +925,6 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "asking the city how large it is",
             zh: "正在问这座城有多大",
         },
-        Msg::OverviewNoBuildings => Phrase {
-            en: "this city has no buildings yet",
-            zh: "这座城还没有楼",
-        },
-        Msg::OverviewNothingRunningFrozen => Phrase {
-            en: "nothing is running; {frozen} run(s) stopped with work left, across {raised} building(s)",
-            zh: "没有东西在跑；{raised} 栋楼里有 {frozen} 个会话停在了半途",
-        },
-        Msg::OverviewNothingRunning => Phrase {
-            en: "nothing is running in any of the {raised} building(s) here",
-            zh: "{raised} 栋楼里都没有东西在跑",
-        },
-        Msg::OverviewOneRunning => Phrase {
-            en: "1 run in flight, in 1 of the {raised} building(s) here",
-            zh: "1 个会话在跑，在 {raised} 栋楼中的 1 栋里",
-        },
-        Msg::OverviewManyRunning => Phrase {
-            en: "{runs} runs in flight, across {busy} of the {raised} building(s) here",
-            zh: "{runs} 个会话在跑，分布在 {raised} 栋楼中的 {busy} 栋",
-        },
-        Msg::OverviewWaitingApprovals => Phrase {
-            en: "waiting for you to allow or refuse",
-            zh: "等你放行或拒绝",
-        },
-        Msg::OverviewUnreadable => Phrase {
-            en: "approval record(s) this client could not read",
-            zh: "条待批记录本客户端读不了",
-        },
-        Msg::OverviewFrozenRuns => Phrase {
-            en: "run(s) frozen, each holding a handoff for whoever resumes it",
-            zh: "个会话已冻结，各自留着给接手者的 Handoff",
-        },
-        Msg::OverviewProviderDegraded => Phrase {
-            en: "the model service is unstable",
-            zh: "模型服务不稳定",
-        },
-        Msg::OverviewProviderLost => Phrase {
-            en: "the model service cannot be reached",
-            zh: "连不上模型服务",
-        },
         Msg::ProviderUnknown => Phrase {
             en: "not connected",
             zh: "未接入",
@@ -704,121 +941,9 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "unreachable",
             zh: "连不上",
         },
-        Msg::OverviewScope => Phrase {
-            en: "Counts what is running. Frozen and halted sessions are listed below and not counted here.",
-            zh: "只数在跑的。冻结与停住的列在下面，不计入这一句。",
-        },
-        Msg::OverviewSource => Phrase {
-            en: "From the events this page received, plus one city query asked on open.",
-            zh: "来自本页收到的事件，加上打开时问的一次城查询。",
-        },
-        Msg::OverviewHalted => Phrase {
-            en: "This city is halted: nothing new will start until it is released.",
-            zh: "这座城已停：放行之前不会有新东西开始。",
-        },
-        Msg::OverviewNothingWaiting => Phrase {
-            en: "nothing is waiting for you",
-            zh: "没有东西在等你",
-        },
-        Msg::OverviewNothingWaitingWhat => Phrase {
-            en: "Approvals and frozen sessions appear here.",
-            zh: "待批的活和冻结的会话会出现在这里。",
-        },
-        Msg::OverviewWorkedOn => Phrase {
-            en: "what is being worked on",
-            zh: "正在做的事",
-        },
-        Msg::OverviewNeverStarted => Phrase {
-            en: "no run has ever started in this city",
-            zh: "这座城从未开始过一个会话",
-        },
-        Msg::OverviewNoneWorkingNow => Phrase {
-            en: "{known} run(s) are on the city's books, and none is working now",
-            zh: "城的账上有 {known} 个会话，此刻一个都不在跑",
-        },
-        Msg::OverviewInFlightScope => Phrase {
-            en: "One row per session this page has seen an event for.",
-            zh: "本页见过其事件的会话各一行。",
-        },
-        Msg::OverviewInFlightSource => Phrase {
-            en: "A session's own events, one at a time. This window starts when the page connects; earlier ones are in the ledger.",
-            zh: "会话自己的事件，到一条算一条。这个窗口从页面连上才开始；更早的在账本里。",
-        },
-        Msg::OverviewNoWorkSent => Phrase {
-            en: "no work has been sent yet",
-            zh: "还没派过活",
-        },
-        Msg::OverviewNothingWorkingNow => Phrase {
-            en: "nothing is working now; the city holds {known} run(s) that already ran",
-            zh: "此刻没有东西在做；城里存着 {known} 个跑过的会话",
-        },
-        Msg::OverviewSendSome => Phrase {
-            en: "Send one from the bar below: which building, and what to do. It appears here the moment it starts.",
-            zh: "用下面那条栏派一件活：去哪栋楼、要做什么。它一开始就会出现在这里。",
-        },
-        Msg::OverviewEarlierRuns => Phrase {
-            en: "Earlier sessions are in the ledger. Dispatch again and it appears here live.",
-            zh: "更早的会话在账本里。再派活就会实时出现在这里。",
-        },
-        Msg::ColumnWhere => Phrase {
-            en: "where",
-            zh: "在哪",
-        },
-        Msg::ColumnPhase => Phrase {
-            en: "phase",
-            zh: "状态",
-        },
-        Msg::ColumnSteps => Phrase {
-            en: "steps",
-            zh: "步数",
-        },
-        Msg::OverviewStepsOf => Phrase {
-            en: "{done} of {planned}",
-            zh: "{done}／{planned}",
-        },
-        Msg::OverviewStepsSoFar => Phrase {
-            en: "{done} so far",
-            zh: "已走 {done} 步",
-        },
-        Msg::OverviewNoBuildingRaised => Phrase {
-            en: "no building has been raised",
-            zh: "还没盖过楼",
-        },
-        Msg::OverviewBuildingsHeld => Phrase {
-            en: "the {raised} building(s) this city holds",
-            zh: "这座城有 {raised} 栋楼",
-        },
-        Msg::OverviewBuildingsScope => Phrase {
-            en: "Each building with the progress its own plan states. A building whose plan cannot be read says so.",
-            zh: "每栋楼配上它自己的计划所说的进度。读不出计划的楼直说读不出。",
-        },
-        Msg::OverviewBuildingsSource => Phrase {
-            en: "The one city query this page asks on open.",
-            zh: "打开本页时问的一次城查询。",
-        },
         Msg::AskingWhatItHolds => Phrase {
             en: "asking the city what it holds",
             zh: "正在问这座城里有什么",
-        },
-        Msg::OverviewItsBuildings => Phrase {
-            en: "its buildings and their plans",
-            zh: "它的楼，以及各自的计划",
-        },
-        Msg::OverviewRaiseOneOnCity => Phrase {
-            en: "A building is one line of business, and a folder on disk. Create one on the city page.",
-            zh: "一栋楼是一条业务线，也是磁盘上的一个目录。到城市页新建一栋。",
-        },
-        Msg::OverviewGoToCity => Phrase {
-            en: "go to the city",
-            zh: "去城市页",
-        },
-        Msg::StateWorking => Phrase {
-            en: "working",
-            zh: "在做",
-        },
-        Msg::StateIdle => Phrase {
-            en: "idle",
-            zh: "闲着",
         },
         Msg::LineToolCalled => Phrase {
             en: "{who} calls a tool",
@@ -915,10 +1040,6 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::LiveSteerSend => Phrase {
             en: "send at the next safe point",
             zh: "在下一个安全点送达",
-        },
-        Msg::LiveTakeover => Phrase {
-            en: "answer for this run from here",
-            zh: "从这里接手这个会话",
         },
         Msg::LiveForkFrom => Phrase {
             en: "branch a new run from step {seq}",
@@ -1107,10 +1228,6 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::ApprovalTainted => Phrase {
             en: "this one began with someone else's text: answered alone, and no policy can waive it",
             zh: "这一条起于别人的文本：只能单独回答，任何策略都免不了它",
-        },
-        Msg::ApprovalAndStopAsking => Phrase {
-            en: "and stop asking me this",
-            zh: "以后别再问我这件事",
         },
         Msg::BinRestoreCheckpoint => Phrase {
             en: "restore from the checkpoint at {at}",
@@ -1457,14 +1574,6 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::LiveEveryEvent => Phrase {
             en: "every event, one line each",
             zh: "每一条事件，各一行",
-        },
-        Msg::DispatchMore => Phrase {
-            en: "more",
-            zh: "更多",
-        },
-        Msg::DispatchFewer => Phrase {
-            en: "fewer",
-            zh: "收起",
         },
         Msg::PalettePlaceholder => Phrase {
             en: "go to a page, a building or a session",
@@ -1916,6 +2025,29 @@ pub fn fill(pattern: &str, slots: &[(&str, &str)]) -> String {
     out
 }
 
+/// The words on each side of one slot, for a page that draws the slot's
+/// own value in its own element.
+///
+/// [`fill`] answers when the result is one string. This answers when it
+/// is not: the composer underlines the inferred word and leaves the
+/// words around it plain, which needs the two halves separately.
+///
+/// Splitting rather than assuming the value comes last is what keeps
+/// this working in both languages and in the next one: `as {mode}` puts
+/// it at the end and a language that says it first would silently
+/// reverse the sentence under a rule that hard-coded the order.
+///
+/// A pattern without the slot yields the whole phrase and an empty tail,
+/// so a missing slot renders as a sentence with a word absent rather
+/// than as an empty screen.
+#[must_use]
+pub fn around(pattern: &'static str, slot: &str) -> (&'static str, &'static str) {
+    match pattern.split_once(&format!("{{{slot}}}")) {
+        Some(halves) => halves,
+        None => (pattern, ""),
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -1954,28 +2086,90 @@ mod tests {
     /// up to date. A variant added without a line here fails to compile.
     fn every_message() -> Vec<Msg> {
         let all = [
-            Msg::NavHappeningNow,
+            Msg::CityNoBuildings,
             Msg::NavTheRecord,
-            Msg::NavSetup,
-            Msg::NavOverview,
             Msg::NavCity,
-            Msg::NavLive,
-            Msg::NavApprovals,
-            Msg::NavLedger,
-            Msg::NavArchive,
-            Msg::NavRecycleBin,
             Msg::NavCost,
             Msg::NavSettings,
-            Msg::DispatchRoom,
-            Msg::DispatchRoomHint,
-            Msg::DispatchCallIt,
-            Msg::DispatchCallItHint,
-            Msg::DispatchTask,
-            Msg::DispatchTaskHint,
-            Msg::DispatchDoneWhen,
-            Msg::DispatchDoneWhenHint,
-            Msg::DispatchMode,
-            Msg::DispatchEffort,
+            Msg::PhaseRunning,
+            Msg::PhaseWaiting,
+            Msg::PhaseFrozen,
+            Msg::PhaseCancelled,
+            Msg::PhaseHalted,
+            Msg::NavSessions,
+            Msg::NavWaiting,
+            Msg::ComposerTitle,
+            Msg::ComposerScope,
+            Msg::ComposerExample,
+            Msg::ComposerSendTo,
+            Msg::ComposerAs,
+            Msg::ComposerThink,
+            Msg::ComposerKeys,
+            Msg::ComposerSource,
+            Msg::ComposerRoomFor,
+            Msg::ComposerModeFor,
+            Msg::ComposerEffortFor,
+            Msg::SessionsScope,
+            Msg::SessionsSource,
+            Msg::SessionsEnded,
+            Msg::SessionsEndedScope,
+            Msg::SessionsEndedSource,
+            Msg::SessionsNothingYet,
+            Msg::SessionsNothingWhat,
+            Msg::SessionsTurnCount,
+            Msg::SessionsUnpriced,
+            Msg::SessionsCityScope,
+            Msg::SessionAllSessions,
+            Msg::SessionTurnOrdinal,
+            Msg::SessionSpentIs,
+            Msg::SessionAtGate,
+            Msg::SessionNoGate,
+            Msg::SessionContextUnknown,
+            Msg::SessionContextScope,
+            Msg::SessionHandoffAt,
+            Msg::SessionHandoffNone,
+            Msg::SessionHandoffJust,
+            Msg::SessionTabTurns,
+            Msg::SessionTabChanges,
+            Msg::SessionTabCost,
+            Msg::SessionTabDocs,
+            Msg::SessionScope,
+            Msg::SessionSource,
+            Msg::SessionUnknown,
+            Msg::SessionUnknownWhat,
+            Msg::WaitingScope,
+            Msg::WaitingSource,
+            Msg::WaitingNothing,
+            Msg::WaitingNothingWhat,
+            Msg::WaitingFrozenHeading,
+            Msg::RecordScope,
+            Msg::RecordLensLedger,
+            Msg::RecordLensArchive,
+            Msg::RecordLensBin,
+            Msg::FirstNoModelTitle,
+            Msg::FirstNoModelScope,
+            Msg::FirstNoModelStatus,
+            Msg::FirstNoModelWhat,
+            Msg::FirstNoModelWay,
+            Msg::FirstNoModelSubscription,
+            Msg::FirstNoModelSource,
+            Msg::FirstNoBuildingTitle,
+            Msg::FirstNoBuildingScope,
+            Msg::FirstNoBuildingStatus,
+            Msg::FirstNoBuildingWhat,
+            Msg::FirstNoBuildingWay,
+            Msg::FirstNoBuildingSource,
+            Msg::FirstDispatchTitle,
+            Msg::FirstDispatchScope,
+            Msg::FirstDispatchKeys,
+            Msg::FirstDispatchSource,
+            Msg::CityRunning,
+            Msg::CityRunningIdle,
+            Msg::CityStopped,
+            Msg::CityUnwell,
+            Msg::CountRunning,
+            Msg::CountWaiting,
+            Msg::CountBuildings,
             Msg::EffortInherited,
             Msg::EffortLow,
             Msg::EffortMedium,
@@ -1990,49 +2184,11 @@ mod tests {
             Msg::VitalsSignals,
             Msg::VitalsDiscards,
             Msg::VitalsAsking,
-            Msg::OverviewNoBuildings,
-            Msg::OverviewNothingRunningFrozen,
-            Msg::OverviewNothingRunning,
-            Msg::OverviewOneRunning,
-            Msg::OverviewManyRunning,
-            Msg::OverviewWaitingApprovals,
-            Msg::OverviewUnreadable,
-            Msg::OverviewFrozenRuns,
-            Msg::OverviewProviderDegraded,
-            Msg::OverviewProviderLost,
             Msg::ProviderUnknown,
             Msg::ProviderHealthy,
             Msg::ProviderDegraded,
             Msg::ProviderLost,
-            Msg::OverviewScope,
-            Msg::OverviewSource,
-            Msg::OverviewHalted,
-            Msg::OverviewNothingWaiting,
-            Msg::OverviewNothingWaitingWhat,
-            Msg::OverviewWorkedOn,
-            Msg::OverviewNeverStarted,
-            Msg::OverviewNoneWorkingNow,
-            Msg::OverviewInFlightScope,
-            Msg::OverviewInFlightSource,
-            Msg::OverviewNoWorkSent,
-            Msg::OverviewNothingWorkingNow,
-            Msg::OverviewSendSome,
-            Msg::OverviewEarlierRuns,
-            Msg::ColumnWhere,
-            Msg::ColumnPhase,
-            Msg::ColumnSteps,
-            Msg::OverviewStepsOf,
-            Msg::OverviewStepsSoFar,
-            Msg::OverviewNoBuildingRaised,
-            Msg::OverviewBuildingsHeld,
-            Msg::OverviewBuildingsScope,
-            Msg::OverviewBuildingsSource,
             Msg::AskingWhatItHolds,
-            Msg::OverviewItsBuildings,
-            Msg::OverviewRaiseOneOnCity,
-            Msg::OverviewGoToCity,
-            Msg::StateWorking,
-            Msg::StateIdle,
             Msg::LineToolCalled,
             Msg::LineToolResult,
             Msg::LineModelCalled,
@@ -2057,7 +2213,6 @@ mod tests {
             Msg::LivePickASession,
             Msg::LiveSteerPlaceholder,
             Msg::LiveSteerSend,
-            Msg::LiveTakeover,
             Msg::LiveForkFrom,
             Msg::LiveNothingToBranch,
             Msg::LiveInterventionNote,
@@ -2105,7 +2260,6 @@ mod tests {
             Msg::ApprovalNoneEscalated,
             Msg::ApprovalNoneEscalatedWhat,
             Msg::ApprovalTainted,
-            Msg::ApprovalAndStopAsking,
             Msg::BinRestoreCheckpoint,
             Msg::BinRestoreStored,
             Msg::BinRebuild,
@@ -2192,8 +2346,6 @@ mod tests {
             Msg::ChangedRenamed,
             Msg::ChangedBinary,
             Msg::LiveEveryEvent,
-            Msg::DispatchMore,
-            Msg::DispatchFewer,
             Msg::PalettePlaceholder,
             Msg::PaletteNothing,
             Msg::PaletteNothingWhat,
@@ -2302,28 +2454,90 @@ mod tests {
         ];
         for msg in all {
             match msg {
-                Msg::NavHappeningNow
+                Msg::CityNoBuildings
                 | Msg::NavTheRecord
-                | Msg::NavSetup
-                | Msg::NavOverview
                 | Msg::NavCity
-                | Msg::NavLive
-                | Msg::NavApprovals
-                | Msg::NavLedger
-                | Msg::NavArchive
-                | Msg::NavRecycleBin
                 | Msg::NavCost
                 | Msg::NavSettings
-                | Msg::DispatchRoom
-                | Msg::DispatchRoomHint
-                | Msg::DispatchCallIt
-                | Msg::DispatchCallItHint
-                | Msg::DispatchTask
-                | Msg::DispatchTaskHint
-                | Msg::DispatchDoneWhen
-                | Msg::DispatchDoneWhenHint
-                | Msg::DispatchMode
-                | Msg::DispatchEffort
+                | Msg::PhaseRunning
+                | Msg::PhaseWaiting
+                | Msg::PhaseFrozen
+                | Msg::PhaseCancelled
+                | Msg::PhaseHalted
+                | Msg::NavSessions
+                | Msg::NavWaiting
+                | Msg::ComposerTitle
+                | Msg::ComposerScope
+                | Msg::ComposerExample
+                | Msg::ComposerSendTo
+                | Msg::ComposerAs
+                | Msg::ComposerThink
+                | Msg::ComposerKeys
+                | Msg::ComposerSource
+                | Msg::ComposerRoomFor
+                | Msg::ComposerModeFor
+                | Msg::ComposerEffortFor
+                | Msg::SessionsScope
+                | Msg::SessionsSource
+                | Msg::SessionsEnded
+                | Msg::SessionsEndedScope
+                | Msg::SessionsEndedSource
+                | Msg::SessionsNothingYet
+                | Msg::SessionsNothingWhat
+                | Msg::SessionsTurnCount
+                | Msg::SessionsUnpriced
+                | Msg::SessionsCityScope
+                | Msg::SessionAllSessions
+                | Msg::SessionTurnOrdinal
+                | Msg::SessionSpentIs
+                | Msg::SessionAtGate
+                | Msg::SessionNoGate
+                | Msg::SessionContextUnknown
+                | Msg::SessionContextScope
+                | Msg::SessionHandoffAt
+                | Msg::SessionHandoffNone
+                | Msg::SessionHandoffJust
+                | Msg::SessionTabTurns
+                | Msg::SessionTabChanges
+                | Msg::SessionTabCost
+                | Msg::SessionTabDocs
+                | Msg::SessionScope
+                | Msg::SessionSource
+                | Msg::SessionUnknown
+                | Msg::SessionUnknownWhat
+                | Msg::WaitingScope
+                | Msg::WaitingSource
+                | Msg::WaitingNothing
+                | Msg::WaitingNothingWhat
+                | Msg::WaitingFrozenHeading
+                | Msg::RecordScope
+                | Msg::RecordLensLedger
+                | Msg::RecordLensArchive
+                | Msg::RecordLensBin
+                | Msg::FirstNoModelTitle
+                | Msg::FirstNoModelScope
+                | Msg::FirstNoModelStatus
+                | Msg::FirstNoModelWhat
+                | Msg::FirstNoModelWay
+                | Msg::FirstNoModelSubscription
+                | Msg::FirstNoModelSource
+                | Msg::FirstNoBuildingTitle
+                | Msg::FirstNoBuildingScope
+                | Msg::FirstNoBuildingStatus
+                | Msg::FirstNoBuildingWhat
+                | Msg::FirstNoBuildingWay
+                | Msg::FirstNoBuildingSource
+                | Msg::FirstDispatchTitle
+                | Msg::FirstDispatchScope
+                | Msg::FirstDispatchKeys
+                | Msg::FirstDispatchSource
+                | Msg::CityRunning
+                | Msg::CityRunningIdle
+                | Msg::CityStopped
+                | Msg::CityUnwell
+                | Msg::CountRunning
+                | Msg::CountWaiting
+                | Msg::CountBuildings
                 | Msg::EffortInherited
                 | Msg::EffortLow
                 | Msg::EffortMedium
@@ -2338,49 +2552,11 @@ mod tests {
                 | Msg::VitalsSignals
                 | Msg::VitalsDiscards
                 | Msg::VitalsAsking
-                | Msg::OverviewNoBuildings
-                | Msg::OverviewNothingRunningFrozen
-                | Msg::OverviewNothingRunning
-                | Msg::OverviewOneRunning
-                | Msg::OverviewManyRunning
-                | Msg::OverviewWaitingApprovals
-                | Msg::OverviewUnreadable
-                | Msg::OverviewFrozenRuns
-                | Msg::OverviewProviderDegraded
-                | Msg::OverviewProviderLost
                 | Msg::ProviderUnknown
                 | Msg::ProviderHealthy
                 | Msg::ProviderDegraded
                 | Msg::ProviderLost
-                | Msg::OverviewScope
-                | Msg::OverviewSource
-                | Msg::OverviewHalted
-                | Msg::OverviewNothingWaiting
-                | Msg::OverviewNothingWaitingWhat
-                | Msg::OverviewWorkedOn
-                | Msg::OverviewNeverStarted
-                | Msg::OverviewNoneWorkingNow
-                | Msg::OverviewInFlightScope
-                | Msg::OverviewInFlightSource
-                | Msg::OverviewNoWorkSent
-                | Msg::OverviewNothingWorkingNow
-                | Msg::OverviewSendSome
-                | Msg::OverviewEarlierRuns
-                | Msg::ColumnWhere
-                | Msg::ColumnPhase
-                | Msg::ColumnSteps
-                | Msg::OverviewStepsOf
-                | Msg::OverviewStepsSoFar
-                | Msg::OverviewNoBuildingRaised
-                | Msg::OverviewBuildingsHeld
-                | Msg::OverviewBuildingsScope
-                | Msg::OverviewBuildingsSource
                 | Msg::AskingWhatItHolds
-                | Msg::OverviewItsBuildings
-                | Msg::OverviewRaiseOneOnCity
-                | Msg::OverviewGoToCity
-                | Msg::StateWorking
-                | Msg::StateIdle
                 | Msg::LineToolCalled
                 | Msg::LineToolResult
                 | Msg::LineModelCalled
@@ -2405,7 +2581,6 @@ mod tests {
                 | Msg::LivePickASession
                 | Msg::LiveSteerPlaceholder
                 | Msg::LiveSteerSend
-                | Msg::LiveTakeover
                 | Msg::LiveForkFrom
                 | Msg::LiveNothingToBranch
                 | Msg::LiveInterventionNote
@@ -2453,7 +2628,6 @@ mod tests {
                 | Msg::ApprovalNoneEscalated
                 | Msg::ApprovalNoneEscalatedWhat
                 | Msg::ApprovalTainted
-                | Msg::ApprovalAndStopAsking
                 | Msg::BinRestoreCheckpoint
                 | Msg::BinRestoreStored
                 | Msg::BinRebuild
@@ -2540,8 +2714,6 @@ mod tests {
                 | Msg::ChangedRenamed
                 | Msg::ChangedBinary
                 | Msg::LiveEveryEvent
-                | Msg::DispatchMore
-                | Msg::DispatchFewer
                 | Msg::PalettePlaceholder
                 | Msg::PaletteNothing
                 | Msg::PaletteNothingWhat
@@ -2717,7 +2889,7 @@ mod tests {
     /// a test that read the directory would be testing the machine it ran
     /// on. A view added without a line here is a view whose English can
     /// escape, which is the failure this table exists to make loud.
-    const VIEWS: [(&str, &str); 18] = [
+    const VIEWS: [(&str, &str); 22] = [
         ("alert.rs", include_str!("alert.rs")),
         ("app.rs", include_str!("app.rs")),
         ("approval.rs", include_str!("approval.rs")),
@@ -2729,9 +2901,13 @@ mod tests {
         ("ledger_view.rs", include_str!("ledger_view.rs")),
         ("live.rs", include_str!("live.rs")),
         ("turn.rs", include_str!("turn.rs")),
-        ("overview.rs", include_str!("overview.rs")),
         ("palette.rs", include_str!("palette.rs")),
         ("panel.rs", include_str!("panel.rs")),
+        ("phase.rs", include_str!("phase.rs")),
+        ("record.rs", include_str!("record.rs")),
+        ("session.rs", include_str!("session.rs")),
+        ("sessions.rs", include_str!("sessions.rs")),
+        ("waiting.rs", include_str!("waiting.rs")),
         ("progress.rs", include_str!("progress.rs")),
         ("reach.rs", include_str!("reach.rs")),
         ("settings.rs", include_str!("settings.rs")),

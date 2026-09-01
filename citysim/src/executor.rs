@@ -266,6 +266,7 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
                 interrupt: &mut interrupt,
                 fence: Some(&mut fence),
                 invoke: &mut invoke,
+                deltas: None,
             };
             drive(plan, &mut ledger, &mut model, &mut hooks, &handoff)?
         }
@@ -275,6 +276,7 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
                 interrupt: &mut interrupt,
                 fence: None,
                 invoke: &mut invoke,
+                deltas: None,
             };
             drive(plan, &mut ledger, &mut model, &mut hooks, &handoff)?
         }

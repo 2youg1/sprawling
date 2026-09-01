@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling — 等我的</title>
+<!--
+  One page for one question. What waits on a person used to be spread
+  across three places, and a person cannot act on a count they have to
+  assemble. The badge in the nav counts exactly what this page lists.
+
+  The queue comes first because it is the only part of this page a person
+  can answer; what stopped without them is below it.
+
+  Run `cargo test -p web` once before opening this file.
+-->
+<link rel="stylesheet" href="../../../target/screens/tokens.css">
+<link rel="stylesheet" href="../assets/app.css">
+</head>
+<body>
+<main class="layout">
+
+  <header class="top-bar">
+    <span class="address">等我的</span>
+    <span class="counts">
+      <span><b>3</b> 在跑</span>
+      <span><b>2</b> 等你</span>
+      <span><b>5</b> 栋楼</span>
+    </span>
+  </header>
+
+  <nav class="left-nav">
+    <div class="nav-group">
+      <a class="nav-item" href="#/">在做的事</a>
+      <a class="nav-item" href="#/waiting" aria-current="page">等我的<span class="badge">2</span></a>
+      <a class="nav-item" href="#/record">记录</a>
+      <a class="nav-item" href="#/cost">花销</a>
+      <a class="nav-item" href="#/setup">设置</a>
+    </div>
+    <div class="city-state">
+      <p class="standing">这座城在运转。</p>
+      <button type="button" class="quiet">停下这座城</button>
+    </div>
+  </nav>
+
+  <section class="centre">
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">两件事在等你放行</h2>
+        <span class="panel-figure">2</span>
+      </div>
+      <p class="panel-scope">所有在你回答之前动不了的东西。</p>
+      <div class="panel-body">
+        <article class="cluster">
+          <header class="cluster-head">
+            <span class="what">写 .github/workflows/ci.yml</span>
+            <span class="who">lab/wire</span>
+          </header>
+          <div class="empty-way">
+            <button type="button" class="allow">放行</button>
+            <button type="button" class="deny">拒绝</button>
+          </div>
+        </article>
+        <article class="cluster">
+          <header class="cluster-head">
+            <span class="what">推到远端 origin/main</span>
+            <span class="who">site/copy</span>
+          </header>
+          <div class="empty-way">
+            <button type="button" class="allow">放行</button>
+            <button type="button" class="deny">拒绝</button>
+          </div>
+        </article>
+      </div>
+      <p class="panel-source">审批来自队列，冻结的会话来自事件流。</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">停住了，而不是你停的</h2>
+        <span class="panel-figure">1</span>
+      </div>
+      <div class="panel-body">
+        <a class="session-row" href="#/s/lab/index">
+          <span class="phase frozen" role="img" aria-label="已冻结"></span>
+          <span class="room">lab/index</span>
+          <span class="said">已冻结</span>
+          <span class="turn">21 轮</span>
+          <span class="spent"></span>
+        </a>
+      </div>
+      <p class="panel-source">审批来自队列，冻结的会话来自事件流。</p>
+    </section>
+
+  </section>
+
+</main>
+</body>
+</html>

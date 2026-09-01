@@ -763,11 +763,10 @@ pub fn dispatch_command(building: &str, task: &str, goal: &str) -> Option<Client
     // What a Dispatch frame looks like is `app::dispatch_command`'s
     // answer and only its answer - this page decides the address.
     crate::app::dispatch_command(
-        building.trim(),
+        &format!("{}/{}", building.trim(), session_name(task)),
         task,
         goal,
         "plan",
-        &session_name(task),
         // This page asks for two lines and a building; how hard to think
         // is chosen where the whole form is, at the bottom of the window.
         None,
@@ -863,7 +862,7 @@ pub fn CityView(
     rsx! {
         section { class: "city-view",
             crate::panel::Panel {
-                title: if raised == 0 { word(Msg::OverviewNoBuildings).to_owned() }
+                title: if raised == 0 { word(Msg::CityNoBuildings).to_owned() }
                     else {
                         crate::lang::fill(
                             word(Msg::CityStanding),
@@ -1011,7 +1010,7 @@ pub fn CityView(
             }
             if city.buildings.is_empty() {
                 crate::panel::Empty {
-                    status: word(Msg::OverviewNoBuildings).to_owned(),
+                    status: word(Msg::CityNoBuildings).to_owned(),
                     what: word(Msg::CityNoBuildingsWhat).to_owned(),
                 }
             }
@@ -1225,15 +1224,15 @@ mod tests {
     }
 
     #[test]
-    fn sending_work_needs_a_room_a_task_and_a_definition_of_done() {
+    fn sending_work_needs_a_room_and_a_task_and_nothing_else() {
         assert!(dispatch_command("lab", "fix the timer", "the test passes").is_some());
         assert!(
             dispatch_command("lab", "  ", "the test passes").is_none(),
             "a run with nothing to do is not a command"
         );
         assert!(
-            dispatch_command("lab", "fix the timer", "").is_none(),
-            "a run with no definition of done cannot report that it is done"
+            dispatch_command("lab", "fix the timer", "").is_some(),
+            "an empty goal is how this city spells a conversation, not a missing field"
         );
         assert!(
             dispatch_command("", "fix the timer", "the test passes").is_none(),

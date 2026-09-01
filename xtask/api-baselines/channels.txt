@@ -199,6 +199,8 @@ pub channels::CostAnswer::total: kernel::budget::UsdMicros
 pub channels::Delivered::NobodyAsked
 pub channels::Delivered::PeerGone
 pub channels::Delivered::ToThePeer
+pub channels::Delta::run: kernel::event::RunId
+pub channels::Delta::text: alloc::string::String
 pub channels::DiscardAnswer::rows: alloc::vec::Vec<channels::DiscardLine>
 pub channels::DiscardLine::at: kernel::event::TimeMs
 pub channels::DiscardLine::path: alloc::string::String
@@ -284,12 +286,14 @@ pub channels::ServeConfig::addr: core::net::socket_addr::SocketAddr
 pub channels::ServeConfig::city: core::option::Option<kernel::address::Address>
 pub channels::ServeConfig::client: alloc::sync::Arc<channels::ClientAssets>
 pub channels::ServeConfig::commands: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::WireCommand, channels::Reply) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
+pub channels::ServeConfig::deltas: tokio::sync::broadcast::Sender<channels::Delta>
 pub channels::ServeConfig::events: tokio::sync::broadcast::Sender<kernel::event::EventRecord>
 pub channels::ServeConfig::queries: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Query) -> core::result::Result<channels::Answer, kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServeConfig::secrets: alloc::sync::Arc<(dyn core::ops::function::Fn(channels::Command<kernel::secret::Sealed<alloc::string::String>>, channels::Reply) -> core::result::Result<(), kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServeConfig::token_digest: core::option::Option<kernel::locator::B3Hash>
 pub channels::ServeConfig::upload_sink: alloc::sync::Arc<(dyn core::ops::function::Fn(alloc::vec::Vec<u8>) -> core::result::Result<channels::UploadId, kernel::error::AxError> + core::marker::Send + core::marker::Sync)>
 pub channels::ServerFrame::Answer(alloc::boxed::Box<channels::Answer>)
+pub channels::ServerFrame::Delta(channels::Delta)
 pub channels::ServerFrame::Event(alloc::boxed::Box<kernel::event::EventRecord>)
 pub channels::ServerFrame::Refusal(alloc::boxed::Box<kernel::error::AxError>)
 pub channels::ServerFrame::Welcome(channels::Welcome)
@@ -390,6 +394,7 @@ pub struct channels::ChosenSummary
 pub struct channels::CityAnswer
 pub struct channels::CityLabel(_)
 pub struct channels::CostAnswer
+pub struct channels::Delta
 pub struct channels::DiscardAnswer
 pub struct channels::DiscardLine
 pub struct channels::EmbeddedFile

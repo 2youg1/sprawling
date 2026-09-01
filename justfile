@@ -38,6 +38,12 @@ build-web:
     wasm-bindgen --target web --no-typescript --out-dir target/web-dist \
         target/wasm32-unknown-unknown/release/web.wasm
 
+# The accessibility gate on its own, which is what a person runs while
+# moving a screen from `screens/` into the client: it names every role and
+# accessible name the settled screen offers and the build does not.
+ax:
+    cargo xtask ax
+
 # The gate `just check` cannot reach: web's wasm-only paths, and channels
 # built without its server feature. Cheap, so it runs on its own.
 check-web:

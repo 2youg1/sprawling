@@ -43,7 +43,11 @@ use serde::{Deserialize, Serialize};
 ///    (P3.02).
 /// 9: a page can ask for the history that happened before it opened
 ///    (P3.04).
-pub const WIRE_V: u32 = 11;
+/// 12: a third class of frame carries what a model is saying while it is
+///    still saying it (V3.13). It is not an event: it has no sequence
+///    number, it is never written down, and a client that missed one has
+///    lost nothing.
+pub const WIRE_V: u32 = 12;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
@@ -1058,6 +1062,13 @@ pub enum ClientFrame {
 
 /// Everything a server may send. Events are the push half; a `Refusal`
 /// carries the three-part refusal the interface renders verbatim.
+///
+/// **`Delta` is deliberately not an event.** An event is a thing that
+/// happened, and a token increment is not: it has no sequence number, it
+/// is never written to the Ledger, it cannot be replayed, and a client
+/// that missed one has lost nothing. Giving it a frame class of its own
+/// is what keeps that true — folded into the event stream it would
+/// become a second, unverifiable history of what the model said.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ServerFrame {
@@ -1065,6 +1076,19 @@ pub enum ServerFrame {
     Event(Box<EventRecord>),
     Answer(Box<Answer>),
     Refusal(Box<AxError>),
+    /// Text a model is saying, before the call it belongs to has
+    /// settled. Discardable by construction: the run it belongs to is
+    /// named so a client can throw the buffer away when `model_returned`
+    /// arrives, and the settled text of that record is what a page
+    /// draws. Where the two disagree, the record wins.
+    Delta(Delta),
+}
+
+/// One piece of what a model is saying, on its way to a page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delta {
+    pub run: RunId,
+    pub text: String,
 }
 
 #[cfg(test)]

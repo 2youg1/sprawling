@@ -1460,6 +1460,8 @@ name = "eval"
 version = "0.0.2"
 dependencies = [
  "kernel",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]

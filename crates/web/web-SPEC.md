@@ -1231,7 +1231,7 @@ pub fn turns<'a>(records: impl IntoIterator<Item = &'a EventRecord>) -> Vec<Turn
 | M3 组织支持 | 是否存在以该项目为业务的实体（雇员数、融资）或具名生产部署 | 公司主页／投资数据库／项目自述 |
 | M4 维护者自述 | 维护者对未来维护强度的公开表述；自述优先于任何外部推断 | 项目 issue／公告 |
 | M5 构建链外部件 | 从 `cargo build` 到静态资源，需要几个非 cargo 可执行件；其中几个能被 `rust-toolchain.toml`／`Cargo.lock` 钉住 | 官方安装与构建文档 |
-| M6 npm/node 接触面 | 构建链是否调用或下载 node 族工件（`xtask zerojs` 的判据面） | 该工具的 changelog 与配置面 |
+| M6 npm/node 接触面 | 构建链是否调用或下载 node 族工件（当时由 `xtask zerojs` 判定；该门 V3.25a 已删，理由见 §8-57） | 该工具的 changelog 与配置面 |
 | M7 破坏性节奏 | 近 12 个月内的 semver 破坏性发布次数 | 版本历史＋迁移指南 |
 
 M1 与 M2 是**证据**不是**结论**：一个功能完备的库可以合法地长期不发版。故 M4（维护者自述）在冲突时压过 M1/M2——这是判据一「证据」二字的含义。
@@ -1261,7 +1261,7 @@ M1 与 M2 是**证据**不是**结论**：一个功能完备的库可以合法�
 | Yew／Leptos／Sycamore | `trunk build` | 1（`trunk`） | 是（版本可钉） | **有**：0.22.0-beta 的 changelog 含「add node-package configuration」与「download node package in crate folder」 |
 | 不用框架 | `cargo build` ＋ `wasm-bindgen` CLI | 1（`wasm-bindgen-cli`） | **是** | 无 |
 
-Trunk 的 npm 接触面是**可关闭的可选配置**，不构成 C1 的当场违反；但它是该工具的行进方向，意味着 `xtask zerojs` 要长期为它作证。同时 Trunk 的稳定版停在 0.21.14（2025-05-08，M1＝470 天），0.22 自 2026-03 起停在 beta——**判据二上，Trunk 这条路径比它服务的三个框架本身更脆**。
+Trunk 的 npm 接触面是**可关闭的可选配置**，不构成 C1 的当场违反；但它是该工具的行进方向，当时意味着 `xtask zerojs` 要长期为它作证（该门此后已删，§8-57）。同时 Trunk 的稳定版停在 0.21.14（2025-05-08，M1＝470 天），0.22 自 2026-03 起停在 beta——**判据二上，Trunk 这条路径比它服务的三个框架本身更脆**。
 
 **M7 破坏性节奏**：四个框架**全部处于 1.0 之前**，且近 12 个月内各有一次 semver 破坏性发布（Dioxus 0.6→0.7、Yew 0.22→0.23、Leptos 0.8→0.9-beta、Sycamore 0.8→0.9）。这条对全部框架候选一致成立，故它不区分候选，但它定下了后文败诉线 L3 的必要性。
 
@@ -1421,13 +1421,15 @@ lab/parser                                   ● 在跑 · 第 7 轮
 
 | 步 | 内容 | 收口 |
 |---|---|---|
-| D0 ✅ | 样式表成文件（§8-54） | `web` 233 测试绿；三处读 `index.html` 字节的断言全部迁到 `app.css`；嵌入表含 `app.css` |
-| D1 | `web::phase` 与状态基元（B2） | 一条断言：五个相两两不同形；`memory::hot::RunPhase` 与它的关系写明 |
-| D2 | `screens/sessions.html` 定稿：列表＋派活（B1 头、B3） | 人在浏览器里看过并认可 |
-| D3 | `dx translate` → 只补绑定 → 换掉 `DispatchBar`（V3.10） | `grep ': "false"'` 空；两次输入派出一个活 |
-| D4 | 路由六目的地＋旧片段重定向（B1） | `route.rs` 往返测试对新旧两套片段都过 |
-| D5 | `#/s/<b>/<r>` 对象页与页头四格（B4／V3.14） | 四格各指得出来源；第三格画 `——` 并说明 |
-| D6 | 无障碍树验收接进 `just`（V3.15） | 定稿 HTML 与运行中应用的 AX 树对齐 |
+| D0 ✅ | 样式表成文件（§8-54） | 三处读 `index.html` 字节的断言全部迁到 `app.css`；嵌入表含 `app.css` |
+| D1 ✅ | `web::phase` 与状态基元（B2） | 五个相两两不同形；ALERT 只花在 `Waiting`（对着已发布的样式表断言，不是对着一份副本）；`app::RunPhase` **删除**，`memory::hot::RunPhase` 与它的关系写在模块头 |
+| D2 ✅ | 五张定稿屏（B1、B3、B4、§8-56） | `screens/{sessions,first-run,session,waiting,record}.html`，各自 `<link>` 引已发布的 `app.css` |
+| D3 ✅ | `dx translate` → 只补绑定 → 删掉 `DispatchBar`（V3.10） | `grep ': "false"'` 空；派活框静息一个输入框、一句推断、三个可点的词 |
+| D4 ✅ | 路由六目的地＋旧片段重定向（B1） | 九个旧片段各有断言落在继承它那个问题的页上；另一条断言钉住「旧拼法只读不写」 |
+| D5 ✅ | `#/s/<b>/<r>` 对象页与页头四格（B4／V3.14） | 四格各指得出来源；第三格画 `——`，一条断言禁止它出现任何数字 |
+| D6 ✅ | 无障碍验收接进 `just` 与门表（V3.15） | 第十三道门 `xtask ax`：定稿屏给屏幕阅读器的每一样东西，客户端也给 |
+
+**顺带落地的、卡面没写而实测要求的一条**：`class:` 字面量的零规则类名 **31 → 0**。§8-53 C 当时的裁定是「不逐个补，旧页的类随页一起退役」，而那条裁定的参数动了：`approval`／`settings`／`ledger_view`／`building_view`／`archive_search`／`reach` **没有退役**，它们成了六个目的地里四个的组成部分。给活着的页补样式不是给要拆的东西加固。
 
 #### E 继承而不重议的约束（v0.0.2 已裁定，仍然成立）
 
@@ -1561,6 +1563,24 @@ issue #1 的「使用起来过于抽象」有一半在词上：**城、楼、房
 | 门道效应：换页丢上下文 | Session 页头重述你在哪一间房 |
 | 分块：7±2 | 五个目的地、三个区域 |
 
+### 8-57 Dioxus 停在 0.7 稳定版，以及让它重新定价的那个参数（V3.09 附带裁定）
+
+计划卡面允许升到 `0.8.0-alpha.1`。**不升，理由是买不到东西而要付三笔。**
+
+**0.8 在做的事这个仓库不用。** 官方路线图写明 0.8 主攻 *Native APIs、跨平台、修 bug*，并说「没有大改 state management 或 fullstack 的打算」；headline 是 Swift/Kotlin FFI、原生控件、dioxus-native/blitz 的渲染能力。本仓的交付目标是 `wasm32` 上的 web 渲染器，`default-features = false` 加 `["minimal"]`／`["web"]`——0.8 的成果整个落在另一条腿上。
+
+**要付的三笔：**
+
+1. **alpha 依赖。** 0.8.0-alpha.0 的发布说明自己写着「合并了若干内部 API 的破坏性变更与行为微调」。
+2. **`dx` CLI 与 crate 的版本裂开。** `dx translate` 是四步法第 2 步，是这套工艺的承重墙；本机装的是 `dx 0.7.10`。把 crate 升到 0.8 而 CLI 留在 0.7，是在整个方法唯一的接缝上引入 RSX 语法漂移——而那正是这套方法存在要消除的那类损失。
+3. **`wasm-bindgen` CLI 的版本必须等于 crate 版本**（AGENTS.md 明写）。跨大版本升级会同时移动这个钉子，而它对不上时是**最安静的**一种坏法。
+
+**重新定价条件**（按 AGENTS.md「每一条排除架构的规则都要带重新定价条件」）：
+
+> 满足**其一**即重新论证：①Dioxus 0.8 出稳定版且 `dx` 稳定版随之发布；②本仓要出一个非 web 的目标（桌面／移动），届时 0.8 的原生面就从「用不上」变成「正是要的」；③0.7 线出现本仓踩到且 0.8 已修的缺陷。
+>
+> 这条排除的是一种架构而不是一个缺陷，所以它会过期，而上面三个是它过期的样子。
+
 ## 9 工作流程
 
 （随 S4.05 填：从 `socket` 建连、握手校验、事件流入口，到 `app` 求值视图、DOM 应用与画布绘制的完整通路。）
@@ -1600,7 +1620,7 @@ issue #1 的「使用起来过于抽象」有一半在词上：**城、楼、房
 - `justfile`：新增 `build-web` 配方（触碰受保护文件，须 `Verdict:` 尾注）。
 - 根 `Cargo.toml`：`workspace.dependencies` 增 dioxus／wasm-bindgen／web-sys（同上，须 `Verdict:` 尾注）。
 - `xtask color`：S4 起上线，数据面即本 crate 的 `theme` 常量（ARCHITECTURE §8 门表）。
-- `xtask zerojs`：wasm-bindgen 产物不计（门表已写明豁免），但 `just build-web` 与 CI 步骤仍受该门约束。
+- ~~`xtask zerojs`~~：该门 V3.25a 已删除，门数 13 → 12；V3.15 新增 `xtask ax`，门数回到 13。理由见 §8-57。
 - ARCHITECTURE §6 模块表 web 十行：随各卡从「未建」翻「已建」。
 
 ## 16 测试与约束

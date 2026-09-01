@@ -320,8 +320,8 @@ pub fn runtime::turn::Turn<runtime::turn::Assembling>::assemble(self, runtime::t
 pub fn runtime::turn::Turn<runtime::turn::Assembling>::assemble(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &runtime::prefix::FrozenPrefix, &runtime::turn::Window, &[kernel::model::ToolDef], &runtime::turn::CallShape) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Calling>>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::Assembling>::begin(kernel::event::RunId, alloc::string::String, kernel::event::TimeMs) -> runtime::turn::Turn<runtime::turn::Assembling>
 pub fn runtime::turn::Turn<runtime::turn::Assembling>::begin(kernel::event::RunId, alloc::string::String, kernel::event::TimeMs) -> runtime::turn::Turn<runtime::turn::Assembling>
-pub fn runtime::turn::Turn<runtime::turn::Calling>::call(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
-pub fn runtime::turn::Turn<runtime::turn::Calling>::call(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
+pub fn runtime::turn::Turn<runtime::turn::Calling>::call<'sink>(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy, core::option::Option<&mut (dyn core::ops::function::FnMut(&str) + 'sink)>) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
+pub fn runtime::turn::Turn<runtime::turn::Calling>::call<'sink>(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy, core::option::Option<&mut (dyn core::ops::function::FnMut(&str) + 'sink)>) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::Recording>::record(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::TurnReport>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::Recording>::record(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::TurnReport>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::ToolWave>::execute(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Recording>>, kernel::error::AxError>
@@ -439,6 +439,7 @@ pub runtime::ProviderMode::LocalOnly
 pub runtime::ProviderMode::Normal
 pub runtime::ResumeSeed::must_read: alloc::vec::Vec<kernel::locator::Locator>
 pub runtime::ResumeSeed::run: kernel::event::RunId
+pub runtime::RunHooks::deltas: core::option::Option<&'a mut (dyn core::ops::function::FnMut(&str) + 'a)>
 pub runtime::RunHooks::fence: core::option::Option<&'a mut dyn core::ops::function::FnMut(kernel::event::TimeMs) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>>
 pub runtime::RunHooks::interrupt: &'a mut dyn core::ops::function::FnMut(runtime::run::SafePoint) -> runtime::turn::Interrupt
 pub runtime::RunHooks::invoke: &'a mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall, kernel::event::TimeMs) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
@@ -612,6 +613,7 @@ pub runtime::replay::VerifiedLine::Known::echo: kernel::event::EventRef
 pub runtime::replay::VerifiedLine::Known::record: kernel::event::EventRecord
 pub runtime::run::Advance::Concluded(kernel::completion::Completion)
 pub runtime::run::Advance::Turned
+pub runtime::run::RunHooks::deltas: core::option::Option<&'a mut (dyn core::ops::function::FnMut(&str) + 'a)>
 pub runtime::run::RunHooks::fence: core::option::Option<&'a mut dyn core::ops::function::FnMut(kernel::event::TimeMs) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>>
 pub runtime::run::RunHooks::interrupt: &'a mut dyn core::ops::function::FnMut(runtime::run::SafePoint) -> runtime::turn::Interrupt
 pub runtime::run::RunHooks::invoke: &'a mut dyn core::ops::function::FnMut(&kernel::tool::ToolCall, kernel::event::TimeMs) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>

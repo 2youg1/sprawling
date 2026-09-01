@@ -82,6 +82,12 @@ pub enum LinkAction {
     Deliver(Box<EventRecord>),
     /// Hand a query answer to whichever view asked for it.
     Answered(Box<channels::Answer>),
+    /// Hand text a model is still saying to the page showing that run.
+    ///
+    /// Never `Deliver`: an increment has no sequence number and is never
+    /// written down, so folding it into the snapshot would put something
+    /// on screen that no replay could produce.
+    Saying(channels::Delta),
     /// Sleep this long, then feed back `WaitElapsed`.
     WaitMs(u64),
     /// Show this and stop. The interface renders the three-part refusal.
@@ -171,7 +177,9 @@ impl Link {
                 ServerFrame::Refusal(err) => self.refuse(*err),
                 // A server that streams or answers before welcoming is not
                 // speaking this protocol; treat it as the mismatch it is.
-                ServerFrame::Event(_) | ServerFrame::Answer(_) => self.refuse(out_of_order()),
+                ServerFrame::Event(_) | ServerFrame::Answer(_) | ServerFrame::Delta(_) => {
+                    self.refuse(out_of_order())
+                }
             },
 
             (LinkState::Live { resume_from }, LinkEvent::Received(frame)) => {
@@ -187,6 +195,10 @@ impl Link {
                         self.state = LinkState::Live { resume_from };
                         LinkAction::Answered(answer)
                     }
+                    // Text arriving mid-call. It does not advance
+                    // `resume_from`: nothing here is recoverable from the
+                    // ledger, because nothing here is in it.
+                    ServerFrame::Delta(delta) => LinkAction::Saying(delta),
                     ServerFrame::Refusal(err) => LinkAction::Report(err),
                     ServerFrame::Welcome(_) => {
                         self.state = LinkState::Live { resume_from };

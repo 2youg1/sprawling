@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling — 记录</title>
+<!--
+  Three lenses over one history, at one destination. They were three
+  pages with three nav entries, and a person had to choose between them
+  before knowing what they were looking for — which is the wrong order,
+  because the choice only makes sense once the question is formed.
+
+  The lens is in the address, so a link to the archive is still a link to
+  the archive: a reader who sends somebody a link sends them what they
+  were looking at.
+
+  Run `cargo test -p web` once before opening this file.
+-->
+<link rel="stylesheet" href="../../../target/screens/tokens.css">
+<link rel="stylesheet" href="../assets/app.css">
+</head>
+<body>
+<main class="layout">
+
+  <header class="top-bar">
+    <span class="address">记录</span>
+    <span class="counts">
+      <span><b>3</b> 在跑</span>
+      <span><b>2</b> 等你</span>
+      <span><b>5</b> 栋楼</span>
+    </span>
+  </header>
+
+  <nav class="left-nav">
+    <div class="nav-group">
+      <a class="nav-item" href="#/">在做的事</a>
+      <a class="nav-item" href="#/waiting">等我的<span class="badge">2</span></a>
+      <a class="nav-item" href="#/record" aria-current="page">记录</a>
+      <a class="nav-item" href="#/cost">花销</a>
+      <a class="nav-item" href="#/setup">设置</a>
+    </div>
+    <div class="city-state">
+      <p class="standing">这座城在运转。</p>
+      <button type="button" class="quiet">停下这座城</button>
+    </div>
+  </nav>
+
+  <section class="centre">
+
+    <header class="record-head">
+      <h1 class="address">记录</h1>
+      <p class="panel-scope">这座城写下来的东西，一段历史的三个镜头。</p>
+    </header>
+
+    <nav class="session-tabs">
+      <a class="tab" href="#/record" aria-current="page">账本</a>
+      <a class="tab" href="#/record/archive">归档</a>
+      <a class="tab" href="#/record/bin">回收站</a>
+    </nav>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">这座城写下过 48210 条</h2>
+        <span class="panel-figure">48210</span>
+      </div>
+      <p class="panel-scope">只能追加，可以离线验。这一页拿的是这个标签页手里的那一段。</p>
+      <div class="panel-body">
+        <ol class="lines">
+          <li class="line">
+            <span class="seq">48210</span>
+            <span class="at">tool_result</span>
+            <span class="who">lab/parser</span>
+          </li>
+          <li class="line">
+            <span class="seq">48209</span>
+            <span class="at">tool_called</span>
+            <span class="who">lab/parser</span>
+          </li>
+        </ol>
+      </div>
+      <p class="panel-source">用 <code>sprawling replay</code> 可以离线把这条链从头验一遍。</p>
+    </section>
+
+  </section>
+
+</main>
+</body>
+</html>

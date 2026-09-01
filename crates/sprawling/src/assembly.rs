@@ -524,6 +524,22 @@ fn endpoints_answer(book: &gateway::EndpointBook) -> channels::EndpointsAnswer {
     channels::EndpointsAnswer { endpoints, chosen }
 }
 
+/// What the digest model is told when it is asked to name a piece of
+/// work.
+///
+/// Short on purpose, and it states the shape of a legal answer rather
+/// than trusting one: `SessionName::parse` is the authority and refuses
+/// anything with a separator in it, so a prompt that did not say "one
+/// segment" would spend a call to be refused.
+const NAME_THE_WORK: &str = "Name this piece of work in two to four words, joined by hyphens, in \
+     lowercase ASCII. Answer with the name alone: no path, no quotes, no \
+     explanation. Example: refactor-ledger-reads";
+
+/// How many tokens a name is worth. Four words do not need more, and a
+/// ceiling is what stops a model that decided to explain itself from
+/// costing a person real money for a filename.
+const NAME_TOKENS: u64 = 32;
+
 /// The mode a wire tag names. An unknown tag is the planning mode: a
 /// mode nobody implemented must not silently become a stricter or a
 /// looser one, and planning is the mode that demands nothing.
@@ -535,6 +551,20 @@ fn mode_of(tag: &channels::ModeTag) -> runtime::Mode {
         "experiment" => runtime::Mode::Experiment,
         _ => runtime::Mode::PlanGoal,
     }
+}
+
+/// The answer to a verb this build spells on the wire and cannot perform.
+///
+/// One authority for the shape, because the six of them differ only in
+/// which action failed, what it named, and what a person can do instead.
+/// `WireMismatch` rather than `InvalidArgs`: the frame is well formed and
+/// its arguments are sound, and what is absent is the executor.
+///
+/// A verb answered here must not appear as a control in the client. A
+/// refusal is what the city owes a peer that asks anyway; it is not a
+/// substitute for the button being gone.
+fn not_built(action: &'static str, subject: String, instead: &'static str) -> AxError {
+    AxError::failure(AxCode::WireMismatch, action, subject).with_recovery(instead)
 }
 
 /// Reads every building's `Roadmap.md` and tallies it.
@@ -1827,6 +1857,12 @@ pub struct RunWorker {
     /// worker driven one command at a time, which is every worker except
     /// the one behind a live control surface.
     interrupts: Option<Box<dyn FnMut(RunId) -> Interrupt + Send>>,
+    /// Where a model's text goes while it is still arriving. `None` in
+    /// every worker but the one behind a live control surface, and that
+    /// is the switch: a run whose city has nobody watching asks its
+    /// provider for no stream at all, so replay and citysim take the
+    /// byte-identical path they always took.
+    watching: Option<std::sync::Arc<dyn Fn(channels::Delta) + Send + Sync>>,
     /// What waits for a person, who may answer it, what has been
     /// allowed, which scopes are shut, and what each waiting item is
     /// holding up. The worker keeps its own copy for the same reason it
@@ -2027,6 +2063,7 @@ impl RunWorker {
             book,
             vault: Arc::new(std::sync::Mutex::new(vault)),
             interrupts: None,
+            watching: None,
             governance,
             inboxes: collaboration.inboxes,
             joins: collaboration.joins,
@@ -2980,6 +3017,9 @@ impl RunWorker {
         run_id: RunId,
     ) -> Result<Driven, AxError> {
         let mut now = || now_ms();
+        // Taken before the hooks borrow `self`: the sink outlives one
+        // drive and belongs to the worker, not to this call.
+        let watching = self.watching.clone();
         let bench_who = who.to_owned();
         let mut fence_point =
             memory::Checkpoint::open(write_root).map_err(memory::MemoryError::into_ax)?;
@@ -3122,11 +3162,25 @@ impl RunWorker {
                 }
                 Ok(payload)
             };
+            // Where text goes while the model is still saying it. The
+            // sink is whatever the assembly layer was given - a socket
+            // task in a running city, nothing at all in citysim and in
+            // replay - so a run with nobody watching asks the provider
+            // for no stream and behaves exactly as it always did.
+            let mut watched = |said: &str| {
+                if let Some(onto) = watching.as_ref() {
+                    onto(channels::Delta {
+                        run: run_id,
+                        text: said.to_owned(),
+                    });
+                }
+            };
             let mut hooks = RunHooks {
                 now: &mut now,
                 interrupt: &mut interrupt,
                 fence: Some(&mut fence),
                 invoke: &mut invoke,
+                deltas: watching.is_some().then_some(&mut watched),
             };
             drive(plan, &mut self.ledger, adapter, &mut hooks, handoff)
         };
@@ -4059,6 +4113,18 @@ impl RunWorker {
         self.ledger.observe(sink);
     }
 
+    /// Sends every increment a model produces to `sink`, before the call
+    /// it belongs to has settled.
+    ///
+    /// Separate from [`Self::observe`] because the two carry different
+    /// kinds of thing: that one carries history and this one carries a
+    /// view of work in progress. A city with nobody watching never
+    /// installs one, and a run whose city has none asks its provider for
+    /// no stream at all.
+    pub(crate) fn watch(&mut self, sink: std::sync::Arc<dyn Fn(channels::Delta) + Send + Sync>) {
+        self.watching = Some(sink);
+    }
+
     /// # Errors
     /// Refuses a command this stage does not run yet, naming what does.
     pub fn handle(&mut self, command: channels::Command) -> Result<(), AxError> {
@@ -4120,6 +4186,15 @@ impl RunWorker {
                 budget,
                 ..
             } => {
+                // An empty goal is not a missing field. It already means
+                // something here, and the meaning is better than the one
+                // a filled-in copy of the task would carry: no job file
+                // is written and the prefix tells the model a person is
+                // at the other end. That is exactly the shape a single
+                // sentence typed into the composer has, so the composer
+                // sends the goal empty and this reads it as it always
+                // did.
+                let session = self.session_for(&addr, session, &task)?;
                 let addr = self.room_for(addr, session.as_ref())?;
                 // Written into the session's own layer rather than held
                 // beside the run: the ladder that resolves city ->
@@ -4214,12 +4289,65 @@ impl RunWorker {
             } => self.fork(run, at_seq, addr).map(|_| ()),
             channels::Command::Halt { scope, .. } => self.set_admission(&scope, HALTED),
             channels::Command::Release { scope, .. } => self.set_admission(&scope, RELEASED),
-            other => Err(AxError::failure(
+            // Cancel and Steer have a second door. `Desk::interrupt_for`
+            // lifts them off the queue at the next safe point of the run
+            // they name, so arriving here means no run answered - which
+            // is what the refusal says, instead of naming the verb.
+            channels::Command::Cancel { run, .. } => Err(AxError::failure(
                 AxCode::InvalidArgs,
-                "run a command",
-                other.name().to_owned(),
+                "cancel a run",
+                run.to_string(),
             )
-            .with_recovery("this stage runs Dispatch; the rest land with their cards")),
+            .with_recovery(
+                "no run in flight answers to that id: it has already finished, or it never started",
+            )),
+            channels::Command::Steer { run, .. } => Err(AxError::failure(
+                AxCode::InvalidArgs,
+                "steer a run",
+                run.to_string(),
+            )
+            .with_recovery(
+                "no run in flight answers to that id: steer one while it runs, or dispatch a new one",
+            )),
+            // Six verbs the wire spells and this city cannot perform.
+            // Answered one at a time rather than by a catch-all, so that
+            // a Command added without an executor stops the build here:
+            // `channels::Command` is deliberately not `non_exhaustive`,
+            // and this match is what that decision buys.
+            channels::Command::Takeover { run, .. } => Err(not_built(
+                "take over a run",
+                run.to_string(),
+                "steer the run instead; taking the wheel from it is not built",
+            )),
+            channels::Command::Rollback { checkpoint, .. } => Err(not_built(
+                "roll a checkpoint back",
+                checkpoint.to_string(),
+                "the checkpoint stands and its contents are readable; undoing it is not built",
+            )),
+            channels::Command::CreatePolicy { from_item, .. } => Err(not_built(
+                "turn an answer into a policy",
+                from_item.as_str().to_owned(),
+                "answer each request as it arrives; standing policies are not built",
+            )),
+            channels::Command::Attach { upload, .. } => Err(not_built(
+                "attach an upload to a run",
+                upload.as_str().to_owned(),
+                "paste the text into the task instead; attaching a file is not built",
+            )),
+            channels::Command::BatchByBuilding { addr, .. } => Err(not_built(
+                "run a building's work as one batch",
+                addr.as_str().to_owned(),
+                "dispatch the rooms one at a time; batching a building is not built",
+            )),
+            // The handshake is where a peer proves who it is: `Hello`
+            // carries the pairing token and `channels::server` judges it
+            // before any command is read. A second door for the same
+            // question would be a second authority on it.
+            channels::Command::Auth { .. } => Err(not_built(
+                "authenticate over the command channel",
+                "Auth".to_owned(),
+                "the pairing token is proved in the handshake, not in a command",
+            )),
         }
     }
 
@@ -4747,6 +4875,112 @@ impl RunWorker {
     /// two sessions started from the same screen do not write over each
     /// other's files. An unnamed one is a person continuing what is
     /// already at that address.
+    /// What this piece of work should be called, when the person did not
+    /// say.
+    ///
+    /// A person who writes one sentence has named the work in it, and
+    /// making them name it twice is the ceremony this interface exists
+    /// to remove. So an address that names a building with no session
+    /// beside it is answered here, by asking the cheapest model this
+    /// city has for a short name.
+    ///
+    /// **A refusal, never a guess.** When no model answers, when the
+    /// answer is not a legal session name, or when the address already
+    /// names a room, this returns what it was given. The failure a
+    /// person then sees names the field they have to fill, and the
+    /// composer opens that one control — which is the whole reason the
+    /// fallback is a refusal rather than a name this city made up. A run
+    /// living in a room somebody did not choose cannot be found again by
+    /// the name they would look for.
+    fn session_for(
+        &mut self,
+        addr: &Address,
+        session: Option<kernel::SessionName>,
+        task: &str,
+    ) -> Result<Option<kernel::SessionName>, AxError> {
+        if session.is_some() {
+            return Ok(session);
+        }
+        // An address with a room in it is already a session: this is the
+        // shape a second dispatch into an open session takes, and naming
+        // it again would open a room inside a room.
+        if addr.as_str().contains('/') {
+            return Ok(None);
+        }
+        let Some(named) = self.name_the_work(task) else {
+            return Err(AxError::failure(
+                AxCode::InvalidArgs,
+                "work out what to call this work",
+                addr.as_str().to_owned(),
+            )
+            .with_recovery(
+                "name the room yourself: send the work to `building/name` rather than to \
+                 `building`",
+            ));
+        };
+        Ok(Some(named))
+    }
+
+    /// One cheap model call, turning a task into a short room name.
+    ///
+    /// The digest tag, which is this city's word for the small model
+    /// that reads so the main one does not have to. Naming a piece of
+    /// work is exactly that shape of job, and putting it on the main
+    /// model would charge a person reasoning tokens for a filename.
+    ///
+    /// `None` for every failure this can have — no model registered for
+    /// the tag, a call that did not come back, an answer that is not a
+    /// legal session name. The caller turns that into a refusal naming
+    /// the field, so a failure here costs a person one field rather than
+    /// putting their work somewhere they will not look for it.
+    fn name_the_work(&mut self, task: &str) -> Option<kernel::SessionName> {
+        let chosen = self
+            .book
+            .select(kernel::ModelTag::Digest, &kernel::BuildingPolicy::default())
+            .ok()?;
+        let model_id = chosen.entry.id.clone();
+        let mut adapter = self.adapter_for(&chosen).ok()?;
+        let answer = adapter
+            .call(&kernel::ModelRequest {
+                policy: kernel::BuildingPolicy::default(),
+                segments: [kernel::B3Hash::digest(b""); 4],
+                chat: kernel::ChatRequest {
+                    model: model_id,
+                    max_tokens: NAME_TOKENS,
+                    system: vec![kernel::SystemBlock {
+                        text: NAME_THE_WORK.to_owned(),
+                        cache: false,
+                    }],
+                    messages: vec![kernel::ChatMessage {
+                        role: kernel::Role::User,
+                        content: vec![kernel::ContentBlock::Text {
+                            text: task.to_owned(),
+                        }],
+                    }],
+                    tools: Vec::new(),
+                    effort: None,
+                },
+            })
+            .ok()?;
+        // The model is asked for one word and sometimes writes a
+        // sentence around it. The first line, stripped of the
+        // punctuation an answer tends to arrive wrapped in, is what is
+        // offered to the parser — and the parser decides, not this.
+        let said = kernel::content_from_message(&answer.message)
+            .ok()?
+            .into_iter()
+            .find_map(|block| match block {
+                kernel::ContentBlock::Text { text } => Some(text),
+                _ => None,
+            })?;
+        let candidate = said
+            .lines()
+            .next()?
+            .trim()
+            .trim_matches(|glyph: char| glyph == '`' || glyph == '"' || glyph == '.');
+        kernel::SessionName::parse(candidate).ok()
+    }
+
     fn room_for(
         &self,
         addr: Address,
@@ -5397,6 +5631,10 @@ pub struct Serving {
 /// # Errors
 /// Propagates whatever opening the history reports, a thread the
 /// platform will not start, and a worker that ended before reporting.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the assembly point's own wiring: every argument is one seam this thread owns"
+)]
 fn spawn_worker(
     city_root: &Path,
     vault: gateway::Custodian,
@@ -5404,6 +5642,7 @@ fn spawn_worker(
     log: runtime::diagnostics::Diagnostics,
     views: Arc<std::sync::Mutex<Views>>,
     to_clients: tokio::sync::broadcast::Sender<EventRecord>,
+    to_watchers: tokio::sync::broadcast::Sender<channels::Delta>,
     worker_desk: Arc<CommandDesk>,
 ) -> Result<std::thread::JoinHandle<()>, AxError> {
     let (ready_tx, ready_rx) = mpsc::sync_channel::<Result<(), AxError>>(0);
@@ -5425,6 +5664,14 @@ fn spawn_worker(
                     return;
                 }
             };
+            // Somebody is watching, so runs ask their provider to
+            // stream. A worker without this call never installs a sink,
+            // and its runs take the blocking path unchanged.
+            worker.watch(std::sync::Arc::new(move |delta: channels::Delta| {
+                // No subscribers is not a failure: a city with no browser
+                // open is a city doing its work.
+                let _ = to_watchers.send(delta);
+            }));
             worker.observe(Box::new(move |record: &EventRecord| {
                 if let Ok(mut views) = views.lock() {
                     // A record the views refuse to fold is reported and
@@ -5558,6 +5805,11 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
     // owns the ledger, so a city has a single writer no matter how many
     // tabs are open; the socket tasks only read from the broadcast.
     let (events, _first) = tokio::sync::broadcast::channel(1024);
+    // Increments, on their own channel. Smaller and separate: an
+    // increment nobody received is nothing, and sharing the event
+    // channel would let a talkative model push records out of a slow
+    // reader's window.
+    let (deltas, _watching) = tokio::sync::broadcast::channel(256);
     // The views the control surface reads. Rebuilt from the ledger here,
     // folded forward by the write observer inside the worker: one fold
     // rule, two call sites, no second definition of what a view means.
@@ -5596,6 +5848,7 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
         log,
         Arc::clone(&views),
         events.clone(),
+        deltas.clone(),
         Arc::clone(&desk),
     )?;
 
@@ -5611,6 +5864,7 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
             },
         ),
         events,
+        deltas,
         city: city_name,
         secrets: Arc::new(move |command: channels::Command, reply: channels::Reply| {
             // The route waits for whichever comes first, so the
@@ -10965,7 +11219,14 @@ addr = \"gone/room1\"
     }
 
     #[test]
-    fn a_command_this_stage_does_not_run_is_refused_by_name() {
+    fn a_command_with_no_executor_is_refused_by_name_and_not_by_stage() {
+        // What this replaced: one catch-all whose recovery read "this
+        // stage runs Dispatch; the rest land with their cards", which is
+        // a sentence about a build stage that ended. Eight commands
+        // reached it, three of them from buttons this client used to
+        // draw, and a person pressing one learned nothing they could act
+        // on. The match is exhaustive now, so a command added without an
+        // executor stops the build rather than reaching a person.
         let dir = tempfile::tempdir().unwrap();
         init_city(dir.path()).unwrap();
         let mut worker = RunWorker::new(
@@ -10974,13 +11235,44 @@ addr = \"gone/room1\"
             runtime::diagnostics::Diagnostics::off(),
         )
         .unwrap();
-        let err = worker
+
+        // Cancel has a second door - the desk lifts it off the queue at
+        // the next safe point of the run it names - so arriving here
+        // means no run answered, and the refusal says that rather than
+        // naming the verb.
+        let missing = worker
             .handle(channels::Command::Cancel {
                 run: RunId::CITY,
                 idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"cancel"),
             })
             .unwrap_err();
-        assert!(err.recovery().contains("Dispatch"));
+        assert_eq!(*missing.code(), AxCode::InvalidArgs);
+        assert!(
+            missing.recovery().contains("no run in flight"),
+            "the refusal names the run, not the build stage: {}",
+            missing.recovery()
+        );
+        assert!(!missing.recovery().contains("cards"));
+
+        // A verb the wire spells and this city cannot perform. It says
+        // so, and says what to do instead.
+        let unbuilt = worker
+            .handle(channels::Command::Takeover {
+                run: RunId::CITY,
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"takeover"),
+            })
+            .unwrap_err();
+        assert_eq!(*unbuilt.code(), AxCode::WireMismatch);
+        assert!(
+            unbuilt.recovery().contains("not built"),
+            "an unbuilt verb says so: {}",
+            unbuilt.recovery()
+        );
+        assert!(
+            unbuilt.recovery().contains("Steer") || unbuilt.recovery().contains("steer"),
+            "and names what to do instead: {}",
+            unbuilt.recovery()
+        );
     }
 
     #[test]

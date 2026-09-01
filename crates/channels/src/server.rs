@@ -354,6 +354,15 @@ pub struct ServeConfig {
     /// The event fan-out. This crate only subscribes; the writer is
     /// whoever owns the Ledger, because the ledger line is the event.
     pub events: broadcast::Sender<EventRecord>,
+    /// What a model is saying, while it is still saying it.
+    ///
+    /// A second channel rather than a second variant on the first,
+    /// because the two carry different kinds of thing and lag
+    /// differently: an increment a slow client missed is nothing, and an
+    /// event it missed is history it must recover. Sharing one channel
+    /// would let a burst of increments push records out of a reader's
+    /// window.
+    pub deltas: broadcast::Sender<crate::wire::Delta>,
     /// Answers a query from the city's derived views. Synchronous: a
     /// query reads a projection, and a projection that needed to block
     /// would be a query pretending to be a command.
@@ -373,6 +382,7 @@ struct ShellState {
     upload_sink: Arc<dyn Fn(Vec<u8>) -> Result<UploadId, AxError> + Send + Sync>,
     commands: Arc<dyn Fn(WireCommand, Reply) -> Result<(), AxError> + Send + Sync>,
     events: broadcast::Sender<EventRecord>,
+    deltas: broadcast::Sender<crate::wire::Delta>,
     queries: Arc<dyn Fn(Query) -> Result<Answer, AxError> + Send + Sync>,
     secrets: SecretSink,
     acp: AcpSink,
@@ -506,6 +516,7 @@ pub fn router(config: &ServeConfig) -> Router {
         upload_sink: Arc::clone(&config.upload_sink),
         commands: Arc::clone(&config.commands),
         events: config.events.clone(),
+        deltas: config.deltas.clone(),
         queries: Arc::clone(&config.queries),
         secrets: Arc::clone(&config.secrets),
         acp: Arc::clone(&config.acp),
@@ -697,6 +708,7 @@ async fn upgrade(State(state): State<Arc<ShellState>>, ws: WebSocketUpgrade) -> 
 async fn session(mut socket: WebSocket, state: Arc<ShellState>) {
     let mut phase = SessionState::AwaitingHello;
     let mut events = state.events.subscribe();
+    let mut deltas = state.deltas.subscribe();
     // This session's own refusals, which the worker posts into long
     // after the command was accepted. Unbounded because a refusal must
     // not be dropped and because its rate is the rate at which one
@@ -800,6 +812,21 @@ async fn session(mut socket: WebSocket, state: Arc<ShellState>) {
                     // ledger on reconnect.
                     Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(broadcast::error::RecvError::Closed) => return,
+                }
+            }
+            // Increments, on their own channel. Lag is ignored without a
+            // word: a missed increment is a missed frame of an animation,
+            // and the settled text arrives as a record either way.
+            said = deltas.recv() => {
+                match said {
+                    Ok(delta) => {
+                        if phase == SessionState::Live
+                            && send(&mut socket, &ServerFrame::Delta(delta)).await.is_err() {
+                            return;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => {}
                 }
             }
         }

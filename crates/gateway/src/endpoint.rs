@@ -18,6 +18,8 @@ use kernel::{
 };
 use serde_json::Value;
 
+use crate::dialect;
+
 use crate::cost;
 use crate::dialect::{request_wire, response_from_wire};
 use crate::market::ModelEntry;
@@ -221,22 +223,107 @@ impl Endpoint {
     }
 }
 
+impl Endpoint {
+    /// One call, with the body read as it arrives.
+    ///
+    /// **The answer is still the whole answer.** This asks the provider
+    /// to stream, reports the text as it lands, and then reads the
+    /// settled response out of the terminal frame — so what comes back
+    /// is what a non-streaming call would have returned, and a stream cut
+    /// halfway is a body read error rather than a shortened reply. The
+    /// increments are a thing to watch; they are never the record.
+    ///
+    /// Two dialects carry a settled answer at the end of their stream in
+    /// two shapes, and neither is worth a second parser: the request asks
+    /// for a stream only when the caller wants increments, and the reply
+    /// is reassembled through the same `response_from_wire` a blocking
+    /// call uses.
+    fn stream(
+        &mut self,
+        req: &ModelRequest,
+        onto: kernel::Increments<'_>,
+    ) -> Result<ModelReturn, AxError> {
+        let mut wire = self.wire_request(req)?;
+        if let Some(map) = wire.as_object_mut() {
+            map.insert("stream".to_owned(), Value::Bool(true));
+        }
+        let mut request = self
+            .client
+            .post(&self.config.base_url)
+            .header("content-type", "application/json")
+            .header("accept", "text/event-stream");
+        for (name, value) in &self.config.extra_headers {
+            request = request.header(name, value);
+        }
+        request = self.authorize(request)?;
+        let response = request
+            .json(&wire)
+            .send()
+            .map_err(|err| provider_err("call provider", transport_detail(&err)))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(provider_err(
+                "call provider",
+                format!("{} answered {}", self.config.base_url, status.as_u16()),
+            ));
+        }
+        let body = response
+            .text()
+            .map_err(|err| provider_err("read provider response", transport_detail(&err)))?;
+        let mut frames = Vec::new();
+        for line in body.lines() {
+            let Some(payload) = line.strip_prefix("data:") else {
+                continue;
+            };
+            let payload = payload.trim();
+            // The sentinel one dialect ends with. It is not JSON, and
+            // treating it as an unreadable frame would turn every
+            // successful stream into a warning.
+            if payload.is_empty() || payload == "[DONE]" {
+                continue;
+            }
+            // A frame this build cannot read is skipped rather than
+            // fatal: providers add event types, and a person watching
+            // text arrive must not lose a call because one of them was
+            // new. What cannot be skipped is the settled answer, and
+            // that is checked below.
+            let Ok(frame) = serde_json::from_str::<Value>(payload) else {
+                continue;
+            };
+            if let Some(text) = dialect::increment_of(self.config.dialect, &frame) {
+                onto(&text);
+            }
+            frames.push(frame);
+        }
+        let settled = dialect::settled_from_stream(self.config.dialect, &frames)?;
+        let resp = dialect::response_from_wire(self.config.dialect, &settled)?;
+        let billed: Option<UsdMicros> = match &self.config.pricing {
+            Some(entry) => Some(cost::settle(&resp.usage, None, entry)?.billed),
+            None => None,
+        };
+        ModelReturn::from_response(resp, billed)
+    }
+}
+
 impl Model for Endpoint {
+    fn call_streaming(
+        &mut self,
+        req: &ModelRequest,
+        onto: kernel::Increments<'_>,
+    ) -> Result<ModelReturn, AxError> {
+        if req.policy.confidential {
+            return Err(self.confidential_refusal());
+        }
+        self.stream(req, onto)
+    }
+
     fn call(&mut self, req: &ModelRequest) -> Result<ModelReturn, AxError> {
         // A confidential building's bytes do not leave the machine, and
         // this type is the way off it. The refusal is here rather than
         // only at the routing layer because a backstop that lives where
         // the leak would happen survives a routing mistake (P1.08).
         if req.policy.confidential {
-            return Err(AxError::failure(
-                AxCode::GateDenied,
-                "call a remote provider for a confidential building",
-                self.config.base_url.clone(),
-            )
-            .with_recovery(
-                "configure a local model for this building, or drop `confidential: true` \
-                 from its BUILDING.md and record why",
-            ));
+            return Err(self.confidential_refusal());
         }
         let wire = self.wire_request(req)?;
         let mut request = self
@@ -269,6 +356,23 @@ impl Model for Endpoint {
             None => None,
         };
         ModelReturn::from_response(resp, billed)
+    }
+}
+
+impl Endpoint {
+    /// The one sentence both doors say when a confidential building asks
+    /// to leave this machine. Written once because two copies of a
+    /// security refusal are two chances for one of them to soften.
+    fn confidential_refusal(&self) -> AxError {
+        AxError::failure(
+            AxCode::GateDenied,
+            "call a remote provider for a confidential building",
+            self.config.base_url.clone(),
+        )
+        .with_recovery(
+            "configure a local model for this building, or drop `confidential: true` \
+             from its BUILDING.md and record why",
+        )
     }
 }
 

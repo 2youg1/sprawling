@@ -298,12 +298,17 @@ impl Turn<Calling> {
     /// Boundary 2 (before the provider call). Appends `model_called` and
     /// `model_returned`; a provider Err propagates after nothing but the
     /// boundary consumption touched the ledger.
-    pub fn call(
+    /// `'sink` is named rather than elided because the caller holds the
+    /// sink for the whole run and hands it to every turn: with an elided
+    /// lifetime the reborrow would have to shrink the trait object's own
+    /// lifetime, which `&mut` does not permit.
+    pub fn call<'sink>(
         mut self,
         interrupt: Interrupt,
         ledger: &mut dyn Ledger,
         model: &mut dyn Model,
         policy: &BuildingPolicy,
+        deltas: Option<&mut (dyn FnMut(&str) + 'sink)>,
     ) -> Result<PhaseOutcome<Turn<ToolWave>>, AxError> {
         if let Some(cancelled) = self.consume_boundary(interrupt, ledger)? {
             return Ok(PhaseOutcome::Cancelled(cancelled));
@@ -339,7 +344,15 @@ impl Turn<Calling> {
             ig: false,
         })?;
         self.refs.push(echo);
-        let returned_value = model.call(&request)?;
+        // The streaming door when somebody is watching, the blocking one
+        // when nobody is. Both return the same `ModelReturn`, and the
+        // record below is written from that return in either case - so
+        // what a page sees arriving and what the ledger keeps cannot come
+        // from two different readings of one reply.
+        let returned_value = match deltas {
+            Some(onto) => model.call_streaming(&request, onto)?,
+            None => model.call(&request)?,
+        };
         let ModelReturn {
             message,
             calls,
@@ -701,6 +714,7 @@ mod tests {
                 &mut ledger,
                 &mut model,
                 &BuildingPolicy::default(),
+                None,
             )
             .unwrap(),
         );
@@ -780,6 +794,7 @@ mod tests {
                 &mut ledger,
                 &mut model,
                 &BuildingPolicy::default(),
+                None,
             )
             .unwrap();
         match outcome {
@@ -819,6 +834,7 @@ mod tests {
                 &mut ledger,
                 &mut model,
                 &BuildingPolicy::default(),
+                None,
             )
             .unwrap(),
         );
@@ -930,6 +946,7 @@ mod tests {
                 &mut ledger,
                 &mut model,
                 &BuildingPolicy::default(),
+                None,
             )
             .unwrap(),
         );
@@ -980,6 +997,7 @@ mod tests {
                 &mut ledger,
                 &mut model,
                 &BuildingPolicy::default(),
+                None,
             )
             .unwrap(),
         );

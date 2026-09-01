@@ -115,7 +115,7 @@ mod model;
 pub use model::SystemBlock;
 #[cfg(feature = "conformance")]
 pub use model::conformance as model_conformance;
-pub use model::{BuildingPolicy, Model, ModelRequest, ModelReturn};
+pub use model::{BuildingPolicy, Increments, Model, ModelRequest, ModelReturn};
 pub use model::{ChatMessage, ChatRequest, ChatResponse, ContentBlock, DialectKind, Effort};
 pub use model::{ModelTag, ModelUsage, Role, StopReason, ToolDef};
 pub use model::{content_from_message, message_payload, value_has_float};

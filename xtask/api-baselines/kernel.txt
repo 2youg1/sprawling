@@ -290,6 +290,7 @@ pub fn kernel::Locator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::
 pub fn kernel::Locator::parse(&str) -> core::result::Result<Self, kernel::AxError>
 pub fn kernel::Locator::serialize<S: serde_core::ser::Serializer>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error>
 pub fn kernel::Model::call(&mut self, &kernel::ModelRequest) -> core::result::Result<kernel::ModelReturn, kernel::AxError>
+pub fn kernel::Model::call_streaming(&mut self, &kernel::ModelRequest, kernel::Increments<'_>) -> core::result::Result<kernel::ModelReturn, kernel::AxError>
 pub fn kernel::ModelReturn::bare(kernel::Payload, alloc::vec::Vec<kernel::ToolCall>) -> kernel::ModelReturn
 pub fn kernel::ModelReturn::from_response(kernel::ChatResponse, core::option::Option<kernel::UsdMicros>) -> core::result::Result<kernel::ModelReturn, kernel::AxError>
 pub fn kernel::ModelTag::as_str(&self) -> &'static str
@@ -952,4 +953,5 @@ pub struct kernel::consts_policy::Ratio
 pub trait kernel::Ledger
 pub trait kernel::Model
 pub trait kernel::Tool
+pub type kernel::Increments<'a> = &'a mut dyn core::ops::function::FnMut(&str)
 pub type kernel::ServerLabel::Error = kernel::AxError

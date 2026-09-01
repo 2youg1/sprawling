@@ -53,6 +53,10 @@ pub enum Arrived {
     Answer(Box<Answer>),
     /// The city's answer to something a person tried to do.
     Refusal(Box<AxError>),
+    /// Text a model is still saying. Joined rather than superseded: each
+    /// one is a piece of a sentence, so keeping only the last would show
+    /// a person the final word of every burst.
+    Saying(channels::Delta),
 }
 
 /// What one paint does.
@@ -65,6 +69,10 @@ pub struct Paint {
     events: Vec<EventRecord>,
     answers: Vec<Answer>,
     refusal: Option<AxError>,
+    /// What each run said during this frame, already joined. One entry
+    /// per run rather than one per increment: a burst of forty is one
+    /// change to one page, which is the whole point of a paced client.
+    saying: Vec<channels::Delta>,
     superseded: usize,
 }
 
@@ -81,15 +89,25 @@ impl Paint {
     /// out separately would leave that ordering to whoever calls, which is
     /// how it would eventually be got wrong.
     #[must_use]
-    pub fn into_parts(self) -> (Vec<EventRecord>, Vec<Answer>, Option<AxError>) {
-        (self.events, self.answers, self.refusal)
+    pub fn into_parts(
+        self,
+    ) -> (
+        Vec<EventRecord>,
+        Vec<Answer>,
+        Option<AxError>,
+        Vec<channels::Delta>,
+    ) {
+        (self.events, self.answers, self.refusal, self.saying)
     }
 
     /// Whether this frame changes anything at all. A page that paints when
     /// nothing arrived is the animation this library does not have.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty() && self.answers.is_empty() && self.refusal.is_none()
+        self.events.is_empty()
+            && self.answers.is_empty()
+            && self.refusal.is_none()
+            && self.saying.is_empty()
     }
 
     /// How many answers this frame dropped as superseded. Reported rather
@@ -130,6 +148,15 @@ pub fn fold(arrived: impl IntoIterator<Item = Arrived>) -> Paint {
                 }
             }
             Arrived::Refusal(err) => paint.refusal = Some(*err),
+            // Joined per run, never replaced: an increment is a piece of
+            // a sentence, and keeping only the last one in a frame would
+            // show a person every fortieth word.
+            Arrived::Saying(delta) => {
+                match paint.saying.iter_mut().find(|held| held.run == delta.run) {
+                    Some(held) => held.text.push_str(&delta.text),
+                    None => paint.saying.push(delta),
+                }
+            }
         }
     }
     paint
@@ -250,7 +277,7 @@ mod tests {
     fn two_answers_to_one_question_are_one_answer_and_it_is_the_later_one() {
         let painted = fold([city(1), city(7)]);
         assert_eq!(painted.superseded(), 1);
-        let (_, answers, _) = painted.into_parts();
+        let (_, answers, _, _) = painted.into_parts();
         assert_eq!(answers.len(), 1);
         match &answers[0] {
             Answer::City(view) => assert_eq!(view.active, 7),
@@ -282,7 +309,7 @@ mod tests {
             Arrived::Refusal(Box::new(first)),
             Arrived::Refusal(Box::new(second)),
         ]);
-        let (_, _, refusal) = painted.into_parts();
+        let (_, _, refusal, _) = painted.into_parts();
         assert_eq!(refusal.as_ref().map(AxError::subject), Some("second"));
     }
 

@@ -56,16 +56,16 @@ pub struct Stroke<'a> {
 
 /// A destination the `g` sequence can reach.
 ///
-/// Five, and they are the five a person returns to while work is running.
-/// The remaining pages are a nav click away and are not places anybody
-/// goes to repeatedly, so binding them would spend letters to no end.
+/// Five, and they are the five the nav offers: a chord that reached
+/// somewhere the nav does not would be a second map of this client, and
+/// a chord that reached only some of the nav would be a map with holes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Place {
-    Overview,
-    City,
     Sessions,
-    Approvals,
-    Ledger,
+    Waiting,
+    Record,
+    Cost,
+    Setup,
 }
 
 /// What the client should do about a keystroke.
@@ -124,20 +124,20 @@ pub fn press(chord: Chord, stroke: &Stroke) -> (Chord, Act) {
 
 /// The second key of the `g` sequence.
 fn destination(key: &str) -> Act {
-    if key_is(key, "o") {
-        return Act::Go(Place::Overview);
-    }
-    if key_is(key, "c") {
-        return Act::Go(Place::City);
-    }
     if key_is(key, "s") {
         return Act::Go(Place::Sessions);
     }
-    if key_is(key, "a") {
-        return Act::Go(Place::Approvals);
+    if key_is(key, "w") {
+        return Act::Go(Place::Waiting);
     }
-    if key_is(key, "l") {
-        return Act::Go(Place::Ledger);
+    if key_is(key, "r") {
+        return Act::Go(Place::Record);
+    }
+    if key_is(key, "c") {
+        return Act::Go(Place::Cost);
+    }
+    if key_is(key, "e") {
+        return Act::Go(Place::Setup);
     }
     Act::Ignore
 }
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn a_letter_being_typed_is_never_a_command() {
         // Writing "goal" into the task box must not navigate on its `g`.
-        for key in ["g", "o", "c", "a", "l", "s", "?"] {
+        for key in ["g", "s", "w", "r", "c", "e", "?"] {
             assert_eq!(press(Chord::Idle, &typing(key)), (Chord::Idle, Act::Ignore));
         }
     }
@@ -222,11 +222,11 @@ mod tests {
     #[test]
     fn the_sequence_reaches_all_five_and_leaves_no_mode_behind() {
         let wanted = [
-            ("o", Place::Overview),
-            ("c", Place::City),
             ("s", Place::Sessions),
-            ("a", Place::Approvals),
-            ("l", Place::Ledger),
+            ("w", Place::Waiting),
+            ("r", Place::Record),
+            ("c", Place::Cost),
+            ("e", Place::Setup),
         ];
         for (key, place) in wanted {
             let (chord, act) = press(Chord::Idle, &bare("g"));
@@ -252,8 +252,8 @@ mod tests {
         );
         let (chord, _) = press(Chord::Idle, &bare("G"));
         assert_eq!(
-            press(chord, &bare("O")),
-            (Chord::Idle, Act::Go(Place::Overview))
+            press(chord, &bare("S")),
+            (Chord::Idle, Act::Go(Place::Sessions))
         );
     }
 

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling — lab/parser</title>
+<!--
+  The object page this product never had: one session, at an address a
+  person can read and send to somebody else.
+
+  The head answers the four questions somebody arrives with. Three of
+  them are answerable today; the third is drawn as an em rule because the
+  wire does not carry it, and the line under the head says so. A number
+  invented there would be the one fact a person is most likely to act on.
+
+  Run `cargo test -p web` once before opening this file.
+-->
+<link rel="stylesheet" href="../../../target/screens/tokens.css">
+<link rel="stylesheet" href="../assets/app.css">
+</head>
+<body>
+<main class="layout">
+
+  <header class="top-bar">
+    <span class="address">lab/parser</span>
+    <span class="counts">
+      <span><b>3</b> 在跑</span>
+      <span><b>2</b> 等你</span>
+      <span><b>5</b> 栋楼</span>
+    </span>
+  </header>
+
+  <nav class="left-nav">
+    <div class="nav-group">
+      <a class="nav-item" href="#/" aria-current="page">在做的事</a>
+      <a class="nav-item" href="#/waiting">等我的<span class="badge">2</span></a>
+      <a class="nav-item" href="#/record">记录</a>
+      <a class="nav-item" href="#/cost">花销</a>
+      <a class="nav-item" href="#/setup">设置</a>
+    </div>
+    <div class="city-state">
+      <p class="standing">这座城在运转。</p>
+      <button type="button" class="quiet">停下这座城</button>
+    </div>
+  </nav>
+
+  <section class="centre">
+
+    <header class="session-head">
+      <a class="session-back" href="#/">全部会话</a>
+      <h1 class="address">
+        <span class="phase running" role="img" aria-label="在跑"></span>
+        <span class="room">lab/parser</span>
+        <span class="turn">第 7 轮</span>
+      </h1>
+      <p class="session-facts">
+        <span class="fact">花了 $0.42</span>
+        <span class="fact">停在 exec 这道门</span>
+        <span class="fact unknown">上下文 ——</span>
+        <span class="fact">Handoff 三轮前写过</span>
+      </p>
+      <p class="panel-scope">一间房里的一条工作线。它做过的一切在下面的标签里。</p>
+      <p class="panel-scope">上下文余量是这四格里唯一线上还没有的：城里量得到，没有任何查询答得出它。</p>
+    </header>
+
+    <nav class="session-tabs">
+      <button type="button" class="tab" aria-current="page">轮次</button>
+      <button type="button" class="tab">改动</button>
+      <button type="button" class="tab">花费</button>
+      <button type="button" class="tab">文档</button>
+    </nav>
+
+    <p class="said saying">正在读 crates/kernel/src/ledger.rs，看它每次取行都做了什么</p>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">这条会话做了什么</h2>
+        <span class="panel-figure">7</span>
+      </div>
+      <p class="panel-scope">一轮是一行，展开才有细节。</p>
+      <div class="panel-body">
+        <div class="turn">
+          <div class="turn-head">
+            <span class="n">7</span>
+            <span class="count">2 次调用</span>
+            <span class="spent">$0.07</span>
+          </div>
+          <p class="said">句柄复用已经落了，索引常驻还没动。</p>
+        </div>
+        <div class="turn">
+          <div class="turn-head">
+            <span class="n">6</span>
+            <span class="count">1 次调用</span>
+            <span class="spent">$0.05</span>
+          </div>
+          <p class="said">先把读取路径量一遍，再决定改哪一处。</p>
+        </div>
+      </div>
+      <p class="panel-source">来自这条会话在事件流里的那一段。</p>
+    </section>
+
+  </section>
+
+</main>
+</body>
+</html>

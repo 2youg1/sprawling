@@ -316,3 +316,15 @@ golden：两 Dialect 各一请求一响应（insta）；proptest：响应往返�
 ## 18 文档同步
 
 ARCHITECTURE §6 gateway 表逐卡状态翻转；§6 接线台账登记（endpoint/native 生产消费者＝S3 回合层与 assembly；credential 消费者＝endpoint＋S4 PutSecret）；kernel-SPEC §8-24 同集改（S3.01 落 canonical 类型时）；api-baseline 含 gateway 起算（SPEC 既存，apisync 自动入集）。
+
+### 逐字读一次调用（V3.12；形状 3 适配器）
+
+`Endpoint` 覆盖 `Model::call_streaming`：请求带 `stream: true`，逐行读 `data:`，把每一帧交给 `dialect::increment_of`，最后 `dialect::settled_from_stream` 把收集到的帧重装成**这个 dialect 非流式的那个形状**，再交给同一个 `response_from_wire`。
+
+**结算答案只有一个解析器。** 直接把流读成 `ChatResponse` 会立刻长出第二个权威：同一个回复，流式路径与阻塞路径可能得出两个结论。重装成非流式形状是这条口径的全部实现。
+
+**`increment_of` 只认散文。** 各 dialect 各读各的：Anthropic 读 `delta.type == "text_delta"` 的 `delta.text`；OpenAI 读 `choices[0].delta.content`。**工具参数与 thinking 块一律不报**：半个工具参数不是短一点的工具参数，而 thinking 块是替 provider 转交签名用的、不是拿来发表的。它不返回 `Result`——一个读不出来的增量就是不显示的增量，一个显示细节不得有能力弄失败一次本来正常的调用。
+
+**认不出的帧跳过，缺失的结算帧不跳过。** provider 会加新的事件类型，一个人不该因为其中一个是新的就丢掉整次调用；但流在说明「为什么停」的那一帧之前结束，是 `Provider` 失败并且可重试——它和一个被截断的 body 是同一种失败，刻意不允许「保留已收到的增量」来补救：把不完整的回复当成完整的呈现出去，是这里唯一不能有的结局。
+
+**机密楼宇的拒绝写一次。** 两扇门（`call` 与 `call_streaming`）都说同一句话，出自同一个 `confidential_refusal`——一条安全拒绝有两份拷贝，就是两个各自变软的机会。

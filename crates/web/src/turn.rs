@@ -327,7 +327,11 @@ fn text(value: Option<&serde_json::Value>) -> Option<String> {
 /// Text blocks only. `Thinking` and `RedactedThinking` are carried end to
 /// end so the provider can verify the signature it issued; relaying them
 /// is this city's job and publishing them is not.
-fn said_in(message: &serde_json::Value) -> Option<String> {
+///
+/// Visible to the crate because the sessions list needs the same
+/// sentence the session page shows: a row saying one thing and the page
+/// under it saying another would be two readings of one record.
+pub(crate) fn said_in(message: &serde_json::Value) -> Option<String> {
     let blocks = message.as_object()?.get("content")?.as_array()?;
     let said: Vec<&str> = blocks
         .iter()

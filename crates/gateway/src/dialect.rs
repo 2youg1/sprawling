@@ -92,6 +92,257 @@ pub fn request_wire(kind: DialectKind, req: &ChatRequest) -> Result<Value, AxErr
     }
 }
 
+/// The text one server-sent event carries, if it carries any.
+///
+/// **Only text.** Thinking blocks and tool arguments also arrive in
+/// increments and neither may be shown while it is partial: half a tool
+/// argument is not a shorter tool argument, and a thinking block is
+/// relayed for the provider's signature rather than published. So this
+/// reads exactly the field each dialect uses for assistant prose and
+/// answers `None` for everything else, including every frame this build
+/// does not recognise.
+///
+/// No `Result`: an increment nobody can read is an increment not shown,
+/// and a display detail must not be able to fail a call that is
+/// otherwise going fine.
+#[must_use]
+pub fn increment_of(kind: DialectKind, frame: &Value) -> Option<String> {
+    let map = frame.as_object()?;
+    match kind {
+        // `content_block_delta` carries `delta.text` for a text block and
+        // `delta.partial_json` for a tool call. Reading the type rather
+        // than the presence of a field is what keeps a tool's arguments
+        // out of a person's reading pane.
+        DialectKind::Anthropic => {
+            let delta = map.get("delta")?.as_object()?;
+            (delta.get("type")?.as_str()? == "text_delta")
+                .then(|| delta.get("text")?.as_str().map(str::to_owned))?
+        }
+        // `choices[0].delta.content`, absent on the frames that carry a
+        // tool call or a finish reason.
+        DialectKind::OpenAi => map
+            .get("choices")?
+            .as_array()?
+            .first()?
+            .as_object()?
+            .get("delta")?
+            .as_object()?
+            .get("content")?
+            .as_str()
+            .map(str::to_owned),
+        _ => None,
+    }
+    .filter(|text| !text.is_empty())
+}
+
+/// The settled answer a stream ends with, in the shape a non-streaming
+/// call would have returned.
+///
+/// **One parser for the answer.** Reassembling here rather than reading
+/// the stream into a `ChatResponse` directly is what stops a second
+/// authority forming: `response_from_wire` remains the only code that
+/// decides what a provider said, so a streamed call and a blocking call
+/// cannot come to different conclusions about the same reply.
+///
+/// # Errors
+/// `Provider` when the stream ended without the frames that carry the
+/// answer. That is the same failure a truncated body is, and it is
+/// deliberately not recoverable by keeping the increments: a partial
+/// reply presented as a whole one is the one outcome this must not have.
+pub fn settled_from_stream(kind: DialectKind, frames: &[Value]) -> Result<Value, AxError> {
+    match kind {
+        DialectKind::Anthropic => anthropic_settled(frames),
+        DialectKind::OpenAi => openai_settled(frames),
+        _ => Err(AxError::failure(
+            AxCode::EndpointDialectUnsupported,
+            "read a streamed answer",
+            format!("{kind:?} is not a dialect this build speaks"),
+        )
+        .with_recovery("attach the endpoint as anthropic or openai")),
+    }
+}
+
+/// The failure both reassemblers share: the stream stopped before the
+/// provider said what it had said.
+fn stream_cut(detail: &str) -> AxError {
+    AxError::failure(
+        AxCode::Provider,
+        "read a streamed answer",
+        detail.to_owned(),
+    )
+    .with_recovery("dispatch again; the reply that arrived was not a whole one")
+    .retriable()
+}
+
+/// Anthropic streams one `content_block_start` per block, then deltas
+/// against it by index, then `message_delta` with the stop reason and the
+/// output count. The blocks are rebuilt in index order so a tool call
+/// that arrived interleaved with text still lands where it was.
+fn anthropic_settled(frames: &[Value]) -> Result<Value, AxError> {
+    let mut blocks: std::collections::BTreeMap<u64, Value> = std::collections::BTreeMap::new();
+    let mut text: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
+    let mut json: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
+    let mut usage = json!({});
+    let mut stop = None;
+    for frame in frames {
+        let Some(map) = frame.as_object() else {
+            continue;
+        };
+        let at = map.get("index").and_then(Value::as_u64).unwrap_or_default();
+        match map.get("type").and_then(Value::as_str) {
+            Some("message_start") => {
+                if let Some(held) = map.get("message").and_then(|held| held.get("usage")) {
+                    usage = held.clone();
+                }
+            }
+            Some("content_block_start") => {
+                if let Some(block) = map.get("content_block") {
+                    blocks.insert(at, block.clone());
+                }
+            }
+            Some("content_block_delta") => {
+                let Some(delta) = map.get("delta").and_then(Value::as_object) else {
+                    continue;
+                };
+                if let Some(said) = delta.get("text").and_then(Value::as_str) {
+                    text.entry(at).or_default().push_str(said);
+                }
+                if let Some(said) = delta.get("partial_json").and_then(Value::as_str) {
+                    json.entry(at).or_default().push_str(said);
+                }
+                if let Some(said) = delta.get("thinking").and_then(Value::as_str) {
+                    text.entry(at).or_default().push_str(said);
+                }
+            }
+            Some("message_delta") => {
+                if let Some(held) = map.get("delta").and_then(|held| held.get("stop_reason")) {
+                    stop = held.as_str().map(str::to_owned);
+                }
+                // The output count arrives here rather than at the start,
+                // because it is not known until the model stops.
+                if let Some(held) = map.get("usage").and_then(Value::as_object)
+                    && let Some(counted) = usage.as_object_mut()
+                {
+                    for (name, value) in held {
+                        counted.insert(name.clone(), value.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let Some(stop) = stop else {
+        return Err(stream_cut(
+            "the stream ended without the frame that says why the model stopped",
+        ));
+    };
+    let mut content = Vec::new();
+    for (at, mut block) in blocks {
+        if let Some(map) = block.as_object_mut() {
+            if let Some(said) = text.get(&at) {
+                let field = if map.contains_key("thinking") {
+                    "thinking"
+                } else {
+                    "text"
+                };
+                map.insert(field.to_owned(), Value::String(said.clone()));
+            }
+            if let Some(said) = json.get(&at) {
+                let parsed = serde_json::from_str::<Value>(said).unwrap_or_else(|_| json!({}));
+                map.insert("input".to_owned(), parsed);
+            }
+        }
+        content.push(block);
+    }
+    Ok(json!({ "content": content, "stop_reason": stop, "usage": usage }))
+}
+
+/// OpenAI streams one `choices[0].delta` per chunk and the finish reason
+/// on the last one. Tool calls arrive by index with their arguments split
+/// across chunks, which is why they are joined before being read.
+fn openai_settled(frames: &[Value]) -> Result<Value, AxError> {
+    let mut said = String::new();
+    let mut calls: std::collections::BTreeMap<u64, (String, String, String)> =
+        std::collections::BTreeMap::new();
+    let mut finish = None;
+    let mut usage = None;
+    for frame in frames {
+        let Some(map) = frame.as_object() else {
+            continue;
+        };
+        if let Some(held) = map.get("usage")
+            && !held.is_null()
+        {
+            usage = Some(held.clone());
+        }
+        let Some(first) = map
+            .get("choices")
+            .and_then(Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        if let Some(held) = first.get("finish_reason").and_then(Value::as_str) {
+            finish = Some(held.to_owned());
+        }
+        let Some(delta) = first.get("delta").and_then(Value::as_object) else {
+            continue;
+        };
+        if let Some(text) = delta.get("content").and_then(Value::as_str) {
+            said.push_str(text);
+        }
+        for call in delta
+            .get("tool_calls")
+            .and_then(Value::as_array)
+            .unwrap_or(&Vec::new())
+        {
+            let Some(one) = call.as_object() else {
+                continue;
+            };
+            let at = one.get("index").and_then(Value::as_u64).unwrap_or_default();
+            let held = calls.entry(at).or_default();
+            if let Some(id) = one.get("id").and_then(Value::as_str) {
+                held.0 = id.to_owned();
+            }
+            let Some(function) = one.get("function").and_then(Value::as_object) else {
+                continue;
+            };
+            if let Some(name) = function.get("name").and_then(Value::as_str) {
+                held.1 = name.to_owned();
+            }
+            if let Some(part) = function.get("arguments").and_then(Value::as_str) {
+                held.2.push_str(part);
+            }
+        }
+    }
+    let Some(finish) = finish else {
+        return Err(stream_cut(
+            "the stream ended without the chunk that says why the model stopped",
+        ));
+    };
+    let mut message = json!({ "role": "assistant", "content": said });
+    if !calls.is_empty()
+        && let Some(map) = message.as_object_mut()
+    {
+        let wired: Vec<Value> = calls
+            .into_values()
+            .map(|(id, name, arguments)| {
+                json!({
+                    "id": id,
+                    "type": "function",
+                    "function": { "name": name, "arguments": arguments },
+                })
+            })
+            .collect();
+        map.insert("tool_calls".to_owned(), Value::Array(wired));
+    }
+    Ok(json!({
+        "choices": [{ "message": message, "finish_reason": finish }],
+        "usage": usage.unwrap_or_else(|| json!({})),
+    }))
+}
+
 /// Wire response into the canonical shape.
 pub fn response_from_wire(kind: DialectKind, wire: &Value) -> Result<ChatResponse, AxError> {
     match kind {

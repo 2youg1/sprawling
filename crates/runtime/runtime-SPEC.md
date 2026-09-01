@@ -702,3 +702,23 @@ S3 增：A4 golden（build_prefix 重跑逐字节同）；A15（rebuild_prefix �
 ## 18 文档同步
 
 ARCHITECTURE §6 runtime 表逐卡状态翻转（turn/prefix/handoff 随 S2.01/S2.02；S3 九模块逐卡）；接线台账同 PR 登记；S3 完备化的「只加不改」取义见 §8-6（三不变量不动，相变入参按语义长入，消费者同集）；kernel-SPEC §8-23/§8-24 随 S3.01/S3.13 同集改；api-baseline 随每张改公开面的卡重算。
+
+### RunHooks 多一个：说到一半的话往哪去（V3.13）
+
+```rust
+pub struct RunHooks<'a> {
+    pub now: ...,
+    pub interrupt: ...,
+    pub fence: ...,
+    pub invoke: ...,
+    pub deltas: Option<&'a mut (dyn FnMut(&str) + 'a)>,
+}
+```
+
+**`None` 是承重的，不是缺省值。** 一个增量改变不了 run 的任何判断，所以「没人看」的驱动器就不向 provider 要流：`Turn::call` 在 `None` 时走 `Model::call`，字节与从前一模一样。citysim 与离线重放因此一字未改——**这是这条改动不碰确定性的全部理由**。
+
+**它不返回 `Result`。** 增量不是判断：下游任何东西都不得据它分支，而一个能拒绝的 sink 会让一个显示细节有能力弄失败一次调用。
+
+**写进账本的那句话只从 `ModelReturn` 来。** `model_returned` 的载荷此前怎么写，现在还怎么写——增量恒不参与拼装它。于是「页面看到的」与「账本保存的」不可能出自对同一个回复的两次读法；流被切断表现为读取错误，永不表现为一个变短的回答。
+
+**`Turn::call` 的 `'sink` 是显式命名的。** 调用方（`drive`）持有 sink 跨越整个 run 并把它交给每一轮；生命周期省略时，重借需要收缩 trait object 自己的生命周期，而 `&mut` 不允许。这不是风格，是这个签名必须显式的原因。

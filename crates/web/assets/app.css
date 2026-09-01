@@ -915,3 +915,157 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 .session-row .turn, .session-row .spent
     { color: var(--TEXT_QUIET); font-size: var(--text-note);
       font-family: var(--font-mono); text-align: right; }
+
+/* --------------------------------------------------- the session page */
+
+/* The object page this product never had. Its head restates where you
+   are, because moving between pages costs a reader the context they were
+   holding, and the four facts under it are the four questions a person
+   arrives with. */
+.session-head { margin-bottom: var(--space-wide); }
+.session-back { display: inline-block; color: var(--TEXT_QUIET);
+                font-size: var(--text-note); margin-bottom: var(--space-snug); }
+.session-head .address { display: flex; align-items: center;
+                         gap: var(--space-snug); margin: 0;
+                         font-size: var(--text-heading);
+                         font-weight: var(--weight-heading); }
+.session-head .address .room { font-family: var(--font-mono); }
+.session-head .address .turn { color: var(--TEXT_QUIET);
+                               font-size: var(--text-note);
+                               font-family: var(--font-mono); }
+/* Four facts on one line, separated by space rather than by a rule: they
+   are peers, and a divider between peers invites a reader to look for a
+   hierarchy that is not there. */
+.session-facts { display: flex; flex-wrap: wrap; gap: var(--space-base);
+                 margin: var(--space-snug) 0 0; color: var(--TEXT); }
+/* A fact the wire cannot carry. It is drawn quiet and it is drawn: a row
+   left out reads as "nothing to report", which is the one thing that is
+   not true. The scope line beside it says why. */
+.session-facts .unknown { color: var(--TEXT_QUIET); }
+
+/* Four readings of one session, and three of one history. A tab is a
+   place rather than a mode, so where the address bar can carry the
+   choice these are anchors. */
+.session-tabs { display: flex; gap: var(--space-snug);
+                margin-bottom: var(--space-wide);
+                border-bottom: 1px solid var(--G2); }
+.session-tabs .tab { background: transparent; border: 0; color: var(--TEXT_QUIET);
+                     padding: var(--space-snug) var(--space-base);
+                     margin-bottom: -1px; text-decoration: none;
+                     border-bottom: 2px solid transparent; }
+.session-tabs .tab:hover { color: var(--TEXT); }
+.session-tabs .tab[aria-current="page"] { color: var(--TEXT);
+                                          border-bottom-color: var(--ACCENT); }
+
+/* The record's own head. Same shape as a session's, because they are the
+   same kind of object: a page with lenses over one subject. */
+.record-head { margin-bottom: var(--space-wide); }
+.record-head .address { margin: 0; font-size: var(--text-heading);
+                        font-weight: var(--weight-heading); }
+
+/* One word of the inferred sentence, opened. It replaces the word in
+   place rather than revealing a panel, so a person who opened a word by
+   accident has not lost the page they were reading. */
+.composer-open { display: inline-flex; align-items: baseline;
+                 gap: var(--space-tight); }
+.composer-open .label { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.composer-field { background: var(--G2); color: var(--TEXT); border: 0;
+                  border-radius: var(--corner-control);
+                  padding: var(--space-tight) var(--space-snug);
+                  font: inherit; font-family: var(--font-mono); }
+
+/* -------------------------------------------- what the pages compose */
+
+/* The v0.0.3 destinations are compositions: Waiting is the approval
+   queue, Record is three older pages behind one switch, Setup is the
+   settings form, Building is a room's own files. Those pages survived
+   the change of information architecture, so their class names are no
+   longer scaffolding on something being torn down - they are what four
+   of the six destinations are made of, and they were rendering at
+   browser defaults. */
+
+/* Approvals. The two answers differ by weight and by position, never by
+   hue: letting through cannot be taken back and refusing can, and this
+   design has one loud colour which already means "a person is needed".
+   A red allow and a green deny would spend it twice and say neither. */
+.approvals { display: block; }
+.approvals .allow { font-weight: var(--weight-label); }
+.approvals .deny, .allow, .deny { border-radius: var(--corner-control); }
+.allow { background: var(--G4); color: var(--TEXT); font-weight: var(--weight-label); }
+.deny { background: transparent; color: var(--TEXT_QUIET);
+        border: 1px solid var(--G3); }
+.deny:hover { color: var(--TEXT); border-color: var(--G5); }
+/* Who asked, beside what they asked for. Quiet and monospaced: it is an
+   address, and an address is read character by character. */
+.who { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+       font-size: var(--text-note); }
+.subject { color: var(--TEXT); }
+
+/* Settings: four steps in one column, and the order is the argument -
+   attach a provider, point a job at a model, then everything else. */
+.endpoints, .tags, .records { width: 100%; border-collapse: collapse; }
+.endpoints th, .tags th, .records th
+    { text-align: left; color: var(--TEXT_QUIET); font-size: var(--text-note);
+      font-weight: var(--weight-label); padding: var(--space-snug) 0;
+      border-bottom: 1px solid var(--G2); }
+.endpoints td, .tags td, .records td
+    { padding: var(--space-snug) var(--space-base) var(--space-snug) 0;
+      border-bottom: 1px solid var(--G1); vertical-align: baseline; }
+.records td { font-family: var(--font-mono); font-size: var(--text-note); }
+/* One row of the admitted list: a name, and whether this key buys it. */
+.admit { display: block; margin-top: var(--space-snug); }
+.admit-row { display: flex; align-items: baseline; gap: var(--space-snug);
+             padding: var(--space-tight) 0; }
+.choose { display: flex; flex-direction: column; gap: var(--space-snug); }
+/* A step of a login somebody is in the middle of. Numbered by position
+   rather than by a stored counter: this page holds no progress, so a
+   person who finished the login elsewhere finds the step simply gone. */
+.login-step { color: var(--TEXT_QUIET); font-size: var(--text-note);
+              margin: var(--space-snug) 0; }
+.subscription { display: block; margin-top: var(--space-base);
+                padding-top: var(--space-base); border-top: 1px solid var(--G2); }
+.probe { margin-left: var(--space-snug); }
+/* A tag with no model behind it. Quiet rather than loud: nothing is
+   wrong yet, and a job nobody pointed anywhere is a decision waiting to
+   be made rather than a failure. */
+.unset { color: var(--TEXT_QUIET); font-style: normal; }
+.selected { color: var(--TEXT); font-weight: var(--weight-label); }
+.refresh { margin-left: auto; }
+
+/* One building: its files, its rooms, and what waits in each. */
+.building { display: block; }
+.mailbox { display: block; margin-top: var(--space-base); }
+.archive { display: block; margin-top: var(--space-base); }
+/* A document the building keeps, one card per file, with the file's own
+   name in the reader's monospace because it is a path. */
+.doc { display: block; background: var(--G2); border-radius: var(--corner-card);
+       padding: var(--space-base); margin-bottom: var(--space-snug); }
+.doc .name, .doc .desc-note { font-family: var(--font-mono);
+                              font-size: var(--text-note); }
+/* The first thing to do in a building that has nothing in it. It is an
+   empty state rather than a banner: it is what the page looks like when
+   the building is empty, and it disappears by itself. */
+.start-here { display: block; margin-top: var(--space-base); }
+.new-building, .send-work { display: flex; flex-direction: column;
+                            gap: var(--space-snug); margin-top: var(--space-base); }
+/* Following the end of a feed. A checkbox and its word, on one line. */
+.follow { display: inline-flex; align-items: baseline; gap: var(--space-tight);
+          color: var(--TEXT_QUIET); font-size: var(--text-note); }
+
+.ledger { display: block; }
+.recycle-bin { display: block; }
+/* What a building's runs may reach. A form, and the one place a person
+   states it. */
+.reach { display: flex; flex-direction: column; gap: var(--space-snug); }
+
+/* One of the four things a session's head says. Peers, separated by
+   space rather than by a rule: a divider between peers invites a reader
+   to look for a hierarchy that is not there. */
+.fact { color: var(--TEXT); }
+/* What a model is saying, before the call it belongs to has settled. It
+   is drawn quiet on purpose: it is a thing to watch, and the settled
+   text below it is the thing that is true. No cursor, no blink - motion
+   that happens without anybody acting is motion this design deletes. */
+.saying { color: var(--TEXT_QUIET); font-style: normal;
+          border-left: 2px solid var(--G3); padding-left: var(--space-snug);
+          margin-bottom: var(--space-base); }

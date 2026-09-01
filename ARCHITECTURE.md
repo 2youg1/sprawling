@@ -10,7 +10,7 @@
 
 ## 1 What runs
 
-One process, one page. The client is Rust compiled to WebAssembly and embedded in the binary at build time; there is no second client, and no npm or node appears in the build chain, which `cargo xtask zerojs` checks rather than a convention.
+One process, one page. The client is Rust compiled to WebAssembly and embedded in the binary at build time; there is no second client, and no npm or node appears in the build chain rather than a convention.
 
 ```
                       one machine
@@ -478,6 +478,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | eval::suite | crates/eval/src/suite.rs | real tasks split into what a change may learn from and what judges it | decision | P3 | built |
 | eval::probe | crates/eval/src/probe.rs | the same questions asked twice, versioned so two versions never compare | value | P3 | built |
 | eval::score | crates/eval/src/score.rs | what a settled asset is worth, in integer thousandths | decision | P3 | built |
+| eval::nesting | crates/eval/src/nesting.rs | which nested format a model edits with fewest mistakes, and how it fails when it fails | decision | V3 | built |
 | eval::metabolism | crates/eval/src/metabolism.rs | clearing out: warn first, retire second, delete never | decision | P3 | built |
 
 ### channels (5) — the process boundary
@@ -517,7 +518,11 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::settings | crates/web/src/settings.rs | turning a URL and a key into a model a run can be given | decision | P1 | built |
 | web::route | crates/web/src/route.rs | the one translation between a View and the address bar, both ways | decision | F2 | built |
 | web::panel | crates/web/src/panel.rs | the one version of a centre panel: conclusion, scope, body, and where the numbers came from | decision | F2 | built |
-| web::overview | crates/web/src/overview.rs | the first screen: how much of this city is working, on what, and what waits on a person | decision | F2 | built |
+| web::phase | crates/web/src/phase.rs | what a session is doing, in the one vocabulary every surface reads from | data | V3 | built |
+| web::sessions | crates/web/src/sessions.rs | the first screen: the box that starts work, and the table its rows land in | decision | V3 | built |
+| web::session | crates/web/src/session.rs | one session: the four questions a person arrives with, and four readings of what it did | decision | V3 | built |
+| web::waiting | crates/web/src/waiting.rs | everything that cannot move until a person answers, in one place | decision | V3 | built |
+| web::record | crates/web/src/record.rs | one history, in three lenses, at one address | decision | V3 | built |
 
 ### browser (6), protocol (2), bin (10)
 
