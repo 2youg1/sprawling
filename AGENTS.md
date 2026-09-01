@@ -39,8 +39,8 @@ just check                                  # fmt + clippy (-D warnings, --all-f
 ## One change, five steps
 
 1. **Take one piece of work.** One session, one bounded change, read its context in full before starting.
-2. **Write the SPEC first.** Interfaces and decisions land in the crate's SPEC before the code exists. A new module states which of the seven shapes it instantiates ([`ARCHITECTURE.md`](ARCHITECTURE.md) §9); when there is no answer, stop and ask rather than write.
-3. **Red.** Write the failing test and **run it once to watch it fail**. That run is what proves the test can bite.
+2. **Write the SPEC first.** Interfaces and decisions land in the crate's SPEC before the code exists. A new module states which of the seven shapes it instantiates ([`ARCHITECTURE.md`](ARCHITECTURE.md) §9); when there is no answer, stop and ask rather than write. *(The view layer is exempt — see below.)*
+3. **Red.** Write the failing test and **run it once to watch it fail**. That run is what proves the test can bite. *(The view layer is exempt.)*
 4. **Green.** Implement until it passes, no more. When the implementation wants to differ from the SPEC, change the SPEC first.
 5. **Close.** All four: `just check` green | the red-to-green transition visible in the commit order | SPEC and code in step | the module map updated.
 
@@ -59,14 +59,22 @@ Violating any of these turns CI red with a message naming the rule, the violatio
 | Take the time as a parameter. The single sampling point is `bin::assembly`. | `clippy.toml` disallowed methods |
 | Use `BTreeMap` on kernel decision paths; keep floats out of ledger payloads; start tasks from the one spawn point. | review, plus the citysim determinism scenarios |
 | One name per concept, taken from the glossary. | `xtask lexicon` with `xtask/lexicon.toml` |
-| Change a crate's public surface and its SPEC in the same commit. Adding one `pub use` is a public-surface change. | `xtask apisync` |
+| Change a crate's public surface and its SPEC before a release, not before every commit. | `xtask apisync`, at release |
 | Keep credentials as `secret:realm/name` references; let plaintext reach the vault only. | `xtask secret` |
 | Take colour from `web::theme`; express a colour as a ratio of the gamut limit. | `xtask color` |
 | Keep sizes inside their budget, and badges in step with the artifacts. | `xtask budget` |
 | Publish nothing that names one machine's home directory or its working notes. | `xtask release` |
-| **Fix the cause when a gate goes red.** Changing `xtask/`, the root `Cargo.toml`, `deny.toml`, `clippy.toml`, the `justfile`, `.github/`, or deleting a module row requires an explicit ruling from the person, recorded as a `Verdict:` trailer. | `xtask guard` |
+| **Fix the cause when a gate goes red.** Loosening a gate *in the change that the gate is failing* requires an explicit ruling from the person, recorded as a `Verdict:` trailer. Re-pricing a rule in its own commit does not. | `xtask guard` |
 
-The last row is the load-bearing one: it closes the single universal escape hatch, which is loosening a gate in order to pass it.
+The last row is the load-bearing one: it closes the single universal escape hatch, which is loosening a gate in order to pass it. It deliberately does **not** close the other door: a rule whose price has changed may be re-priced in a commit of its own, and doing so is ordinary work rather than an exception.
+
+**Every rule that excludes an architecture carries a re-pricing condition.** A rule that was right when it was written is not thereby right now; the parameter that made it right is written beside it, and when that parameter moves the rule is re-argued rather than obeyed. Rules that exclude a *defect* — the panic bans, the arithmetic bans, the determinism rules — carry no such condition, because nothing about them expires.
+
+## The view layer is exempt from the ceremony
+
+`crates/web` and the stylesheet it ships are **not** held to SPEC-first or to red-before-green. What makes an interface good is cheap iteration, and a process that charges a SPEC and a failing test for every visual change buys correctness the view layer was not losing while taxing the only thing it is short of.
+
+The view layer is held to the machine rules that survive it: the panic bans, colour from `web::theme`, and the size budget. Its correctness is judged by looking at it in a browser, against the same stylesheet the product ships.
 
 **Tests use the same doors as production code.** To exercise something internal, put a seam on that face and give it a second adapter, or drive it from outside through citysim. Test modules may relax lints locally with `#[allow]` on the test module; production code carries them as written.
 

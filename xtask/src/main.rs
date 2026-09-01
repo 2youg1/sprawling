@@ -30,7 +30,6 @@ mod spec;
 mod specalign;
 mod vocabulary;
 mod walk;
-mod zerojs;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -102,7 +101,6 @@ fn main() -> ExitCode {
         Some("length") => report::finish("length", length::check(&root)),
         Some("modmap") => report::finish("modmap", modmap::check(&root)),
         Some("depmap") => report::finish("depmap", depmap::check(&root)),
-        Some("zerojs") => report::finish("zerojs", zerojs::check(&root)),
         Some("guard") => report::finish("guard", guard::check(&root, range.as_deref())),
         Some("release") => report::finish("release", release::check(&root)),
         Some("spec") => match spec::run(&root, args.get(1).map(String::as_str)) {
@@ -149,7 +147,7 @@ fn range_arg(args: &[String]) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|zerojs|secret|specalign|apisync|guard> [--range a..b] [--write]"
+        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|specalign|apisync|guard> [--range a..b] [--write]"
     );
     eprintln!(
         "       cargo xtask spec <crate> | budget | badge [--write] | mem [pid] | sbom | package | repro [--full]"
