@@ -155,7 +155,7 @@ what = "append plus fsync, p50 and p99"
 budget_p50_ms = 5
 budget_p99_ms = 20
 measured_by = "just bench (citysim bench bin, release)"
-status = "measured, not gated: p50 0.97 ms / p99 1.61 ms on windows-x86_64 NVMe (2026-08-22); batched append_all moves about 260k records/s. A wall-clock figure is the machine's, so it is recorded, never gated"
+status = "measured, not gated: p50 0.562 ms / p99 0.838 ms on windows-x86_64 NVMe (2026-09-02, after V3.07 stopped reopening the segment per write; 1.047 / 1.879 ms before it); batched append_all moves about 335k records/s. A wall-clock figure is the machine's, so it is recorded, never gated"
 
 # V3.08. What one durability barrier costs per record as the batch under
 # it grows. The absolute figures are this machine's disk; the ratio
@@ -167,12 +167,15 @@ status = "measured, not gated: p50 0.97 ms / p99 1.61 ms on windows-x86_64 NVMe 
 # writes at the top row. `kernel::Ledger` has one method, `append(draft)`,
 # so every record `runtime` writes is a batch of one and pays a whole
 # barrier. `append_all` has no caller outside this crate and the bench.
-# Closing that gap is V3.07's, and V3.07 as written cannot do it - see
-# memory-SPEC section 8-1.
+#
+# V3.07 halved every row without touching that: `RealFs` reopened the
+# segment for the append and again for the sync, so two `CreateFile` calls
+# sat under every record. It holds the handle now, the way `LineReader`
+# does on the read side. First reading 1100.3 / 103.3 / 22.4 us.
 [durability_barrier]
 what = "one fsync barrier, amortised over the records under it"
 measured_by = "just bench (citysim bench bin, release)"
-status = "measured, not gated: 1100.3 us/record at one record per barrier, 103.3 at ten, 22.4 at fifty (windows-x86_64 NVMe, 2026-09-02, 200 waves per row). A wall-clock figure is the machine's, so it is recorded, never gated"
+status = "measured, not gated: 562.4 us/record at one record per barrier, 57.3 at ten, 17.0 at fifty (windows-x86_64 NVMe, 2026-09-02, 200 waves per row). Of the 562 us, 2.5 us is the write and the rest is the barrier itself. A wall-clock figure is the machine's, so it is recorded, never gated"
 
 # V3.08. Opening yesterday's session: the whole of what `bin::assembly`'s
 # `run_history` does, over the same public faces it calls - refresh the

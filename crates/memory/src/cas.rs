@@ -33,7 +33,7 @@ pub struct Cas {
 impl Cas {
     /// Production entrance: std filesystem underneath.
     pub fn open(dir: &Path) -> Result<Cas, MemoryError> {
-        Cas::open_with(Box::new(RealFs), dir)
+        Cas::open_with(Box::new(RealFs::new()), dir)
     }
 
     /// Injection point for the fault adapter (tests; citysim gets a

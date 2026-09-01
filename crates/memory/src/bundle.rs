@@ -125,7 +125,7 @@ impl Bundle {
     /// city whose ledger cannot be read, because a bundle of an
     /// unreadable history is a backup of nothing.
     pub fn export(city_root: &Path, dest: &Path) -> Result<Manifest, MemoryError> {
-        Bundle::export_with(Box::new(RealFs), city_root, dest)
+        Bundle::export_with(Box::new(RealFs::new()), city_root, dest)
     }
 
     pub(crate) fn export_with(
@@ -161,7 +161,7 @@ impl Bundle {
     /// # Errors
     /// Refuses a directory with no readable manifest.
     pub fn read_manifest(bundle: &Path) -> Result<Manifest, MemoryError> {
-        let vfs = RealFs;
+        let vfs = RealFs::new();
         let at = bundle.join(MANIFEST);
         let bytes = vfs
             .read(&at)
@@ -181,7 +181,7 @@ impl Bundle {
     /// Refuses an occupied city root, a bundle without a manifest, and
     /// any disagreement between the manifest and what was restored.
     pub fn restore(bundle: &Path, city_root: &Path) -> Result<Manifest, MemoryError> {
-        Bundle::restore_with(Box::new(RealFs), bundle, city_root)
+        Bundle::restore_with(Box::new(RealFs::new()), bundle, city_root)
     }
 
     pub(crate) fn restore_with(

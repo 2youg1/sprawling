@@ -30,7 +30,7 @@ pub struct DigestCache {
 
 impl DigestCache {
     pub fn open(dir: &Path) -> Result<DigestCache, MemoryError> {
-        let mut fs = RealFs;
+        let mut fs = RealFs::new();
         fs.create_dir_all(dir)
             .map_err(io_err("create digest cache dir", dir))?;
         let tmp = dir.join("tmp");
