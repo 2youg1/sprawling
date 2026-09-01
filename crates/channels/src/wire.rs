@@ -743,21 +743,6 @@ pub struct ChangesAnswer {
 /// client to make the server do unbounded work.
 pub const HISTORY_MAX: u32 = 500;
 
-/// The most ledger lines one [`Query::RunHistory`] answer may read.
-///
-/// Two bounds rather than one, because narrowing to a session separates
-/// them: `limit` bounds what comes back and this bounds what was looked
-/// at. Without it, asking for one session that ended a month ago would
-/// walk the whole Ledger - unbounded server work a client can ask for,
-/// which is the thing [`HISTORY_MAX`] exists to prevent for the
-/// unfiltered query.
-///
-/// The consequence is deliberate and the caller has to handle it: an
-/// answer may hold nothing while `earlier` is `Some`, meaning "this
-/// stretch held none of it, keep asking". That is a different statement
-/// from reaching the first record the city ever wrote.
-pub const HISTORY_SCAN: u64 = 5_000;
-
 /// One run, as a reader needs it. The client folds the live stream for
 /// itself; this shape is what a query answers about runs it never saw,
 /// which is why it carries the position rather than the whole history.

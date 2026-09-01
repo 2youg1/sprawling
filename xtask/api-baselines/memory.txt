@@ -72,6 +72,7 @@ pub fn memory::LedgerIndex::load_or_rebuild(&std::path::Path) -> core::result::R
 pub fn memory::LedgerIndex::persist(&self, &std::path::Path) -> core::result::Result<(), memory::MemoryError>
 pub fn memory::LedgerIndex::reader(&self, &std::path::Path) -> memory::LineReader<'_>
 pub fn memory::LedgerIndex::refresh(&mut self, &std::path::Path) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::LedgerIndex::run_seqs_before(&self, kernel::event::RunId, core::option::Option<kernel::event::Seq>) -> impl core::iter::traits::iterator::Iterator<Item = kernel::event::Seq>
 pub fn memory::LedgerIndex::tail_seq(&self) -> core::option::Option<kernel::event::Seq>
 pub fn memory::LineReader<'_>::line_at(&mut self, kernel::event::Seq) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
 pub fn memory::Manifest::cas_objects(&self) -> u64

@@ -41,7 +41,7 @@ pub use wire::{Answer, ApprovalsAnswer, ArchiveLine, BuildingProgress};
 pub use wire::{ArchiveAnswer, ArchiveHit, DiscardAnswer, DiscardLine};
 pub use wire::{BuildingAnswer, BuildingDoc};
 pub use wire::{COMMAND_NAMES, QUERY_NAMES, WIRE_V, schema_hash};
-pub use wire::{ChangesAnswer, HISTORY_MAX, HISTORY_SCAN, HistoryAnswer};
+pub use wire::{ChangesAnswer, HISTORY_MAX, HistoryAnswer};
 pub use wire::{ChosenSummary, CityAnswer, CostAnswer, EndpointSummary, EndpointsAnswer};
 pub use wire::{ClientFrame, Command, ServerFrame, WireCommand};
 pub use wire::{HaltScope, Hello, LoginStep, NoSecret, Query, Welcome};

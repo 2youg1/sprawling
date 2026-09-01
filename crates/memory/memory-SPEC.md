@@ -215,13 +215,16 @@ rename 至此入 Vfs（jsonl 卡期未用故未入）；FaultFs 模型：rename 
 ### 8-4 memory::index（S3.05；形状 7）
 
 ```rust
-pub struct LedgerIndex { /* entries: BTreeMap<Seq, (String, u64)> —— 段名＋行首字节偏移；私有 */ }
+pub struct LedgerIndex { /* entries: BTreeMap<Seq, (String, u64)> —— 段名＋行首字节偏移；
+                            runs: BTreeMap<RunId, BTreeSet<Seq>> —— 谁写了哪几条；私有 */ }
 impl LedgerIndex {
     /// Build by scanning the ledger dir; 旁挂 cache `index.cache` is
     /// loaded when checksum-fresh, rebuilt otherwise (disposable by design).
     pub fn load_or_rebuild(dir: &Path) -> Result<LedgerIndex, MemoryError>;
     pub fn refresh(&mut self, dir: &Path) -> Result<(), MemoryError>;              // V3.02：只读长出来的字节
     pub fn reader(&self, dir: &Path) -> LineReader<'_>;                            // V3.01：取行的唯一入口
+    pub fn run_seqs_before(&self, run: RunId, before: Option<Seq>)                 // V3.03：一个 run 写过的 seq，新的在前
+        -> impl Iterator<Item = Seq> + '_;
     pub fn persist(&self, dir: &Path) -> Result<(), MemoryError>;                  // 写 cache；失败非致命（可弃物不阻止主链路）
     pub fn len(&self) -> usize;  pub fn is_empty(&self) -> bool;                   // S3.05 增：重建后自证条数
     pub fn tail_seq(&self) -> Option<Seq>;
@@ -245,7 +248,15 @@ impl LineReader<'_> {
   - 索引因此多记一张 `scanned: BTreeMap<段名, 已折入字节数>`。`refresh` 逐段比对：**变大就只读新那一段字节**；**变小或消失就全重建**（断尾修复截过段，旧偏移不再可信）；一字未动就什么也不做。
   - `load_or_rebuild` 走 cache 命中时，`scanned` 取当下段大小：**cache 新鲜的定义就是字节数与 stamp 相符**，所以这个赋值精确而不是近似。
   - 消费者：`bin::assembly` 的 `Views` 持一份，每次查询先 `refresh`。刷新代价是一次 `read_dir` 加逐段 `metadata`，与账本大小无关。
-- S3.05 落地记录：`seq_of` 只探 `seq` 一个字段——索引不要求整条记录可解析，破损日志上的索引正是修复路径所需；残尾（无换行结尾）跳过不入索引，其修复归 jsonl。段名排序由本模块自持（不信文件系统枚举序）。新增 `MemoryError::SeqMissing{seq}`（→ `E_INVALID_ARGS`）：问一条从未写过的 seq 是调用者错，不是损坏。
+- V3.03 设计（**run 索引与 seq 索引同住一张旁挂物**）：`run_history` 今天从账本尾部逐行往回读，读满 `channels::HISTORY_SCAN` 行就停，**过滤发生在读完之后**——不属于这个 run 的行也要完整取出再丢掉。索引因此多记一张 `runs: BTreeMap<RunId, BTreeSet<Seq>>`，查询只取属于它的 seq，代价与**答的条数**同阶而不与账本长度同阶。
+  - **为什么不放进 `memory::projection`**（计划卡面原话是「run 索引进冷投影」，此处按现状改写）：冷投影**在运行中的服务端根本没有接线**——`bin::assembly` 的 `Views::apply` 只折 `hot`／`attribution`／`book`，`Projection` 今天的消费者只有 `citysim` 的 bench 与本 crate 的测试。要让 `run_history` 读它，就得先在事件路径上开一个 redb 写事务，而本 SPEC §8-6 的 R1.04 记录量过那条路：**每条事件一个磁盘屏障 ≈ 1.1k records/s**。为一个不需要持久化的答案，给每一条落账加一道屏障，方向是反的。
+  - **为什么可以放进 `index`**：这张旁挂物**已经常驻**（V3.02，`Views` 持有并每查询 `refresh`），**已经逐行解析过每一条新行**（`locate` 一次 `serde_json` 解析读两个字段），**已经带着「存疑即重建」的可弃性**。run 表搭的是同一趟 refresh、同一份 cache、同一条重建反射，不新增任何同步义务。
+  - **对 channels-SPEC §2「不建 run→seq 的索引」的重新定价**（该条按 AGENTS.md 先改记录、后改代码）：它的两条理由各自的参数都动了。其一「有界扫描付的是几毫秒的解析」——**实测是 22.4 ms**（V3.01＋V3.02 之后；此前 2823 ms），量级估错了。其二「一份要随账本同步的派生状态」——那份派生状态 V3.02 起**已经存在且必须同步**，run 表是它多一个字段，不是多一份。至于「第二个权威」：本模块开篇即写明索引可弃、存疑即重建，它回答的是「在哪」，从不回答「是什么」；账本仍是唯一权威。
+  - **内存代价**：5 万条账本上 `runs` 约 1.2 MB（`BTreeSet<Seq>` 每条 8 字节数据加 B 树节点开销），与 `entries` 同阶而更小——后者每条还带一个段名 `String`。计入 `session_resident` 预算（今天 4.29 MB／30 MB 上限）。
+  - **cache 格式因此 `idx v1` → `idx v2`**，行形 `seq segment offset run`（run 未知记 `-`）。旧 cache 的首行与新 magic 不符，走既有的「不符即静默重建」，无需迁移代码。
+  - **`before` 取开区间**，与线格式 `HistoryAnswer.earlier` 的既有含义（「从这条之前接着问」）同字同义；调用方不再自己算 `before - 1`，那条减法连同它的 `Seq::FIRST` 边界一起消失。
+  - **答的顺序**：`run_seqs_before` 由新到旧，因为调用方要的是会话的**末尾**；调用方取够条数后翻转成由旧到新再取行，于是 `LineReader` 全程向前走（0.89 µs／行，而不是逆序的 5.82 µs／行）。
+- S3.05 落地记录：`locate`（原 `seq_of`）只探 `seq` 与 `run` 两个字段——索引不要求整条记录可解析，破损日志上的索引正是修复路径所需；`run` 缺失或解析不出的行**照样入 seq 表，只是不属于任何 run**（V3.03 补），残尾（无换行结尾）跳过不入索引，其修复归 jsonl。段名排序由本模块自持（不信文件系统枚举序）。新增 `MemoryError::SeqMissing{seq}`（→ `E_INVALID_ARGS`）：问一条从未写过的 seq 是调用者错，不是损坏。
 
 ### 8-5 memory::hot（S3.05；形状 7）
 

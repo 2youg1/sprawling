@@ -316,7 +316,6 @@ pub channels::Welcome::schema: kernel::locator::B3Hash
 pub channels::Welcome::wire_v: u32
 pub const channels::COMMAND_NAMES: [&str; 22]
 pub const channels::HISTORY_MAX: u32
-pub const channels::HISTORY_SCAN: u64
 pub const channels::QUERY_NAMES: [&str; 14]
 pub const channels::WIRE_V: u32
 pub enum channels::Answer

@@ -706,17 +706,18 @@ impl Views {
 
     /// One session's slice of the history, ending just before `before`.
     ///
-    /// Two bounds, and they are not the same bound: `limit` caps what
-    /// comes back and `HISTORY_SCAN` caps what is read. Scanning until
-    /// `limit` records of one run were found would let a client ask the
-    /// server to walk the whole Ledger by naming a session that ended a
-    /// month ago.
+    /// One bound, not two. The index knows which sequences this run
+    /// wrote, so the newest `limit` of them are named before a single
+    /// line is read and the work is proportional to the answer rather
+    /// than to the ledger. What used to need a second bound - a client
+    /// naming a session that ended a month ago and making the server
+    /// walk the whole history to find out - is no longer reachable, so
+    /// the second bound is gone rather than merely unused.
     ///
-    /// So an answer may carry nothing and still report `earlier`: that
-    /// says "this stretch held none of it, keep asking", which is a
-    /// different fact from having reached the first record the city ever
-    /// wrote. Collapsing the two would turn a busy city into a session
-    /// that appears to have no history.
+    /// The lines are then read oldest first, which is both the order the
+    /// answer is delivered in and the order the cursor walks without a
+    /// seek. A line that will not read ends the slice rather than
+    /// emptying it - what was read is still true.
     fn run_history(
         &mut self,
         run: kernel::RunId,
@@ -731,51 +732,33 @@ impl Views {
         if self.index.refresh(&dir).is_err() {
             return empty;
         }
-        let Some(tail) = self.index.tail_seq() else {
-            return empty;
-        };
-        let end = match before {
-            None => tail,
-            Some(seq) => match seq.value().checked_sub(1) {
-                None => return empty,
-                Some(value) => kernel::Seq::new(value),
-            },
-        };
         let want = usize::try_from(limit.clamp(1, channels::HISTORY_MAX)).unwrap_or(1);
-        let floor = end
-            .value()
-            .saturating_sub(channels::HISTORY_SCAN.saturating_sub(1));
-        let start = floor.max(kernel::Seq::FIRST.value());
-        // Backwards, because what a reader wants first is the end of the
-        // session, and the newest `want` records of it are what stopping
-        // early must leave them holding.
-        let mut found: Vec<EventRecord> = Vec::new();
-        let mut reached = start;
+        // One more than was asked for: whether this session wrote
+        // anything older is exactly what `earlier` reports, and taking
+        // one extra sequence answers it without a second question.
+        let mut newest: Vec<kernel::Seq> = self
+            .index
+            .run_seqs_before(run, before)
+            .take(want.saturating_add(1))
+            .collect();
+        let has_older = newest.len() > want;
+        newest.truncate(want);
+        // The oldest record handed back, so the next question asks for
+        // what is strictly before it and the two pages meet exactly.
+        let earlier = has_older.then(|| newest.last().copied()).flatten();
+        newest.reverse();
+        let mut records = Vec::with_capacity(newest.len());
         let mut reader = self.index.reader(&dir);
-        for value in (start..=end.value()).rev() {
-            if found.len() >= want {
-                // Stopped early: the next question resumes here rather
-                // than at the floor, or the records between would be
-                // skipped on the way back.
-                reached = value.saturating_add(1);
-                break;
-            }
-            reached = value;
-            let Ok(line) = reader.line_at(kernel::Seq::new(value)) else {
+        for seq in newest {
+            let Ok(line) = reader.line_at(seq) else {
                 break;
             };
             let Ok(record) = EventRecord::parse_line(&line) else {
                 break;
             };
-            if record.run() == run {
-                found.push(record);
-            }
+            records.push(record);
         }
-        found.reverse();
-        channels::HistoryAnswer {
-            records: found,
-            earlier: (reached > kernel::Seq::FIRST.value()).then(|| kernel::Seq::new(reached)),
-        }
+        channels::HistoryAnswer { records, earlier }
     }
 
     /// Answers one query. Every arm either answers or names itself
@@ -10185,10 +10168,9 @@ addr = \"gone/room1\"
         );
     }
 
-    /// The bound that stops a client asking the server to walk the whole
-    /// Ledger: one answer reads at most `HISTORY_SCAN` lines. Stopping
-    /// early has to be told apart from reaching the beginning, or a busy
-    /// city reads as a session with nothing in it.
+    /// Stopping on the limit has to be told apart from reaching the
+    /// beginning of the session, or a busy city reads as a session with
+    /// nothing in it.
     #[test]
     fn a_run_history_that_stopped_early_says_where_to_resume_rather_than_that_it_ended() {
         let dir = tempfile::tempdir().unwrap();

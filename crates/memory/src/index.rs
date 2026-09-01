@@ -13,21 +13,37 @@
 //! than one that is missing, so this module never lets a stale cache
 //! survive a comparison it cannot pass.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::ops::Bound;
 use std::path::{Path, PathBuf};
 
-use kernel::{B3Hash, Seq};
+use kernel::{B3Hash, RunId, Seq};
 
 use crate::jsonl::{MemoryError, io_err, is_segment};
 
 const CACHE_NAME: &str = "index.cache";
-const CACHE_MAGIC: &str = "idx v1";
+/// Bumped to v2 when the cache started carrying each line's run. An
+/// older cache fails this comparison and rebuilds in silence, which is
+/// this module's standing answer to any doubt — so no migration code
+/// exists, and none is needed.
+const CACHE_MAGIC: &str = "idx v2";
+/// What a cache row writes where the run belongs when the line named
+/// none. Not a valid uuid, so it can never be read back as one.
+const NO_RUN: &str = "-";
 
 /// seq → (segment file name, byte offset of the line start).
 pub struct LedgerIndex {
     entries: BTreeMap<Seq, (String, u64)>,
+    /// run → the sequences it wrote.
+    ///
+    /// The same map read the other way round, and the reason one
+    /// session's history costs its own length rather than the ledger's:
+    /// without it, answering "the newest twenty lines of this session"
+    /// meant reading every line back to wherever the answer ran out and
+    /// discarding what belonged to somebody else.
+    runs: BTreeMap<RunId, BTreeSet<Seq>>,
     /// Bytes of each segment already folded into `entries`.
     ///
     /// What makes an incremental refresh possible, and what makes it
@@ -57,6 +73,7 @@ impl LedgerIndex {
     pub fn empty() -> LedgerIndex {
         LedgerIndex {
             entries: BTreeMap::new(),
+            runs: BTreeMap::new(),
             scanned: BTreeMap::new(),
         }
     }
@@ -125,16 +142,28 @@ impl LedgerIndex {
                 break;
             }
             let body = line.get(..line.len().saturating_sub(1)).unwrap_or(line);
-            if !body.is_empty()
-                && let Some(seq) = seq_of(body)
-            {
-                self.entries.insert(seq, (name.to_owned(), offset));
+            if !body.is_empty() {
+                self.insert_line(name, offset, body);
             }
             let len = u64::try_from(line.len()).unwrap_or(0);
             offset = offset.saturating_add(len);
             complete_bytes = complete_bytes.saturating_add(len);
         }
         complete_bytes
+    }
+
+    /// What indexing one line means, in one place: where it sits, and
+    /// whose it is. A line that does not parse is skipped rather than
+    /// reported — the caller is looking at a ledger that may be damaged,
+    /// and an index is how such a ledger gets repaired.
+    fn insert_line(&mut self, name: &str, offset: u64, body: &[u8]) {
+        let Some(located) = locate(body) else {
+            return;
+        };
+        self.entries.insert(located.seq, (name.to_owned(), offset));
+        if let Some(run) = located.run {
+            self.runs.entry(run).or_default().insert(located.seq);
+        }
     }
 
     fn replace_with(&mut self, built: LedgerIndex) -> Result<(), MemoryError> {
@@ -155,13 +184,51 @@ impl LedgerIndex {
         }
     }
 
+    /// The sequences one run wrote, newest first, below `before`.
+    ///
+    /// Newest first because what a reader opens a session for is its end;
+    /// a caller that wants them oldest first takes what it needs and
+    /// reverses a list it already holds, which also lets it read the
+    /// segment forwards.
+    ///
+    /// `before` is exclusive, the same word and the same meaning the wire
+    /// gives `HistoryAnswer::earlier`, so paging by handing one answer's
+    /// cursor to the next question can neither repeat nor skip a record.
+    ///
+    /// A run this index never saw yields nothing, which is the truth and
+    /// needs no separate answer.
+    pub fn run_seqs_before(&self, run: RunId, before: Option<Seq>) -> impl Iterator<Item = Seq> {
+        let upper = match before {
+            Some(seq) => Bound::Excluded(seq),
+            None => Bound::Unbounded,
+        };
+        self.runs
+            .get(&run)
+            .into_iter()
+            .flat_map(move |seqs| seqs.range((Bound::Unbounded, upper)).rev().copied())
+    }
+
     /// Writes the cache. Failure is not fatal — the index rebuilds next
     /// time, and a disposable artifact must never block the main path.
     pub fn persist(&self, dir: &Path) -> Result<(), MemoryError> {
         let stamp = directory_stamp(dir)?;
+        // The run map inverted for the length of this write. Held here
+        // rather than resident because a cache row is the only reader of
+        // "which run owns this seq", and a second resident copy would be
+        // a second thing to keep in step.
+        let mut owner: BTreeMap<Seq, RunId> = BTreeMap::new();
+        for (run, seqs) in &self.runs {
+            for seq in seqs {
+                owner.insert(*seq, *run);
+            }
+        }
         let mut out = format!("{CACHE_MAGIC} {} {}\n", stamp.bytes, stamp.digest);
         for (seq, (segment, offset)) in &self.entries {
-            out.push_str(&format!("{} {segment} {offset}\n", seq.value()));
+            let run = match owner.get(seq) {
+                Some(run) => run.to_string(),
+                None => NO_RUN.to_owned(),
+            };
+            out.push_str(&format!("{} {segment} {offset} {run}\n", seq.value()));
         }
         let path = dir.join(CACHE_NAME);
         std::fs::write(&path, out.as_bytes()).map_err(io_err("write index cache", &path))
@@ -333,25 +400,36 @@ fn load_cache(dir: &Path, stamp: &Stamp) -> Option<LedgerIndex> {
         return None;
     }
     let mut entries = BTreeMap::new();
+    let mut runs: BTreeMap<RunId, BTreeSet<Seq>> = BTreeMap::new();
     for line in lines {
         let mut parts = line.split(' ');
-        let seq = parts.next()?.parse::<u64>().ok()?;
+        let seq = Seq::new(parts.next()?.parse::<u64>().ok()?);
         let segment = parts.next()?.to_owned();
         let offset = parts.next()?.parse::<u64>().ok()?;
+        // A row that names no run is how the writer spells a line whose
+        // own run was unreadable; anything else that will not parse as a
+        // run id makes the whole cache suspect, so the caller rebuilds.
+        let owner = match parts.next()? {
+            NO_RUN => None,
+            raw => Some(RunId::parse(raw).ok()?),
+        };
         if parts.next().is_some() {
             return None;
         }
-        entries.insert(Seq::new(seq), (segment, offset));
+        entries.insert(seq, (segment, offset));
+        if let Some(run) = owner {
+            runs.entry(run).or_default().insert(seq);
+        }
     }
     Some(LedgerIndex {
         entries,
+        runs,
         scanned: sizes_now(dir),
     })
 }
 
 fn rebuild(dir: &Path) -> Result<LedgerIndex, MemoryError> {
-    let mut entries = BTreeMap::new();
-    let mut scanned = BTreeMap::new();
+    let mut index = LedgerIndex::empty();
     for name in segment_names(dir)? {
         let path = dir.join(&name);
         let bytes = std::fs::read(&path).map_err(io_err("read segment", &path))?;
@@ -365,31 +443,43 @@ fn rebuild(dir: &Path) -> Result<LedgerIndex, MemoryError> {
             };
             // A torn tail carries no seq we can trust; it is skipped, and
             // the next append overwrites it (jsonl owns that repair).
-            if complete
-                && !body.is_empty()
-                && let Some(seq) = seq_of(body)
-            {
-                entries.insert(seq, (name.clone(), offset));
+            if complete && !body.is_empty() {
+                index.insert_line(&name, offset, body);
             }
             if complete {
-                scanned.insert(
+                index.scanned.insert(
                     name.clone(),
                     offset.saturating_add(u64::try_from(line.len()).unwrap_or(0)),
                 );
             }
             offset = offset.saturating_add(u64::try_from(line.len()).unwrap_or(0));
         }
-        scanned.entry(name).or_insert(0);
+        index.scanned.entry(name).or_insert(0);
     }
-    Ok(LedgerIndex { entries, scanned })
+    Ok(index)
 }
 
-/// Reads only the seq field. Indexing must not depend on the record
-/// parsing cleanly — an index over a damaged ledger is exactly what a
-/// repair path needs.
-fn seq_of(line: &[u8]) -> Option<Seq> {
+/// Where a line sits and whose it is.
+struct Located {
+    seq: Seq,
+    /// `None` when the line names no run that reads back as one. The
+    /// line is still indexed by seq: an index over a damaged ledger is
+    /// exactly what a repair path needs, and a line dropped here would
+    /// be invisible to every reader.
+    run: Option<RunId>,
+}
+
+/// Reads two fields off one parse. Indexing must not depend on the
+/// record parsing cleanly as an `EventRecord`, so this asks the raw
+/// document rather than the typed one.
+fn locate(line: &[u8]) -> Option<Located> {
     let value: serde_json::Value = serde_json::from_slice(line).ok()?;
-    value.get("seq")?.as_u64().map(Seq::new)
+    let seq = Seq::new(value.get("seq")?.as_u64()?);
+    let run = value
+        .get("run")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|raw| RunId::parse(raw).ok());
+    Some(Located { seq, run })
 }
 
 #[cfg(test)]
@@ -497,7 +587,11 @@ mod tests {
     fn a_corrupt_cache_rebuilds_instead_of_reporting() {
         let tmp = tempfile::tempdir().unwrap();
         write_ledger(tmp.path(), 4);
-        std::fs::write(tmp.path().join(CACHE_NAME), b"idx v1 garbage\nnot a row\n").unwrap();
+        std::fs::write(
+            tmp.path().join(CACHE_NAME),
+            format!("{CACHE_MAGIC} garbage\nnot a row\n"),
+        )
+        .unwrap();
         let index = LedgerIndex::load_or_rebuild(tmp.path()).unwrap();
         assert_eq!(index.len(), 4, "a disposable artifact never reports");
     }
@@ -554,6 +648,124 @@ mod tests {
                 .line_at(Seq::new(u64::try_from(i).unwrap()))
                 .unwrap_or_else(|err| panic!("seq {i} unreadable after rebuild: {err}"));
         }
+    }
+
+    /// Writes `count` records that cycle through `runs`, so no run owns a
+    /// contiguous stretch of the ledger. Returns the seqs each run wrote.
+    fn write_interleaved(dir: &Path, runs: &[RunId], count: u64) -> Vec<(RunId, Vec<Seq>)> {
+        let mut blob = Vec::new();
+        let mut prev = B3Hash::digest(b"");
+        let mut owned: Vec<(RunId, Vec<Seq>)> = runs.iter().map(|run| (*run, Vec::new())).collect();
+        for i in 0..count {
+            let slot = usize::try_from(i)
+                .unwrap()
+                .checked_rem(runs.len())
+                .expect("at least one run to cycle through");
+            let run = runs[slot];
+            let draft = EventDraft {
+                run,
+                t: TimeMs::new(i),
+                who: "tester".to_owned(),
+                addr: None,
+                kind: EventKind::RunStarted,
+                data: Payload::new(serde_json::Map::new()).unwrap(),
+                ig: false,
+            };
+            let record = EventRecord::from_draft(draft, Seq::new(i), prev);
+            let line = record.canonical_line().unwrap();
+            prev = B3Hash::digest(&line);
+            blob.extend_from_slice(&line);
+            blob.push(b'\n');
+            owned[slot].1.push(Seq::new(i));
+        }
+        std::fs::write(dir.join("ledger-00000000000000000000.jsonl"), &blob).unwrap();
+        owned
+    }
+
+    /// The whole point of the run index: one session's lines are found
+    /// without reading anybody else's. The assertion is on the seqs the
+    /// index hands back, because that set *is* what the reader will open
+    /// the segment for - a walk that returned the other runs' seqs and
+    /// left the filtering to the caller would have read them all.
+    #[test]
+    fn a_run_s_own_lines_are_found_without_walking_anybody_else_s() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mine = RunId::from_bytes([1u8; 16]);
+        let yours = RunId::from_bytes([2u8; 16]);
+        let city = RunId::CITY;
+        let owned = write_interleaved(tmp.path(), &[mine, yours, city], 30);
+        let index = LedgerIndex::load_or_rebuild(tmp.path()).unwrap();
+
+        let all: Vec<Seq> = index.run_seqs_before(mine, None).collect();
+        let mut expected = owned[0].1.clone();
+        expected.reverse();
+        assert_eq!(all, expected, "newest first, and only this run's lines");
+
+        // Bounded by the answer rather than by the ledger: taking two
+        // reads two, however many lines the other runs wrote between.
+        let newest_two: Vec<Seq> = index.run_seqs_before(mine, None).take(2).collect();
+        assert_eq!(newest_two, [Seq::new(27), Seq::new(24)]);
+
+        // `before` is exclusive, which is what the wire's `earlier`
+        // cursor already means; paging with it never repeats a record.
+        let older: Vec<Seq> = index
+            .run_seqs_before(mine, Some(Seq::new(24)))
+            .take(2)
+            .collect();
+        assert_eq!(older, [Seq::new(21), Seq::new(18)]);
+
+        // A session this ledger never held has no lines, which is a
+        // different answer from an empty ledger and needs no special case.
+        let stranger: Vec<Seq> = index
+            .run_seqs_before(RunId::from_bytes([9u8; 16]), None)
+            .collect();
+        assert!(stranger.is_empty());
+
+        // The city's own records are a run like any other here.
+        assert_eq!(index.run_seqs_before(city, None).count(), 10);
+    }
+
+    /// The run map rides the same refresh and the same cache as the seq
+    /// map. Either one going stale on its own would make "which lines are
+    /// this session's" disagree with "where is line n".
+    #[test]
+    fn the_run_map_survives_a_refresh_and_a_cache_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mine = RunId::from_bytes([1u8; 16]);
+        let yours = RunId::from_bytes([2u8; 16]);
+        write_interleaved(tmp.path(), &[mine, yours], 4);
+        let mut index = LedgerIndex::load_or_rebuild(tmp.path()).unwrap();
+        assert_eq!(index.run_seqs_before(mine, None).count(), 2);
+
+        // Appended: the refresh folds the new lines into both maps.
+        write_interleaved(tmp.path(), &[mine, yours], 10);
+        index.refresh(tmp.path()).unwrap();
+        assert_eq!(index.run_seqs_before(mine, None).count(), 5);
+
+        // Persisted and read back: a cache that carried offsets but not
+        // runs would answer this with nothing.
+        index.persist(tmp.path()).unwrap();
+        let loaded = LedgerIndex::load_or_rebuild(tmp.path()).unwrap();
+        assert_eq!(loaded.len(), 10, "the cache was believed, not rebuilt");
+        assert_eq!(loaded.run_seqs_before(mine, None).count(), 5);
+    }
+
+    /// A line whose `run` cannot be read still belongs in the seq map:
+    /// an index over a damaged ledger is what a repair path needs, and
+    /// dropping the line would hide it from every reader.
+    #[test]
+    fn a_line_with_no_readable_run_is_still_indexed_by_seq() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("ledger-00000000000000000000.jsonl");
+        std::fs::write(&path, b"{\"seq\":0,\"run\":\"not-a-uuid\"}\n{\"seq\":1}\n").unwrap();
+        let index = LedgerIndex::load_or_rebuild(tmp.path()).unwrap();
+        assert_eq!(index.len(), 2, "both lines are locatable");
+        assert_eq!(index.tail_seq(), Some(Seq::new(1)));
+        assert_eq!(
+            index.run_seqs_before(RunId::CITY, None).count(),
+            0,
+            "an unreadable run joins no run rather than joining the nil one"
+        );
     }
 
     #[test]
