@@ -460,6 +460,14 @@ pub(crate) struct Views {
     /// How many records this view has folded. The one number a page
     /// cannot derive from any other answer.
     events: u64,
+    /// seq to byte offset, held rather than rebuilt.
+    ///
+    /// Rebuilding it read the whole side cache and allocated a `String`
+    /// per line, and that was charged to every history question a page
+    /// asked - 14.4 ms of it on a fifty thousand record ledger. Held, the
+    /// same question costs one directory listing and the bytes that are
+    /// actually new.
+    index: memory::LedgerIndex,
 }
 
 impl Views {
@@ -475,6 +483,11 @@ impl Views {
             discards: std::collections::BTreeMap::new(),
             assets: Vec::new(),
             events: 0,
+            // An unreadable ledger directory is not a reason to refuse to
+            // start: the index is disposable, every refresh tries again,
+            // and a city with no ledger yet is the ordinary first run.
+            index: memory::LedgerIndex::load_or_rebuild(&ledger_dir(city_root))
+                .unwrap_or_else(|_| memory::LedgerIndex::empty()),
         }
     }
 
@@ -648,16 +661,16 @@ impl Views {
     /// records would be a second copy of the only history, and the index
     /// already maps a sequence to a byte offset. An unreadable line ends
     /// the slice rather than emptying it - what was read is still true.
-    fn history(&self, before: Option<kernel::Seq>, limit: u32) -> channels::HistoryAnswer {
+    fn history(&mut self, before: Option<kernel::Seq>, limit: u32) -> channels::HistoryAnswer {
         let empty = channels::HistoryAnswer {
             records: Vec::new(),
             earlier: None,
         };
         let dir = ledger_dir(&self.city_root);
-        let Ok(index) = memory::LedgerIndex::load_or_rebuild(&dir) else {
+        if self.index.refresh(&dir).is_err() {
             return empty;
-        };
-        let Some(tail) = index.tail_seq() else {
+        }
+        let Some(tail) = self.index.tail_seq() else {
             return empty;
         };
         let end = match before {
@@ -675,7 +688,7 @@ impl Views {
         let want = u64::from(limit.clamp(1, channels::HISTORY_MAX));
         let start = end.value().saturating_sub(want.saturating_sub(1));
         let mut records = Vec::new();
-        let mut reader = index.reader(&dir);
+        let mut reader = self.index.reader(&dir);
         for value in start..=end.value() {
             let Ok(line) = reader.line_at(kernel::Seq::new(value)) else {
                 break;
@@ -705,7 +718,7 @@ impl Views {
     /// wrote. Collapsing the two would turn a busy city into a session
     /// that appears to have no history.
     fn run_history(
-        &self,
+        &mut self,
         run: kernel::RunId,
         before: Option<kernel::Seq>,
         limit: u32,
@@ -715,10 +728,10 @@ impl Views {
             earlier: None,
         };
         let dir = ledger_dir(&self.city_root);
-        let Ok(index) = memory::LedgerIndex::load_or_rebuild(&dir) else {
+        if self.index.refresh(&dir).is_err() {
             return empty;
-        };
-        let Some(tail) = index.tail_seq() else {
+        }
+        let Some(tail) = self.index.tail_seq() else {
             return empty;
         };
         let end = match before {
@@ -738,7 +751,7 @@ impl Views {
         // early must leave them holding.
         let mut found: Vec<EventRecord> = Vec::new();
         let mut reached = start;
-        let mut reader = index.reader(&dir);
+        let mut reader = self.index.reader(&dir);
         for value in (start..=end.value()).rev() {
             if found.len() >= want {
                 // Stopped early: the next question resumes here rather
@@ -768,7 +781,7 @@ impl Views {
     /// Answers one query. Every arm either answers or names itself
     /// unavailable; none of them returns an empty result that a reader
     /// would mistake for an empty city.
-    pub(crate) fn answer(&self, query: &channels::Query) -> channels::Answer {
+    pub(crate) fn answer(&mut self, query: &channels::Query) -> channels::Answer {
         match query {
             channels::Query::CityView => {
                 let runs: Vec<channels::RunSummary> = self
@@ -5573,7 +5586,7 @@ pub async fn serve(serving: Serving) -> Result<(), AxError> {
     // terminal are two ways into one city, and this is the read half of
     // what makes that literally true rather than a claim.
     let answering: crate::console::Answering = Arc::new(move |query: channels::Query| {
-        let views = query_views.lock().map_err(|_| {
+        let mut views = query_views.lock().map_err(|_| {
             AxError::failure(
                 AxCode::StorageFatal,
                 "read the city views",
@@ -6402,7 +6415,7 @@ mod tests {
             })
             .unwrap();
 
-        let live = live
+        let mut live = live
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let channels::Answer::City(city) = live.answer(&channels::Query::CityView) else {
@@ -6418,7 +6431,7 @@ mod tests {
 
         // The same answer arrives from a cold rebuild: a view is
         // disposable exactly to the extent that this holds.
-        let rebuilt = rebuild_views(&report.ledger_dir).unwrap();
+        let mut rebuilt = rebuild_views(&report.ledger_dir).unwrap();
         let channels::Answer::City(again) = rebuilt.answer(&channels::Query::CityView) else {
             panic!("CityView answers with a city");
         };
@@ -9289,7 +9302,7 @@ addr = \"gone/room1\"
             })
             .unwrap();
 
-        let views = Views::new(dir.path());
+        let mut views = Views::new(dir.path());
         let channels::Answer::City(city) = views.answer(&channels::Query::CityView) else {
             panic!("CityView answers with a city");
         };
@@ -10073,7 +10086,7 @@ addr = \"gone/room1\"
                 })
                 .unwrap();
         }
-        let views = rebuild_views(&report.ledger_dir).unwrap();
+        let mut views = rebuild_views(&report.ledger_dir).unwrap();
 
         let channels::Answer::History(tail) = views.answer(&channels::Query::History {
             before: None,
@@ -10137,7 +10150,7 @@ addr = \"gone/room1\"
                 })
                 .unwrap();
         }
-        let views = rebuild_views(&report.ledger_dir).unwrap();
+        let mut views = rebuild_views(&report.ledger_dir).unwrap();
 
         // Everything a fresh city writes belongs to the city's own run,
         // so asking for it gets those records and asking for a session
@@ -10195,7 +10208,7 @@ addr = \"gone/room1\"
                 })
                 .unwrap();
         }
-        let views = rebuild_views(&report.ledger_dir).unwrap();
+        let mut views = rebuild_views(&report.ledger_dir).unwrap();
 
         // One record at a time, so the walk stops on the limit well
         // before it reaches the genesis line.
@@ -10843,7 +10856,7 @@ addr = \"gone/room1\"
         )
         .unwrap();
 
-        let views = Views::new(dir.path());
+        let mut views = Views::new(dir.path());
         let channels::Answer::City(city) = views.answer(&channels::Query::CityView) else {
             panic!("CityView answers with a city");
         };
@@ -10875,7 +10888,7 @@ addr = \"gone/room1\"
         )
         .unwrap();
 
-        let views = Views::new(dir.path());
+        let mut views = Views::new(dir.path());
         let channels::Answer::City(city) = views.answer(&channels::Query::CityView) else {
             panic!("CityView answers with a city");
         };

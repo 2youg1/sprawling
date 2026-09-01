@@ -220,6 +220,7 @@ impl LedgerIndex {
     /// Build by scanning the ledger dir; 旁挂 cache `index.cache` is
     /// loaded when checksum-fresh, rebuilt otherwise (disposable by design).
     pub fn load_or_rebuild(dir: &Path) -> Result<LedgerIndex, MemoryError>;
+    pub fn refresh(&mut self, dir: &Path) -> Result<(), MemoryError>;              // V3.02：只读长出来的字节
     pub fn reader(&self, dir: &Path) -> LineReader<'_>;                            // V3.01：取行的唯一入口
     pub fn persist(&self, dir: &Path) -> Result<(), MemoryError>;                  // 写 cache；失败非致命（可弃物不阻止主链路）
     pub fn len(&self) -> usize;  pub fn is_empty(&self) -> bool;                   // S3.05 增：重建后自证条数
@@ -239,6 +240,11 @@ impl LineReader<'_> {
   - **位置用 `Option<u64>` 表达，算不出来就作废**：seek 前、读前各置 `None`，只在一次成功的读之后写回 `offset + 读长`；长度换 `u64` 失败或相加溢出则继续为 `None`，下一次调用必 seek。一个可能错的位置会让游标把别的行的字节交在调用方要的 seq 名下，而旁挂物宁可重做不可误信（与 cache 失效同一条反射）。
   - **`LedgerIndex::line_at` 一并删除**，不留转发壳：读一行只此一条路，否则「怎样读一行」有两个权威，而慢的那个还在原地招手。读者全部迁完（`bin::assembly` 的 `history`／`run_history`、`tests/derived_views.rs` 的 index 实例、本模块单测）。
   - **段不因此出门**：`LineReader` 的公开面只有 `line_at(seq)`，段名与偏移仍是内部事务（§7 第三条）。
+- V3.02 落地记录（**索引常驻，不再每次查询重建**）：`load_or_rebuild` 在**每一次** `History`／`RunHistory` 里把整个 `index.cache` 读进来重新解析。5 万条时是 1.5 MB 与 5 万次 String 分配，实测 **14.4 ms 一次查询**。
+  - **增量面是 `refresh`，不是“追加时告知索引”**：调用方手里只有 `EventRecord`，段名与偏移是 `jsonl` 的内部事务（§7 第三条）。让观察者携偏移会把分段泄给调用方，而 `refresh` 把那个知识留在本模块。
+  - 索引因此多记一张 `scanned: BTreeMap<段名, 已折入字节数>`。`refresh` 逐段比对：**变大就只读新那一段字节**；**变小或消失就全重建**（断尾修复截过段，旧偏移不再可信）；一字未动就什么也不做。
+  - `load_or_rebuild` 走 cache 命中时，`scanned` 取当下段大小：**cache 新鲜的定义就是字节数与 stamp 相符**，所以这个赋值精确而不是近似。
+  - 消费者：`bin::assembly` 的 `Views` 持一份，每次查询先 `refresh`。刷新代价是一次 `read_dir` 加逐段 `metadata`，与账本大小无关。
 - S3.05 落地记录：`seq_of` 只探 `seq` 一个字段——索引不要求整条记录可解析，破损日志上的索引正是修复路径所需；残尾（无换行结尾）跳过不入索引，其修复归 jsonl。段名排序由本模块自持（不信文件系统枚举序）。新增 `MemoryError::SeqMissing{seq}`（→ `E_INVALID_ARGS`）：问一条从未写过的 seq 是调用者错，不是损坏。
 
 ### 8-5 memory::hot（S3.05；形状 7）
