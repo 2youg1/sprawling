@@ -346,10 +346,17 @@ impl Checkpoint {
     /// payload with restoration=Tracked(file:<addr>@<pre_oid>).
     pub fn wave_post(&mut self, pre_oid: &str) -> Result<Vec<Payload>, MemoryError>;
     /// Staged-diff secret scan; a hit refuses the commit (E_SECRET_EGRESS,
-    /// positions only, never the bytes).
+    /// positions only, never the bytes). V3.05: 只扫这一次会新提交进去的
+    /// blob——基线那一次仍然全扫。
     pub fn scan_staged(&mut self) -> Result<(), MemoryError>;
 }
 ```
+
+- V3.05 落地记录（**扫改动过的 blob，不扫整棵树**，携 `Verdict:`）：原实现遍历 git index 里的**每一个** blob，对**整份内容**跑 `kernel::secret::scan`，**每一次工具波都跑一遍**。实测 4.89 MB／350 文件的树：纯 CPU **212 ms** 每波，另加从 git 对象库 zlib 解压每一个 blob 的开销。**改了一个文件的波，付整棵树的钱。**
+  - 改成 `diff_tree_to_index(HEAD 树, index)`：git 自己报出这一次提交会新写进去的条目，只有它们被读出内容并扫描。与 V3.06 的 `wave_post` 同一个动作——**问 git 什么变了，而不是自己逐文件推**——于是这两处的「什么算改动」由同一个机制回答。
+  - **无 HEAD 时全扫**：基线那一次没有「上一棵树」可比，扫的就是全部。
+  - **守的性质不变，且这是它成立的归纳证明**：`commit` 只从 `wave_pre` 出来，而 `wave_pre` 恒先扫后提交。基例——第一次提交全扫；归纳步——第 N 次提交里未变的 blob 在它进树的那一次已被扫过，变了的这一次扫。于是**每一个进过树的字节都被扫过一次**，而「模型刚写下的密钥不会变成永久」正是这句话：密钥只能随改动进入。
+  - **一个被收窄的东西，明写在此**：`kernel::secret::scan` 将来多认一种形状时，**已经提交进树的内容不会被回头重扫**——新形状从此刻起作用于所有到来的改动，但不追溯。追溯要的是一次全树重扫，而那正是本卡删掉的每波开销；真要重扫时，删掉 `.git` 让下一次波成为基线是现成的路。
 
 - V3.06 落地记录（**`wave_post` 问 git，不逐文件 stat**）：原实现走 pre 提交树的 `TreeWalk`，对**每一个** blob 做一次 `format!`、一次 `PathBuf::join`、一次文件系统 `exists()`——**每一波都付整棵树的钱，不管这一波动没动东西**。改成 `diff_tree_to_workdir`，git 自己一遍就报出 `Delta::Deleted`。
   - 输出仍然在本模块排序而不信 diff 的顺序：**这批行落账的顺序是重放要复现的东西**。

@@ -156,23 +156,53 @@ impl Checkpoint {
         Ok(payloads)
     }
 
-    /// Scans staged content. Reports how many shapes matched and where,
-    /// never what matched.
+    /// Scans what this checkpoint would newly write into the tree.
+    /// Reports how many shapes matched and where, never what matched.
+    ///
+    /// Only the entries that differ from the last checkpoint's tree are
+    /// read, because only they can carry something new. What guards the
+    /// city is that every byte entering the tree is scanned once on its
+    /// way in: `commit` is reachable only through `wave_pre`, `wave_pre`
+    /// always scans first, the first checkpoint has no previous tree and
+    /// so scans everything, and every later one scans what changed. A
+    /// secret can only arrive with a change, so it still meets the
+    /// scanner before it can become permanent.
+    ///
+    /// Reading the rest again cost 212 ms of CPU on a 4.89 MB tree after
+    /// every single wave, plus one zlib inflate per blob, whether or not
+    /// the wave had touched anything.
+    ///
+    /// One consequence is named rather than hidden: a scanner that later
+    /// learns a new shape does not go back over what is already
+    /// committed. The new shape holds against everything that arrives
+    /// from then on; making it retroactive means one whole-tree scan,
+    /// which is the cost this deleted.
     pub fn scan_staged(&mut self) -> Result<(), MemoryError> {
         let index = self.repo.index().map_err(git_err("read index"))?;
         let mut hits: Vec<String> = Vec::new();
-        for entry in index.iter() {
-            let blob = match self.repo.find_blob(entry.id) {
-                Ok(blob) => blob,
-                Err(_) => continue,
-            };
-            let spans = scan(blob.content());
-            if spans.is_empty() {
-                continue;
+        match self.head_tree()? {
+            // No previous tree to compare against: this checkpoint is
+            // writing all of it, so all of it is read.
+            None => {
+                for entry in index.iter() {
+                    self.scan_blob(entry.id, &String::from_utf8_lossy(&entry.path), &mut hits);
+                }
             }
-            let path = String::from_utf8_lossy(&entry.path).into_owned();
-            for span in spans {
-                hits.push(format!("{path}:{}+{}", span.start, span.len));
+            // git is asked what changed, the same way `wave_post` asks it
+            // what went missing, so "what counts as a change" has one
+            // answer in this module rather than two.
+            Some(tree) => {
+                let diff = self
+                    .repo
+                    .diff_tree_to_index(Some(&tree), Some(&index), None)
+                    .map_err(git_err("diff checkpoint against the staged tree"))?;
+                for delta in diff.deltas() {
+                    let staged = delta.new_file();
+                    let Some(path) = staged.path().and_then(|p| p.to_str()) else {
+                        continue;
+                    };
+                    self.scan_blob(staged.id(), &path.replace('\\', "/"), &mut hits);
+                }
             }
         }
         if hits.is_empty() {
@@ -181,6 +211,35 @@ impl Checkpoint {
         Err(MemoryError::SecretEgress {
             locations: hits.join(" "),
         })
+    }
+
+    /// One blob against the secret shapes, appending `path:start+len` per
+    /// match. An id the object database will not hand back as a blob is
+    /// skipped: a deletion names no new content, and a submodule is not
+    /// this repository's to read.
+    fn scan_blob(&self, id: git2::Oid, path: &str, hits: &mut Vec<String>) {
+        let Ok(blob) = self.repo.find_blob(id) else {
+            return;
+        };
+        for span in scan(blob.content()) {
+            hits.push(format!("{path}:{}+{}", span.start, span.len));
+        }
+    }
+
+    /// The tree the last checkpoint committed, or `None` when this city
+    /// has never been fenced. An unborn HEAD is a state, not a failure -
+    /// it is what an empty repository looks like.
+    fn head_tree(&self) -> Result<Option<git2::Tree<'_>>, MemoryError> {
+        let Ok(head) = self.repo.head() else {
+            return Ok(None);
+        };
+        let commit = head
+            .peel_to_commit()
+            .map_err(git_err("read the last checkpoint"))?;
+        commit
+            .tree()
+            .map(Some)
+            .map_err(git_err("read the last checkpoint's tree"))
     }
 
     /// Stages every file under `scope`, including deletions. Paths
@@ -336,6 +395,48 @@ mod tests {
         );
         let ax = err.into_ax();
         assert_eq!(*ax.code(), kernel::AxCode::SecretEgress);
+    }
+
+    /// The narrowing, stated as behaviour: content that is already in the
+    /// tree is not read again.
+    ///
+    /// Observing it needs a secret that reached the tree without passing
+    /// the fence, which is why this test commits through the private
+    /// staging path instead of through `wave_pre`. Nothing in production
+    /// can do that - `commit` is reachable only from `wave_pre`, and
+    /// `wave_pre` always scans first - and that is exactly the induction
+    /// the narrowing rests on.
+    #[test]
+    fn a_wave_pays_for_what_it_changed_rather_than_for_the_whole_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let token = ["sk-ant-api03-", "Zx9yQ2mK4pL7", "vB1nC5tR8sD3"].concat();
+        write(tmp.path(), "work/smuggled.env", &format!("KEY={token}"));
+        let mut checkpoint = Checkpoint::open(tmp.path()).unwrap();
+        checkpoint.stage_scope("work").unwrap();
+        checkpoint
+            .commit(TimeMs::new(1_000), "resident", "past the fence")
+            .unwrap();
+
+        // An ordinary wave that touches a different file. What it pays
+        // for is its own change; the blob it did not touch is not read.
+        write(tmp.path(), "work/ordinary.txt", "nothing to see");
+        checkpoint
+            .wave_pre("work", TimeMs::new(2_000), "resident")
+            .expect("an unchanged blob is not re-examined");
+
+        // And the guard still bites on this wave's own writing, which is
+        // the half of the property the narrowing must not cost.
+        write(tmp.path(), "work/fresh.env", &format!("KEY={token}"));
+        let err = match checkpoint.wave_pre("work", TimeMs::new(3_000), "resident") {
+            Err(err) => err,
+            Ok(_) => panic!("a secret arriving with this wave must refuse the commit"),
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("work/fresh.env"), "{rendered}");
+        assert!(
+            !rendered.contains("work/smuggled.env"),
+            "only what this wave staged is reported: {rendered}"
+        );
     }
 
     #[test]
