@@ -340,6 +340,9 @@ impl Checkpoint {
 }
 ```
 
+- V3.06 落地记录（**`wave_post` 问 git，不逐文件 stat**）：原实现走 pre 提交树的 `TreeWalk`，对**每一个** blob 做一次 `format!`、一次 `PathBuf::join`、一次文件系统 `exists()`——**每一波都付整棵树的钱，不管这一波动没动东西**。改成 `diff_tree_to_workdir`，git 自己一遍就报出 `Delta::Deleted`。
+  - 输出仍然在本模块排序而不信 diff 的顺序：**这批行落账的顺序是重放要复现的东西**。
+  - `Checkpoint::root` 随之删除——它存在的唯一理由就是拿来 stat，clippy 在改完当场报了它。
 - S3.07 落地记录（checkpoint）：`open` 无仓即 `init` 但**不造创世提交**（空仓是合法态；在此臆造历史会使首个 checkpoint 无法归属）。暂存用 `add_all`＋`update_all` 两步（后者含删除），glob 限于 `<scope>/*`。`wave_post` 走 pre 提交树的 `TreeWalk` 比对工作区存在性，输出按路径排序（确定性）。secret 扫描在**提交之前**扫 index blob，命中即拒且只报 `path:start+len`——回显字节本身即泄漏。新增 `MemoryError::Checkpoint{op,detail}`（→ `E_WORKTREE_BUSY`，**此码由此获得首个消费者，待消解清单可划去一条**）与 `SecretEgress{locations}`（→ `E_SECRET_EGRESS`）。
 - P2.03 补：`open` 逐次钉仓库局部 `core.autocrlf=false`。城里的文件必须逐字节往返，而这台机器的 git 有可能被配成在检出时重写行尾；被重写的文件与 Ledger 里它的哈希不符，而那看起来像损坏不像设置（P2.03 的 worktree 检出抳出此事）。
 - 提交身份固定 `sprawling <sprawling@local>`；时间恒入参（git 签名时间＝t，确定性 2）；scope 外文件恒不入 add（WriteDomain 即边界，全树扫描被明拒）。无变化波：wave_pre 产空提交（同树 oid，仍记 payload——链可重建优于省一次提交）。

@@ -22,7 +22,7 @@
 //! the commit and reports positions only; echoing the matched bytes to
 //! prove a secret leaked would be the leak.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use kernel::{Payload, TimeMs, scan};
 use serde_json::{Map, Value};
@@ -34,7 +34,6 @@ const IDENTITY_EMAIL: &str = "sprawling@local";
 
 pub struct Checkpoint {
     repo: git2::Repository,
-    root: PathBuf,
 }
 
 fn git_err(op: &'static str) -> impl FnOnce(git2::Error) -> MemoryError {
@@ -64,10 +63,7 @@ impl Checkpoint {
         repo.config()
             .and_then(|mut config| config.set_bool("core.autocrlf", false))
             .map_err(git_err("pin the repository's line endings"))?;
-        Ok(Checkpoint {
-            repo,
-            root: city_root.to_path_buf(),
-        })
+        Ok(Checkpoint { repo })
     }
 
     /// Makes sure the city has one commit, and makes no more than that.
@@ -119,18 +115,28 @@ impl Checkpoint {
             .find_commit(oid)
             .map_err(git_err("find checkpoint commit"))?;
         let tree = commit.tree().map_err(git_err("read checkpoint tree"))?;
+        // git already knows what is missing, so it is asked once instead
+        // of being told the answer file by file. Walking the whole tree
+        // and calling `exists` on every blob cost one `format!`, one
+        // `PathBuf` and one filesystem stat per tracked file, after every
+        // wave, whether or not that wave touched anything.
+        let mut options = git2::DiffOptions::new();
+        options.include_typechange(true);
+        let diff = self
+            .repo
+            .diff_tree_to_workdir(Some(&tree), Some(&mut options))
+            .map_err(git_err("diff checkpoint against the work tree"))?;
         let mut deleted: Vec<String> = Vec::new();
-        tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
-            if entry.kind() == Some(git2::ObjectType::Blob) {
-                let name = entry.name().unwrap_or_default();
-                let rel = format!("{dir}{name}");
-                if !self.root.join(&rel).exists() {
-                    deleted.push(rel);
-                }
+        for delta in diff.deltas() {
+            if delta.status() != git2::Delta::Deleted {
+                continue;
             }
-            git2::TreeWalkResult::Ok
-        })
-        .map_err(git_err("walk checkpoint tree"))?;
+            if let Some(path) = delta.old_file().path().and_then(|p| p.to_str()) {
+                deleted.push(path.replace('\\', "/"));
+            }
+        }
+        // Sorted here rather than trusted from the diff: the order these
+        // records land in is part of what a replay reproduces.
         deleted.sort();
         let mut payloads = Vec::new();
         for path in deleted {
