@@ -157,6 +157,42 @@ budget_p99_ms = 20
 measured_by = "just bench (citysim bench bin, release)"
 status = "measured, not gated: p50 0.97 ms / p99 1.61 ms on windows-x86_64 NVMe (2026-08-22); batched append_all moves about 260k records/s. A wall-clock figure is the machine's, so it is recorded, never gated"
 
+# V3.08. What one durability barrier costs per record as the batch under
+# it grows. The absolute figures are this machine's disk; the ratio
+# between the rows is a fact about the design, and it is the reason
+# `append_all` exists: a barrier is a fixed cost, so a wave of fifty
+# records is very nearly the price of one.
+#
+# The reading nobody had taken, and the one that matters: production
+# writes at the top row. `kernel::Ledger` has one method, `append(draft)`,
+# so every record `runtime` writes is a batch of one and pays a whole
+# barrier. `append_all` has no caller outside this crate and the bench.
+# Closing that gap is V3.07's, and V3.07 as written cannot do it - see
+# memory-SPEC section 8-1.
+[durability_barrier]
+what = "one fsync barrier, amortised over the records under it"
+measured_by = "just bench (citysim bench bin, release)"
+status = "measured, not gated: 1100.3 us/record at one record per barrier, 103.3 at ten, 22.4 at fifty (windows-x86_64 NVMe, 2026-09-02, 200 waves per row). A wall-clock figure is the machine's, so it is recorded, never gated"
+
+# V3.08. Opening yesterday's session: the whole of what `bin::assembly`'s
+# `run_history` does, over the same public faces it calls - refresh the
+# resident index, name the newest `limit` sequences that session wrote,
+# read those lines, parse them. The socket and the JSON frame are left
+# out because they are the same for every query and would hide what this
+# measures.
+#
+# The fixture is a city that has been working: fifty thousand records,
+# eight interleaved sessions, and the question asked about the oldest of
+# them. Before V3.03 the same question on the same fixture in the same
+# process measured 27.6 ms, because the answer was found by reading every
+# line back from the tail and discarding what belonged to somebody else.
+# What is left is almost entirely the cost of parsing the 500 records that
+# are the answer, which no index can remove.
+[run_history]
+what = "one session's newest 500 records, out of a ledger holding eight sessions"
+measured_by = "just bench (citysim bench bin, release)"
+status = "measured, not gated: p50 3.311 ms against 27.6 ms before V3.03 (windows-x86_64 NVMe, 2026-09-02, 50,000 records, 50 rounds). A wall-clock figure is the machine's, so it is recorded, never gated"
+
 [prefix_assembly]
 what = "assembling one frozen prefix"
 budget_ms = 1

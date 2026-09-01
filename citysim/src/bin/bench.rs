@@ -27,8 +27,10 @@ fn main() -> std::process::ExitCode {
     println!("readings are for this machine; budgets.toml states the budgets\n");
     let scratch = scratch_dir();
     let outcome = ledger_append(&scratch)
+        .and_then(|()| durability_barrier(&scratch))
         .and_then(|()| prefix_assembly())
-        .and_then(|()| projection_rebuild(&scratch));
+        .and_then(|()| projection_rebuild(&scratch))
+        .and_then(|()| run_history(&scratch));
     std::fs::remove_dir_all(&scratch).ok();
     match outcome {
         Ok(()) => std::process::ExitCode::SUCCESS,
@@ -113,6 +115,41 @@ fn ledger_append(scratch: &std::path::Path) -> Result<(), String> {
         took.as_secs_f64() * 1_000.0,
         f64::from(u32::try_from(BATCH).unwrap_or(u32::MAX)) / took.as_secs_f64()
     );
+    Ok(())
+}
+
+/// Budget row `durability_barrier`: what one barrier costs per record as
+/// the batch under it grows.
+///
+/// The absolute figure is the machine's disk. The ratio between the rows
+/// is the design fact: a barrier is a fixed cost, so what a batch buys is
+/// the whole difference between the first row and the last.
+fn durability_barrier(scratch: &std::path::Path) -> Result<(), String> {
+    println!("durability_barrier");
+    for batch in [1u64, 10, 50] {
+        let dir = scratch.join(format!("barrier-{batch}"));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let (mut ledger, _report) = memory::JsonlLedger::open(&dir, TimeMs::new(1_700_000_000_000))
+            .map_err(|e| format!("{}", e.into_ax()))?;
+        const WAVES: u64 = 200;
+        let mut times = Vec::with_capacity(usize::try_from(WAVES).unwrap_or(200));
+        for wave in 0..WAVES {
+            let drafts: Vec<EventDraft> = (0..batch)
+                .map(|n| draft(wave.saturating_mul(batch).saturating_add(n)))
+                .collect::<Result<_, _>>()?;
+            let t0 = stamp();
+            ledger.append_all(drafts).map_err(|e| format!("{e}"))?;
+            times.push(t0.elapsed());
+        }
+        times.sort();
+        let p50 = times.get(times.len() / 2).copied().unwrap_or_default();
+        let per_record =
+            p50.as_secs_f64() * 1_000_000.0 / f64::from(u32::try_from(batch).unwrap_or(1));
+        println!(
+            "  {batch:>3} record(s) per barrier   whole wave p50 {:>8.3} ms   amortised {per_record:>9.1} µs/record",
+            p50.as_secs_f64() * 1_000.0
+        );
+    }
     Ok(())
 }
 
@@ -208,5 +245,76 @@ fn projection_rebuild(scratch: &std::path::Path) -> Result<(), String> {
         took.as_secs_f64() * 1_000.0,
         f64::from(count) / took.as_secs_f64()
     );
+    Ok(())
+}
+
+/// Budget row `run_history`: opening yesterday's session.
+///
+/// The work `bin::assembly`'s `run_history` does, over the same public
+/// faces it calls: refresh the resident index, name the newest `limit`
+/// sequences this run wrote, read those lines, parse them. What it
+/// deliberately leaves out is the socket and the JSON frame, which are
+/// the same for every query and would hide the difference this measures.
+fn run_history(scratch: &std::path::Path) -> Result<(), String> {
+    let dir = scratch.join("history");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let (mut ledger, _report) = memory::JsonlLedger::open(&dir, TimeMs::new(1_700_000_000_000))
+        .map_err(|e| format!("{}", e.into_ax()))?;
+    // Eight sessions interleaved across fifty thousand records: a city
+    // that has been working, which is the only city where this question
+    // is expensive. The session asked about is the *oldest* one, because
+    // the answer used to cost a walk back from the tail.
+    const RECORDS: u64 = 50_000;
+    const SESSIONS: u64 = 8;
+    let session = |n: u64| {
+        let mut bytes = [0u8; 16];
+        bytes[..8].copy_from_slice(&n.to_le_bytes());
+        RunId::from_bytes(bytes)
+    };
+    let drafts: Vec<EventDraft> = (0..RECORDS)
+        .map(|n| {
+            let mut d = draft(n)?;
+            d.run = session(n.checked_rem(SESSIONS).unwrap_or(0));
+            Ok::<EventDraft, String>(d)
+        })
+        .collect::<Result<_, _>>()?;
+    ledger.append_all(drafts).map_err(|e| format!("{e}"))?;
+
+    let mut index =
+        memory::LedgerIndex::load_or_rebuild(&dir).map_err(|e| format!("{}", e.into_ax()))?;
+    const LIMIT: usize = 500;
+    const ROUNDS: usize = 50;
+    let mut times = Vec::with_capacity(ROUNDS);
+    let mut answered = 0usize;
+    for _ in 0..ROUNDS {
+        let t0 = stamp();
+        index
+            .refresh(&dir)
+            .map_err(|e| format!("{}", e.into_ax()))?;
+        let mut seqs: Vec<kernel::Seq> = index
+            .run_seqs_before(session(0), None)
+            .take(LIMIT.saturating_add(1))
+            .collect();
+        seqs.truncate(LIMIT);
+        seqs.reverse();
+        let mut reader = index.reader(&dir);
+        let mut records = Vec::with_capacity(seqs.len());
+        for seq in seqs {
+            let line = reader
+                .line_at(seq)
+                .map_err(|e| format!("{}", e.into_ax()))?;
+            records.push(kernel::EventRecord::parse_line(&line).map_err(|e| format!("{e}"))?);
+        }
+        times.push(t0.elapsed());
+        answered = records.len();
+        std::hint::black_box(&records);
+    }
+    times.sort();
+    let p50 = times.get(times.len() / 2).copied().unwrap_or_default();
+    println!(
+        "run_history        p50 {:>8.3} ms                    ({answered} records of 1 session, {RECORDS} in the ledger, {SESSIONS} sessions)",
+        p50.as_secs_f64() * 1_000.0
+    );
+
     Ok(())
 }
