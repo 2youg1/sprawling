@@ -59,6 +59,10 @@ error.rs 不设：MemoryError 住 lib 下唯一非索引宿主？——否：一
 ```
 
 **本 crate 不做什么（否定式；S3 增两条）**：
+- **V3.07 的调查结果（未实现，卡面前提不成立，待人裁定）**。卡面写的是「跨会话组提交：一个序列化写入者收集同一时间窗内各会话的 drafts」，依据是一份探针测到的 p99（4 会话 29 ms → 32 会话 319 ms，锁车队）。**这座城没有那个形状可优化**：
+  - `bin::assembly::spawn_worker` 开唯一一条写入线程，账本在它里打开且从不离开（源注：「a city has one writer, and the type never has to cross a thread boundary to prove it」），`worker_desk.wait()` 逐条取命令串行 `serve_one`。ARCHITECTURE §10 同词：「The whole city runs as real code, single-threaded」。全仓除测试夹具外再无第二个 spawn 碰账本。探针量的是 32 线程共享一个 `Mutex<JsonlLedger>`，**那是本仓刻意不采用的架构**。
+  - 真正的缺陷在另一根轴上，且更大：**`kernel::Ledger` 只有 `append(draft) -> EventRef` 一个方法**，于是 `runtime` 写的每一条记录都是一批一条，各付一道屏障；`append_all` 在生产代码里**没有任何调用方**。实测（V3.08 的 `durability_barrier` 行，windows-x86_64 NVMe）：一条一屏障 **1100.3 µs／条**，十条 103.3，五十条 **22.4**。**49 倍就压在每一条事件下面。**
+  - 为什么没有直接改：要么把批量面提上 `kernel::Ledger` 端口（改 kernel 公开面与 ARCHITECTURE 记过的缝），让 `runtime::turn` 攒满一波再交；要么给端口加一个显式屏障动作，`append` 只写不同步。**后者会改掉本模块的承重契约**：今天 `Ok` 即已落盘，观察者也只在落盘后才听到一条——「架上不会有历史里没有的东西」靠的就是这个，而 `EventRef` 一旦在同步前发出去，它就不再是一条已存在的历史的引用。两条路都不是一张「修地基」卡能悄声做完的事。
 - 不裁决任何语义——kind 二分、载荷校验、规范字节全部来自 kernel；jsonl 只定 seq/prev 与介质。
 - 不采样时钟（clippy disallowed 已看守）——`log_truncated` 的 `t` 由 open 的调用方注入；checkpoint 的提交时间同规入参。
 - 不向调用方暴露分段——segment 边界、滚动阈值、文件名全为内部事务；对外只有目录（index 的 seq 寻址经 jsonl 的 pub(crate) 读面，不破此墙）。
@@ -236,7 +240,7 @@ impl LineReader<'_> {
 }
 ```
 
-- 旁挂 cache 格式：首行 `idx v1 <全目录字节数> <b3 前 16>`＋逐行 `seq segment offset`；校验不符／解析失败／目录字节数变化 → 静默重建（可弃即不报错）。失效判定粗粒度（全目录字节数）是刻意的：旁挂物宁可重建不可误信。
+- 旁挂 cache 格式：首行 `idx v2 <全目录字节数> <b3 前 16>`＋逐行 `seq segment offset run`（run 未知记 `-`；V3.03 从 `idx v1` 升上来）；校验不符／解析失败／目录字节数变化 → 静默重建（可弃即不报错）。失效判定粗粒度（全目录字节数）是刻意的：旁挂物宁可重建不可误信。
 - V3.01 落地记录（**取行从「每行一次 open ＋逐字节 read」改为游标**）：一次 `History`／`RunHistory` 查询要取一段连续的 seq，而旧 `line_at` 每一行重开段文件、再一次一个字节 `read` 到换行——系统调用数与行长同阶。句柄因此住进 `LineReader`：段名不变即不重开，读用 `BufReader::read_until(b'\n')`，一次填充服务多行。
   - **实测**（5 万条账本，windows-x86_64 NVMe，2026-09-02，每种模式 200 行）：顺序读（`history`）734 → **0.89 µs／行**；逆序读（`run_history`）706 → **5.82 µs／行**；随机跳读 649 → **14.9 µs／行**。探针一次性，读完即删。
   - **位置自持**：游标记住下一行的偏移，与所求偏移相同即不 seek（顺序读全程零 seek），不同则绝对 seek 并弃缓冲。`run_history` 逆序读每行付一次 seek 与一次缓冲填充，仍是常数次系统调用。
