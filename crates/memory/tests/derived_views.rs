@@ -122,10 +122,11 @@ proptest! {
                 (dir, index)
             },
             |(dir, index)| {
+                let mut reader = index.reader(dir);
                 let lines: Vec<Vec<u8>> = (0..index.len())
                     .map(|i| {
-                        index
-                            .line_at(dir, Seq::new(u64::try_from(i).unwrap_or(0)))
+                        reader
+                            .line_at(Seq::new(u64::try_from(i).unwrap_or(0)))
                             .expect("line")
                     })
                     .collect();

@@ -12,6 +12,7 @@ impl memory::EventQueue
 impl memory::HotView
 impl memory::JsonlLedger
 impl memory::LedgerIndex
+impl memory::LineReader<'_>
 impl memory::Manifest
 impl memory::MemoryError
 impl memory::PlannedMerge<'_>
@@ -66,10 +67,11 @@ pub fn memory::JsonlLedger::position(&self) -> kernel::event::Seq
 pub fn memory::JsonlLedger::read_raw_lines(&self) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<u8>>, memory::MemoryError>
 pub fn memory::LedgerIndex::is_empty(&self) -> bool
 pub fn memory::LedgerIndex::len(&self) -> usize
-pub fn memory::LedgerIndex::line_at(&self, &std::path::Path, kernel::event::Seq) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
 pub fn memory::LedgerIndex::load_or_rebuild(&std::path::Path) -> core::result::Result<memory::LedgerIndex, memory::MemoryError>
 pub fn memory::LedgerIndex::persist(&self, &std::path::Path) -> core::result::Result<(), memory::MemoryError>
+pub fn memory::LedgerIndex::reader(&self, &std::path::Path) -> memory::LineReader<'_>
 pub fn memory::LedgerIndex::tail_seq(&self) -> core::option::Option<kernel::event::Seq>
+pub fn memory::LineReader<'_>::line_at(&mut self, kernel::event::Seq) -> core::result::Result<alloc::vec::Vec<u8>, memory::MemoryError>
 pub fn memory::Manifest::cas_objects(&self) -> u64
 pub fn memory::Manifest::files(&self) -> u64
 pub fn memory::Manifest::head(&self) -> &str
@@ -188,6 +190,7 @@ pub struct memory::EventQueue
 pub struct memory::HotView
 pub struct memory::JsonlLedger
 pub struct memory::LedgerIndex
+pub struct memory::LineReader<'index>
 pub struct memory::Manifest
 pub struct memory::OpenReport
 pub struct memory::PlannedMerge<'a>

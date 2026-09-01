@@ -31,6 +31,7 @@ pub use cas::Cas;
 mod index;
 
 pub use index::LedgerIndex;
+pub use index::LineReader;
 
 mod hot;
 

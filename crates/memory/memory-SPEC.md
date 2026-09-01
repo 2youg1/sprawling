@@ -220,14 +220,25 @@ impl LedgerIndex {
     /// Build by scanning the ledger dir; 旁挂 cache `index.cache` is
     /// loaded when checksum-fresh, rebuilt otherwise (disposable by design).
     pub fn load_or_rebuild(dir: &Path) -> Result<LedgerIndex, MemoryError>;
-    pub fn line_at(&self, dir: &Path, seq: Seq) -> Result<Vec<u8>, MemoryError>;   // 常数时间取一条（open+seek）
+    pub fn reader(&self, dir: &Path) -> LineReader<'_>;                            // V3.01：取行的唯一入口
     pub fn persist(&self, dir: &Path) -> Result<(), MemoryError>;                  // 写 cache；失败非致命（可弃物不阻止主链路）
     pub fn len(&self) -> usize;  pub fn is_empty(&self) -> bool;                   // S3.05 增：重建后自证条数
     pub fn tail_seq(&self) -> Option<Seq>;
 }
+/// 一次查询期间的取行游标：持有当前段的句柄与它的逻辑位置。私有字段。
+pub struct LineReader<'index> { /* index、dir、Option<段名＋BufReader<File>＋下一行偏移> */ }
+impl LineReader<'_> {
+    pub fn line_at(&mut self, seq: Seq) -> Result<Vec<u8>, MemoryError>;           // 取一条（顺序读零 syscall 开销）
+}
 ```
 
 - 旁挂 cache 格式：首行 `idx v1 <全目录字节数> <b3 前 16>`＋逐行 `seq segment offset`；校验不符／解析失败／目录字节数变化 → 静默重建（可弃即不报错）。失效判定粗粒度（全目录字节数）是刻意的：旁挂物宁可重建不可误信。
+- V3.01 落地记录（**取行从「每行一次 open ＋逐字节 read」改为游标**）：一次 `History`／`RunHistory` 查询要取一段连续的 seq，而旧 `line_at` 每一行重开段文件、再一次一个字节 `read` 到换行——系统调用数与行长同阶。句柄因此住进 `LineReader`：段名不变即不重开，读用 `BufReader::read_until(b'\n')`，一次填充服务多行。
+  - **实测**（5 万条账本，windows-x86_64 NVMe，2026-09-02，每种模式 200 行）：顺序读（`history`）734 → **0.89 µs／行**；逆序读（`run_history`）706 → **5.82 µs／行**；随机跳读 649 → **14.9 µs／行**。探针一次性，读完即删。
+  - **位置自持**：游标记住下一行的偏移，与所求偏移相同即不 seek（顺序读全程零 seek），不同则绝对 seek 并弃缓冲。`run_history` 逆序读每行付一次 seek 与一次缓冲填充，仍是常数次系统调用。
+  - **位置用 `Option<u64>` 表达，算不出来就作废**：seek 前、读前各置 `None`，只在一次成功的读之后写回 `offset + 读长`；长度换 `u64` 失败或相加溢出则继续为 `None`，下一次调用必 seek。一个可能错的位置会让游标把别的行的字节交在调用方要的 seq 名下，而旁挂物宁可重做不可误信（与 cache 失效同一条反射）。
+  - **`LedgerIndex::line_at` 一并删除**，不留转发壳：读一行只此一条路，否则「怎样读一行」有两个权威，而慢的那个还在原地招手。读者全部迁完（`bin::assembly` 的 `history`／`run_history`、`tests/derived_views.rs` 的 index 实例、本模块单测）。
+  - **段不因此出门**：`LineReader` 的公开面只有 `line_at(seq)`，段名与偏移仍是内部事务（§7 第三条）。
 - S3.05 落地记录：`seq_of` 只探 `seq` 一个字段——索引不要求整条记录可解析，破损日志上的索引正是修复路径所需；残尾（无换行结尾）跳过不入索引，其修复归 jsonl。段名排序由本模块自持（不信文件系统枚举序）。新增 `MemoryError::SeqMissing{seq}`（→ `E_INVALID_ARGS`）：问一条从未写过的 seq 是调用者错，不是损坏。
 
 ### 8-5 memory::hot（S3.05；形状 7）

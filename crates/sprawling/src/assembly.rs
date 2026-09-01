@@ -675,8 +675,9 @@ impl Views {
         let want = u64::from(limit.clamp(1, channels::HISTORY_MAX));
         let start = end.value().saturating_sub(want.saturating_sub(1));
         let mut records = Vec::new();
+        let mut reader = index.reader(&dir);
         for value in start..=end.value() {
-            let Ok(line) = index.line_at(&dir, kernel::Seq::new(value)) else {
+            let Ok(line) = reader.line_at(kernel::Seq::new(value)) else {
                 break;
             };
             let Ok(record) = EventRecord::parse_line(&line) else {
@@ -737,6 +738,7 @@ impl Views {
         // early must leave them holding.
         let mut found: Vec<EventRecord> = Vec::new();
         let mut reached = start;
+        let mut reader = index.reader(&dir);
         for value in (start..=end.value()).rev() {
             if found.len() >= want {
                 // Stopped early: the next question resumes here rather
@@ -746,7 +748,7 @@ impl Views {
                 break;
             }
             reached = value;
-            let Ok(line) = index.line_at(&dir, kernel::Seq::new(value)) else {
+            let Ok(line) = reader.line_at(kernel::Seq::new(value)) else {
                 break;
             };
             let Ok(record) = EventRecord::parse_line(&line) else {
