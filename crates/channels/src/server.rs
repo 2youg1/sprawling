@@ -736,9 +736,35 @@ async fn session(mut socket: WebSocket, state: Arc<ShellState>) {
                         }
                     }
                     SessionStep::Answer(query) => {
-                        let frame = match (state.queries)(*query) {
-                            Ok(answer) => ServerFrame::Answer(Box::new(answer)),
-                            Err(error) => ServerFrame::Refusal(Box::new(error)),
+                        // Answering reads the disk and takes a lock, and
+                        // it ran here, inside the task that owns this
+                        // socket. One `RunHistory` therefore held a
+                        // tokio worker thread for the whole read: this
+                        // peer received no pushed event for as long as
+                        // it lasted, and enough people opening a session
+                        // at once could occupy every worker the runtime
+                        // has. The blocking pool is where a synchronous
+                        // read belongs, and this stays true however fast
+                        // the read becomes.
+                        let answering = Arc::clone(&state.queries);
+                        let asked = *query;
+                        let outcome =
+                            tokio::task::spawn_blocking(move || answering(asked)).await;
+                        let frame = match outcome {
+                            Ok(Ok(answer)) => ServerFrame::Answer(Box::new(answer)),
+                            Ok(Err(error)) => ServerFrame::Refusal(Box::new(error)),
+                            // The pool dropped the work, which means the
+                            // runtime is going down; say so rather than
+                            // leave the page waiting on a frame that
+                            // will never come.
+                            Err(_) => ServerFrame::Refusal(Box::new(
+                                AxError::failure(
+                                    AxCode::StorageFatal,
+                                    "answer a query",
+                                    "the answering task did not finish",
+                                )
+                                .with_recovery("ask again; if it repeats, restart the server"),
+                            )),
                         };
                         if send(&mut socket, &frame).await.is_err() {
                             return;
