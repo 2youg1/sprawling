@@ -1,0 +1,917 @@
+/* The stylesheet the browser receives.
+
+   Nothing here is named: not a colour, not a font family, not a size, not
+   a corner. web::theme writes the :root custom properties as its first
+   act and every rule below reads one. That is what makes "one production
+   point for presentation" true of the page the browser receives, and not
+   only of the Rust source. Two unit tests in that module read this file
+   back: one fails if a family or a size reappears here, the other fails
+   if a rule reads a token the tables do not produce.
+
+   A file rather than a <style> block, so that a screen designed in plain
+   HTML can <link> the same bytes the product ships. A prototype that
+   carries its own styles cannot be worse than the product and cannot be
+   better than it either - it is simply a different interface, which is
+   how a prototype and its build came to share 60 of 262 class names. */
+
+/* --------------------------------------------------------- the machine */
+
+/* Tells the engine this document is dark, which is not decoration: a
+   browser that has not been told renders every widget it draws itself
+   in its light theme. On Windows that meant a white popup opening out
+   of a select on a near-black page, a white autofill panel, and a date
+   control nobody styled. One declaration answers all of them, and it
+   also gives the scrollbars below their dark base. */
+:root { color-scheme: dark; }
+
+/* The scrollbar is furniture, so it takes surface tokens rather than
+   text tokens: a thumb one step above the raised rung, on the working
+   surface it slides over. Before this it was the platform's own light
+   grey, which on a near-black page is the brightest thing on screen and
+   is attached to the part of the interface that means least. */
+* { scrollbar-width: thin; scrollbar-color: var(--G4) var(--G1); }
+
+/* Selection inverts rather than lightening the surface under the text.
+   Lightening is what a highlight normally does and it cannot be done
+   here: text stops at G2 because the ladder above it does not leave
+   enough contrast, so a brighter highlight would make the selected
+   words the least readable on the page. ACCENT_SOLID is already solved
+   to carry dark ink at the body tier - that is the whole reason it
+   exists - so selection borrows the one fill that can. */
+::selection { background: var(--ACCENT_SOLID); color: var(--G0); }
+
+/* ---------------------------------------------------------------- base */
+
+/* Depth in a dark interface comes from stepped surface lightness, not
+   from shadow: a shadow cannot render darker than a near-black page. So
+   the ladder is G0 page -> G1 working surface -> G2 card -> G3 raised,
+   and a 1px G3 border sharpens an edge where two steps meet. */
+body { background: var(--G0); color: var(--TEXT);
+       font-family: var(--font-sans); font-size: var(--text-body);
+       font-weight: var(--weight-body); line-height: 1.55;
+       margin: 0; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+/* Numbers, identifiers, addresses and hashes take the reader's own
+   fixed-width face. A second family rather than tabular figures alone: a
+   value should line up *and* read as a different kind of thing from the
+   prose beside it. `font-size: 1em` is not decoration - a browser applies
+   a smaller default size to the generic monospace family, and without it
+   every number on the page would shrink beside its own label. */
+.num, .seq, .at, .id, .amount, .day, .count, .address, .addr, .room,
+.tab.room, .binned .what, .login-url, .doc-text, td.num, .sign b, .vitals b
+    { font-family: var(--font-mono); font-size: 1em;
+      font-variant-numeric: tabular-nums; }
+
+h1, h2, h3 { margin: 0; font-weight: var(--weight-heading); }
+h2 { font-size: var(--text-heading); color: var(--TEXT); }
+p { margin: 0; }
+/* Colour is never the only thing carrying a meaning, and here it cannot
+   be the thing at all: ACCENT on the working surface measures Lc 45.7
+   against the 90 a 14px line needs. The word takes the text token and
+   ACCENT moves to the underline, which is a non-text element. */
+a { color: var(--TEXT); text-decoration: underline;
+    text-decoration-color: var(--ACCENT); text-underline-offset: 2px; }
+
+/* ---------------------------------------------------------- the regions */
+
+/* Five regions fill the window exactly once: the rows are declared, so
+   the middle one takes what is left and scrolls inside itself. With
+   min-height and no rows the whole document scrolled instead, and the
+   control surface slid off the bottom edge.
+
+   Three regions now, and the rule that removed two of them is the motion
+   rule generalised from movement to presence: *nothing occupies the
+   screen permanently unless it changes the reader's next action*.
+   "provider status: normal" is a problem's absence and changes nobody's
+   next action; the dispatch bar served one moment and was charged for on
+   all eleven pages. The counts stayed, because whether something is
+   waiting does decide what a person does next. */
+.layout { display: grid; height: 100vh; box-sizing: border-box;
+          gap: var(--space-base); padding: var(--space-base) var(--space-pane);
+          grid-template-columns: 200px minmax(0, 1fr);
+          grid-template-rows: auto minmax(0, 1fr);
+          grid-template-areas: "top top" "nav centre"; }
+
+/* One measure, and one page width.
+
+   45-75 characters is where a line stops making the eye search for its
+   own beginning; three different caps - 88ch, 78ch, 72ch - used to answer
+   this one question in three places. The page bound is what issue #1
+   photographed the absence of: a dispatch strip 2376px wide.
+
+   The content is centred in what is left and the top bar takes the same
+   bound, so the page has one spine down each side instead of a bar that
+   runs edge to edge above a column that does not. Rows and tables may use
+   the whole page width; prose may not, because width is a property of
+   what is being read and not of the window it arrived in. */
+.centre > * { max-width: var(--width-page); margin-inline: auto; }
+.panel-scope, .empty-what, .said, .composer-key, .panel-source
+    { max-width: var(--width-measure); }
+/* `stable` reserves the scrollbar's width whether or not one is showing,
+   so a page whose content crosses the fold does not shift sideways as it
+   grows. `contain` stops a scroll that reaches the end of one pane from
+   continuing in the pane behind it, which is how a list inside a panel
+   used to drag the whole document. */
+.left-nav, .right-status, .centre, ol.lines, .doc-text
+    { scrollbar-gutter: stable; overscroll-behavior: contain; }
+.left-nav, .right-status { overflow: auto; }
+/* The bar states the page, and the counts a person checks from any page.
+   Bounded and centred like the content under it, so the two share a
+   spine; stopping the city moved out of here, because this bar says what
+   the page is and halting says what the city is. */
+.top-bar { grid-area: top; color: var(--TEXT); display: flex; align-items: baseline;
+           gap: var(--space-base); padding-bottom: var(--space-snug);
+           border-bottom: 1px solid var(--G2);
+           width: 100%; max-width: var(--width-page); margin-inline: auto; }
+.top-bar .address { font-size: var(--text-heading); font-weight: var(--weight-heading);
+                    color: var(--TEXT); letter-spacing: 0.02em; }
+.top-bar .counts { margin-left: auto; display: flex; gap: var(--space-base);
+                   color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.top-bar .counts b { color: var(--TEXT); font-weight: var(--weight-heading);
+                     font-family: var(--font-mono); }
+/* Only when it is not normal. A steady "everything is fine" is a
+   problem's absence, and an absence does not earn permanent space. */
+.top-bar .unwell { color: var(--ALERT); font-size: var(--text-note); }
+/* Five destinations at the top, and what this whole city is doing at the
+   bottom - the rail's foot is where a product says what it is, and it is
+   also far from the send button that stopping the city used to sit
+   beside. */
+.left-nav { grid-area: nav; display: flex; flex-direction: column;
+            gap: var(--space-pane); }
+.left-nav .city-state { margin-top: auto; padding-top: var(--space-base);
+                        border-top: 1px solid var(--G2); display: flex;
+                        flex-direction: column; gap: var(--space-snug);
+                        align-items: flex-start; }
+.left-nav .city-state .standing { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.centre { grid-area: centre; background: var(--G1); overflow: auto;
+          padding: var(--space-wide); border: 1px solid var(--G3);
+          border-radius: var(--corner-panel); corner-shape: var(--corner-panel-shape); }
+/* The standing column: facts that are true on every page. It stacks
+   rather than runs across, because it is 264px wide and a row of counts
+   in that space wraps into an unreadable block. */
+.right-status { grid-area: status; display: flex; flex-direction: column;
+                gap: var(--space-base); background: var(--G1);
+                border: 1px solid var(--G3); border-radius: var(--corner-panel);
+                corner-shape: var(--corner-panel-shape); padding: var(--space-pane); }
+.right-status .standing { color: var(--TEXT); }
+.right-status .vitals { flex-direction: column; gap: var(--space-snug); margin: 0;
+                        padding-top: var(--space-base); border-top: 1px solid var(--G2); }
+.right-status .sign { display: flex; gap: var(--space-snug); align-items: baseline; }
+.control-surface { grid-area: foot; border-top: 1px solid var(--G3);
+                   padding-top: var(--space-base); display: flex;
+                   gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap; }
+
+/* What the city refused, where the person who asked for it is looking. In
+   the top bar rather than over the page because a refusal is an answer,
+   not an interruption: nothing is covered and nothing has to be dismissed
+   before work continues. ALERT is on the border and the code alone; a
+   whole strip in the warm token would outshout the badge, which is the one
+   mark meaning somebody has to act. */
+/* Three parts that wrap as parts. Held in one line they each folded
+   into a column a few characters wide, which is how a refusal that
+   names a long address used to read - three narrow paragraphs side by
+   side. The recovery takes its own row: it is the step to take, not a
+   continuation of the sentence above it. */
+.refusal { margin-left: auto; display: flex; align-items: baseline;
+           flex-wrap: wrap; gap: var(--space-snug); max-width: var(--width-measure);
+           padding: var(--space-tight) var(--space-snug); font-size: var(--text-note);
+           background: var(--G2); border: 1px solid var(--ALERT);
+           border-radius: var(--corner-control); corner-shape: var(--corner-control-shape); }
+.refusal-code { color: var(--ALERT); font-weight: var(--weight-heading); white-space: nowrap;
+                font-family: var(--font-mono); }
+.refusal-what { color: var(--TEXT); flex: 1 1 24ch; }
+.refusal-way { color: var(--TEXT_QUIET); flex: 1 1 100%; }
+.refusal-close { background: transparent; border: 0; color: var(--TEXT_QUIET);
+                 padding: 0 2px; line-height: 1; }
+.refusal-close:hover { color: var(--TEXT); }
+
+/* ------------------------------------------------------------- the nav */
+
+/* Three headings rather than eight flat entries: the nav answers "where
+   do I go for this", and a list that long is read as a menu to search.
+   Nothing collapses - a hidden page is not a shorter nav, it is a page
+   nobody finds. */
+.nav-group { display: flex; flex-direction: column; gap: 1px; }
+.nav-heading { font-size: var(--text-note); font-weight: var(--weight-note);
+               letter-spacing: 0.09em; text-transform: uppercase; color: var(--TEXT_QUIET);
+               margin: 0 0 var(--space-tight) 10px; }
+/* `text-decoration: none` because a nav entry is an anchor: the address
+   bar is the one authority for which page is showing, so a link needs no
+   handler, and the underline the base rule gives every anchor would draw
+   a line under all five destinations. */
+.nav-item { text-align: left; background: transparent; border: 0; color: var(--TEXT);
+            border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
+            padding: 7px 10px; display: flex; align-items: center; gap: var(--space-snug);
+            font-size: var(--text-body); text-decoration: none; }
+.nav-item:hover { background: var(--G2); color: var(--TEXT); }
+.nav-item[aria-current="page"] { background: var(--G2); color: var(--TEXT);
+                                 font-weight: var(--weight-heading);
+                                 box-shadow: inset 2px 0 0 var(--ACCENT); }
+.badge { margin-left: auto; background: var(--ALERT); color: var(--G0);
+         border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+         padding: 0 6px; font-size: var(--text-label); font-weight: 700;
+         font-family: var(--font-mono); }
+
+/* --------------------------------------------------- the command box */
+
+/* The one thing in this client that covers the page, and it covers it
+   because it is modal in the reader's head too: they have stopped to say
+   where they are going. The scrim is the page's own token mixed with
+   transparency rather than a new colour, so desaturating the interface
+   desaturates this with it. */
+.palette-scrim { position: fixed; inset: 0; z-index: 40; display: grid;
+                 justify-items: center; align-content: start; padding-top: 12vh;
+                 padding-left: var(--space-pane); padding-right: var(--space-pane);
+                 background: color-mix(in oklab, var(--G0) 74%, transparent); }
+.palette, .keymap { width: min(560px, 100%); background: var(--G1);
+                    border: 1px solid var(--G4); border-radius: var(--corner-panel);
+                    corner-shape: var(--corner-panel-shape); overflow: hidden; }
+/* The query line carries no border of its own: the box around it is
+   already the edge, and a second one inside reads as a field inside a
+   field. One step larger than prose, because it is the only thing on
+   screen the person is doing. */
+.palette-query { width: 100%; background: transparent; border: 0;
+                 border-bottom: 1px solid var(--G3); border-radius: 0;
+                 font-size: var(--text-heading); font-weight: var(--weight-body);
+                 padding: var(--space-base) var(--space-pane); }
+.palette-query:focus-visible { outline: none; border-bottom-color: var(--ACCENT); }
+.palette-list { list-style: none; margin: 0; padding: var(--space-tight);
+                max-height: 46vh; overflow: auto; }
+/* A row is the whole width: the target is the destination, not the word
+   that names it. */
+.palette-row { display: flex; width: 100%; align-items: baseline;
+               gap: var(--space-base); text-align: left; background: transparent;
+               border: 0; padding: var(--space-snug) var(--space-base);
+               font-size: var(--text-body); }
+.palette-row:hover:not(:disabled) { background: var(--G2); border-color: transparent; }
+.palette-label { color: var(--TEXT); }
+/* Which sort of thing this is. "lab" can be a building and "lab/parser"
+   a session, so a list that does not say has to be guessed at. */
+.palette-kind { margin-left: auto; color: var(--TEXT_QUIET);
+                font-size: var(--text-note); }
+.palette-empty { padding: var(--space-pane); }
+.keymap { padding: var(--space-pane) var(--space-wide) var(--space-wide); }
+.keymap dl { margin: var(--space-base) 0 0; }
+.keymap-row { display: grid; grid-template-columns: 152px 1fr;
+              gap: var(--space-base); padding: var(--space-snug) 0;
+              border-top: 1px solid var(--G2); }
+.keymap-row dd { margin: 0; color: var(--TEXT); }
+.keymap .chord { font-family: var(--font-mono); color: var(--TEXT_QUIET);
+                 font-size: var(--text-note); }
+
+/* --------------------------------------------------------- the panel */
+
+/* One grammar for every centre panel, in four parts, because a panel that
+   states a number without saying where the number came from is the one
+   thing a product built on an auditable Ledger may not ship:
+
+     title   the conclusion, not the noun     G10, text-title
+     scope   what is counted and what is not  G6,  text-small
+     body    the thing itself
+     source  where these numbers came from    G6,  text-small, ruled off
+
+   A page is a stack of these and nothing else, so two pages cannot
+   disagree about what a heading means. */
+.panel { margin: 0 0 var(--space-section); }
+.panel:last-child { margin-bottom: 0; }
+.panel-head { display: flex; align-items: baseline; gap: var(--space-base);
+              flex-wrap: wrap; margin-bottom: var(--space-tight); }
+.panel-title { font-size: var(--text-title); font-weight: var(--weight-title);
+               color: var(--TEXT); letter-spacing: -0.01em; }
+.panel-figure { font-size: var(--text-figure); font-weight: var(--weight-figure);
+                color: var(--TEXT); font-family: var(--font-mono);
+                font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.panel-scope { color: var(--TEXT_QUIET); font-size: var(--text-note);
+               margin-bottom: var(--space-base); }
+.panel-body { display: block; }
+.panel-source { color: var(--TEXT_QUIET); font-size: var(--text-note);
+                margin-top: var(--space-base); padding-top: var(--space-snug);
+                border-top: 1px solid var(--G2); }
+
+/* A card is a panel's contents raised one step off the working surface. */
+.card { background: var(--G2); border: 1px solid var(--G3);
+        border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+        padding: var(--space-pane); }
+
+/* ----------------------------------------------------- the empty state */
+
+/* Never a bare sentence in an empty pane. Three parts, after Nielsen
+   Norman's rule: say what the system's state is, say what would be here,
+   and give the way to put something here. A pane that says nothing is
+   read as a pane that is broken, and a reader cannot tell "nothing yet"
+   from "still loading" from "the filter excluded everything". */
+.empty { display: block; color: var(--TEXT_QUIET); font-size: var(--text-note);
+         background: var(--G1); border: 1px dashed var(--G3);
+         border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+         padding: var(--space-pane) var(--space-pane); }
+.empty-status { color: var(--TEXT); font-size: var(--text-body);
+                display: block; margin-bottom: var(--space-tight); }
+.empty-what { color: var(--TEXT_QUIET); display: block; }
+.empty-way { margin-top: var(--space-base); display: flex; gap: var(--space-snug);
+             flex-wrap: wrap; }
+
+/* Everything that qualifies something else: scope, provenance, a count
+   that was left out, a note under a row. One size, one step of grey. */
+.note, .window, .dropped, .settings-state, .city-state, .reconciled,
+.spent-line, .enrolment, .doc-note, .desc-note
+    { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+/* ALERT means one thing everywhere: a person is needed, and nothing else
+   may borrow it. A filter that hid rows and a total nobody priced are
+   both cases where the interface would otherwise quietly answer for the
+   person. */
+.filtered, .unpriced, .problems { color: var(--ALERT); font-size: var(--text-note); }
+
+/* ---------------------------------------------------------- controls */
+
+/* A control is raised off whatever it sits on, and a label one step
+   larger than prose is what pays for the height.
+
+   The first attempt here stopped every fill at G2 so that a 14px label
+   kept Lc 90. It satisfied the measurement and broke the control: a card
+   is G2, so a button on a card had the card's own fill and read as a
+   button only by its border. The measurement was right and the
+   conclusion was wrong - the label does not have to be 14px. At the
+   `note` step Bronze asks Lc 75, the text token reaches 87.5 on G3 and
+   83.4 on G4, and the button gets its step back on every surface it can
+   sit on. A control that is slightly larger than the prose around it is
+   also the correct thing on its own terms. */
+button { background: var(--G3); color: var(--TEXT); border: 1px solid var(--G4);
+         border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
+         padding: 5px 12px; font: inherit; font-size: var(--text-note); cursor: pointer; }
+button:hover:not(:disabled) { background: var(--G4); border-color: var(--G6); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+/* The one fill that carries dark text. ACCENT itself cannot: dark ink on
+   it measures Lc 48.5 and a 14px label needs 90, so the solid variant is
+   solved for the label rather than chosen for the fill. Hover speaks in
+   stroke here too, because raising the fill would take the label back
+   below the floor. */
+button[type="submit"]:not(:disabled) { background: var(--ACCENT_SOLID);
+                                       border-color: var(--ACCENT_SOLID);
+                                       color: var(--G0); font-weight: var(--weight-heading); }
+button[type="submit"]:hover:not(:disabled) { border-color: var(--TEXT); }
+button.quiet { background: transparent; border-color: var(--G3); color: var(--TEXT_QUIET); }
+button.quiet:hover:not(:disabled) { background: var(--G2); color: var(--TEXT); }
+:focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 2px; }
+input, select, textarea { background: var(--G1); color: var(--TEXT); font: inherit;
+                          font-size: var(--text-body);
+                          border: 1px solid var(--G4); border-radius: var(--corner-control);
+                          corner-shape: var(--corner-control-shape); padding: 6px 9px;
+                          caret-color: var(--ACCENT); accent-color: var(--ACCENT); }
+input:hover, select:hover, textarea:hover { border-color: var(--TEXT_DISABLED); }
+input::placeholder, textarea::placeholder { color: var(--TEXT_DISABLED); }
+
+/* What a control owes the hand that just moved to it, and the only
+   movement in this library. Declared on the resting rule because a
+   transition has to be there for the way back as well; every property
+   named here is one that nothing but :hover, :focus-visible or :active
+   changes, so none of it can fire while nobody is touching the page.
+
+   The press is a real displacement rather than another colour: at this
+   size a one-pixel drop is the difference between a surface that
+   answers and a picture of a button, and it survives the desaturated
+   snapshot, where a colour-only press would not. */
+button, .nav-item, .tab, .attention-row, .index-row .pick {
+    transition: background-color var(--motion-quick), border-color var(--motion-quick),
+                color var(--motion-quick), transform var(--motion-quick); }
+button:active:not(:disabled), .nav-item:active, .tab:active,
+.attention-row:active { transform: translateY(1px); }
+form { display: flex; gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap;
+       margin: var(--space-base) 0; }
+
+/* A label above its field, never a placeholder standing in for one: a
+   placeholder disappears the moment somebody types, taking the only
+   statement of what the field wanted with it. */
+.field { display: flex; flex-direction: column; gap: var(--space-tight); }
+.field > label { font-size: var(--text-label); font-weight: var(--weight-label);
+                 letter-spacing: 0.07em; text-transform: uppercase; color: var(--TEXT); }
+.field .hint { font-size: var(--text-note); color: var(--TEXT_QUIET); }
+.field .hint.blocking { color: var(--ALERT); }
+/* A sentence saying why a form is refused reads the whole form, so it
+   belongs under the row and not inside the last field. Inside one, it
+   made that field a line taller than its neighbours, and a row whose
+   controls align on their bottom edge answered by lifting the button
+   out of line with the selects it belongs to. */
+form > .hint.blocking { flex-basis: 100%; color: var(--ALERT);
+                        font-size: var(--text-note); margin-top: var(--space-tight); }
+
+/* ------------------------------------------------------ tables, lists */
+
+table { width: 100%; border-collapse: collapse; margin: var(--space-snug) 0; }
+th { text-align: left; color: var(--TEXT); font-weight: var(--weight-body);
+     font-size: var(--text-label); letter-spacing: 0.07em; text-transform: uppercase;
+     padding: var(--space-snug); border-bottom: 1px solid var(--G3); }
+td { padding: 7px var(--space-snug); border-bottom: 1px solid var(--G2);
+     vertical-align: top; }
+tbody tr:hover td { background: var(--G2); }
+/* A turn is one row and what it did is inside it. The event stream is
+   the Ledger's shape; this is the reader's, and both read the same
+   records. Everything this product does differently happens inside one
+   turn, and as a flat stream all of it arrived as the same grey line. */
+ol.turns { list-style: none; margin: 0; padding: 0; max-height: 56vh;
+           overflow: auto; scrollbar-gutter: stable;
+           overscroll-behavior: contain; }
+.turn { border-top: 1px solid var(--G2); padding: var(--space-snug) 0; }
+.turn-head { display: flex; align-items: baseline; gap: var(--space-base);
+             font-size: var(--text-note); color: var(--TEXT_QUIET); }
+.turn-head .n { color: var(--TEXT); font-weight: var(--weight-label); }
+.turn-head .count { margin-left: auto; }
+/* One call, one line: what ran, what it ran on, how it came out, and
+   where the bytes are. The last column is why this is a disclosure and
+   not a dump - the row states a shape and addresses the rest. */
+.call { display: grid; grid-template-columns: 13ch minmax(0, 1fr) 9ch 7ch;
+        gap: var(--space-base); align-items: baseline; padding: 3px 0 3px var(--space-base);
+        border-left: 2px solid var(--G3); margin-top: var(--space-tight); }
+.call .tool { color: var(--TEXT); font-family: var(--font-mono); }
+/* `note` and not the body step: the quiet token answers Lc 75, which
+   Bronze admits from 15px, and at 14px it would be below its tier. On a
+   dark surface quiet is bought with size, never with grey. */
+.call .arg { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+             font-size: var(--text-note);
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call .out { font-size: var(--text-note); }
+.call .out.waiting { color: var(--TEXT_QUIET); }
+.call .out.answered { color: var(--TEXT_QUIET); }
+/* A failed call is a fact, not a request for a person, so it does not
+   borrow ALERT. It separates by lightness and by the word, which is the
+   same handling the diff rules describe. */
+.call .out.failed { color: var(--TEXT); font-weight: var(--weight-label); }
+.call .seq { color: var(--TEXT_QUIET); font-size: var(--text-note);
+             text-align: right; }
+/* What one turn cost. Pushed to the right of the head, after the count,
+   because it is what a reader checks second and never first. */
+.turn-head .spent, .turn-head .used, .turn-head .stopped
+    { font-family: var(--font-mono); font-size: var(--text-note);
+      color: var(--TEXT_QUIET); }
+/* What the model said. The reason this is a session and not a tool log,
+   so it takes the body step and the body token rather than the quiet
+   one - this is prose a person reads, not a figure they scan. */
+.said { margin: var(--space-snug) 0 0; color: var(--TEXT);
+        white-space: pre-wrap; overflow-wrap: break-word; }
+/* A disclosure, one click down, spanning the call's four columns. The
+   summary is quiet at the note step; the output itself is body-coloured
+   because somebody opened it in order to read it. */
+.call .output { grid-column: 1 / -1; margin-top: var(--space-tight); }
+.call .output summary { cursor: pointer; color: var(--TEXT_QUIET);
+                        font-size: var(--text-note); }
+.call .output pre { margin: var(--space-tight) 0 0; color: var(--TEXT);
+                    font-family: var(--font-mono); font-size: var(--text-note);
+                    max-height: 24em; overflow: auto; white-space: pre-wrap;
+                    overscroll-behavior: contain; }
+.call .output .cut { margin: var(--space-tight) 0 0; color: var(--TEXT_QUIET);
+                     font-size: var(--text-note); }
+/* What else happened inside a turn. Same left rule as a call because it
+   sits at the same depth, and no colour of its own: a refusal is a fact
+   about this turn, and ALERT means a person is needed rather than a
+   person should read. Lightness and weight carry it, as with `failed`. */
+.note { display: flex; flex-wrap: wrap; align-items: baseline;
+        gap: var(--space-snug); padding: 3px 0 3px var(--space-base);
+        border-left: 2px solid var(--G3); margin-top: var(--space-tight);
+        font-size: var(--text-note); }
+.note .code { font-family: var(--font-mono); color: var(--TEXT);
+              font-weight: var(--weight-label); }
+.note .what { color: var(--TEXT); }
+.note .recovery { color: var(--TEXT_QUIET); }
+.note .arg { color: var(--TEXT_QUIET); font-family: var(--font-mono); }
+.note .seq { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+             margin-left: auto; }
+/* What this session did to the disk. Above the turns because it is the
+   fastest answer to "what has this agent been doing", and open by
+   default for the same reason. */
+.changed { margin: var(--space-snug) 0 var(--space-base);
+           border: 1px solid var(--G3); border-radius: var(--corner-card);
+           corner-shape: var(--corner-card-shape); padding: var(--space-snug); }
+.changed summary { cursor: pointer; color: var(--TEXT);
+                   font-weight: var(--weight-label); }
+.changed-file { display: grid;
+                grid-template-columns: 6ch minmax(0, 1fr) 6ch 6ch;
+                gap: var(--space-base); align-items: baseline;
+                padding: 3px 0; font-size: var(--text-note); }
+.changed-file .how { color: var(--TEXT_QUIET); }
+.changed-file .path { color: var(--TEXT); font-family: var(--font-mono);
+                      overflow: hidden; text-overflow: ellipsis;
+                      white-space: nowrap; direction: rtl; text-align: left; }
+/* No green and no red. This design has two chromatic tokens and both
+   already mean something else - ACCENT "something is happening", ALERT
+   "a person is needed" - so a red deletion would be asking for a person
+   every time an agent tidied up. The sign carries the direction, the
+   column carries which is which, and weight separates the one that is
+   usually being looked for. Same instrument as `.call .out.failed`. */
+.changed-file .added { color: var(--TEXT); font-family: var(--font-mono);
+                       font-weight: var(--weight-label); text-align: right; }
+.changed-file .removed { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+                         text-align: right; }
+.changed-file .binary { grid-column: 3 / -1; color: var(--TEXT_QUIET);
+                        text-align: right; }
+.live .stream { margin-top: var(--space-base); }
+.live .stream summary { cursor: pointer; color: var(--TEXT_QUIET);
+                        font-size: var(--text-note); }
+ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; }
+.line { display: grid; grid-template-columns: 76px 152px 1fr; gap: var(--space-base);
+        padding: var(--space-tight) 0; border-bottom: 1px solid var(--G2); }
+.line .seq { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.line .kind { color: var(--TEXT_QUIET); }
+.line .text { color: var(--TEXT); }
+.line.person .text { color: var(--TEXT); font-weight: var(--weight-heading); }
+
+/* ------------------------------------------------------------- pages */
+
+/* The first screen. What waits on a person is a row that is itself the
+   button: a sentence with a link inside it asks somebody to aim, and the
+   thing being aimed at is the whole row. ALERT is on the count alone,
+   because the count is what makes it urgent - a row that is merely
+   informative would be shouting in the same voice. */
+.attention { display: flex; flex-direction: column; gap: var(--space-tight); }
+.attention-row { display: flex; align-items: baseline; gap: var(--space-base);
+                 text-align: left; width: 100%; background: var(--G2);
+                 border: 1px solid var(--G3); padding: var(--space-base) var(--space-pane); }
+/* Hover speaks in stroke: this row carries body text and a quiet
+   second line, and raising the fill would take both below their tiers
+   for as long as the pointer is on them. */
+.attention-row:hover { border-color: var(--G6); }
+.attention-row .count { font-family: var(--font-mono); font-size: var(--text-title);
+                        font-weight: var(--weight-title); color: var(--ALERT);
+                        min-width: 2ch; }
+.attention-row .what { color: var(--TEXT); }
+.overview .in-flight td.addr { color: var(--TEXT); }
+.overview .index-row { grid-template-columns: minmax(0, 22ch) 120px 1fr;
+                       padding: var(--space-snug) var(--space-snug); }
+
+/* Approvals: a group is a card, and a tainted one is bordered in the
+   colour that means a person is needed and cannot be waived. */
+.cluster { border: 1px solid var(--G3); background: var(--G2);
+           border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+           margin-bottom: var(--space-base); overflow: hidden; }
+/* Stays on G2 with a rule to separate it. A header carries the group's
+   quiet text, and the quiet token measures Lc 71.8 on G3 against the 75
+   its step asks for - the raised rung is for controls, whose labels are
+   one step larger, and for nothing that has to whisper. */
+.cluster > header { background: var(--G2); border-bottom: 1px solid var(--G4);
+                    padding: var(--space-snug) var(--space-base);
+                    display: flex; gap: var(--space-base); align-items: center;
+                    flex-wrap: wrap; }
+.cluster.tainted { border-color: var(--ALERT); }
+.cluster .item { padding: 9px var(--space-base); border-top: 1px solid var(--G3);
+                 display: flex; gap: var(--space-base); align-items: center;
+                 flex-wrap: wrap; }
+.cluster .desc { flex: 1; color: var(--TEXT); }
+.cluster .actor, .cluster .count { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+
+/* The progress bar: one shape, three states, and the blocked one carries
+   a rule so it survives both the loss of hue and a lightness collision.
+   No animation - a moving stripe manufactures attention. */
+.bar { display: flex; align-items: center; gap: var(--space-snug); }
+.bar .track { display: block; width: 168px; height: 8px; background: var(--G4);
+              border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+              overflow: hidden; }
+.bar .fill { display: block; height: 100%; }
+.bar.running .fill { background: var(--ACCENT); }
+.bar.done .fill { background: var(--PROGRESS_DONE); }
+.bar.blocked .fill { background: var(--ALERT); box-shadow: inset -2px 0 0 var(--G10); }
+.bar.blocked .track { box-shadow: inset 2px 0 0 var(--G10); }
+.bar .bar-label { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+
+/* The city's vital signs: three counts. Plain text rather than tiles - a
+   number that needs a box around it to be noticed is a number nobody
+   needed. */
+.vitals { display: flex; gap: var(--space-wide); flex-wrap: wrap; color: var(--TEXT_QUIET);
+          font-size: var(--text-note); margin-bottom: var(--space-base); }
+.vitals.empty { border: 0; background: none; padding: 0; }
+.vitals b { color: var(--TEXT); font-weight: var(--weight-heading); }
+
+/* The archive: a search over the shelves, and what the record says went
+   in lately. The two halves are separated, never merged - one reads the
+   disk, the other reads history. */
+.archive-search .search { margin: 0 0 var(--space-base); }
+.archive-search .search input { min-width: 280px; }
+.shelf { margin: var(--space-base) 0 var(--space-pane); }
+.shelf h2 { color: var(--TEXT); border-bottom: 1px solid var(--G3);
+            padding-bottom: var(--space-tight); }
+.lately { margin-top: var(--space-wide); padding-top: var(--space-base);
+          border-top: 1px solid var(--G3); }
+.archive-search .filed { grid-template-columns: 90px 110px 1fr 160px; }
+.filed .where { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.filed { display: grid; grid-template-columns: 90px 110px 1fr; gap: var(--space-base);
+         padding: 7px 0; border-bottom: 1px solid var(--G2); }
+.filed .day, .filed .kind { color: var(--TEXT_QUIET); }
+
+/* A room's mailbox: what waits, and who sent it. */
+.waiting { display: grid; grid-template-columns: 110px 180px 1fr; gap: var(--space-base);
+           padding: var(--space-snug) 0; border-bottom: 1px solid var(--G2); }
+.waiting .kind { color: var(--TEXT); }
+.waiting .from, .waiting .id { color: var(--TEXT_QUIET); }
+.tab.room { font-size: var(--text-note); }
+
+/* The Recycle Bin: the way back is the widest column because it is the
+   only part a person acts on. A row that already came back dims - it is
+   evidence, not work. */
+.binned { display: grid; grid-template-columns: 280px 1fr auto; gap: var(--space-base);
+          padding: 7px 0; border-bottom: 1px solid var(--G2); align-items: baseline; }
+.binned .what { color: var(--TEXT); font-size: var(--text-note); }
+.binned .way-back { color: var(--TEXT_QUIET); }
+.binned.back { color: var(--TEXT_QUIET); }
+.binned.back .what, .binned.back .way-back { color: var(--TEXT_QUIET); }
+
+/* Cost: one bar grammar, share by width, amount right-aligned. */
+.dimension { margin-bottom: var(--space-pane); }
+.dashboard .row { display: grid; grid-template-columns: 232px 1fr 104px;
+                  gap: var(--space-base); align-items: center; padding: 3px 0; }
+.track { display: block; height: 10px; background: var(--G3);
+         border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+         overflow: hidden; }
+.fill { display: block; height: 100%; background: var(--PROGRESS_DONE); }
+.total { display: flex; gap: var(--space-base); align-items: baseline; flex-wrap: wrap;
+         margin-bottom: var(--space-base); }
+.total .amount { font-size: var(--text-figure); font-weight: var(--weight-figure);
+                 color: var(--TEXT); letter-spacing: -0.02em; }
+.dashboard .amount { text-align: right; }
+.consumed { color: var(--TEXT_QUIET); }
+
+/* The dispatch bar takes the width it needs and no more. The address
+   column is measured in characters because that is what it holds: at
+   180px the one field nobody can guess the format of showed
+   `which room, as building/ro`, and a placeholder cut in half is a
+   placeholder that teaches the wrong format. */
+/* At rest this is two fields and two buttons: where the work goes, what
+   it is, one control that says there is more, and the one that starts
+   it. The other four have defaults that are right most of the time, and
+   standing open they asked a person to read the whole grammar of a
+   dispatch before writing a word of it.
+
+   Flex rather than a fixed column count, because the number of controls
+   is now a state: a seven-column grid holding four items leaves three
+   empty tracks, and the send button lands in the middle of the bar. */
+.dispatch { flex: 1; display: flex; flex-wrap: wrap; gap: var(--space-snug);
+            margin: 0; align-items: end; }
+.dispatch input, .dispatch select { width: 100%; }
+.dispatch .field { gap: 3px; min-width: 0; flex: 1 1 15ch; }
+/* The task takes what is left: it is the only field whose content has no
+   shape anybody can predict. Opened, it takes a whole row instead, so
+   the five short fields beside it stop being squeezed to the point where
+   a select reads `follow the city set...`. */
+.dispatch .field.task { flex: 3 1 28ch; }
+.dispatch.open .field.task { flex: 1 1 100%; order: -1; }
+.dispatch .field.where { flex: 0 1 18ch; }
+/* Away from the send button and behind a rule. Stopping the city is a
+   different kind of act from starting a session, and it used to sit
+   where a slip of the hand reaches it. */
+.control-surface .cancel { margin-left: var(--space-base);
+                           padding-left: var(--space-base);
+                           border-left: 1px solid var(--G3); }
+.top-bar .halt { margin-left: var(--space-base); }
+.steer input { min-width: 320px; }
+/* What a person may do to a run, beside what they may say to it. Quiet
+   buttons: these are available rather than suggested, and a page that
+   highlighted them would be recommending an interruption. */
+.interventions { display: flex; gap: var(--space-snug); align-items: baseline;
+                 flex-wrap: wrap; margin-top: var(--space-base);
+                 padding-top: var(--space-base); border-top: 1px solid var(--G2); }
+.interventions .note { flex-basis: 100%; }
+.filters input, .filters select { min-width: 160px; }
+.export textarea { width: 100%; background: var(--G1); color: var(--TEXT_QUIET);
+                   border: 1px solid var(--G3); border-radius: var(--corner-card);
+                   corner-shape: var(--corner-card-shape); }
+
+/* The isometric city is drawn as shapes in the document, so it reads the
+   tokens every other surface reads, scales without resampling, and is
+   reachable by hover, focus and a keyboard. */
+/* height: auto, so the box takes the drawing's own proportions rather
+   than sitting inside a field it does not fill, which is what the canvas
+   did. The ceiling is the correction to that reasoning: on a 1280x800
+   window the drawing alone was 650px, so `raise a building` and the list
+   of buildings both fell below the fold and the last row was cut in
+   half. Under the ceiling the picture keeps its proportions and gives
+   back the margin at its sides - the only place in this client where a
+   building can be raised is worth more than that margin. */
+/* An empty city keeps its ground and gives back the height: nothing is
+   standing there yet, and the form that raises the first building is
+   worth more of the fold than a picture of bare tiles. */
+.city-view .stage.bare { max-height: 22vh; }
+.city-view .stage { display: block; width: 100%; height: auto; max-height: 52vh;
+                    background: var(--G0);
+                    border: 1px solid var(--G3); border-radius: var(--corner-panel);
+                    corner-shape: var(--corner-panel-shape); }
+/* A building is one group, and the group is what a pointer, a focus ring
+   and a keyboard all reach. The fill of each face is written inline from
+   the token the geometry chose, so hover and focus speak in stroke
+   instead - a rule that has to out-shout an inline style is a rule that
+   will lose somewhere. */
+.stage .prism { cursor: pointer; outline: none; }
+.stage .prism polygon { stroke-width: 0; }
+.stage .prism:hover polygon.body { stroke: var(--G9); stroke-width: 1.5;
+                                   vector-effect: non-scaling-stroke; }
+.stage .prism:focus-visible polygon.body { stroke: var(--ACCENT); stroke-width: 2;
+                                           vector-effect: non-scaling-stroke; }
+.stage .chosen { fill: none; stroke: var(--ACCENT); stroke-width: 2.5;
+                 vector-effect: non-scaling-stroke; pointer-events: none; }
+.stage text { text-anchor: middle; }
+.stage text.name { font-size: 13px; font-weight: var(--weight-heading); }
+.stage text.note { font-size: 12px; font-family: var(--font-mono); }
+.city-view .camera { display: flex; gap: var(--space-tight); flex-wrap: wrap;
+                     margin-top: var(--space-snug); }
+.city-view .camera button { padding: 4px 9px; font-size: var(--text-note); }
+
+/* The registration form is read as four steps in one column: name the
+   provider and its wire, hand the key over, then attach. Three fields
+   whose hints are different heights were sharing one baseline, so the
+   eye had no line to follow and the two buttons read as alternatives
+   rather than as the order they must be pressed in. */
+/* The language switch: two words, each in its own language, and the
+   one in use marked the way the nav marks the page you are on. */
+.languages { display: flex; gap: var(--space-snug); }
+.languages button[aria-current="true"] { border-color: var(--ACCENT); color: var(--TEXT); }
+.settings .attach { align-items: start; }
+.settings .attach .field { flex: 1 1 20ch; }
+.settings .attach .field.wide, .settings .attach .enrolment { flex-basis: 100%; }
+.settings .attach .field.submit { align-items: flex-start; }
+.settings .models summary { cursor: pointer; color: var(--TEXT_QUIET); }
+.settings .model { display: inline-block; margin: 2px 6px 0 0; color: var(--TEXT_QUIET);
+                   font-size: var(--text-note); border: 1px solid var(--G3);
+                   border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
+                   padding: 0 6px; font-family: var(--font-mono); }
+/* The heading of a watched session: the name its person gave it, then
+   the identifier the Ledger knows it by. The second one is quiet: a
+   person reads the name and addresses `sprawling fork` with the id. */
+.live-head { display: flex; gap: var(--space-base); align-items: baseline;
+             flex-wrap: wrap; margin-bottom: var(--space-snug); }
+.live-head .run { color: var(--TEXT); font-weight: var(--weight-heading); }
+.live-head .run-id { color: var(--TEXT_QUIET); font-family: var(--font-mono);
+                     font-size: var(--text-note); }
+.runs { display: flex; gap: var(--space-tight); flex-wrap: wrap;
+        margin-bottom: var(--space-base); }
+.runs button[aria-current="true"] { border-color: var(--ACCENT); color: var(--TEXT); }
+.paging { display: flex; gap: var(--space-snug); align-items: center;
+          margin-top: var(--space-base); }
+
+/* A building's own pages: tabs across the top, one document below. */
+.building-head { display: flex; gap: var(--space-pane); align-items: baseline;
+                 flex-wrap: wrap; margin-bottom: var(--space-base); }
+.building-head .progress, .building-head .rooms { color: var(--TEXT_QUIET);
+                                                  font-size: var(--text-note); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--G3);
+        margin-bottom: var(--space-base); flex-wrap: wrap; }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--TEXT_QUIET);
+       padding: 7px var(--space-base); }
+.tab:hover { color: var(--TEXT); }
+.tab[aria-current="true"] { color: var(--TEXT); border-bottom-color: var(--ACCENT); }
+/* A drop zone says so while a drag is over it and stays quiet
+   otherwise: a target that is always outlined teaches nothing. */
+.drop-zone { border-radius: var(--corner-card); corner-shape: var(--corner-card-shape); }
+/* Two rules, because they answer two different questions. `:hover` is a
+   pointer moving over the page with nothing in hand, and it teaches
+   that this place takes a drop at all. `.over` is a drag actually here,
+   and it is the one that has to be right: for the whole of a drag the
+   browser suppresses device input events, so the pointer state a hover
+   rule reads is not being updated and the hover outline never lights at
+   the moment somebody is deciding where to let go. The class is put on
+   by `dragenter` and taken off by `dragleave`, which always fires even
+   when the drag is cancelled. */
+.drop-zone:hover { outline: 1px dashed var(--G5); outline-offset: 2px; }
+/* ACCENT rather than a colour of its own: "something is happening
+   here" is exactly what a drop target under the cursor means, and a
+   third hue would be a third meaning nobody asked for. Solid and two
+   pixels, so it is a different statement from the dashed hint. */
+.drop-zone.over { outline: 2px solid var(--ACCENT); outline-offset: 2px;
+                  background: var(--G2); }
+.doc-text { background: var(--G1); border: 1px solid var(--G3);
+            border-radius: var(--corner-card); corner-shape: var(--corner-card-shape);
+            padding: var(--space-pane); white-space: pre-wrap; color: var(--TEXT);
+            max-height: 56vh; overflow: auto; margin: 0; font-size: var(--text-note);
+            line-height: 1.6; }
+/* Syntax, carried by lightness and weight and by nothing else.
+
+   This is not a limitation worked around, it is the design's own rule
+   followed: there are exactly two chromatic tokens in this product and
+   each has one meaning - ACCENT "something is happening here", ALERT
+   "a person is needed here". A rainbow document would break the
+   single-hue language and, worse, spend the only two colours the
+   interface has on syntax that means neither of those things. So the
+   nine tokens separate the way `.call .out.failed` separates from
+   `.answered`: where they sit on the grey ramp, how heavy they are,
+   and whether they slant.
+
+   Every token is at the note step or larger and takes TEXT or a token
+   the ramp admits at that step, so `xtask color` still decides the
+   contrast rather than this block. */
+.tok { color: inherit; }
+/* The ramp has no step above TEXT, so a heading cannot be made brighter
+   than the prose under it. It separates upward in weight instead, which
+   is the same move `.call .out.failed` makes and the reason that one
+   works. */
+.tok.heading { color: var(--TEXT); font-weight: var(--weight-heading); }
+.tok.strong { color: var(--TEXT); font-weight: var(--weight-label); }
+.tok.emphasis { font-style: italic; }
+/* Inline code and fenced blocks read as one thing, because they are.
+   The tint is a step on the surface ladder, not a hue. */
+.tok.code { background: var(--G2); border-radius: var(--corner-control);
+            corner-shape: var(--corner-control-shape); }
+/* Scaffolding: present, because somebody editing the file needs to see
+   it, and quiet, because it is not the content. Quiet and not faint -
+   `.doc-text` is at the note step and faint sits below the tier Bronze
+   admits there. */
+.tok.fence { color: var(--TEXT_QUIET); }
+.tok.meta { color: var(--TEXT_QUIET); font-style: italic; }
+/* Underlined rather than coloured, which is already what this document
+   does with every other link on the page. */
+.tok.link { text-decoration: underline; text-underline-offset: 2px;
+            text-decoration-color: var(--G5); }
+.tok.marker { color: var(--TEXT_QUIET); font-weight: var(--weight-label); }
+.tok.quote { color: var(--TEXT_QUIET); font-weight: var(--weight-label); }
+.open-building { margin: var(--space-snug) 0; }
+.index { margin-top: var(--space-base); display: flex; flex-direction: column; gap: 1px; }
+.index-row { display: grid; grid-template-columns: 1fr 110px auto; gap: var(--space-base);
+             align-items: center; padding: 3px 0; }
+.index-row:hover { background: var(--G2); }
+.index-row .pick { text-align: left; background: transparent; border: 0; color: var(--TEXT); }
+.index-row .pick[aria-current="true"] { color: var(--TEXT);
+                                        font-weight: var(--weight-heading);
+                                        box-shadow: inset 2px 0 0 var(--ACCENT); }
+.index-row .note { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.index-row .read { padding: 3px 9px; font-size: var(--text-note); }
+
+/* ------------------------------------------------- the phase primitive */
+
+/* One mark for what state a piece of work is in, and it is the same mark
+   in the list, in the header, in the nav and on the city drawing. Four
+   drawings used to say this: a progress bar's three classes, a phase
+   word, a count borrowed from ALERT and a tainted border borrowed from
+   ALERT again.
+
+   The five marks differ in *shape*, so the desaturated snapshot still
+   tells them apart and colour stays what this library says it is - a
+   redundant layer. ALERT is spent on exactly one of them, the one that
+   literally means a person is needed. */
+.phase { display: inline-block; width: 9px; height: 9px; flex: none;
+         border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape); }
+.phase.running { background: var(--TEXT); }
+/* A halo, not a second colour: running and waiting must not be one shape
+   in two tokens, or the desaturated page has two identical marks. */
+.phase.waiting { background: var(--ALERT); box-shadow: 0 0 0 3px var(--G3); }
+.phase.frozen { border: 1.5px solid var(--TEXT_QUIET); }
+/* A ring turned forty-five degrees. Cancelled and frozen are both endings
+   and the difference is who ended it, so they are one family with one
+   rotation between them. */
+.phase.cancelled { border: 1.5px solid var(--TEXT_QUIET); border-radius: 0;
+                   transform: rotate(45deg); }
+.phase.halted { background: var(--TEXT_QUIET); border-radius: 0; }
+
+/* -------------------------------------------------------- the composer */
+
+/* The one question, and a sentence of answers under it.
+   Seven controls standing open asked a person to read the whole grammar
+   of a dispatch before writing a word of it; four of them folded away
+   asked them to trust what they could not see. So every answer is stated
+   and none of them is asked: the line below the box is a sentence whose
+   words are buttons, and pressing one swaps that word for its own
+   control where it stands. */
+.composer { margin-bottom: var(--space-section); }
+.composer-task { width: 100%; box-sizing: border-box; resize: vertical;
+                 min-height: 4.4em; line-height: 1.5; }
+.composer-plan { display: flex; align-items: baseline; flex-wrap: wrap;
+                 gap: var(--space-snug); margin-top: var(--space-snug); }
+.composer-plan .dot { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+/* A word of the sentence, not a control in a row: no fill, no border, and
+   the underline carries which kind of word it is. */
+.composer-plan .guess, .composer-plan .chosen
+    { background: transparent; border: 0; padding: 2px 0; color: var(--TEXT_QUIET);
+      font-size: var(--text-note); }
+.composer-plan .guess b, .composer-plan .chosen b
+    { color: var(--TEXT); font-weight: var(--weight-body);
+      text-underline-offset: 3px; }
+/* Dotted is the reader's own convention for "inferred", and it is the
+   only mark on this page that separates what the city guessed from what
+   the person said. An interface that draws a guess like a decision has
+   answered for the person. */
+.composer-plan .guess b { text-decoration: underline dotted; text-decoration-color: var(--G6); }
+/* Solid ACCENT is what this stylesheet already means by "this is the one
+   that is chosen" - the nav, the tabs and the language switch all mark
+   the current thing this way. */
+.composer-plan .chosen b { text-decoration: underline solid;
+                           text-decoration-color: var(--ACCENT); }
+.composer-plan .guess:hover b, .composer-plan .chosen:hover b
+    { text-decoration-color: var(--TEXT); }
+.composer-plan .send { margin-left: auto; }
+.composer-key { color: var(--TEXT_QUIET); font-size: var(--text-note);
+                margin-top: var(--space-tight); }
+
+/* ------------------------------------------------------ the work list */
+
+/* One row is one piece of work, and the row is a link: the address bar is
+   the only authority for which page is showing, so an anchor needs no
+   handler at all and brings the keyboard, the middle click, "copy link
+   address" and the link role with it. */
+.session-row { display: grid; align-items: baseline; gap: var(--space-base);
+               grid-template-columns: 9px minmax(12ch, 20ch) minmax(0, 1fr) 6ch 7ch;
+               padding: var(--space-snug) var(--space-snug);
+               border-bottom: 1px solid var(--G2); text-decoration: none; }
+.session-row:hover { background: var(--G2); }
+.session-row .phase { align-self: center; }
+.session-row .room { color: var(--TEXT); font-family: var(--font-mono);
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What it is doing right now, in the model's own words, clipped to one
+   line: the row answers "is this going anywhere", and the whole of the
+   answer is on its own page one click away. */
+.session-row .said { color: var(--TEXT_QUIET); font-size: var(--text-note);
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-row .turn, .session-row .spent
+    { color: var(--TEXT_QUIET); font-size: var(--text-note);
+      font-family: var(--font-mono); text-align: right; }

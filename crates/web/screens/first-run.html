@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling — 一座新城</title>
+<!--
+  The same page as sessions.html, in the three states a city passes through
+  before it can work. They are not wizard steps: each one is a fact that is
+  true right now, so attaching a provider outside this window makes the
+  first one disappear by itself. Nothing here stores progress.
+
+  Run `cargo test -p web` once before opening this file.
+-->
+<link rel="stylesheet" href="../../../target/screens/tokens.css">
+<link rel="stylesheet" href="../assets/app.css">
+</head>
+<body>
+<main class="layout">
+
+  <header class="top-bar">
+    <span class="address">在做的事</span>
+    <span class="unwell">还没有接上模型服务</span>
+    <span class="counts">
+      <span><b>0</b> 在跑</span>
+      <span><b>0</b> 等你</span>
+      <span><b>0</b> 栋楼</span>
+    </span>
+  </header>
+
+  <nav class="left-nav">
+    <div class="nav-group">
+      <a class="nav-item" href="#/" aria-current="page">在做的事</a>
+      <a class="nav-item" href="#/waiting">等我的</a>
+      <a class="nav-item" href="#/record">记录</a>
+      <a class="nav-item" href="#/cost">花销</a>
+      <a class="nav-item" href="#/setup">设置</a>
+    </div>
+    <div class="city-state">
+      <p class="standing">这座城在运转，只是还没有活可做。</p>
+      <button type="button" class="quiet">停下这座城</button>
+    </div>
+  </nav>
+
+  <section class="centre">
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">这座城还派不出活</h2>
+      </div>
+      <p class="panel-scope">第一步只有一件事：告诉它去问哪个模型。这台机器上的密钥不会离开这台机器。</p>
+      <div class="panel-body">
+        <div class="empty">
+          <span class="empty-status">没有模型回答 <code>main</code> 这个用途。</span>
+          <span class="empty-what">接上之后，你写一句话，它就能派出去做。</span>
+          <span class="empty-way">
+            <button type="button">去接一个模型服务</button>
+            <button type="button" class="quiet">我用的是订阅，不是 API key</button>
+          </span>
+        </div>
+      </div>
+      <p class="panel-source">读的是这台机器上已注册的 endpoint 与它们各自答应的用途。</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">还没有地方放活</h2>
+      </div>
+      <p class="panel-scope">楼（一条业务线，磁盘上就是一个文件夹）是活落脚的地方；一次派活会在楼里开一间房。</p>
+      <div class="panel-body">
+        <div class="empty">
+          <span class="empty-status">这座城一栋楼都没有。</span>
+          <span class="empty-what">建一栋，比如 <code>lab</code>；之后每一件活都住在它下面的一间房里，房间名就是你给这件活取的名字。</span>
+          <span class="empty-way">
+            <button type="button">建第一栋楼</button>
+            <button type="button" class="quiet">把已有的文件夹变成一栋楼</button>
+          </span>
+        </div>
+      </div>
+      <p class="panel-source">读的是城根目录下已有的楼。</p>
+    </section>
+
+    <form class="panel composer">
+      <div class="panel-head">
+        <h2 class="panel-title">派出第一件活</h2>
+      </div>
+      <p class="panel-scope">写一句话就够，剩下的下面那句里都说了。做完之后，它会把过程完整记进账本（这座城的全部历史，只能追加，可以离线验）。</p>
+      <div class="panel-body">
+        <textarea class="composer-task" rows="2"
+                  placeholder="把账本的读取路径量一遍，找出最慢的那一处，并写下测出来的数"></textarea>
+        <p class="composer-plan">
+          <button type="button" class="guess">送到 <b>lab/第一件活</b></button>
+          <span class="dot">·</span>
+          <button type="button" class="guess">以 <b>build</b></button>
+          <span class="dot">·</span>
+          <button type="button" class="guess">想 <b>medium</b></button>
+          <button type="submit" class="send">送出</button>
+        </p>
+        <p class="composer-key">Enter 送出，Shift+Enter 换行。灰框里那句就是一件活该有的大小。</p>
+      </div>
+      <p class="panel-source">还没有派过活，所以三个词全是猜的：楼取城里唯一的一栋，模式取 build，思考深度取城的默认。</p>
+    </form>
+
+  </section>
+
+</main>
+</body>
+</html>

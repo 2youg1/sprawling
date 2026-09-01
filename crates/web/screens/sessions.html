@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling — 在做的事</title>
+<!--
+  Step 1 of the four-step method (WORKSPACE/FRONTEND-METHOD.md): the screen
+  is settled here, in plain HTML, and only then translated.
+
+  It carries no styles of its own. `tokens.css` is written into target/ by
+  web::theme's own test; `app.css` is the file the product ships. The last
+  prototype carried its own stylesheet, which is how it came to share 60 of
+  262 class names with the build.
+
+  Run `cargo test -p web` once before opening this file, or the tokens will
+  not be there.
+-->
+<link rel="stylesheet" href="../../../target/screens/tokens.css">
+<link rel="stylesheet" href="../assets/app.css">
+</head>
+<body>
+<main class="layout">
+
+  <header class="top-bar">
+    <span class="address">在做的事</span>
+    <span class="counts">
+      <span><b>3</b> 在跑</span>
+      <span><b>2</b> 等你</span>
+      <span><b>5</b> 栋楼</span>
+    </span>
+  </header>
+
+  <nav class="left-nav">
+    <div class="nav-group">
+      <a class="nav-item" href="#/" aria-current="page">在做的事</a>
+      <a class="nav-item" href="#/waiting">等我的<span class="badge">2</span></a>
+      <a class="nav-item" href="#/record">记录</a>
+      <a class="nav-item" href="#/cost">花销</a>
+      <a class="nav-item" href="#/setup">设置</a>
+    </div>
+    <div class="city-state">
+      <p class="standing">这座城在运转。</p>
+      <button type="button" class="quiet">停下这座城</button>
+    </div>
+  </nav>
+
+  <section class="centre">
+
+    <form class="panel composer">
+      <div class="panel-head">
+        <h2 class="panel-title">要做什么？</h2>
+      </div>
+      <p class="panel-scope">写一句话就够。送到哪、算什么模式，下面那句里都说了。</p>
+      <div class="panel-body">
+        <textarea class="composer-task" rows="2"
+                  placeholder="把账本的读取路径量一遍，找出最慢的那一处，并写下测出来的数"></textarea>
+        <p class="composer-plan">
+          <button type="button" class="guess">送到 <b>lab/parser</b></button>
+          <span class="dot">·</span>
+          <button type="button" class="guess">以 <b>build</b></button>
+          <span class="dot">·</span>
+          <button type="button" class="chosen">想 <b>medium</b></button>
+          <button type="submit" class="send">送出</button>
+        </p>
+        <p class="composer-key">Enter 送出，Shift+Enter 换行。</p>
+      </div>
+      <p class="panel-source">带点线的词是这座城猜的，来自你上一次派活与城的默认；实线的是你自己设的。点任意一个词可以改它。</p>
+    </form>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">在做的事</h2>
+        <span class="panel-figure">3</span>
+      </div>
+      <p class="panel-scope">在跑的与在等你的会话（一间房里的一条工作线）。已经结束的在下面一节。</p>
+      <div class="panel-body">
+        <a class="session-row" href="#/s/lab/parser">
+          <span class="phase running" role="img" aria-label="在跑"></span>
+          <span class="room">lab/parser</span>
+          <span class="said">正在读 crates/kernel/src/ledger.rs</span>
+          <span class="turn">7 轮</span>
+          <span class="spent">$0.42</span>
+        </a>
+        <a class="session-row" href="#/s/lab/wire">
+          <span class="phase waiting" role="img" aria-label="等你"></span>
+          <span class="room">lab/wire</span>
+          <span class="said">要写 .github/workflows/ci.yml，等你放行</span>
+          <span class="turn">3 轮</span>
+          <span class="spent">$0.08</span>
+        </a>
+        <a class="session-row" href="#/s/site/copy">
+          <span class="phase running" role="img" aria-label="在跑"></span>
+          <span class="room">site/copy</span>
+          <span class="said">正在写 README.zh-CN.md 的第二节</span>
+          <span class="turn">12 轮</span>
+          <span class="spent">未报价</span>
+        </a>
+      </div>
+      <p class="panel-source">来自事件流，最后一条 seq 48210。</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">已经结束的</h2>
+      </div>
+      <p class="panel-scope">最近八件。每一件都可以从任意一轮分出一支接着做。</p>
+      <div class="panel-body">
+        <a class="session-row" href="#/s/lab/index">
+          <span class="phase frozen" role="img" aria-label="已冻结"></span>
+          <span class="room">lab/index</span>
+          <span class="said">留了交接说明：句柄复用已落，索引常驻还没动</span>
+          <span class="turn">21 轮</span>
+          <span class="spent">$1.36</span>
+        </a>
+        <a class="session-row" href="#/s/site/nav">
+          <span class="phase cancelled" role="img" aria-label="你取消了它"></span>
+          <span class="room">site/nav</span>
+          <span class="said">你在第 4 轮取消了它</span>
+          <span class="turn">4 轮</span>
+          <span class="spent">$0.11</span>
+        </a>
+      </div>
+      <p class="panel-source">同一条事件流，冻结与取消两种收尾。</p>
+    </section>
+
+  </section>
+
+</main>
+</body>
+</html>

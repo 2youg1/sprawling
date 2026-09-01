@@ -3231,7 +3231,7 @@ mod tests {
     /// whole of a drag and a hover rule therefore never lights.
     #[test]
     fn a_drop_zone_reports_a_drag_through_events_and_not_through_hover() {
-        let source = include_str!("../assets/index.html");
+        let source = include_str!("../assets/app.css");
         assert!(
             source.contains(".drop-zone.over"),
             "a drop zone has no drag state to show"

@@ -7,7 +7,7 @@
 //! generates `client_embed.rs`, the file table main.rs includes.
 //!
 //! The bundle is whatever `just build-web` left in `target/web-dist`,
-//! plus the page shell from `crates/web/assets/index.html`. When the
+//! plus the page shell and stylesheet from `crates/web/assets/`. When the
 //! wasm artifacts are absent the binary still builds - it carries the
 //! shell alone, `CLIENT_COMPLETE` is false, and a warning says so -
 //! because `just check` must not demand a wasm toolchain. The release
@@ -32,12 +32,18 @@ fn main() {
 fn embed() -> Result<(), String> {
     let manifest = std::env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?;
     let out_dir = std::env::var("OUT_DIR").map_err(|e| e.to_string())?;
-    let shell = PathBuf::from(&manifest)
+    let assets = PathBuf::from(&manifest)
         .join("..")
         .join("web")
-        .join("assets")
-        .join("index.html");
+        .join("assets");
+    // The page shell and the stylesheet it links. Two files rather than
+    // one: a screen designed in plain HTML links the same bytes the
+    // product ships, which is what stops a prototype and its build from
+    // drifting into two different interfaces.
+    let shell = assets.join("index.html");
+    let stylesheet = assets.join("app.css");
     println!("cargo::rerun-if-changed={}", shell.display());
+    println!("cargo::rerun-if-changed={}", stylesheet.display());
 
     // target/web-dist, robust to profile dirs: walk up from OUT_DIR to the
     // directory literally named `target`, falling back to ../../target.
@@ -47,7 +53,10 @@ fn embed() -> Result<(), String> {
     println!("cargo::rerun-if-changed={}", dist.display());
 
     // (request path, source file) - index.html always, the bundle when built.
-    let mut files: Vec<(String, PathBuf)> = vec![("index.html".to_owned(), shell)];
+    let mut files: Vec<(String, PathBuf)> = vec![
+        ("index.html".to_owned(), shell),
+        ("app.css".to_owned(), stylesheet),
+    ];
     let mut complete = false;
     if dist.join("web.js").is_file() && dist.join("web_bg.wasm").is_file() {
         complete = true;

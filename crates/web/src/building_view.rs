@@ -610,7 +610,7 @@ mod tests {
         classes.sort_unstable();
         classes.dedup();
         assert_eq!(classes.len(), held, "two tokens cannot share one class");
-        let sheet = include_str!("../assets/index.html");
+        let sheet = include_str!("../assets/app.css");
         for token in all {
             let class = class_of(token).replace(' ', ".");
             assert!(
