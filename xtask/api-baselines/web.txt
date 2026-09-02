@@ -677,8 +677,11 @@ pub web::Msg::CostCutEmpty
 pub web::Msg::CostNoneBilled
 pub web::Msg::CostNoneBilledWhat
 pub web::Msg::CostNothingSpent
+pub web::Msg::CostOwnStream
 pub web::Msg::CostScope
 pub web::Msg::CostSource
+pub web::Msg::CostTokenLine
+pub web::Msg::CostUnpricedCalls
 pub web::Msg::CostUnpricedScope
 pub web::Msg::CostUnpricedTitle
 pub web::Msg::CostWhereMoneyWent

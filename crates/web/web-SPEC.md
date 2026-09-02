@@ -1788,3 +1788,18 @@ pub fn given(records: &[EventRecord], run: RunId) -> Given;
 **又一条超长签名被消掉而不是被搬走**：`dispatch_command(room, task, goal, mode, effort)` 五个参数，
 现在是 `dispatch_command(Sending { room, mode, effort }, task, goal)`。
 `Sending` 三个字段永远一起出现——`Plan::guessed` 一次填满三个，城市页一次固定三个——`Reporter` 的 doc 就是这个修法的先例。
+
+### 8-61 第三次：中文页面上的英文段落，这次是格式化出来的（V3.50）
+
+```rust
+// web::lang —— 新增 3 条，全部带名字的槽位
+Msg::CostTokenLine | Msg::CostUnpricedCalls | Msg::CostOwnStream
+```
+
+**病灶**：成本页有三句英文写死在视图里——token 行、未计价调用的说明、以及「其中多少是从本页这条流里到的」那一句。中文界面上它们就是英文。
+
+**这是 §8-43 的同一种病的第三次，而它躲过了那次清剿**：ux-5 找的是「声明了 `en`／`zh` 却从没被调用的 `Msg` 变体」，这三句从来没有被声明过。它们是 `format!` 出来的句子——里面有数字，所以当时的人没把它当成「一句话」，而是当成「一段拼接」。**`lang` 的两条断言都读视图向表要了什么，一句从不调用 `say` 的字面量不在任何一条断言的视野里。**
+
+**为什么槽位必须有名字**：`"{input} in, {output} out"` 与「进 {input}，出 {output}」的数字顺序不同，位置槽会静默换掉两个数。`fill` 因此按名字填，这与 §8-43 之后建立的形状一致。
+
+**它是怎么被发现的**：把客户端构建出来、跑起来、拍下来。定稿屏里没有成本页，`xtask ax` 与 `xtask render` 都只读 `crates/web/screens/`，所以这一页至今没有任何机器看过。**这条 SPEC 记下这个缺口本身**：运行中的客户端仍然只能由人打开浏览器看，或者由一次手工的无头渲染看。
