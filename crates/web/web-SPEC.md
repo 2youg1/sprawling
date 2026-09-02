@@ -1759,3 +1759,32 @@ pub fn given(records: &[EventRecord], run: RunId) -> Given;
 现在是 `Edge { from, to }` 上的 `at(part: Part, fall: i32)`。四个调用点原本都在重复同一条边与同一个分母 8，
 `Edge` 让「一扇窗的四个角落在同一堵墙上」成为类型上的事实，而不是四行里各写一遍的巧合。
 `argument_count` 登记表因此少一行；**豁免不许跟着函数搬家**。
+
+## 8-62 客户端的根拆成六块（V3.41）
+
+`web::app` 3,916 → 961（`app`）＋567（`shell`）＋686（`mount`）＋277（`readout`）＋361（`asking`），
+另有 `View`／`Lens`／`Destination` 一族并入 `route`，派活构造子并入 `command`，
+**页面验收套件 947 行搬进 `crates/web/tests/pages.rs`**。
+
+**切法取自 ARCHITECTURE §9 已经写下的那句话**：`web::app` 被列为 Humble Object 的实例——「难测的一端剥到最薄，厚的一端保持纯粹」——
+而地址栏、键盘、socket、动画帧这四样**只有浏览器才有的东西，一直和那个纯粹的 fold 住在同一个文件里**。现在它们是 `web::mount`，全部 `#[cfg(target_arch = "wasm32")]`，一条判断也不做。
+
+| 模块 | 形状 | 它拥有什么 |
+|---|---|---|
+| `app` | 7 projection | `Snapshot` 与折叠：客户端相信什么，以及重放同一串事件必得同一个值 |
+| `readout` | 1 decision | 一个快照在读者的语言里怎么说：四行状态、钱、一个 id 该显示成哪个名字 |
+| `asking` | 1 decision | 一个标签页留下什么、哪条事件让哪个答案过期、错过的历史怎么补 |
+| `shell` | 7 projection | 哪个区域显示什么（`Root`），以及把它挂起来的客户端（`App`） |
+| `mount` | 4 adapter | 只有浏览器才有的四样东西，判断全部借自 `keys`／`route`／`pace`／`Snapshot::apply` |
+| `route` | 1 decision | 这个客户端有哪些地方（`View`／`Lens`／`Destination`），以及与地址栏的双向翻译 |
+
+**验收套件搬出 crate 的理由是它本来就不碰私有面**：`Root`／`Snapshot`／`View` 与各答面都是公开的，
+一套只用公开面的测试是验收测试而不是单元测试（AGENTS.md：测试走与生产代码相同的门）。
+
+**搬家当场抓到一条自我满足的断言。** `a_drop_zone_reports_a_drag_through_events_and_not_through_hover`
+把 `app.rs` 列进「必须带 `ondragenter` 的文件」，而 `app.rs` 里唯一那处 `ondragenter` **就是这条断言自己写的字符串**——
+它一直在检查自己。搬出 crate 之后 `include_str!` 读的是别的文件，它当场变红。真正画拖放区的只有 `live.rs` 与 `building_view.rs`，表因此改成这两个。
+
+**又一条超长签名被消掉而不是被搬走**：`dispatch_command(room, task, goal, mode, effort)` 五个参数，
+现在是 `dispatch_command(Sending { room, mode, effort }, task, goal)`。
+`Sending` 三个字段永远一起出现——`Plan::guessed` 一次填满三个，城市页一次固定三个——`Reporter` 的 doc 就是这个修法的先例。

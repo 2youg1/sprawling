@@ -22,8 +22,8 @@
 
 use dioxus::prelude::*;
 
-use crate::app::View;
 use crate::lang::{Msg, say};
+use crate::route::View;
 
 /// What sort of thing a row leads to. Shown beside the name because
 /// "lab" can be a building and "lab/parser" a session, and a list that
@@ -184,7 +184,7 @@ pub fn Palette(
 )]
 mod tests {
     use super::{Kind, Offer, Palette, matching};
-    use crate::app::View;
+    use crate::route::View;
 
     fn offer(label: &str, kind: Kind) -> Offer {
         Offer {

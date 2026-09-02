@@ -521,6 +521,10 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
 | web::app | crates/web/src/app.rs | what the client believes, folded forward from events; holds no business state | projection | S4 | built |
+| web::readout | crates/web/src/readout.rs | what a page says about a snapshot, in the reader's own language | decision | V3 | built |
+| web::asking | crates/web/src/asking.rs | what this client keeps, what it asks for again, and what it missed | decision | V3 | built |
+| web::shell | crates/web/src/shell.rs | which region shows what, and the client that mounts it | projection | V3 | built |
+| web::mount | crates/web/src/mount.rs | the four things only a browser has: address bar, keyboard, socket, frame | adapter | V3 | built |
 | web::board | crates/web/src/board.rs | the plan tree laid out by state; five columns, no state of its own, nothing here can move a node | projection | V3 | built |
 | web::command | crates/web/src/command.rs | every command frame this client sends, built in one place | value | V3 | built |
 | web::pursuit | crates/web/src/pursuit.rs | what a building is working towards on its own, and who answers for it | adapter | V3 | built |

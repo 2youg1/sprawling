@@ -178,7 +178,7 @@ pub fn web::RecordView(web::record::RecordViewProps) -> dioxus_core::innerlude::
 pub fn web::RecycleBinView(web::approval::RecycleBinViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ReturnPath::of(&kernel::discard::Restoration) -> Self
 pub fn web::ReturnPath::sentence(&self, web::Lang) -> alloc::string::String
-pub fn web::Root(web::app::RootProps) -> dioxus_core::innerlude::Element
+pub fn web::Root(web::shell::RootProps) -> dioxus_core::innerlude::Element
 pub fn web::SessionView(web::session::SessionViewProps) -> dioxus_core::innerlude::Element
 pub fn web::SessionsView(web::sessions::SessionsViewProps) -> dioxus_core::innerlude::Element
 pub fn web::Snapshot::adopt_approvals(&mut self, alloc::vec::Vec<kernel::approval::ApprovalItem>)
@@ -230,11 +230,13 @@ pub fn web::day_label(u64) -> alloc::string::String
 pub fn web::describe(&kernel::event::EventRecord) -> (core::option::Option<web::Msg>, alloc::string::String)
 pub fn web::describe_in(web::Lang, &kernel::event::EventRecord) -> alloc::string::String
 pub fn web::destinations(&web::Snapshot) -> alloc::vec::Vec<web::Destination>
-pub fn web::dispatch_command(&str, &str, &str, &str, core::option::Option<kernel::model::Effort>) -> core::option::Option<channels::wire::ClientFrame>
+pub fn web::dispatch_command(web::Sending<'_>, &str, &str) -> core::option::Option<channels::wire::ClientFrame>
+pub fn web::dispatch_to_building(&str, &str, &str) -> core::option::Option<channels::wire::ClientFrame>
 pub fn web::distinguishable_without_colour() -> bool
 pub fn web::done_band_of(&web::Camera, &web::Prism) -> alloc::vec::Vec<web::Face>
 pub fn web::draw(&web::Camera, alloc::vec::Vec<web::Prism>, core::option::Option<&str>) -> web::DisplayList
 pub fn web::drawable(usize) -> bool
+pub fn web::effort_named(&str) -> core::option::Option<kernel::model::Effort>
 pub fn web::endpoint_rows(&channels::answer::EndpointsAnswer) -> alloc::vec::Vec<web::EndpointRow>
 pub fn web::enrol(&str, &str, &str, impl core::ops::function::FnOnce(web::Enrolment) + 'static)
 pub fn web::export(&web::Page) -> alloc::string::String
@@ -349,6 +351,7 @@ pub struct web::Row
 pub struct web::RunRow
 pub struct web::SavingsRow
 pub struct web::SeatRow
+pub struct web::Sending<'a>
 pub struct web::Shelf
 pub struct web::Sign
 pub struct web::Skill
@@ -1036,6 +1039,9 @@ pub web::SeatRow::phase: web::Phase
 pub web::SeatRow::said: core::option::Option<alloc::string::String>
 pub web::SeatRow::spent: core::option::Option<kernel::budget::UsdMicros>
 pub web::SeatRow::turns: u32
+pub web::Sending::effort: core::option::Option<kernel::model::Effort>
+pub web::Sending::mode: &'a str
+pub web::Sending::room: &'a str
 pub web::Shelf::building: kernel::address::Address
 pub web::Shelf::hits: alloc::vec::Vec<channels::answer::ArchiveHit>
 pub web::Sighting::Changed

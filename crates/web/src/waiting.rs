@@ -20,9 +20,10 @@
 
 use dioxus::prelude::*;
 
-use crate::app::{Snapshot, View};
+use crate::app::Snapshot;
 use crate::lang::{Lang, Msg, say};
 use crate::phase::Phase;
+use crate::route::View;
 
 /// A session that stopped without a person stopping it.
 ///

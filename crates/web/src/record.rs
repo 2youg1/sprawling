@@ -19,8 +19,8 @@
 
 use dioxus::prelude::*;
 
-use crate::app::{Lens, View};
 use crate::lang::{Lang, Msg, say};
+use crate::route::{Lens, View};
 
 /// One history, read three ways.
 #[component]
@@ -99,7 +99,7 @@ pub fn RecordView(
     reason = "test code"
 )]
 mod tests {
-    use crate::app::Lens;
+    use crate::route::Lens;
     use crate::route::{from_fragment, to_fragment};
 
     /// A reader who sends somebody a link sends them what they were
@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn the_lens_travels_in_the_link() {
         for lens in Lens::ALL {
-            let view = crate::app::View::Record(lens);
+            let view = crate::route::View::Record(lens);
             assert_eq!(from_fragment(&to_fragment(&view)), Some(view));
         }
     }

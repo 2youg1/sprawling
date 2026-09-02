@@ -20,6 +20,7 @@
 use channels::{Address, ClientFrame, EndpointsAnswer, IdemKey, LoginStep};
 use channels::{ProviderName, RunId, Seq, WireCommand};
 
+use crate::lang::Msg;
 use crate::settings::{
     AttachForm, AttachReadiness, SelectForm, SelectReadiness, ready, select_ready,
 };
@@ -206,23 +207,26 @@ pub fn create_command(addr: &str, template: &str) -> Option<ClientFrame> {
 /// both are required here rather than defaulted: a dispatch with an
 /// invented goal is a run that cannot report it finished.
 #[must_use]
-pub fn dispatch_command(building: &str, task: &str, goal: &str) -> Option<ClientFrame> {
+pub fn dispatch_to_building(building: &str, task: &str, goal: &str) -> Option<ClientFrame> {
     // Work happens in a room, not at a building's root: living there
     // would hand a run the whole building's write domain. The room used
     // to be `room1` for every dispatch this page sent, so two pieces of
     // work started from the same tower wrote over each other's files.
     // The city opens a room from the name instead, and the name comes
     // from the work rather than from a counter (city-SPEC.md 8-13).
-    // What a Dispatch frame looks like is `app::dispatch_command`'s
-    // answer and only its answer - this page decides the address.
-    crate::app::dispatch_command(
-        &format!("{}/{}", building.trim(), session_name(task)),
+    // What a Dispatch frame looks like is `dispatch_command`'s answer and
+    // only its answer - the city page decides the address.
+    dispatch_command(
+        Sending {
+            room: &format!("{}/{}", building.trim(), session_name(task)),
+            mode: "plan",
+            // This page asks for two lines and a building; how hard to
+            // think is chosen where the whole form is, at the bottom of
+            // the window.
+            effort: None,
+        },
         task,
         goal,
-        "plan",
-        // This page asks for two lines and a building; how hard to think
-        // is chosen where the whole form is, at the bottom of the window.
-        None,
     )
 }
 
@@ -238,6 +242,120 @@ fn session_name(task: &str) -> String {
     joined.replace(['/', '\\', ':'], "-")
 }
 
+/// The effort a control's value names. An empty value is no choice,
+/// which is not the same as `Effort::None` - that one asks a provider
+/// for no reasoning at all.
+#[must_use]
+pub fn effort_named(value: &str) -> Option<channels::Effort> {
+    match value {
+        "low" => Some(channels::Effort::Low),
+        "medium" => Some(channels::Effort::Medium),
+        "high" => Some(channels::Effort::High),
+        "xhigh" => Some(channels::Effort::XHigh),
+        "max" => Some(channels::Effort::Max),
+        _ => None,
+    }
+}
+
+/// The efforts this bar offers, in the order it offers them: what the
+/// city already resolves, plus the one that leaves the answer to the
+/// layer above.
+pub(crate) const EFFORTS: [(&str, Msg); 6] = [
+    ("", Msg::EffortInherited),
+    ("low", Msg::EffortLow),
+    ("medium", Msg::EffortMedium),
+    ("high", Msg::EffortHigh),
+    ("xhigh", Msg::EffortXHigh),
+    ("max", Msg::EffortMax),
+];
+
+/// The modes a person may pick between, in the order the control offers
+/// them.
+///
+/// `runtime::Mode` is the authority for the set and this is the
+/// authority for its spelling on the wire: `ModeTag::parse` accepts any
+/// string and `mode_of` reads an unknown one as planning, so a typo here
+/// would silently change what a run is allowed to do.
+pub const MODES: [&str; 5] = ["build", "up", "sc", "ud", "experiment"];
+
+/// Builds one Dispatch. The only place in the client that does.
+///
+/// No budget travels from a person: `BudgetCap::default()` is what the
+/// wire carries, and what a run costs is reported after it runs. This
+/// city has no budget lock, so the composer neither asks for a figure
+/// nor shows one.
+///
+/// **`room` is split, not sent whole.** `lab/parser` means the building
+/// `lab` and a session a person is calling `parser`, which is exactly
+/// what the wire's two fields say: given a session name the city opens a
+/// room of that name under the building, and two dispatches naming one
+/// room are one session continued. A bare `lab` sends no session name at
+/// all, which is the city's cue to work one out from the task.
+///
+/// **The goal is left empty, and that is a meaning rather than a gap.**
+/// A dispatch with no goal is already how this city spells "a person is
+/// at the other end": no job file is written and the frozen prefix says
+/// so. That is exactly what one sentence typed into the composer is, so
+/// the box sends no goal and the city reads it as it always did. A
+/// client that copied the task into the goal field would turn every
+/// conversation into a task nobody asked for.
+/// How a dispatch is to be run: where, in which mode, and how hard to
+/// think.
+///
+/// Three values that always travel together and are never chosen
+/// independently, so they travel as one. The composer holds them as one
+/// (`sessions::Plan`), `Plan::guessed` fills all three at once, and the
+/// city page fixes all three at once.
+#[derive(Debug, Clone, Copy)]
+pub struct Sending<'a> {
+    /// `lab` or `lab/parser`: the building, and optionally the session
+    /// name a person is calling this piece of work.
+    pub room: &'a str,
+    pub mode: &'a str,
+    pub effort: Option<channels::Effort>,
+}
+
+#[must_use]
+pub fn dispatch_command(
+    sending: Sending<'_>,
+    task: &str,
+    goal: &str,
+) -> Option<channels::ClientFrame> {
+    let Sending { room, mode, effort } = sending;
+    let task = task.trim();
+    if task.is_empty() {
+        return None;
+    }
+    let (building, session) = match room.trim().split_once('/') {
+        Some((building, named)) => (building, Some(channels::SessionName::parse(named).ok()?)),
+        None => (room.trim(), None),
+    };
+    let addr = Address::parse(building).ok()?;
+    Some(channels::ClientFrame::Command(Box::new(
+        channels::WireCommand::Dispatch {
+            idem: channels::IdemKey::derive(
+                &RunId::CITY,
+                Seq::FIRST,
+                format!("{}|{task}", addr.as_str()).as_bytes(),
+            ),
+            addr,
+            task: task.to_owned(),
+            goal: goal.trim().to_owned(),
+            mode: channels::ModeTag::parse(mode).ok()?,
+            budget: channels::BudgetCap::default(),
+            session,
+            effort,
+        },
+    )))
+}
+
+/// How hard this city thinks when nobody has said otherwise.
+///
+/// The city's own ladder resolves effort per room, and this is only what
+/// the composer offers before a person opens that word - so a wrong
+/// guess here costs a click rather than a decision.
+pub const DEFAULT_EFFORT: &str = "medium";
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -251,17 +369,17 @@ mod tests {
 
     #[test]
     fn sending_work_needs_a_room_and_a_task_and_nothing_else() {
-        assert!(dispatch_command("lab", "fix the timer", "the test passes").is_some());
+        assert!(dispatch_to_building("lab", "fix the timer", "the test passes").is_some());
         assert!(
-            dispatch_command("lab", "  ", "the test passes").is_none(),
+            dispatch_to_building("lab", "  ", "the test passes").is_none(),
             "a run with nothing to do is not a command"
         );
         assert!(
-            dispatch_command("lab", "fix the timer", "").is_some(),
+            dispatch_to_building("lab", "fix the timer", "").is_some(),
             "an empty goal is how this city spells a conversation, not a missing field"
         );
         assert!(
-            dispatch_command("", "fix the timer", "the test passes").is_none(),
+            dispatch_to_building("", "fix the timer", "the test passes").is_none(),
             "there is no building called nothing"
         );
     }
@@ -269,7 +387,7 @@ mod tests {
     #[test]
     fn work_is_sent_to_a_room_and_never_to_a_buildings_root() {
         let Some(ClientFrame::Command(command)) =
-            dispatch_command("lab", "fix the timer", "the test passes")
+            dispatch_to_building("lab", "fix the timer", "the test passes")
         else {
             panic!("a complete form is a command");
         };
@@ -287,7 +405,7 @@ mod tests {
         );
         assert_eq!(named.as_str(), "fix the timer");
 
-        let Some(ClientFrame::Command(second)) = dispatch_command(
+        let Some(ClientFrame::Command(second)) = dispatch_to_building(
             "lab",
             "fix the timer again, and this time read the failing case first",
             "the test passes",

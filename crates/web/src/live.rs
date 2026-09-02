@@ -419,7 +419,7 @@ pub fn LiveView(
                             // here, and the token figure carries no
                             // denominator because the wire has none.
                             if let Some(spent) = round.spent {
-                                span { class: "spent", "{crate::app::render_usd(spent)}" }
+                                span { class: "spent", "{crate::readout::render_usd(spent)}" }
                             }
                             if let Some(used) = round.used {
                                 span { class: "used", "{tokens_line(lang(), used)}" }

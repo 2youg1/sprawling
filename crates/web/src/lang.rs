@@ -3225,7 +3225,7 @@ mod tests {
     /// a test that read the directory would be testing the machine it ran
     /// on. A view added without a line here is a view whose English can
     /// escape, which is the failure this table exists to make loud.
-    const VIEWS: [(&str, &str); 25] = [
+    const VIEWS: [(&str, &str); 30] = [
         ("alert.rs", include_str!("alert.rs")),
         ("board.rs", include_str!("board.rs")),
         ("app.rs", include_str!("app.rs")),
@@ -3233,6 +3233,7 @@ mod tests {
         ("archive_search.rs", include_str!("archive_search.rs")),
         ("building_view.rs", include_str!("building_view.rs")),
         ("city_view.rs", include_str!("city_view.rs")),
+        ("command.rs", include_str!("command.rs")),
         ("dashboard.rs", include_str!("dashboard.rs")),
         ("drop.rs", include_str!("drop.rs")),
         ("ledger_view.rs", include_str!("ledger_view.rs")),
@@ -3241,7 +3242,9 @@ mod tests {
         ("palette.rs", include_str!("palette.rs")),
         ("panel.rs", include_str!("panel.rs")),
         ("phase.rs", include_str!("phase.rs")),
+        ("readout.rs", include_str!("readout.rs")),
         ("record.rs", include_str!("record.rs")),
+        ("route.rs", include_str!("route.rs")),
         ("session.rs", include_str!("session.rs")),
         ("sessions.rs", include_str!("sessions.rs")),
         ("waiting.rs", include_str!("waiting.rs")),
@@ -3250,6 +3253,8 @@ mod tests {
         ("pursuit.rs", include_str!("pursuit.rs")),
         ("reach.rs", include_str!("reach.rs")),
         ("settings.rs", include_str!("settings.rs")),
+        ("shell.rs", include_str!("shell.rs")),
+        ("mount.rs", include_str!("mount.rs")),
         ("vitals.rs", include_str!("vitals.rs")),
     ];
 

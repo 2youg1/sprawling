@@ -31,9 +31,10 @@
 use channels::Address;
 use dioxus::prelude::*;
 
-use crate::app::{Snapshot, View};
+use crate::app::Snapshot;
 use crate::lang::{Lang, Msg, around, fill, say};
 use crate::phase::Phase;
+use crate::route::View;
 
 /// How many finished sessions the second table holds.
 ///
@@ -313,7 +314,7 @@ pub fn listing(snapshot: &Snapshot) -> (Vec<SeatRow>, Vec<SeatRow>) {
 #[must_use]
 pub fn spent_of(lang: Lang, spent: Option<channels::UsdMicros>) -> String {
     match spent {
-        Some(amount) => crate::app::render_usd(amount),
+        Some(amount) => crate::readout::render_usd(amount),
         None => say(lang, Msg::SessionsUnpriced).to_owned(),
     }
 }
@@ -388,24 +389,28 @@ pub fn SessionsView(
     // button cannot go out of step with what pressing it would do.
     let intended = {
         let held = plan.read().clone();
-        crate::app::dispatch_command(
-            &held.room,
+        crate::command::dispatch_command(
+            crate::command::Sending {
+                room: &held.room,
+                mode: &held.mode,
+                effort: crate::command::effort_named(&held.effort),
+            },
             &task.read(),
             "",
-            &held.mode,
-            crate::app::effort_named(&held.effort),
         )
     };
     let sendable = intended.is_some();
     let mut send = move || {
         let held = plan.read().clone();
         let written = task.read().clone();
-        if let Some(frame) = crate::app::dispatch_command(
-            &held.room,
+        if let Some(frame) = crate::command::dispatch_command(
+            crate::command::Sending {
+                room: &held.room,
+                mode: &held.mode,
+                effort: crate::command::effort_named(&held.effort),
+            },
             &written,
             "",
-            &held.mode,
-            crate::app::effort_named(&held.effort),
         ) {
             on_frame.call(frame);
             task.set(String::new());
@@ -596,13 +601,13 @@ pub fn SessionsView(
             div { class: "panel-body",
                 crate::city_view::CityView {
                     city,
-                    busy: crate::app::busy_buildings(&snapshot),
+                    busy: crate::shell::busy_buildings(&snapshot),
                     selected: None,
                     live,
                     on_frame,
                     on_select: move |_| {},
                     on_open: move |name: String| {
-                        if let Some(addr) = crate::app::opened_building(Some(name.as_str())) {
+                        if let Some(addr) = crate::route::opened_building(Some(name.as_str())) {
                             on_view.call(View::Building(addr));
                         }
                     },
@@ -635,11 +640,11 @@ fn Decision(
     // offered rather than typed.
     let choices: Vec<(String, String)> = match field {
         Field::Room => Vec::new(),
-        Field::Mode => crate::app::MODES
+        Field::Mode => crate::command::MODES
             .iter()
             .map(|tag| ((*tag).to_owned(), (*tag).to_owned()))
             .collect(),
-        Field::Effort => crate::app::EFFORTS
+        Field::Effort => crate::command::EFFORTS
             .iter()
             .skip(1)
             .map(|(tag, msg)| ((*tag).to_owned(), say(lang(), *msg).to_owned()))

@@ -34,7 +34,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::command::{create_command, dispatch_command};
+use crate::command::{create_command, dispatch_to_building};
 use crate::isometry::Camera;
 use crate::isometry::{PAN_STEP, ZOOM_STOPS, points_attr, view_box};
 use crate::lang::{Msg, fill, say};
@@ -352,7 +352,7 @@ pub fn CityView(
                         class: "send-work",
                         onsubmit: move |event| {
                             event.prevent_default();
-                            let frame = dispatch_command(&submitting, &task.read(), &goal.read());
+                            let frame = dispatch_to_building(&submitting, &task.read(), &goal.read());
                             if let Some(frame) = frame {
                                 on_frame.call(frame);
                                 task.set(String::new());
@@ -373,7 +373,7 @@ pub fn CityView(
                         }
                         button {
                             r#type: "submit",
-                            disabled: dispatch_command(&checking, &task.read(), &goal.read()).is_none(),
+                            disabled: dispatch_to_building(&checking, &task.read(), &goal.read()).is_none(),
                             "{word(Msg::CitySendWorkHere)}"
                         }
                     }

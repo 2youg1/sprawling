@@ -29,7 +29,7 @@ use crate::lang::{Msg, fill, say};
 use channels::UsdMicros;
 use dioxus::prelude::*;
 
-use crate::app::render_usd;
+use crate::readout::render_usd;
 
 /// The five cuts of one authoritative total. Exhaustive:
 /// a sixth dimension would have to be added here, and to the reconciliation
@@ -247,7 +247,7 @@ pub fn CostsView(
                 },
                 source: word(Msg::CostSource).to_owned(),
                 p { class: "consumed",
-                    "{crate::app::render_tokens(usage.input)} in, {crate::app::render_tokens(usage.output)} out, {crate::app::render_tokens(usage.cache_read)} from cache"
+                    "{crate::readout::render_tokens(usage.input)} in, {crate::readout::render_tokens(usage.output)} out, {crate::readout::render_tokens(usage.cache_read)} from cache"
                 }
                 if usage.unpriced_calls > 0 {
                     p { class: "unpriced",

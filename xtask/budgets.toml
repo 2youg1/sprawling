@@ -217,8 +217,6 @@ names = [
   "crates/sprawling/src/assembly.rs::settle",      # 5
   "crates/sprawling/src/assembly.rs::stand_up",    # 5
   "crates/sprawling/src/console.rs::drive",        # 5
-  "crates/web/src/app.rs::dispatch_command",       # 5
-  "crates/web/src/city_view.rs::along",            # 5
 ]
 
 [file_length]
@@ -245,7 +243,6 @@ status = "gated, with a register of the files that predate the rule"
 # Delete a row by doing the split, never by raising its number.
 [file_length.predating]
 "crates/sprawling/src/assembly.rs" = 11461
-"crates/web/src/app.rs" = 3916
 
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"

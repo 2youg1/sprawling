@@ -27,7 +27,83 @@
 
 use channels::{Address, RunId};
 
-use crate::app::{Lens, View};
+use crate::app::Snapshot;
+use crate::lang::Msg;
+
+/// Which page the content region is showing (web-SPEC.md section 8-53
+/// B1). Three regions fill the window — top bar, left nav, content — and
+/// only the content region routes.
+///
+/// **Six destinations, and two shapes that are reached from them.** The
+/// previous set had eleven entries and no page for the one object this
+/// product has: a session. Eight of those eleven were a list of
+/// sessions, a history of sessions, or settings, and each had a nav
+/// entry of its own — so the interface asked a person to choose between
+/// eleven answers to a question they had not asked yet.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum View {
+    /// The list, and the box that starts work. Default because the
+    /// action a person arrives to take is on it.
+    #[default]
+    Sessions,
+    /// One session: a work line in one room, named by the name a person
+    /// gave it. The object page this interface never had.
+    Session(Address),
+    /// Everything that cannot move until a person answers.
+    Waiting,
+    /// One history, in three lenses. They were three pages with three
+    /// nav entries, and no reader ever had to choose between them
+    /// before knowing what they were looking for.
+    Record(Lens),
+    /// Spend, in five cuts.
+    Cost,
+    /// Where a provider is registered, and which language this reads in.
+    /// A region rather than a modal: registering is work, and work that
+    /// can be interrupted needs a place to return to.
+    Setup,
+    /// One building's own files and archive. Reached from a session and
+    /// from the city drawing, not from the nav: it is where sessions
+    /// live rather than a sixth thing to check.
+    Building(Address),
+    /// A run named by a link written before sessions had addresses.
+    /// Held as its own view because the router is pure and the room a
+    /// run is in is a fact only the snapshot has; the page resolves it
+    /// and moves on, so this is a state the address bar passes through.
+    Run(RunId),
+}
+
+/// Which lens the record is read through.
+///
+/// One page, three lenses, because they are three questions about one
+/// history and a person picks the lens after deciding to look — not
+/// before. `Bin` is spelled short in the fragment and long on screen:
+/// the address bar is typed and the heading is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lens {
+    /// Every record, newest first.
+    #[default]
+    Ledger,
+    /// What was filed on the shelves, and what went there lately.
+    Archive,
+    /// What was discarded, and the way each row comes back.
+    Bin,
+}
+
+impl Lens {
+    /// Every lens, in the order the page offers them: the whole history,
+    /// then what was kept, then what was thrown away.
+    pub const ALL: [Lens; 3] = [Lens::Ledger, Lens::Archive, Lens::Bin];
+
+    /// What this lens is called on screen.
+    #[must_use]
+    pub fn word(self) -> Msg {
+        match self {
+            Self::Ledger => Msg::RecordLensLedger,
+            Self::Archive => Msg::RecordLensArchive,
+            Self::Bin => Msg::RecordLensBin,
+        }
+    }
+}
 
 /// The address-bar form of a view, fragment marker included.
 ///
@@ -128,6 +204,112 @@ pub fn go(view: &View) {
     // Assigning the hash is what pushes a history entry; `replace` would
     // make the back button skip the page a person just left.
     let _ = window.location().set_hash(&to_fragment(view));
+}
+
+/// One entry of the left nav.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Destination {
+    pub view: View,
+    /// What this destination is called, in whichever language the
+    /// person reads. The word itself lives in `web::lang`, so the nav
+    /// and the translation cannot disagree about which page is which.
+    pub label: crate::lang::Msg,
+    /// How many things are waiting behind this destination, when waiting
+    /// is a thing that can happen there.
+    pub waiting: Option<u32>,
+}
+
+/// Every destination the left nav offers, in reading order.
+///
+/// One producer for the list, its wording and its badge: a destination
+/// added here appears in the nav, in the router and in the test that
+/// walks them, and cannot appear in two of the three.
+///
+/// **Five, and flat.** The previous nav had nine entries under three
+/// headings, and the headings existed because nine entries read as a
+/// menu to be searched rather than a place to go. Five is inside the
+/// span a person holds without searching, so the headings are not
+/// replaced by better headings — they are not needed.
+#[must_use]
+pub fn destinations(snapshot: &Snapshot) -> Vec<Destination> {
+    let waiting = snapshot.waiting_on_you();
+    vec![
+        Destination {
+            view: View::Sessions,
+            label: crate::lang::Msg::NavSessions,
+            waiting: None,
+        },
+        // The one badge in this interface. It is here on every page
+        // because an unfinished thing that is out of sight stops being
+        // an unfinished thing and starts being a surprise.
+        Destination {
+            view: View::Waiting,
+            label: crate::lang::Msg::NavWaiting,
+            waiting: (waiting > 0).then_some(waiting),
+        },
+        Destination {
+            view: View::Record(Lens::Ledger),
+            label: crate::lang::Msg::NavTheRecord,
+            waiting: None,
+        },
+        Destination {
+            view: View::Cost,
+            label: crate::lang::Msg::NavCost,
+            waiting: None,
+        },
+        Destination {
+            view: View::Setup,
+            label: crate::lang::Msg::NavSettings,
+            waiting: None,
+        },
+    ]
+}
+
+/// Whether this destination is the page being shown.
+///
+/// The record's three lenses are one destination, so the nav entry stays
+/// marked while a person moves between them: an entry that unhighlights
+/// when the reader is still inside it says they have left.
+#[must_use]
+pub fn showing(destination: &View, view: &View) -> bool {
+    match (destination, view) {
+        (View::Record(_), View::Record(_)) => true,
+        // A session and a building are reached from the list, and the
+        // list stays lit while a person is inside one: they went deeper
+        // into what the first entry offers rather than somewhere else.
+        (View::Sessions, View::Session(_) | View::Building(_) | View::Run(_)) => true,
+        (left, right) => left == right,
+    }
+}
+
+/// The building a person is looking at, if the city page has one
+/// selected. The nav does not carry buildings - a city may have fifty -
+/// so the way in is the city page, and this is what it hands over.
+#[must_use]
+pub fn opened_building(selected: Option<&str>) -> Option<Address> {
+    selected.and_then(|name| Address::parse(name).ok())
+}
+
+/// Where the `g` sequence's second key goes.
+///
+/// Here rather than in `web::keys` because a `View` carries a run id and
+/// an address, and a module that decides what a key means has no business
+/// holding either.
+#[cfg_attr(
+    not(target_arch = "wasm32"),
+    expect(
+        dead_code,
+        reason = "the only caller is the browser's keydown listener"
+    )
+)]
+pub(crate) fn place_view(place: crate::keys::Place) -> View {
+    match place {
+        crate::keys::Place::Sessions => View::Sessions,
+        crate::keys::Place::Waiting => View::Waiting,
+        crate::keys::Place::Record => View::Record(Lens::Ledger),
+        crate::keys::Place::Cost => View::Cost,
+        crate::keys::Place::Setup => View::Setup,
+    }
 }
 
 #[cfg(test)]
@@ -289,5 +471,19 @@ mod tests {
         ] {
             assert_eq!(from_fragment(wrong), None, "{wrong} resolved to something");
         }
+    }
+
+    #[test]
+    fn the_default_view_answers_the_question_somebody_arrives_with() {
+        // A person opening this product is asking "is anything
+        // happening, does any of it need me, and how do I start
+        // something". One page answers all three, and it is the page the
+        // bare fragment lands on.
+        assert_eq!(View::default(), View::Sessions);
+        assert_eq!(
+            crate::route::from_fragment("#/"),
+            Some(View::Sessions),
+            "the bare fragment and the default view are the same page"
+        );
     }
 }

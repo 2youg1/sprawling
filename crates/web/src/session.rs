@@ -26,8 +26,9 @@
 use channels::Address;
 use dioxus::prelude::*;
 
-use crate::app::{Snapshot, View};
+use crate::app::Snapshot;
 use crate::lang::{Lang, Msg, fill, say};
+use crate::route::View;
 
 /// One of the four things the head says, and the four are fixed.
 ///
@@ -57,7 +58,7 @@ pub fn head_facts(lang: Lang, row: &crate::app::RunRow) -> [Fact; 4] {
         Some(amount) => Fact {
             said: fill(
                 say(lang, Msg::SessionSpentIs),
-                &[("amount", &crate::app::render_usd(amount))],
+                &[("amount", &crate::readout::render_usd(amount))],
             ),
             known: true,
         },

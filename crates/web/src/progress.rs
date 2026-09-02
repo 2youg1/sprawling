@@ -159,7 +159,7 @@ pub fn bar(progress: &Progress, blocked: bool, subject: Subject, lang: crate::la
                 Subject::Run => format!(
                     "{} steps · {}",
                     unplanned.steps,
-                    crate::app::render_usd(unplanned.budget.usd)
+                    crate::readout::render_usd(unplanned.budget.usd)
                 ),
             };
             Bar {
