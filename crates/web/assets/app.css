@@ -272,7 +272,15 @@ a { color: var(--TEXT); text-decoration: underline;
 
    A page is a stack of these and nothing else, so two pages cannot
    disagree about what a heading means. */
-.panel { margin: 0 0 var(--space-section); }
+/* `display` is declared, and that is not redundancy. The element rule
+   below gives every `form` a wrapping control row, and a panel that is
+   also a form - the composer on the home page and on the first run - was
+   therefore laid out as four items in a row: the title, the sentence
+   beside it, the box floated to the right of both, and the provenance
+   line wrapped underneath. Stating the panel grammar's own display is
+   what makes the class the authority on a panel's layout, whichever
+   element carries it. */
+.panel { display: block; margin: 0 0 var(--space-section); }
 .panel:last-child { margin-bottom: 0; }
 .panel-head { display: flex; align-items: baseline; gap: var(--space-base);
               flex-wrap: wrap; margin-bottom: var(--space-tight); }
@@ -375,6 +383,10 @@ button, .nav-item, .tab, .attention-row, .index-row .pick {
                 color var(--motion-quick), transform var(--motion-quick); }
 button:active:not(:disabled), .nav-item:active, .tab:active,
 .attention-row:active { transform: translateY(1px); }
+/* A form is a row of controls that ends in the button that submits them.
+   A form that carries `.panel` is not: the panel grammar states its own
+   display, which beats this rule on specificity, so the two cannot
+   collide again. */
 form { display: flex; gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap;
        margin: var(--space-base) 0; }
 
