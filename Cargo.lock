@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "browser"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "kernel",
  "serde_json",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "channels"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "axum",
  "kernel",
@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "city"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "kernel",
  "serde",
@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "citysim"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "eval",
  "gateway",
@@ -466,7 +466,7 @@ dependencies = [
 
 [[package]]
 name = "collab"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "kernel",
  "memory",
@@ -1457,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "eval"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "kernel",
  "serde_json",
@@ -1615,7 +1615,7 @@ dependencies = [
 
 [[package]]
 name = "gateway"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "insta",
  "kernel",
@@ -2241,7 +2241,7 @@ dependencies = [
 
 [[package]]
 name = "kernel"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "blake3",
  "insta",
@@ -2456,7 +2456,7 @@ dependencies = [
 
 [[package]]
 name = "memory"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "blake3",
  "git2",
@@ -2761,7 +2761,7 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "kernel",
  "serde_json",
@@ -3099,7 +3099,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "kernel",
  "memory",
@@ -3596,7 +3596,7 @@ checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
 
 [[package]]
 name = "sprawling"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "channels",
  "city",
@@ -4693,7 +4693,7 @@ dependencies = [
 
 [[package]]
 name = "web"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "channels",
  "dioxus",
@@ -5101,7 +5101,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "flate2",
  "kernel",

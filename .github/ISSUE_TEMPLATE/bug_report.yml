@@ -54,7 +54,7 @@ body:
     attributes:
       label: 环境
       description: OS / 工具链版本 / release tag 或 commit SHA——足以复现的那部分。
-      placeholder: Windows 11 / rustc 1.97.1 / sprawling v0.0.2
+      placeholder: Windows 11 / rustc 1.97.1 / sprawling v0.0.3-Pre-alpha-260903
     validations:
       required: true
 
