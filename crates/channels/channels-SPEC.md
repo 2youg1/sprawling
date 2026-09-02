@@ -99,7 +99,15 @@ aggregate ──▶ 上游 City 的 WS 连接（发送面类型上只收 Query�
 
 理由：若 channels 自建一份 `enum Mode`，就产生了**同一规则的第二个权威**（AGENTS.md 明拒），且两份枚举会静默地漂开。channels **确实不知道** mode 集合是什么，假装知道才是谎言。**被否**：（a）channels 内镜像三个枚举——两个权威；（b）把 `Mode` 上移入 kernel——它不在任何缝上，上移只为了让 wire 好看，且删 `runtime::mode` 行需 verdict。
 
-### 8-1 channels::wire（S4.02；形状 2 值类型 ＋ 形状 1 编解码）
+### 8-1 channels::wire（S4.02；形状 2 值类型 ＋ 形状 1 编解码）＋command／answer／carried_name（V3.38）
+
+**V3.38：一个文件装着四样东西，现在装四样的四个文件。** 1,278 → 310（wire）＋576（command）＋381（answer）＋88（carried_name）。
+切法取自依赖方向而不是行数，**因为方向是无环的**：`wire`（信封：`Query`、五种帧、`WIRE_V`、`schema_hash`）→ `command`／`answer` → `carried_name`。
+谁都不回头指，所以加一个 Command 不碰答面，加一个答面不碰命令，而 `carried_name` 的四个新类型谁也不依赖。
+- `command`：`Command`／`WireCommand`／`NoSecret`／`COMMAND_NAMES` 与三个只服务于命令的步骤枚举（`LoginStep`／`HaltScope`／`PursuitStep`）。两条不可拼写的性质随类型走，反例仍在 `tests/trybuild.rs`。
+- `answer`：二十余个答面结构与 `Answer` 枚举、`HISTORY_MAX`。它们是读形状，一处判定也不做。
+- `carried_name`：`carried_name!` 宏与 `ModeTag`／`ProviderName`／`TemplateName`／`UploadId`——**本 crate 不拥有的名字**，只在唯一构造点拒空与控制字符，合法值集恒属上游。
+**公开名一字未改**（`lib.rs` 重导出）；变的只有 `cargo public-api` 记的定义模块，`sprawling` 与 `web` 两份基线同变更集重生，各自 SPEC 记一行。
 
 ```rust
 pub struct ModeTag(String);      // 三个携带 newtype：parse 拒空串与控制字符，不拒未知值

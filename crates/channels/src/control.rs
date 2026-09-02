@@ -16,7 +16,7 @@
 
 use kernel::{AxCode, AxError, RunId};
 
-use crate::wire::Command;
+use crate::command::Command;
 
 /// The verbs the control surface shows. Five interventions plus `Release`,
 /// the return path that `Halt` needs in order not to be a trap.

@@ -13,9 +13,12 @@
 //! frames owes the vocabulary to read them.
 
 mod aggregate;
+mod answer;
 #[cfg(feature = "server")]
 mod assets;
 mod auth;
+mod carried_name;
+mod command;
 mod control;
 #[cfg(feature = "server")]
 mod reception;
@@ -24,9 +27,22 @@ mod server;
 mod wire;
 
 pub use aggregate::{Aggregate, CityLabel, Forwarded, Sighting, Upstream};
+pub use answer::PlanRow;
+pub use answer::PursuitLine;
+pub use answer::RunSummary;
+pub use answer::{Answer, ApprovalsAnswer, ArchiveLine, BlockedLine, BuildingProgress};
+pub use answer::{ArchiveAnswer, ArchiveHit, DiscardAnswer, DiscardLine};
+pub use answer::{BuildingAnswer, BuildingDoc};
+pub use answer::{ChangesAnswer, HISTORY_MAX, HistoryAnswer};
+pub use answer::{ChosenSummary, CityAnswer, CostAnswer, EndpointSummary, EndpointsAnswer};
+pub use answer::{InboxAnswer, MetricsAnswer, RegistryAnswer, RegistryLine, SignalLine};
 #[cfg(feature = "server")]
 pub use assets::{AssetReply, ClientAssets, EmbeddedFile};
 pub use auth::{PairingToken, verify};
+pub use carried_name::{ModeTag, ProviderName, TemplateName, UploadId};
+pub use command::COMMAND_NAMES;
+pub use command::{Command, WireCommand};
+pub use command::{HaltScope, LoginStep, NoSecret, PursuitStep};
 pub use control::{ControlVerdict, Intervention, classify};
 pub use kernel::{FileChange, How, Lines};
 pub use kernel::{Span, Token, markdown};
@@ -40,18 +56,9 @@ pub use reception::{decide_bind, decide_handshake};
 pub use server::{AcpBody, AcpProgress, AcpSink};
 #[cfg(feature = "server")]
 pub use server::{Delivered, Reply, ServeConfig, router, serve};
-pub use wire::RunSummary;
-pub use wire::{Answer, ApprovalsAnswer, ArchiveLine, BlockedLine, BuildingProgress};
-pub use wire::{ArchiveAnswer, ArchiveHit, DiscardAnswer, DiscardLine};
-pub use wire::{BuildingAnswer, BuildingDoc};
-pub use wire::{COMMAND_NAMES, QUERY_NAMES, WIRE_V, schema_hash};
-pub use wire::{ChangesAnswer, HISTORY_MAX, HistoryAnswer};
-pub use wire::{ChosenSummary, CityAnswer, CostAnswer, EndpointSummary, EndpointsAnswer};
-pub use wire::{ClientFrame, Command, Delta, ServerFrame, WireCommand};
-pub use wire::{HaltScope, Hello, LoginStep, NoSecret, PlanRow, Query, Welcome};
-pub use wire::{InboxAnswer, MetricsAnswer, RegistryAnswer, RegistryLine, SignalLine};
-pub use wire::{ModeTag, ProviderName, TemplateName, UploadId};
-pub use wire::{PursuitLine, PursuitStep};
+pub use wire::{ClientFrame, Delta, ServerFrame};
+pub use wire::{Hello, Query, Welcome};
+pub use wire::{QUERY_NAMES, WIRE_V, schema_hash};
 
 pub use kernel::{Address, ApprovalId, Autonomy, AxCode, AxError, B3Hash, BudgetCap};
 pub use kernel::{ApprovalClass, ApprovalItem, ApprovalSource, ClusterKey, Restoration};

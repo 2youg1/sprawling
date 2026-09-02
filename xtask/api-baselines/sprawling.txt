@@ -8,7 +8,7 @@ pub enum sprawling::firstrun::FirstScreen
 pub fn sprawling::assembly::Keyed::code(&self) -> core::option::Option<&str>
 pub fn sprawling::assembly::RunWorker::adopt_building(&mut self, kernel::address::Address) -> core::result::Result<(), kernel::error::AxError>
 pub fn sprawling::assembly::RunWorker::fork(&mut self, kernel::event::RunId, kernel::event::Seq, core::option::Option<kernel::address::Address>) -> core::result::Result<kernel::event::RunId, kernel::error::AxError>
-pub fn sprawling::assembly::RunWorker::handle(&mut self, channels::wire::Command) -> core::result::Result<(), kernel::error::AxError>
+pub fn sprawling::assembly::RunWorker::handle(&mut self, channels::command::Command) -> core::result::Result<(), kernel::error::AxError>
 pub fn sprawling::assembly::RunWorker::new(&std::path::Path, gateway::credential::Custodian, runtime::diagnostics::Diagnostics) -> core::result::Result<Self, kernel::error::AxError>
 pub fn sprawling::assembly::RunWorker::startup_scan(&mut self) -> core::result::Result<sprawling::assembly::ScanReport, kernel::error::AxError>
 pub fn sprawling::assembly::ScanReport::summary(&self) -> alloc::string::String

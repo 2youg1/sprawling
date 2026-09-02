@@ -1735,3 +1735,11 @@ pub fn given(records: &[EventRecord], run: RunId) -> Given;
 用的是既有的面板语法与既有的类名规则，**没有新的版面判断要花**。
 但四步法没有为这一类写下豁免，所以要么补一张定稿屏，要么在 `docs/frontend-method.md` 里写清哪类改动免走第 1 步。
 **在那之前，这是一笔记在案的欠账，不是一个先例。**
+
+## 附记：答面类型的定义模块变了，接口没变（V3.38）
+
+本 crate 的 API 基线里十七行的类型路径从 `channels::wire::*Answer` 变成
+`channels::answer::*Answer`，`WireCommand` 变成 `channels::command::WireCommand`。
+**这不是一次接口变更**：公开路径仍是 `channels::DiscardAnswer` 一类，字段与签名一字未动，
+变的只是 `cargo public-api` 记录的定义模块——答面与命令从 `channels::wire` 各自搬进了自己的文件
+（channels-SPEC §8-1）。记在这里是因为 `apisync` 判的是「基线动了就要有一份 SPEC 同行」。

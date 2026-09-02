@@ -155,7 +155,7 @@ pub fn web::LiveView(web::live::LiveViewProps) -> dioxus_core::innerlude::Elemen
 pub fn web::Note::at(&self) -> kernel::event::Seq
 pub fn web::Outcome::class(self) -> &'static str
 pub fn web::Outcome::word(self) -> web::Msg
-pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::wire::Answer>, core::option::Option<kernel::error::AxError>, alloc::vec::Vec<channels::wire::Delta>)
+pub fn web::Paint::into_parts(self) -> (alloc::vec::Vec<kernel::event::EventRecord>, alloc::vec::Vec<channels::answer::Answer>, core::option::Option<kernel::error::AxError>, alloc::vec::Vec<channels::wire::Delta>)
 pub fn web::Paint::is_empty(&self) -> bool
 pub fn web::Paint::superseded(&self) -> usize
 pub fn web::Palette(web::palette::PaletteProps) -> dioxus_core::innerlude::Element
@@ -216,12 +216,12 @@ pub fn web::absorb(web::Lang, &mut web::Alerts, &kernel::event::EventRecord) -> 
 pub fn web::alert_for(web::Lang, &kernel::event::EventRecord) -> core::option::Option<web::Alert>
 pub fn web::backoff_ms(u32) -> u64
 pub fn web::bar(&kernel::completion::Progress, bool, web::Subject, web::Lang) -> web::Bar
-pub fn web::bin_rows(&channels::wire::DiscardAnswer) -> alloc::vec::Vec<web::BinRow>
+pub fn web::bin_rows(&channels::answer::DiscardAnswer) -> alloc::vec::Vec<web::BinRow>
 pub fn web::building_of(&kernel::address::Address) -> core::option::Option<kernel::address::Address>
-pub fn web::can_dispatch(&channels::wire::EndpointsAnswer) -> bool
+pub fn web::can_dispatch(&channels::answer::EndpointsAnswer) -> bool
 pub fn web::cancel_command(kernel::event::RunId) -> channels::wire::ClientFrame
 pub fn web::cleared_by(&kernel::event::EventRecord) -> core::option::Option<alloc::string::String>
-pub fn web::configure_command(&kernel::address::Address, kernel::config::SandboxLimits, alloc::vec::Vec<kernel::config::McpServer>) -> channels::wire::WireCommand
+pub fn web::configure_command(&kernel::address::Address, kernel::config::SandboxLimits, alloc::vec::Vec<kernel::config::McpServer>) -> channels::command::WireCommand
 pub fn web::continuity_order(u16) -> u16
 pub fn web::cost_rows(alloc::vec::Vec<(alloc::string::String, kernel::budget::UsdMicros, kernel::budget::UsdMicros)>, kernel::budget::UsdMicros) -> alloc::vec::Vec<web::CostRow>
 pub fn web::counts_said(web::Lang, &web::Snapshot) -> [alloc::string::String; 3]
@@ -235,14 +235,14 @@ pub fn web::distinguishable_without_colour() -> bool
 pub fn web::done_band_of(&web::Camera, &web::Prism) -> alloc::vec::Vec<web::Face>
 pub fn web::draw(&web::Camera, alloc::vec::Vec<web::Prism>, core::option::Option<&str>) -> web::DisplayList
 pub fn web::drawable(usize) -> bool
-pub fn web::endpoint_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::EndpointRow>
+pub fn web::endpoint_rows(&channels::answer::EndpointsAnswer) -> alloc::vec::Vec<web::EndpointRow>
 pub fn web::enrol(&str, &str, &str, impl core::ops::function::FnOnce(web::Enrolment) + 'static)
 pub fn web::export(&web::Page) -> alloc::string::String
 pub fn web::face_tokens(bool, bool) -> (&'static str, &'static str, &'static str)
 pub fn web::faces_of(&web::Camera, &web::Prism, bool) -> [web::Face; 3]
 pub fn web::filed_at(kernel::event::TimeMs) -> alloc::string::String
-pub fn web::filed_lately(&channels::wire::RegistryAnswer, usize) -> alloc::vec::Vec<channels::wire::RegistryLine>
-pub fn web::filed_line(&channels::wire::RegistryAnswer, usize) -> alloc::string::String
+pub fn web::filed_lately(&channels::answer::RegistryAnswer, usize) -> alloc::vec::Vec<channels::answer::RegistryLine>
+pub fn web::filed_line(&channels::answer::RegistryAnswer, usize) -> alloc::string::String
 pub fn web::fill(&str, &[(&str, &str)]) -> alloc::string::String
 pub fn web::fold(impl core::iter::traits::collect::IntoIterator<Item = web::Arrived>) -> web::Paint
 pub fn web::fold_line(&web::CostRow) -> alloc::string::String
@@ -264,7 +264,7 @@ pub fn web::listing(&web::Snapshot) -> (alloc::vec::Vec<web::SeatRow>, alloc::ve
 pub fn web::matching(&str, alloc::vec::Vec<web::Offer>) -> alloc::vec::Vec<web::Offer>
 pub fn web::opened_at(&[web::Turn]) -> core::option::Option<kernel::locator::GitOid>
 pub fn web::opened_building(core::option::Option<&str>) -> core::option::Option<kernel::address::Address>
-pub fn web::opening_leaf(&channels::wire::BuildingAnswer) -> web::Leaf
+pub fn web::opening_leaf(&channels::answer::BuildingAnswer) -> web::Leaf
 pub fn web::page<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>, &web::Filter, usize) -> web::Page
 pub fn web::painter_order(alloc::vec::Vec<web::Prism>) -> alloc::vec::Vec<web::Prism>
 pub fn web::per_mille(u16) -> alloc::string::String
@@ -292,12 +292,12 @@ pub fn web::room_for_link(&web::Snapshot, &web::View) -> core::option::Option<we
 pub fn web::say(web::Lang, web::Msg) -> &'static str
 pub fn web::searchable(&str) -> core::option::Option<alloc::string::String>
 pub fn web::share_per_mille(kernel::budget::UsdMicros, kernel::budget::UsdMicros) -> u16
-pub fn web::shelves(&channels::wire::ArchiveAnswer) -> alloc::vec::Vec<web::Shelf>
+pub fn web::shelves(&channels::answer::ArchiveAnswer) -> alloc::vec::Vec<web::Shelf>
 pub fn web::short_run(kernel::event::RunId) -> alloc::string::String
 pub fn web::show_mounts(&[kernel::address::Address]) -> alloc::string::String
 pub fn web::show_servers(&[kernel::config::McpServer]) -> alloc::string::String
 pub fn web::showing(&web::View, &web::View) -> bool
-pub fn web::signs(&channels::wire::MetricsAnswer) -> [web::Sign; 3]
+pub fn web::signs(&channels::answer::MetricsAnswer) -> [web::Sign; 3]
 pub fn web::spend_line(web::Lang, &web::Snapshot) -> alloc::string::String
 pub fn web::spent_of(web::Lang, core::option::Option<kernel::budget::UsdMicros>) -> alloc::string::String
 pub fn web::stalled(&web::Snapshot) -> alloc::vec::Vec<web::Stalled>
@@ -305,14 +305,14 @@ pub fn web::started_here(&kernel::event::EventRecord, &str) -> core::option::Opt
 pub fn web::status_line(web::Lang, &web::Snapshot) -> [alloc::string::String; 4]
 pub fn web::storeys(u64) -> u32
 pub fn web::superellipse_tenths(u16) -> u16
-pub fn web::tag_rows(&channels::wire::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
+pub fn web::tag_rows(&channels::answer::EndpointsAnswer) -> alloc::vec::Vec<web::TagRow>
 pub fn web::to_fragment(&web::View) -> alloc::string::String
 pub fn web::token_in(&str) -> core::option::Option<alloc::string::String>
 pub fn web::track_token() -> &'static str
 pub fn web::turns<'a>(impl core::iter::traits::collect::IntoIterator<Item = &'a kernel::event::EventRecord>) -> alloc::vec::Vec<web::Turn>
 pub fn web::url_is_safe(&str) -> bool
 pub fn web::view_box(&web::DisplayList, usize, (i32, i32)) -> web::Frame
-pub fn web::waiting_in(core::option::Option<&channels::wire::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
+pub fn web::waiting_in(core::option::Option<&channels::answer::InboxAnswer>, &kernel::address::Address, &str) -> web::RoomQueue
 pub fn web::waiting_line(web::Lang, &web::Snapshot) -> alloc::string::String
 pub fn web::watchable(&web::Snapshot) -> alloc::vec::Vec<(kernel::event::RunId, alloc::string::String)>
 pub mod web
@@ -390,7 +390,7 @@ pub web::AlertKind::AwaitingApproval
 pub web::AlertKind::ProviderTrouble
 pub web::AlertKind::Refused
 pub web::AlertKind::RunFrozen
-pub web::Arrived::Answer(alloc::boxed::Box<channels::wire::Answer>)
+pub web::Arrived::Answer(alloc::boxed::Box<channels::answer::Answer>)
 pub web::Arrived::Event(alloc::boxed::Box<kernel::event::EventRecord>)
 pub web::Arrived::Refusal(alloc::boxed::Box<kernel::error::AxError>)
 pub web::Arrived::Saying(channels::wire::Delta)
@@ -498,7 +498,7 @@ pub web::Line::kind: kernel::event::EventKind
 pub web::Line::msg: core::option::Option<web::Msg>
 pub web::Line::seq: kernel::event::Seq
 pub web::Line::who: alloc::string::String
-pub web::LinkAction::Answered(alloc::boxed::Box<channels::wire::Answer>)
+pub web::LinkAction::Answered(alloc::boxed::Box<channels::answer::Answer>)
 pub web::LinkAction::CloseSocket
 pub web::LinkAction::Deliver(alloc::boxed::Box<kernel::event::EventRecord>)
 pub web::LinkAction::Nothing
@@ -1009,7 +1009,7 @@ pub web::ReturnPath::Rebuild(alloc::string::String)
 pub web::ReturnPath::Undescribed
 pub web::RoomQueue::Empty
 pub web::RoomQueue::Unasked
-pub web::RoomQueue::Waiting(alloc::vec::Vec<channels::wire::SignalLine>)
+pub web::RoomQueue::Waiting(alloc::vec::Vec<channels::answer::SignalLine>)
 pub web::Row::at: kernel::event::TimeMs
 pub web::Row::kind: kernel::event::EventKind
 pub web::Row::locator: core::option::Option<alloc::string::String>
@@ -1037,7 +1037,7 @@ pub web::SeatRow::said: core::option::Option<alloc::string::String>
 pub web::SeatRow::spent: core::option::Option<kernel::budget::UsdMicros>
 pub web::SeatRow::turns: u32
 pub web::Shelf::building: kernel::address::Address
-pub web::Shelf::hits: alloc::vec::Vec<channels::wire::ArchiveHit>
+pub web::Shelf::hits: alloc::vec::Vec<channels::answer::ArchiveHit>
 pub web::Sighting::Changed
 pub web::Sighting::Changed::was: alloc::string::String
 pub web::Sighting::First
@@ -1060,7 +1060,7 @@ pub web::Tab::Cost
 pub web::Tab::Docs
 pub web::Tab::Prompt
 pub web::Tab::Turns
-pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>
+pub web::TagRow::chosen: core::option::Option<channels::answer::ChosenSummary>
 pub web::TagRow::consequence: web::Msg
 pub web::TagRow::tag: kernel::model::ModelTag
 pub web::Target::Composer

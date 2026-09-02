@@ -28,7 +28,8 @@ use std::net::SocketAddr;
 use kernel::{Address, AxCode, AxError, B3Hash};
 
 use crate::auth;
-use crate::wire::{ClientFrame, Hello, Query, WIRE_V, Welcome, WireCommand, schema_hash};
+use crate::command::WireCommand;
+use crate::wire::{ClientFrame, Hello, Query, WIRE_V, Welcome, schema_hash};
 
 /// Which face the listener presents. An enum rather than `bool` so the
 /// exposed case can never be reached by passing the wrong literal.
@@ -291,7 +292,7 @@ mod tests {
     }
 
     fn a_command() -> ClientFrame {
-        ClientFrame::Command(Box::new(crate::wire::Command::Cancel {
+        ClientFrame::Command(Box::new(crate::command::Command::Cancel {
             run: kernel::RunId::CITY,
             idem: kernel::IdemKey::derive(&kernel::RunId::CITY, kernel::Seq::FIRST, b"cancel"),
         }))

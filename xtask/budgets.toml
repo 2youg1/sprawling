@@ -248,7 +248,6 @@ status = "gated, with a register of the files that predate the rule"
 "crates/web/src/app.rs" = 3916
 "crates/runtime/src/turn.rs" = 1716
 "crates/web/src/city_view.rs" = 1554
-"crates/channels/src/wire.rs" = 1278
 
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"

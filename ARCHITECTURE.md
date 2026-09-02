@@ -499,11 +499,14 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | eval::nesting | crates/eval/src/nesting.rs | which nested format a model edits with fewest mistakes, and how it fails when it fails | decision | V3 | built |
 | eval::metabolism | crates/eval/src/metabolism.rs | clearing out: warn first, retire second, delete never | decision | P3 | built |
 
-### channels (7) — the process boundary
+### channels (10) — the process boundary
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
-| channels::wire | crates/channels/src/wire.rs | the boundary's vocabulary: Commands, Queries, Events, and the schema hash | value | S4 | built |
+| channels::wire | crates/channels/src/wire.rs | the envelope both sides speak: the Queries, the frames, the version and its hash | value | S4 | built |
+| channels::command | crates/channels/src/command.rs | everything a client may ask the city to do, and the one frame it cannot spell | value | V3 | built |
+| channels::answer | crates/channels/src/answer.rs | what a Query comes back as: one shape per view, and the closed set of them | value | V3 | built |
+| channels::carried_name | crates/channels/src/carried_name.rs | names this crate does not own, validated at one construction point | value | V3 | built |
 | channels::reception | crates/channels/src/reception.rs | may we bind, may this peer enrol, may we greet it, and what its frame means now | decision | V3 | built |
 | channels::assets | crates/channels/src/assets.rs | the client the browser downloads, and which bytes answer which path | adapter | V3 | built |
 | channels::server | crates/channels/src/server.rs | the listening end; the judgements are pure and the socket makes none | adapter | S4 | built |
