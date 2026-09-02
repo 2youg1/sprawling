@@ -27,3 +27,4 @@ mod keying;
 mod mcp_http;
 mod mcp_stdio;
 mod plan_view;
+mod views;

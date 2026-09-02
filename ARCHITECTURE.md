@@ -559,6 +559,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | bin::keying | crates/sprawling/src/keying.rs | what guards the door this serve opens: nothing, what the operator configured, or one minted for this serve alone | decision | R2 | built |
 | bin::effect | crates/sprawling/src/effect.rs | what a run's desks left behind: the lines the history takes, and the change the city may not make before them | value | R2 | built |
 | bin::plan_view | crates/sprawling/src/plan_view.rs | every building's plan, parsed once and re-parsed only when a record says it may have moved | projection | V3 | built |
+| bin::views | crates/sprawling/src/views.rs | the fold every query is answered from, and the lines a page reads off it | projection | V3 | built |
 
 ## 13 Changing this document
 

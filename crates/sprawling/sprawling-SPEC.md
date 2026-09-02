@@ -1034,3 +1034,35 @@ justfile／CI 无涉；S4 前端框架结论书将改写 build.rs 拷贝源与 `
 子命令每扩一个：本 SPEC 增章、ARCHITECTURE.md §12 状态翻转、CLI 三栏表核对。
 
 P7 起交付形态入册：`just package` 的产物名、`QUICKSTART.md`、README 与 `docs/getting-started.md` 的首次运行段、`release.yml` 的附件清单，五处同改。
+
+## 8-37 每个问题的答案搬出装配点（V3.30；`bin::views`）
+
+**动手的理由是尺寸，留下来的理由是形状。** `bin::assembly` 12,078 行，`xtask length` 的文件面（1000 行）从此判它红，
+而 `[file_length.predating]` 把它钉在 12,078——只准变小。这一刀先切最干净的那条缝。
+
+**缝在哪，由模块表自己说。** ARCHITECTURE §9 写着「一个说不出自己形状的模块，通常装着两件想分家的东西」。
+`bin::assembly` 的行是 `adapter`：装配点、最脏、唯一全知。而 `Views` 折账本、答每一个 `Query`、删掉重折得到同样的字节——
+**那是 `projection`，§9 的形状 7。** 一个文件里两个形状，正是那一行说的判据。
+
+**先例已经在这个 crate 里**：V3.17 把 `assembly::read_spine` 搬成 `bin::plan_view`，同样是从装配点里取出一个投影。
+本卡沿用它的落法：**兄弟模块，不是 `assembly/` 子目录**。子目录会让 `assembly.rs` 变成 `modmap` 眼里的索引文件
+（`xtask/src/modmap.rs` 的 `is_index_name`），而索引文件只准放声明——那等于要求 12,078 行**一次全部**拆完。
+兄弟模块让这条债可以一刀一刀还。
+
+### 搬走什么
+
+`Views` 结构与它的两个 `impl`、`endpoints_answer`、`verdict_line`、`pursuit_from`、`buildings_of`、
+`signal_line`、`discard_lines`、`registry_line`、`summarize`，以及**咬它们的那十条断言**。
+测试跟着被测的东西走：一份留在原处的断言会让下一个人以为那里还有代码。
+
+### 不搬走什么，以及这件事本身的发现
+
+`NAME_THE_WORK`、`NAME_TOKENS`、`mode_of`、`not_built`、`Reporter`、`building_of`、`plan_node_of`
+在原文件里**物理上坐在 `Views` 那一簇的中间**，而它们的使用者是 `RunWorker` 与 `CollaborationFold`：
+`not_built` 六处、`Reporter` 三处、`mode_of` 一处，`Views` 一处都不用。
+**这就是那个文件长成这样的机制**——没有边界的地方，新东西落在光标所在的行，而不是落在它属于的地方。
+
+### 验收
+
+`Views` 与 `rebuild_views` 在本 crate 外没有任何引用（已查），所以搬动不动任何公开面，`apisync` 基线不变。
+`cargo xtask length` 里 `bin::assembly` 的钉子随之降低；降不下来就是没搬干净。
