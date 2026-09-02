@@ -17,7 +17,7 @@
 #
 #   clippy   fmt, then the zero-warning build of every target and feature
 #   test     the suite; the only job that produces trybuild scratch
-#   gates    the thirteen machine gates, and the nightly rustdoc apisync
+#   gates    the sixteen machine gates, and the nightly rustdoc apisync
 #            needs (27s of a 27.5s gate run locally - it is why the other
 #            twelve no longer queue behind a compile)
 #   web      the two places `just check` cannot reach
@@ -37,7 +37,8 @@
 # A second of noise is not a lever; leave the backtraces alone.
 #
 # C1 note: GitHub Actions infrastructure is not part of the artifact build
-# chain; the zero-js gate asserts our own commands never invoke npm/node.
+# chain. The zero-js gate that asserted this was deleted at V3.25: it
+# excluded an architecture rather than a defect.
 name: ci
 on:
   push:

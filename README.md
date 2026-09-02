@@ -147,7 +147,7 @@ The rest of the vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 | Missing piece | Reason |
 |---|---|
 | OS-level sandbox | Requires per-platform work; only one-third can be verified on this machine. Unverified isolation is worse than none, because people will treat it as a defense. Today’s claim is therefore “a deletion can be undone,” not “a deletion cannot happen.” |
-| Browser end-to-end in CI | The loop is a local command, not a gate. **Nobody has driven this release's client in a real browser** — every session behind the claims above went through the wire, which is a debugging door rather than the product. |
+| Browser end-to-end in CI | The loop is a local command, not a gate. **This release's client has been driven in a real browser exactly once** — the sessions behind the claims above went through the wire, which is a debugging door rather than the product. |
 | Reproducible builds | Fixtures are ready; the compiler flags that would make two builds byte-identical are not yet set. |
 | Attributing spend to skills | This is a decision, not a debt: a tool call does not happen “under” a skill—a skill is a disclosure line in the prefix, not call context. Charging by skill would invent a metric. |
 
@@ -187,7 +187,7 @@ Apart from this page and the getting-started guide, the docs are in English.
 - Want to put it to work: [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md) → [`docs/operating.md`](docs/operating.md).
 - Want to change it: [`ARCHITECTURE.md`](ARCHITECTURE.md) → [`AGENTS.md`](AGENTS.md) → the code and tests of the neighboring modules.
 
-Also available: [`docs/logging.md`](docs/logging.md) (why logs are not history), [`docs/frontend-method.md`](docs/frontend-method.md) (how a screen is built, and why the client is not hand-written), [`docs/third-party.md`](docs/third-party.md) (whose shoulders we stand on, and the license obligations). [`docs/City.md`](docs/City.md) and [`docs/templates/`](docs/templates/) are the documents the city writes into buildings—agents read them, and so can you.
+Also available: [`CHANGELOG.md`](CHANGELOG.md) (what each release changed, and which machine produced the numbers it claims), [`docs/logging.md`](docs/logging.md) (why logs are not history), [`docs/frontend-method.md`](docs/frontend-method.md) (how a screen is built, and why the client is not hand-written), [`docs/third-party.md`](docs/third-party.md) (whose shoulders we stand on, and the license obligations). [`docs/City.md`](docs/City.md) and [`docs/templates/`](docs/templates/) are the documents the city writes into buildings—agents read them, and so can you.
 
 ## Contributing
 

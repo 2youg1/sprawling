@@ -183,7 +183,7 @@ sprawling help                      # 所有命令，一屏列完
 - 要用它干活：[`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md) → [`docs/operating.md`](docs/operating.md)。
 - 要改它：[`ARCHITECTURE.md`](ARCHITECTURE.md) → [`AGENTS.md`](AGENTS.md) → 相邻模块的代码与测试。
 
-另有 [`docs/logging.md`](docs/logging.md)（日志为什么不是历史）、[`docs/third-party.md`](docs/third-party.md)（站在谁的肩上、许可义务）。[`docs/City.md`](docs/City.md) 与 [`docs/templates/`](docs/templates/) 是城写进楼里的那几份文档——Agent 读它们，你也可以读。
+另有 [`CHANGELOG.md`](CHANGELOG.md)（每一版改了什么，以及它声称的那些数字出自哪台机器）、[`docs/logging.md`](docs/logging.md)（日志为什么不是历史）、[`docs/third-party.md`](docs/third-party.md)（站在谁的肩上、许可义务）。[`docs/City.md`](docs/City.md) 与 [`docs/templates/`](docs/templates/) 是城写进楼里的那几份文档——Agent 读它们，你也可以读。
 
 ## 参与
 
