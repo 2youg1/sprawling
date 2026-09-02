@@ -3,12 +3,28 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Copyright (c) 2026 2youg1 and the sprawling contributors
 
-//! Main's assembly point — the dirtiest component and the only omniscient
-//! one: it knows every concrete type, and nothing knows it. Ledger handle, clock source, RNG seed and spawn points are
-//! injected from here and nowhere else; citysim is the second Main.
+//! Main's assembly point — the dirtiest component and the only
+//! omniscient one: it knows every concrete type, and nothing knows it.
+//! Ledger handle, clock source, RNG seed and spawn points are injected
+//! from here and nowhere else; citysim is the second Main.
 //!
 //! The clock is sampled *here only* (determinism rule 2): every callee
-//! takes time as a parameter.
+//! takes time as a parameter, and the sample stays in this file so that
+//! the rule keeps naming one place.
+//!
+//! **This file holds the worker and the modules below hold its methods.**
+//! `RunWorker` is declared here, so its twenty-two private fields are
+//! visible throughout `assembly` and nowhere else — a private item
+//! reaches the module that declares it and that module's descendants, so
+//! the split cost no field its privacy. What stays here is what every
+//! submodule needs and no submodule owns: the worker itself, the one
+//! clock sample, the record it appends, the two hooks a live control
+//! surface installs, and the door a `Command` enters by.
+//!
+//! The `use` block below is the one place the sixteen submodules see
+//! each other through. A submodule imports from `super`, never from a
+//! sibling, so what one part of the assembly point offers another is
+//! stated once, here, and reads as a list rather than as a graph.
 
 mod building_page;
 mod commanding;
