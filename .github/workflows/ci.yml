@@ -106,11 +106,37 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+      # The four trybuild suites were the whole of this job's test phase:
+      # 369s of a 370s run. They are not slow, they were cold - measured
+      # on the developer machine, one suite is 21.4s against an empty
+      # scratch and 0.9s against a warm one. The scratch is deleted below
+      # so that rust-cache can save, so it was cold on every run by
+      # construction, and this job paid the first build of it forever.
+      #
+      # Restored and saved explicitly rather than by a post-step, because
+      # the order is the whole point: save has to happen after the tests
+      # that fill the scratch and before the step that empties it, and a
+      # post-step cannot be placed between two ordinary ones.
+      - uses: actions/cache/restore@v4
+        id: trybuild-scratch
+        with:
+          path: target/tests
+          key: trybuild-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'crates/*/tests/**') }}
+          restore-keys: trybuild-${{ runner.os }}-
       # No `--doc` companion: this workspace has no doctest, which is a
       # fact about it (`rg '///\s*```' crates/*/src` finds nothing), not
       # an omission for somebody to fix later by adding a slower command.
       - name: tests
         run: cargo nextest run --workspace --locked --all-features
+
+      # Only the branch everyone builds on writes, for the reason the
+      # rust-cache blocks above give: a pull request that saved its own
+      # would evict the shared entry it was restored from.
+      - uses: actions/cache/save@v4
+        if: ${{ github.ref == 'refs/heads/main' && steps.trybuild-scratch.outputs.cache-hit != 'true' }}
+        with:
+          path: target/tests
+          key: trybuild-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'crates/*/tests/**') }}
 
       # trybuild keeps its scratch tree under `target/tests`, including an
       # entry that does not survive the cache's own pruning pass. The save

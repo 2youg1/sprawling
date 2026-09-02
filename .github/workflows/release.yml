@@ -49,6 +49,14 @@ jobs:
         run: cargo fmt --all --check
       - name: clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      # See ci.yml: the four trybuild suites are the whole of the test
+      # phase, and they are cold rather than slow. Same cache, same key,
+      # so a release reuses whatever the last push to main filled.
+      - uses: actions/cache/restore@v4
+        with:
+          path: target/tests
+          key: trybuild-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'crates/*/tests/**') }}
+          restore-keys: trybuild-${{ runner.os }}-
       - name: tests
         run: cargo nextest run --workspace --locked --all-features
       - name: deny
