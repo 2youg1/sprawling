@@ -25,7 +25,10 @@ use std::path::{Path, PathBuf};
 
 use kernel::{EventRecord, GENESIS_PREV, Seq, chain_hash};
 
-use crate::jsonl::{JsonlLedger, MemoryError, RealFs, Vfs, io_err};
+use crate::error::{MemoryError, io_err};
+use crate::jsonl::JsonlLedger;
+use crate::real_fs::RealFs;
+use crate::vfs::Vfs;
 
 /// What a bundle claims to contain. Checked on restore, so a truncated
 /// or half-copied bundle is refused rather than restored quietly.

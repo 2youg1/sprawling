@@ -384,11 +384,14 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | kernel::change | crates/kernel/src/change.rs | what moved between two checkpoints; a binary file cannot be spelled as one that moved nothing | value | R2 | built |
 | kernel::highlight | crates/kernel/src/highlight.rs | a document read as ordered, disjoint spans; it says where things are and never rewrites the text | decision | R2 | built |
 
-### memory (13) — persistence, and every view derived from it
+### memory (16) — persistence, and every view derived from it
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
 | memory::jsonl | crates/memory/src/jsonl.rs | the durable Ledger: segments, chain verification, tail recovery, group commit | adapter | S1 | built |
+| memory::vfs | crates/memory/src/vfs.rs | the one face this crate touches a filesystem through; inner seam, two adapters | port | V3 | built |
+| memory::real_fs | crates/memory/src/real_fs.rs | std::fs, holding the handle it is appending through | adapter | V3 | built |
+| memory::error | crates/memory/src/error.rs | what persistence says when it refuses, and the one door out to `AxError` | value | V3 | built |
 | memory::cas | crates/memory/src/cas.rs | content-addressed storage under BLAKE3, written through a temporary file | adapter | S1 | built |
 | memory::fault_fs | crates/memory/src/fault_fs.rs | the second filesystem adapter: a deterministic power-loss model | adapter | S1 | built |
 | memory::index | crates/memory/src/index.rs | seq to byte offset; disposable, rebuilt when damaged | projection | S3 | built |

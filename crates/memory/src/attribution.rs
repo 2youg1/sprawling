@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 use kernel::{EventKind, EventRecord, UsdMicros};
 use serde_json::Value;
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 /// The bucket a call falls into when the ledger gives no basis for a
 /// finer split — an honest "unsplit", never a silent drop.

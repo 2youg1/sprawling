@@ -23,7 +23,7 @@ use kernel::{EventKind, EventRecord, Seq, TimeMs};
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
 use serde_json::Value;
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 const META: TableDefinition<&str, u64> = TableDefinition::new("meta");
 const RUNS: TableDefinition<&str, &str> = TableDefinition::new("runs");

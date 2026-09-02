@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use kernel::{ByteLen, Payload, consts_policy::WORKTREE_MAX_BYTES};
 use serde_json::{Map, Value};
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 /// Where the trees live: inside the reserved subtree, because they are
 /// the city's own machinery rather than anybody's writable space. What a

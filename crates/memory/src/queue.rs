@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kernel::{Admission, IdemKey, ItemMeta, Payload, QueueStats, TimeMs, admit};
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 /// Which lane a queue serves. The lanes differ in their accounting
 /// names and nothing else; the day they differ in behaviour is the day

@@ -8,7 +8,10 @@
 
 | 卡 | 模块 | 形状 | 一句话 |
 |---|---|---|---|
-| S1.07 | `jsonl` | 4 适配器 | kernel Ledger 的落盘实现：内缝 Vfs＋组提交＋断尾＋版本方向判定＋分段滚动 |
+| S1.07 | `jsonl` | 4 适配器 | kernel Ledger 的落盘实现：组提交＋断尾＋版本方向判定＋分段滚动 |
+| V3.35 | `vfs` | 3 端口 | 内缝 `trait Vfs`：本 crate 触碰文件系统的唯一一张脸 |
+| V3.35 | `real_fs` | 4 适配器 | Vfs 的生产适配器：std::fs，持住正在追写的那个句柄 |
+| V3.35 | `error` | 2 值 | `MemoryError` 与 `into_ax`：本 crate 失败词汇的唯一定义点 |
 | S1.08 | `fault_fs` | 4 适配器 | Vfs 第二适配器：撕裂写／乱序持久化／rename 中断；断电点阵的驱动器 |
 | S1.09 | `cas` | 4 适配器 | BLAKE3 寻址存储：范围取回＋临时文件 rename＋去重 |
 | S3.05 | `index` | 7 projection | Ledger 旁挂索引 seq→（段，偏移）；可弃，损坏即重建 |
@@ -52,11 +55,19 @@ Vfs、RealFs、FaultFs、FaultPlan、power cut、tail-truncation recovery（断�
 ## 7 模块边界
 
 ```
-jsonl ──声明──▶ pub(crate) trait Vfs（内缝；RealFs 同文件）
+vfs ──声明──▶ pub(crate) trait Vfs（内缝，形状 3；不出对外接口，不升真缝）
+real_fs ──实现──▶ Vfs（生产适配器；持住追写句柄）
 fault_fs ──实现──▶ Vfs（第二适配器；#[cfg(any(test, feature = "fault"))]）
-cas ──使用──▶ jsonl::Vfs
-error.rs 不设：MemoryError 住 lib 下唯一非索引宿主？——否：一模块一文件，MemoryError 与映射住 jsonl.rs（S1 唯一汇聚点不足 3 处；≥3 处跨模块汇聚时按 ARCHITECTURE §5 登记独立 error 模块）
+jsonl / cas / bundle / digest_cache ──使用──▶ vfs::Vfs ＋ real_fs::RealFs
+error ◀──使用── 全部十二个模块（MemoryError 与 into_ax 的唯一定义点）
 ```
+
+**V3.35：S1 写下的那条拆分条件到期了，按它自己的话执行。** §7 原文写着「MemoryError 与映射住 jsonl.rs（S1 唯一汇聚点不足 3 处；**≥3 处跨模块汇聚时按 ARCHITECTURE §5 登记独立 error 模块**）」。
+今天十二个模块 `use crate::jsonl::MemoryError`，而二十个变体里九个描述的失败 jsonl 永远不会产生——`CasCorrupt`／`Projection`／`Checkpoint`／`SecretEgress`／`Bundle`／`Worktree`／`WorktreeBusy`／`MergeStale`／`RangeOutOfBounds`。
+条件被满足了四倍，所以 `error` 登记为独立模块，`io_err`（`MemoryError::Io` 的构造子）随它走。
+
+**Vfs 与 RealFs 分家的依据是形状而不是行数**：一条缝上的 trait 是形状 3，std::fs 的直译是形状 4，而第二适配器 `fault_fs` 早就是自己的文件。
+一个文件同时装端口、适配器与账本，正是 ARCHITECTURE §9 说的「说不出自己形状的模块通常装着两件想分开的东西」。
 
 **本 crate 不做什么（否定式；S3 增两条）**：
 - **V3.07 落地记录（卡面前提不成立，真正的钱在另一处，已改）**。
@@ -79,19 +90,8 @@ error.rs 不设：MemoryError 住 lib 下唯一非索引宿主？——否：一
 ### 8-1 memory::jsonl（S1.07）
 
 ```rust
-pub(crate) trait Vfs {                      // 内缝：不出对外接口，不升真缝
-    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()>;
-    fn list(&self, dir: &Path) -> io::Result<Vec<PathBuf>>;     // 排序后返回：遍历确定性
-    fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
-    fn append(&mut self, path: &Path, bytes: &[u8]) -> io::Result<()>;
-    fn truncate(&mut self, path: &Path, len: u64) -> io::Result<()>;
-    fn sync_data(&mut self, path: &Path) -> io::Result<()>;
-    fn rename(&mut self, from: &Path, to: &Path) -> io::Result<()>;
-    fn sync_dir(&mut self, dir: &Path) -> io::Result<()>;       // Windows no-op（§3-3）
-    fn remove_file(&mut self, path: &Path) -> io::Result<()>;
-    fn exists(&self, path: &Path) -> bool;                      // cas 去重与重开容忍需要
-}
-pub(crate) struct RealFs;                   // std::fs 直译，零策略
+// Vfs 的声明住 §8-15，RealFs 住 §8-16，MemoryError 住 §8-14（V3.35）。
+// 本章只管账本本身：seq/prev 与介质。
 
 // 公开面不带泛型：Vfs 是 pub(crate) 内缝，若 JsonlLedger<V: Vfs> 公开即私有 trait 漏入公开签名（E0445）。
 // 故 Box<dyn Vfs> 内藏；生产构造子 open(dir, now) 恒用 RealFs，注入点为 pub(crate) open_with（本 crate 测试）
@@ -127,18 +127,8 @@ impl kernel::Ledger for JsonlLedger { /* append = append_all(vec![d]) */ }
 #[cfg(feature = "conformance")] impl LedgerInspect for JsonlLedger { … }
 // 测试可调滚动阈：roll_bytes 字段＋#[cfg(test)] 设定器；生产恒为 SEGMENT_ROLL_BYTES。
 
-pub enum MemoryError {                      // thiserror；crate 根
-    Io { op: &'static str, path: PathBuf, source: io::Error },
-    VersionAhead { path: PathBuf, v: u32 }, // 方向感知拒绝的机器面
-    Envelope { path: PathBuf, line: u64, source: AxError },  // open 期行解析失败＝断尾候选之外的段中损坏
-    CasMissing { hash: String },
-    CasCorrupt { hash: String, path: PathBuf },
-    RangeOutOfBounds { hash: String },
-    Draft { source: AxError },              // 组 log_truncated 草稿/规范字节失败（实践不可达，不以死变体粉饰）
-}
 // 创世行撑裂且仅此一段：回到空城，OpenReport 报告但账上无 log_truncated——账本身不存在，
 // 且首行必须是 city_initialized；首行可解析但链根不对＝Envelope（人裁），不静默清场。
-impl MemoryError { pub fn into_ax(self) -> AxError; }   // 跨 crate 边界的唯一出口
 ```
 
 **落盘形态**：目录内 `ledger-<first_seq 20 位零填>.jsonl` 若干段；行＝`canonical_line`＋`\n`；链与 seq 跨段连续。滚动：当前段字节数 ≥ `SEGMENT_ROLL_BYTES` 时下一波起新段（新段创建后 `sync_dir`）。
@@ -500,6 +490,59 @@ pub fn open_restored(city_root: &Path, now: TimeMs) -> Result<PathBuf, MemoryErr
 - **链验在 restore 内**：恢复完即走一遍 Ledger 开启与链校（jsonl 已有的那一道）。交给调用方去验等于把一个必须成立的性质变成约定。
 - **文件顺序确定**：遍历走 `Vfs::list`（已排序），清单用 BTreeMap；同一座城导两次，`MANIFEST.json` 逐字节相同。
 - S3.07 落地记录（digest_cache）：红转绿抳出一个真缺陷——`Vfs::append` 是**追加**，残留 `.part` 未清即发布出「残骸＋新内容」的拼接体。修法取 cas 既有两层纪律（open 清扫 tmp 残骸＋put 前 `truncate(0)`）而非另立新机制。`invalidate` 对不存在项不报错（末态即调用者所求），载荷携 `existed` 实报。
+
+### 8-14 memory::error（V3.35；形状 2 值）
+
+```rust
+pub enum MemoryError {                      // thiserror；crate 根
+    Io { op: &'static str, path: PathBuf, source: io::Error },
+    VersionAhead { path: PathBuf, v: u64 }, // 方向感知拒绝的机器面
+    Envelope { path: PathBuf, line: u64, source: AxError },  // 段中损坏（断尾候选之外）
+    Draft { source: AxError },              // 组 log_truncated 草稿失败（不以死变体粉饰）
+    CasMissing / CasCorrupt / RangeOutOfBounds,               // cas
+    SeqMissing,                                              // index
+    Projection / Checkpoint / SecretEgress / Bundle,          // 各自的模块
+    Worktree / WorktreeBusy / MergeStale,                    // worktree
+}
+impl MemoryError { pub fn into_ax(self) -> AxError; }   // 跨 crate 边界的唯一出口
+pub(crate) fn io_err(op: &'static str, path: &Path) -> impl FnOnce(io::Error) -> MemoryError;
+```
+
+- **为什么现在才分**：§7 写下的条件是「≥3 处跨模块汇聚」，今天是十二处。一条写下了到期条件的决定，到期时执行它不需要新的论证。
+- **为什么带着 `io_err` 走**：它是 `MemoryError::Io` 的构造子，而一个值的构造子与它的定义同住。四个模块（cas／bundle／digest_cache／index）只为取它而 import jsonl，那是一条指错了方向的依赖。
+- **不变的东西**：公开名 `memory::MemoryError` 一字未改（`lib.rs` 重导出），所以 api-baseline 不动。
+
+### 8-15 memory::vfs（V3.35；形状 3 端口）
+
+```rust
+pub(crate) trait Vfs {                      // 内缝：不出对外接口，不升真缝
+    fn create_dir_all(&mut self, dir: &Path) -> io::Result<()>;
+    fn list(&self, dir: &Path) -> io::Result<Vec<PathBuf>>;     // 排序后返回：遍历确定性
+    fn list_dirs(&self, dir: &Path) -> io::Result<Vec<PathBuf>>; // 同为浅层：遍树用显式工作表
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
+    fn append(&mut self, path: &Path, bytes: &[u8]) -> io::Result<()>;
+    fn truncate(&mut self, path: &Path, len: u64) -> io::Result<()>;
+    fn sync_data(&mut self, path: &Path) -> io::Result<()>;
+    fn rename(&mut self, from: &Path, to: &Path) -> io::Result<()>;
+    fn sync_dir(&mut self, dir: &Path) -> io::Result<()>;       // Windows no-op（§3-3）
+    fn remove_file(&mut self, path: &Path) -> io::Result<()>;
+    fn exists(&self, path: &Path) -> bool;                      // cas 去重与重开容忍需要
+}
+```
+
+- **端口的符合性套件就是断电点阵**（§8-2）：两个适配器对同一组语义负责，`fault_fs` 存在本身就是这条缝的存在证明（§8.5 设计 A）。
+- **仍然不升真缝**：`pub(crate)`，`JsonlLedger` 把它藏在 `Box<dyn Vfs>` 后面，公开签名里一次不出现（否则 E0445）。
+
+### 8-16 memory::real_fs（V3.35；形状 4 适配器）
+
+```rust
+pub(crate) struct RealFs { open: Option<OpenAppend> }   // std::fs 直译，零策略
+impl RealFs { pub(crate) fn new() -> RealFs; }
+impl Vfs for RealFs { … }
+```
+
+- **唯一的状态是那个句柄**（V3.07）：追写与 sync 走同一个句柄，所以被做持久的就是刚写的那些字节。实测 979.7 → 576.6 µs／条。
+- **句柄命名的是文件不是路径**：`rename`／`remove_file`／`truncate` 前必须 `release`。两条断言随这个模块走，它们问的是「之后字节落在哪个文件里」。
 
 ## 8.5 两个设计
 

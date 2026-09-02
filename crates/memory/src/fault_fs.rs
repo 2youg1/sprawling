@@ -31,7 +31,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::jsonl::Vfs;
+use crate::vfs::Vfs;
 
 /// The whole fault script; fully explicit, fully deterministic.
 #[derive(Debug, Clone, Copy)]
@@ -293,7 +293,8 @@ impl Vfs for FaultFs {
 )]
 mod tests {
     use super::*;
-    use crate::jsonl::{JsonlLedger, Vfs};
+    use crate::jsonl::JsonlLedger;
+    use crate::vfs::Vfs;
     use kernel::{
         EventDraft, EventKind, EventRecord, GENESIS_PREV, Payload, RunId, Seq, TimeMs, chain_hash,
     };

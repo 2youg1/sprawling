@@ -21,7 +21,8 @@ use std::path::{Path, PathBuf};
 
 use kernel::{B3Hash, RunId, Seq};
 
-use crate::jsonl::{MemoryError, io_err, is_segment};
+use crate::error::{MemoryError, io_err};
+use crate::jsonl::is_segment;
 
 const CACHE_NAME: &str = "index.cache";
 /// Bumped to v2 when the cache started carrying each line's run. An

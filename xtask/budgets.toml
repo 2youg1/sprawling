@@ -251,7 +251,6 @@ status = "gated, with a register of the files that predate the rule"
 "crates/gateway/src/dialect.rs" = 1280
 "crates/channels/src/wire.rs" = 1278
 "crates/channels/src/server.rs" = 1235
-"crates/memory/src/jsonl.rs" = 1194
 
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"

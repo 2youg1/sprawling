@@ -28,7 +28,7 @@ use std::path::Path;
 
 use kernel::{FileChange, GitOid, How, Lines};
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 /// The far end of the comparison.
 ///

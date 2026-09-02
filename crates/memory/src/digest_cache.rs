@@ -21,7 +21,9 @@ use std::path::{Path, PathBuf};
 use kernel::{B3Hash, Payload};
 use serde_json::{Map, Value};
 
-use crate::jsonl::{MemoryError, RealFs, Vfs, io_err};
+use crate::error::{MemoryError, io_err};
+use crate::real_fs::RealFs;
+use crate::vfs::Vfs;
 
 pub struct DigestCache {
     dir: PathBuf,

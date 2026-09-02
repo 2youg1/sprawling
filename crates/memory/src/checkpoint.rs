@@ -27,7 +27,7 @@ use std::path::Path;
 use kernel::{Payload, TimeMs, scan};
 use serde_json::{Map, Value};
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 const IDENTITY_NAME: &str = "sprawling";
 const IDENTITY_EMAIL: &str = "sprawling@local";

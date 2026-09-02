@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 use kernel::{EventKind, EventRecord, RunId, Seq};
 
-use crate::jsonl::MemoryError;
+use crate::error::MemoryError;
 
 /// A Run's phase as the hot view sees it. Freezing is terminal here:
 /// the ledger may keep appending to a frozen Run's history, but the
