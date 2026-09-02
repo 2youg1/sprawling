@@ -94,10 +94,23 @@
 #
 # The line therefore moves to what the product actually weighs today, and
 # the ratchet holds from here. Headroom against the 2 MB budget is 3.1x.
+#
+# V3.51-V3.52 records 673,488 on the person's ruling, which also settled
+# the 672,246 above: the gap was accepted rather than recovered, because
+# every byte of it is a feature and none of it is slack. The 1.2 KB since
+# is this stage's own, and it is eleven phrases in two languages - the
+# approval page's count and its two verbs, the four column heads of the
+# record table, a document's size, the cost page's unpriced cell, the
+# filter line, and the accessible name of the button that dismisses a
+# refusal. Each one replaced an English literal that a Chinese page was
+# rendering as English, which is the defect `xtask wording` now refuses;
+# the stylesheet and the font stack changed in the same stage and weigh
+# nothing next to microcopy, as they have at every reading since F2.05.
+# Headroom against the 2 MB budget is 3.1x, and the ratchet holds.
 [frontend_artifact]
 what = "the client the browser downloads, gzipped, fonts excluded"
 budget_bytes = 2097152
-best_bytes = 672246
+best_bytes = 673488
 slack_bytes = 20480
 measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
 status = "gated"

@@ -33,6 +33,7 @@ mod specalign;
 mod vocabulary;
 mod walk;
 mod wiring;
+mod wording;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -97,6 +98,7 @@ fn main() -> ExitCode {
         Some("secret") => report::finish("secret", secret::check(&root)),
         Some("specalign") => report::finish("specalign", specalign::check(&root)),
         Some("wiring") => report::finish("wiring", wiring::check(&root)),
+        Some("wording") => report::finish("wording", wording::check(&root)),
         Some("apisync") if args.iter().any(|a| a == "--write") => match apisync::write(&root) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => report::internal_failure(&err),

@@ -11,7 +11,24 @@ use std::path::{Path, PathBuf};
 
 use crate::report::XtaskError;
 
-const SKIP_DIRS: [&str; 3] = [".git", "target", "node_modules"];
+/// Directories a gate never walks into: version control, and the build
+/// output of the three toolchains this tree can contain.
+///
+/// **A gate testifies about committed objects**, and a build directory
+/// holds none - `.gitignore` names every one of these. `dist-newstyle`
+/// joined the list when the adversarial checker landed and cabal began
+/// writing its package database beside the source: the `secret` scan read
+/// 108,472 findings out of it and the `release` scan nine more, all of
+/// them true statements about generated files that no reader will ever
+/// receive. A gate that reports a hundred thousand findings reports
+/// nothing, because nobody reads the hundred thousand and first.
+///
+/// This list is a second authority for "what is in the tree", and git is
+/// the first. It stays a list rather than a `.gitignore` reader because
+/// four names cost four tokens and a parser costs a parser - but that is
+/// the parameter: **the day this list needs a fifth entry that is not a
+/// build directory, read the ignore file instead of adding a row.**
+const SKIP_DIRS: [&str; 4] = [".git", "target", "node_modules", "dist-newstyle"];
 
 /// All regular files under `root`, sorted by their relative forward-slash path.
 pub(crate) fn files(root: &Path) -> Result<Vec<PathBuf>, XtaskError> {

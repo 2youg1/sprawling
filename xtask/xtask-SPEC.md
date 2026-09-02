@@ -15,11 +15,17 @@
 | depmap | crate 依赖边 ⊆ §2 depmap 块；`pub trait` 仅现于 §3 缝清单文件 |
 | guard | 改动门自身、又同时改动门所判源码的提交，必须携 `Verdict:` 尾注 |
 | ax | 定稿屏（`crates/web/screens/*.html`）写下的角色、可及名、当前页标记与地标元素，客户端（`crates/web/src`）也提供 |
+| wording（V3.51 上线） | 读者拿到的词出自 `web::lang`：`crates/web/src` 里 RSX 文本节点与朗读型属性的字面量，去掉插值后不得剩下相邻两个字母；行内 `wording-ok:` 豁免专名 |
+| render（V3.48 上线） | 定稿屏在真引擎里画出来，量盒子落在哪：一页一条书脊、面板头坐在自己面板的左上角、没有东西宽过装它的区域 |
+| wiring（V3.32 上线） | 城能执行的动词必须从客户端够得到；三个来源零副本（`wire.rs` 的 `enum Command`、`run_command` 的臂、`crates/web/src`），channels-SPEC §19-2 只提供三者都说不出的那一件事——这个动词该由哪一侧够到 |
 | spec | 生成 `<crate>-SPEC.md` 骨架（Daily Loop 的 `just spec`） |
 | secret（S2.12 上线） | 全仓＋夹具扫 secret shape（判定复用 `kernel::secret::scan`，无内联豁免）；兼查 `Sealed::expose` 调用点白名单 |
 | specalign（S2.12 上线） | kernel 枚举 ↔ kernel-SPEC §8-1／§8-4 表逐 variant：消费真 enum（AxCode::ALL／EventKind::ALL）对表作证，计数、归属、carrier／窗类逐项同 |
 | apisync（S2.12 上线） | 双断言：①基线新鲜——`cargo public-api` 实时面与已提交基线逐行同；②同集变更——基线文件变即要求同 crate SPEC 同集被触 |
 | badge（P5 上线） | 体积徽章由 `budget` 的读数渲染成 `docs/badges/*.svg`；徽章陈旧＝`budget` 门红（不新增门） |
+| budget | `xtask/budgets.toml` 里每一行可称重且被 gated 的预算，当场称一次；称不出则沉默（本机没构建产物不是缺陷），壁钟读数只入册不入门 |
+| color（S4 上线） | 颜色只出自 `web::theme`，且以色域上限的比值表达；扫仓库根，文件自豁免 |
+| release（P4.14 上线，P5.05 增第三条断言） | 公开树由过滤生成；三条断言：公开树上零脚手架路径、产品文档不得链向或在正文里点名脚手架、任何发布文件不得携家目录路径 |
 | length（R2.20 上线，V3.29 加文件面与参数面） | 一个生产函数不得长过 `function_length`（今 200 行）、不得多于 `argument_count` 个参数（今 4 个，不含接收者），一个源文件不得长过 `file_length`（今 1000 行，含测试）；函数尺寸与签名以 `syn` 量得，文件尺寸即行数 |
 | gates | 顺序跑全部门，聚合报告，任一违规即退出码 1 |
 
@@ -36,6 +42,7 @@
 | 词汇漂移、自造同义词 | lexicon | 附录 A 禁用词的机器子集，命中即红 |
 | 忘记许可头或版权行 | header | 五行逐字节比对 |
 | 翻译定稿屏时丢掉 `role`／`aria-label`／`aria-current` | ax | 两侧同一读法取出可及面，屏上有而客户端无即红 |
+| 中文页面上直接写一句英文（模型的母语泄漏） | wording | 按位置判定：落在文本节点或朗读型属性里的字面量，去掉插值后仍带词即红 |
 | stub／todo!／unwrap 蒙混 | （不在本 crate）workspace lints | clippy deny 已覆盖，本 crate 不重复 |
 | 一个函数里塞进整条流程（模型最常见的结构失效） | length | 超过行数预算即红，报出函数名、行数与预算 |
 
@@ -65,15 +72,16 @@
 
 ## 6 命名统一
 
-gate／Violation／rule／violation／alternative（three-part refusal 的施工侧同构）；模块名与子命令名一致：header、lexicon、modmap、depmap、guard、ax、spec、gates。
+gate／Violation／rule／violation／alternative（three-part refusal 的施工侧同构）；模块名与子命令名一致：header、lexicon、modmap、depmap、guard、ax、render、wiring、wording、spec、gates。
 
 ## 7 模块边界
 
-一门一文件：`main`（分发）｜`report`（Violation 与渲染）｜`walk`（确定性文件遍历）｜`header`｜`lexicon`｜`modmap`｜`length`｜`depmap`｜`guard`｜`ax`｜`secret`｜`specalign`｜`apisync`｜`spec`｜`badge`（渲染与陈旧判定，被 `budget` 调用）。
+一门一文件。十六道门：`header`｜`lexicon`｜`modmap`｜`length`｜`depmap`｜`secret`｜`color`｜`wording`｜`ax`｜`render`｜`wiring`｜`budget`｜`specalign`｜`apisync`｜`release`｜`guard`。三个不判只做的模块：`main`（分发）｜`report`（Violation 与渲染）｜`walk`（确定性文件遍历）。其余各文件各自被某一道门调用而不自成一门：`badge`（渲染与陈旧判定，被 `budget` 调用）｜`vocabulary`（`lexicon` 与 `wording` 共用的词形读法）｜`spec`（只生成骨架）｜`mem`／`sbom`／`repro`／`package`（`just` 的量具与交付物，恒不入 `gates`）。
 
 **length 门的形状属于 modmap 而不属于自己**：形状列的解析只住 `modmap::shapes`，因为模块表只应有一个读者——列格式一变，只有一处要改。
 
-**本模块不做什么（否定式三条）**：不做 color（S4 随 web::theme 启用，届时增列）；不修改任何被检文件（门只判不改；唯二例外＝spec 只新建不覆盖、`apisync --write` 只重写基线文件）；不缓存扫描结果（每次全量重扫——确定性优于速度）。
+**本模块不做什么（否定式两条）**：不修改任何被检文件（门只判不改；唯二例外＝spec 只新建不覆盖、`apisync --write` 只重写基线文件）；不缓存扫描结果（每次全量重扫——确定性优于速度）。
+原第三条「不做 color（S4 随 `web::theme` 启用，届时增列）」已到期：`color` 已是一道门，故划掉。
 
 **secret 门细则**（S2.12）：扫描面＝仓内全部文件（含 fixtures／语料），排除隔离区 local/、.git、target；判定器＝`kernel::secret::scan`（xtask 依赖 kernel，工作区成员不占产品拓扑，合法）；命中只报文件＋偏移＋长度，恒不回显字节；无内联豁免（豁免口会被注入内容利用）。兼查：`crates/*/src/**` 内 `.expose(` 调用点白名单＝kernel/src/secret.rs（定义处）、gateway/src/endpoint.rs、gateway/src/native.rs；命中即红。自测纪律：扫描器自身测试的高熵样本在源码中必须拆段拼接，不留可扫描的完整字面量。
 
@@ -145,7 +153,7 @@ pub(crate) struct Violation {
 
 `XtaskError`（thiserror）：`Io{path}`｜`Doc{file,msg}`（数据面不可解析）｜`Cmd{cmd,msg}`（git/cargo 调用失败）｜`Usage`。数据面坏＝退出码 2（门自身故障），不伪装成 0 或 1——门坏了必须显性，静默通过是门的最坏失效。
 
-**一门判不动，不得连累其余各门的结论**（issue #5）。`gates` 的那张数组是急切求值的，十三门在第一行输出之前就已全部跑完；此前的循环一遇 `Err` 即 `return`，于是排在它后面的 `release` 与 `guard` 结论已在手里却从未被打印。缺 `cargo-public-api` 是 `docs/CONTRIBUTING.md` §7 明列的预期状态，而在那种机器上，一次带违规的运行与一次干净的运行输出逐字相同，承重的 `guard` 恰在被吞掉的那两道里。故聚合运行遍历到底，逐门报出 `ok`／`N violation(s)`／`could not judge` 三态之一，再统一渲染全部违规。**退出码取最重的一态**：任一门判不动＝2，否则有违规＝1，否则 0——判不动压过判有罪，因为「没判」与「判过且干净」同形正是本条要拆开的东西。
+**一门判不动，不得连累其余各门的结论**（issue #5）。`gates` 的那张数组是急切求值的，十六门在第一行输出之前就已全部跑完；此前的循环一遇 `Err` 即 `return`，于是排在它后面的 `release` 与 `guard` 结论已在手里却从未被打印。缺 `cargo-public-api` 是 `docs/CONTRIBUTING.md` §7 明列的预期状态，而在那种机器上，一次带违规的运行与一次干净的运行输出逐字相同，承重的 `guard` 恰在被吞掉的那两道里。故聚合运行遍历到底，逐门报出 `ok`／`N violation(s)`／`could not judge` 三态之一，再统一渲染全部违规。**退出码取最重的一态**：任一门判不动＝2，否则有违规＝1，否则 0——判不动压过判有罪，因为「没判」与「判过且干净」同形正是本条要拆开的东西。
 
 ## 13 依赖选型
 
@@ -200,3 +208,33 @@ CI 与 justfile 调用面；ARCHITECTURE.md §6/§2/§3 的表格式即本 crate
 **找不到浏览器是 skip，不是红。** 引擎不在仓库里也不能在；门在自己打印的那一行里说出它没看，而不是假装看过。`SPRAWLING_BROWSER` 可以点名一个。`target/screens/tokens.css` 未写时同样 skip：那是 `cargo test -p web` 的产物，而缺一个生成文件不是版面漂移。
 
 **它自己的消融实验已经做过**：把 `.panel { display: block }` 删掉，两张屏报“面板头不在顶部”；把脊线那一列换回逐孩子居中，`session.html` 报“两条左边”。两次都变红，恢复后都变绿。
+
+### 扫描面：构建目录不在里面（V3.53，带人的裁定）
+
+`walk::SKIP_DIRS` 从三个名字变成四个，新的那个是 `dist-newstyle`。
+**一道门为已提交的对象作证**，而构建目录里一个都没有；`.gitignore` 逐个点过它们的名。
+对抗性检查器落地后 cabal 开始把包数据库写在源码旁边，于是 `secret` 从里面读出 **108,472 条**、`release` 再读出 8 条——
+全部是关于生成文件的真命题，而那些文件没有任何读者会收到。**一道报出十万条的门等于什么都没报**，
+因为没有人会读到第十万零一条。改后 `secret` 归零，`release` 剩下一条——那一条在一份**被跟踪的**文件里，是真的。
+
+这张表是「树里有什么」的第二个权威，git 是第一个；它继续做一张表而不去读 `.gitignore`，是因为四个名字值四个 token 而一个解析器值一个解析器。
+**这就是它的重新定价参数：哪天这张表需要第五行而那一行不是构建目录，就去读忽略文件，不要再添一行。**
+
+本改动动的是门自身，故它与被判源码同处一枚提交时携 `Verdict:` 尾注（AGENTS.md guard 行）。
+
+### 第十六道门：`wording`（V3.51）
+
+**它读的方向与 `web::lang` 那两条断言相反。** 那两条读的都是「视图向表要了什么」：一条要求每一条短语都有视图叫得出名字，另一条禁止视图把表里已有的句子再拄一遍。**一句从不调用 `say` 的字面量不在它们任何一条的视野里**：表不知道它存在，也就没有东西可比。成本页上三句英文就这样活过一整段（web-SPEC §8-61），而发现它们的是一张截图。
+
+**判据是位置，不是词表。** 扫全部字符串字面量的那个版本会去判类名、线上取值、事件名与格式键，而同一形状的错误曾经一次性报出 79 条全是地址的命中（V3.28）。所以它走一遍 RSX 的花括号结构，只留两个位置，而那两个位置各自都是「读者被递了一个词」：
+
+1. **文本节点**——单独站在元素体里的字面量，浏览器把它画出来；
+2. **朗读型属性的值**——`placeholder`、`title`、`alt` 与值为作者文本的那几个 `aria-*`，屏幕阅读器把它念出来。
+
+其余全部由**坐在哪里**排除，而不由一张例外名单排除：属性值不是文本节点，调用参数不在元素体里，`match` 的臂是模式而不是内容（`rsx!` 是回到内容的唯一入口）。整个客户端 307 处递给读者的字面量里，这条位置规则只留下 18 条待判。
+
+**去掉城自己的值之后剩下的那部分才是问题。** `"{percent}%"`、`"+{added}"`、`"{room}/"` 没有递给读者任何视图写的东西；`"{count} waiting"` 递了一个英文词。故插值槽与 `\u{...}` 转义先取出，再问剩下的部分里有没有相邻的两个字母。
+
+**专名进不了短语表，所以它必须有一扇门。** `web::lang` 自己的断言 `assert_ne!(said.zh, said.en)` 拒绝一条两种语言相同的短语，而 `openai` 在两种语言里就是 `openai`。这五处用 `wording-ok: <理由>` 写在本行或上一行——**同一个拼法、同一条两行规则、同一笔交易，照搬 `lexicon-ok:`**。一个可见的、带理由的现场标记，比一张没人会去读的 toml 名单诚实。
+
+**它自己的消融实验就是它存在的理由**：把 V3.50 那三句英文原样写回 `dashboard.rs`，本门变红并点名行号，而 `web::lang` 那两条断言全程全绿；改回译文，本门变绿。单测 `the_three_sentences_that_escaped_both_of_langs_assertions_are_caught` 把这次实验固定下来。
