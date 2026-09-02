@@ -193,36 +193,55 @@ pub const CORNER_SCALES: [(&str, u16, u16); 4] = [
     ("pill", 999, 2),
 ];
 
-/// The reader's own face, and the reader's own fixed-width face. Two
-/// generic families and not one named font anywhere in the library.
+/// The face the chrome is set in. A stack of the faces a desktop already
+/// has, ending in the generic family.
 ///
-/// **No font file is embedded, none is fetched, and none is named.** Three
-/// reasons, in the order they decide it:
+/// **No font file is embedded and none is fetched.** That half of the old
+/// decision stands, for its original reason: everything on screen except
+/// the chrome is content a person wrote - a Building's name, `Memo.md`, a
+/// Ledger payload - whose character set cannot be predicted, so no subset
+/// could cover it, and a whole CJK face costs several megabytes against a
+/// two-megabyte budget.
 ///
-/// 1. Only the chrome of this interface is ours. Everything else on screen
-///    is content a person wrote - a Building's name, `Memo.md`, a Ledger
-///    payload - whose character set cannot be predicted, so no subset
-///    could cover it and a whole CJK face costs several megabytes against
-///    a two-megabyte budget.
-/// 2. A generic family is exactly the setting a browser exposes as
-///    *Customise fonts*. Writing `sans-serif` hands the choice to the
-///    reader; writing `system-ui`, or any face by name, takes it back.
-/// 3. The order used to be wrong in a way worth recording: a CJK family
-///    listed first renders *Latin* text with that family's Latin glyphs,
-///    so English chrome was drawn by a Chinese face on every machine that
-///    happened to have one installed.
+/// **What changed is naming nothing at all.** The library used to declare
+/// the bare generic families, on the argument that `sans-serif` hands the
+/// choice to the reader while any named face takes it back. Measured on
+/// Windows, that argument buys the opposite of what it promises: the
+/// browser resolves `sans-serif` to Arial and `monospace` to Courier New,
+/// and this interface sets every address, identifier, amount and count in
+/// the fixed-width face - so a typewriter face drew about half the
+/// characters on the page. A reader who never opened *Customise fonts*
+/// was not handed a choice; they were handed Courier New.
+///
+/// The generic family is therefore last rather than alone: a reader who
+/// has set a preference still ends there, and a reader who has not gets
+/// the face their own platform dresses its interface in.
+///
+/// **No family named here is CJK, and that is load-bearing.** A CJK family
+/// listed first renders *Latin* text with that family's Latin glyphs, so
+/// English chrome came out drawn by a Chinese face on every machine that
+/// had one installed. Latin faces are named, Han is left to the browser's
+/// own fallback, and the two never compete for one run of text.
 ///
 /// The interface pane of the settings page says where the setting lives,
 /// because a preference the product obeys and never mentions is a
 /// preference the reader cannot find.
-pub const FONT_SANS: &str = "sans-serif";
+pub const FONT_SANS: &str =
+    "system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, Arial, sans-serif";
 
-/// Numbers, identifiers, hashes and addresses take the reader's
-/// fixed-width face. A second family rather than `tabular-nums` alone: a
-/// column of digits should line up *and* read as a different kind of thing
-/// from the prose beside it, which is how a terminal separates a value
-/// from its label without emphasising either.
-pub const FONT_MONO: &str = "monospace";
+/// Numbers, identifiers, hashes and addresses take the fixed-width face.
+/// A second family rather than `tabular-nums` alone: a column of digits
+/// should line up *and* read as a different kind of thing from the prose
+/// beside it, which is how a terminal separates a value from its label
+/// without emphasising either.
+///
+/// `ui-monospace` first, for the face a platform already uses in its own
+/// developer surfaces; then the four that ship with the three desktops;
+/// then the generic family as the reader's last word. Courier New is
+/// deliberately not named - it is what `monospace` alone resolved to on
+/// Windows, and it is the reason this stack exists.
+pub const FONT_MONO: &str =
+    "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace";
 
 /// The type scale: name, size in px, weight, and the Bronze tier that size
 /// and weight demand.
@@ -253,12 +272,25 @@ pub const FONT_MONO: &str = "monospace";
 ///
 /// `cargo xtask color` re-derives this column from the size and the weight
 /// and fails on drift, so the tier is checked rather than asserted.
+/// **`body` is 15px because `note` is 15px.** The scale shipped prose at
+/// 14px and the line that qualifies prose at 15px, so on every panel the
+/// sentence explaining a figure was set larger than the rows stating it:
+/// the second tier of information was the loudest thing in the panel. The
+/// two steps are now one size and the hierarchy is carried by colour -
+/// `body` takes TEXT, `note` takes TEXT_QUIET - which is the distinction
+/// that survives a reader who has zoomed the page.
+///
+/// 15px rather than dropping `note` to 13px: Bronze admits a 13px content
+/// step only at Lc 90, which is the tier `body` itself claims, so a
+/// smaller note would have had to be as loud as the prose it qualifies in
+/// order to stay legible. `xtask color` re-derives both rows, so this
+/// trade is checked rather than asserted.
 pub const TYPE_SCALE: [(&str, u16, u16, u16); 6] = [
     ("figure", 28, 600, 60),
     ("title", 20, 600, 60),
     ("heading", 18, 600, 60),
     ("label", 14, 600, 90),
-    ("body", 14, 400, 90),
+    ("body", 15, 400, 90),
     ("note", 15, 400, 75),
 ];
 
@@ -758,8 +790,8 @@ mod tests {
         for (name, size) in WIDTH_SCALE {
             assert!(css.contains(&format!("--width-{name}:{size}px;")), "{name}");
         }
-        assert!(css.contains("--font-sans:sans-serif;"));
-        assert!(css.contains("--font-mono:monospace;"));
+        assert!(css.contains(&format!("--font-sans:{FONT_SANS};")));
+        assert!(css.contains(&format!("--font-mono:{FONT_MONO};")));
         // And the shipped page reads them rather than repeating them. A
         // `font-family` in the stylesheet is a second production point for
         // presentation, which is the thing the token tables exist to stop.
@@ -806,34 +838,45 @@ mod tests {
     }
 
     #[test]
-    fn no_font_file_ships_and_no_family_outranks_the_system_face() {
-        // The chrome is English and the system stack renders it; everything
-        // else on screen is content whose character set nobody can predict,
-        // so no subset could cover it. A CJK family listed ahead of the
-        // system face renders *Latin* text with that family's Latin glyphs,
-        // which is what this interface was doing on every machine that had
-        // one installed.
-        for named in [
+    fn no_font_file_ships_and_the_generic_family_is_the_last_word() {
+        // Han is left to the browser's own fallback. A CJK family listed in
+        // either stack renders *Latin* text with that family's Latin
+        // glyphs, so English chrome comes out drawn by a Chinese face on
+        // every machine that has one installed - which is what this
+        // interface used to do, and the reason the rule is a rule.
+        for cjk in [
             "Noto Sans SC",
+            "Noto Sans CJK",
             "Zen Kaku Gothic New",
             "Source Han",
             "PingFang",
-            "Segoe UI",
-            "Helvetica",
-            "Consolas",
-            "Menlo",
-            "system-ui",
+            "Microsoft YaHei",
+            "SimSun",
+            "Hiragino",
         ] {
             assert!(
-                !FONT_SANS.contains(named)
-                    && !FONT_MONO.contains(named)
-                    && !SHIPPED.contains(named),
-                "{named} is named; a generic family is the browser setting the reader controls, \
-                 and naming a face takes that choice back"
+                !FONT_SANS.contains(cjk) && !FONT_MONO.contains(cjk) && !SHIPPED.contains(cjk),
+                "{cjk} is named in a stack whose Latin glyphs would then draw the chrome"
             );
         }
-        assert_eq!(FONT_SANS, "sans-serif", "the reader's own choice, not ours");
-        assert_eq!(FONT_MONO, "monospace", "the reader's own choice, not ours");
+        // The reader's *Customise fonts* setting is what a generic family
+        // resolves to, so it stays reachable - last, where it decides the
+        // case nothing above it covered, rather than first, where it once
+        // resolved every identifier on the page to Courier New.
+        assert!(
+            FONT_SANS.ends_with("sans-serif"),
+            "the generic family is the last word in the sans stack: {FONT_SANS}"
+        );
+        assert!(
+            FONT_MONO.ends_with("monospace"),
+            "the generic family is the last word in the mono stack: {FONT_MONO}"
+        );
+        // A stack of one is the state this rule was written to leave: it is
+        // the bare generic family under another name.
+        assert!(
+            FONT_SANS.contains(',') && FONT_MONO.contains(','),
+            "a stack names at least one face before the generic family"
+        );
         for embedded in [
             "@font-face",
             ".woff",
