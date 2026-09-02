@@ -13,29 +13,33 @@
 //! frames owes the vocabulary to read them.
 
 mod aggregate;
+#[cfg(feature = "server")]
+mod assets;
 mod auth;
 mod control;
+#[cfg(feature = "server")]
+mod reception;
 #[cfg(feature = "server")]
 mod server;
 mod wire;
 
 pub use aggregate::{Aggregate, CityLabel, Forwarded, Sighting, Upstream};
+#[cfg(feature = "server")]
+pub use assets::{AssetReply, ClientAssets, EmbeddedFile};
 pub use auth::{PairingToken, verify};
 pub use control::{ControlVerdict, Intervention, classify};
 pub use kernel::{FileChange, How, Lines};
 pub use kernel::{Span, Token, markdown};
 #[cfg(feature = "server")]
+pub use reception::{BindFace, BindVerdict, HandshakeVerdict};
+#[cfg(feature = "server")]
+pub use reception::{SessionState, SessionStep, decide_frame};
+#[cfg(feature = "server")]
+pub use reception::{decide_bind, decide_handshake};
+#[cfg(feature = "server")]
 pub use server::{AcpBody, AcpProgress, AcpSink};
 #[cfg(feature = "server")]
-pub use server::{AssetReply, ClientAssets, EmbeddedFile};
-#[cfg(feature = "server")]
-pub use server::{BindFace, BindVerdict, HandshakeVerdict, ServeConfig};
-#[cfg(feature = "server")]
-pub use server::{Delivered, Reply};
-#[cfg(feature = "server")]
-pub use server::{SessionState, SessionStep, decide_frame};
-#[cfg(feature = "server")]
-pub use server::{decide_bind, decide_handshake, router, serve};
+pub use server::{Delivered, Reply, ServeConfig, router, serve};
 pub use wire::RunSummary;
 pub use wire::{Answer, ApprovalsAnswer, ArchiveLine, BlockedLine, BuildingProgress};
 pub use wire::{ArchiveAnswer, ArchiveHit, DiscardAnswer, DiscardLine};

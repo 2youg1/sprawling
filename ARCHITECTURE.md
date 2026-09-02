@@ -496,11 +496,13 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | eval::nesting | crates/eval/src/nesting.rs | which nested format a model edits with fewest mistakes, and how it fails when it fails | decision | V3 | built |
 | eval::metabolism | crates/eval/src/metabolism.rs | clearing out: warn first, retire second, delete never | decision | P3 | built |
 
-### channels (5) — the process boundary
+### channels (7) — the process boundary
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
 | channels::wire | crates/channels/src/wire.rs | the boundary's vocabulary: Commands, Queries, Events, and the schema hash | value | S4 | built |
+| channels::reception | crates/channels/src/reception.rs | may we bind, may this peer enrol, may we greet it, and what its frame means now | decision | V3 | built |
+| channels::assets | crates/channels/src/assets.rs | the client the browser downloads, and which bytes answer which path | adapter | V3 | built |
 | channels::server | crates/channels/src/server.rs | the listening end; the judgements are pure and the socket makes none | adapter | S4 | built |
 | channels::control | crates/channels/src/control.rs | the five verbs a person has, and which of them owe a handoff | decision | S4 | built |
 | channels::auth | crates/channels/src/auth.rs | pairing tokens: minting, the one readable form, constant-time comparison | value | S4 | built |

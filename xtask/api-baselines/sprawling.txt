@@ -38,7 +38,7 @@ pub sprawling::assembly::Keyed::NothingToPresent
 pub sprawling::assembly::ScanReport::waiting_approvals: usize
 pub sprawling::assembly::Serving::addr: core::net::socket_addr::SocketAddr
 pub sprawling::assembly::Serving::city_root: std::path::PathBuf
-pub sprawling::assembly::Serving::client: channels::server::ClientAssets
+pub sprawling::assembly::Serving::client: channels::assets::ClientAssets
 pub sprawling::assembly::Serving::console: core::option::Option<sprawling::console::Terminal>
 pub sprawling::assembly::Serving::log: runtime::diagnostics::Diagnostics
 pub sprawling::assembly::Serving::token: core::option::Option<alloc::string::String>

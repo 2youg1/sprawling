@@ -154,9 +154,12 @@ impl From<WireCommand> for Command                     // 总函数；PutSecret 
 
 5. **`Rollback{checkpoint}` 携 `kernel::GitOid`，为此给 `GitOid` 补 serde**（与紧邻的 `B3Hash` 同形：40 位小写 hex，长度不对即拒）。**被否**：在 wire 里自建 `CheckpointRef(String)` 并自校 40 hex——那是 git oid 形状的第二个权威。该变更属 kernel 公开面，已与 kernel-SPEC §8-2 同集提交（apisync 门）。
 
-### 8-2 channels::server（S4.02；形状 1 判定函数 ＋ 形状 4 薄壳）
+### 8-2 channels::server（S4.02；形状 4 薄壳）＋reception（V3.36；形状 1）＋assets（V3.36；形状 4）
 
 **Humble Object 在此的切法**（ARCHITECTURE §7 末段，理由只写一次）：难测的一端（tokio＋axum 监听）剥到最薄，厄的一端（绑定面判定、握手判定）是纯函数，无需跑服务即可穷尽测。
+
+**V3.36：切法写在这里，而两半一直在同一个文件里。** 模块表给 `server` 的形状是 `adapter`——ARCHITECTURE §9 定义为「薄、无策略：换第二个实现不改变任何策略」——而四个判定函数就是策略。于是它们搬进 `channels::reception`（绑定／录凭证／握手／帧），客户端资产搬进 `channels::assets`，`server` 剩下的每一条分支不是一次发送、一次接收，就是一次会话的结束。三个文件 1,235 → 649＋385＋271。
+**公开名一字未改**（`lib.rs` 重导出）；变的只有 `cargo public-api` 记的**定义模块**，所以 `sprawling` 基线里 `Serving::client` 的类型路径从 `channels::server::ClientAssets` 变成 `channels::assets::ClientAssets`，两份 SPEC 同变更集各记一行（与 V3.34 同例）。
 
 ```rust
 pub enum BindFace { Loopback, Exposed }              // 穷尽，不是 bool

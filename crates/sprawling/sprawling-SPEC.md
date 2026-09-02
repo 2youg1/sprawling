@@ -1066,3 +1066,11 @@ P7 起交付形态入册：`just package` 的产物名、`QUICKSTART.md`、READM
 
 `Views` 与 `rebuild_views` 在本 crate 外没有任何引用（已查），所以搬动不动任何公开面，`apisync` 基线不变。
 `cargo xtask length` 里 `bin::assembly` 的钉子随之降低；降不下来就是没搬干净。
+
+## 附记：`ClientAssets` 的定义模块变了，接口没变（V3.36）
+
+本 crate 的 API 基线里 `Serving::client` 的类型路径从 `channels::server::ClientAssets`
+变成 `channels::assets::ClientAssets`。**这不是一次接口变更**：公开路径仍是
+`channels::ClientAssets`，字段与签名一字未动，变的只是 `cargo public-api` 记录的定义模块——
+客户端资产从 `channels::server` 搬进了自己的文件（channels-SPEC §8-2）。
+记在这里是因为 `apisync` 判的是「基线动了就要有一份 SPEC 同行」，而基线确实动了。
