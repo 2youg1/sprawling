@@ -12,11 +12,31 @@
 //! `local/` holds one machine's handoffs, rulings and probes, it is
 //! gitignored, and nothing published may depend on it.
 //!
-//! Three assertions, all about honesty rather than tidiness. Nothing in
+//! Four assertions, all about honesty rather than tidiness. Nothing in
 //! the published tree may be an isolation-zone path, nothing in it may
 //! link to one - a link that is dead for every reader but one is a
-//! sentence written for a reader who does not exist - and nothing in it
-//! may carry a path off the machine that built it.
+//! sentence written for a reader who does not exist - nothing in it may
+//! carry a path off the machine that built it, and nothing in it may
+//! cite a document this tree does not contain.
+//!
+//! The fourth assertion exists because the third one missed a real case.
+//! Six files - two settled screens, two SPECs and a gate's own rustdoc -
+//! cited `WORKSPACE/FRONTEND-METHOD.md`, the directory this repository
+//! happened to sit in on one machine. It is not a home path, so the
+//! third assertion said nothing, and it is not a markdown link, so the
+//! second said nothing either. A contributor who cloned this tree could
+//! not read the document two gates named as their own justification.
+//!
+//! **A citation of a machine-local file is testimony that one of the two
+//! is misfiled**, and the gate cannot decide which. Either the cited
+//! document is an authority, and withholding it leaves a reader with
+//! source and no reasons; or the citing text is one machine's working
+//! note wearing a product file's name, and it belongs in the isolation
+//! zone. The second reading is the one that gets missed, so the report
+//! offers it first. It is not always available: the file that raised
+//! this was `xtask/src/guard.rs`, a gate CI runs on every push, which
+//! cannot move anywhere. There the testimony convicted the other side,
+//! and the document it named now ships as `docs/frontend-method.md`.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -56,6 +76,112 @@ const HOME_SHAPES: [&str; 7] = [
 /// a detector cannot be written, or explained, without writing down what
 /// it detects. The specification is on the list for the second reason.
 const DETECTORS: [&str; 2] = ["xtask/src/release.rs", "xtask/xtask-SPEC.md"];
+
+/// The extensions that mark a token as a document a reader is told to
+/// open, rather than a word with a slash in it.
+///
+/// Closed on purpose. A path with no extension is a directory, a command
+/// or a placeholder, and guessing which of those a reader is meant to
+/// follow would make the gate wrong about prose it has no business
+/// judging.
+const CITED_EXTENSIONS: [&str; 7] = [".md", ".rs", ".toml", ".html", ".css", ".json", ".jsonl"];
+
+/// Every directory name the published tree contains, at any depth.
+///
+/// Depth is deliberately discarded. A SPEC that writes `tools/exec.rs`
+/// means `crates/runtime/src/tools/exec.rs`, and shorthand relative to
+/// the crate being specified is how every SPEC in this repository is
+/// written; a rule that demanded full paths would be a style opinion
+/// wearing a gate's clothes. What the set is for is the other case: a
+/// first segment that names no directory here at all cannot be
+/// shorthand for anything, because there is nothing for it to be short
+/// of.
+fn directory_names(published: &[String]) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for rel in published {
+        let mut parts: Vec<&str> = rel.split('/').collect();
+        parts.pop();
+        for part in parts {
+            names.insert(part.to_owned());
+        }
+    }
+    // Two directories this tree has that its own file list cannot show.
+    // `local/` is filtered out of `published` and already has an
+    // assertion with a better sentence, so reporting it here would put
+    // the weaker one in front of the reader; `target/` is where the
+    // build writes, and a document that points at a generated file is
+    // pointing at something every clone produces for itself.
+    names.insert("local".to_owned());
+    names.insert("target".to_owned());
+    names
+}
+
+/// The maximal runs of path characters in a line.
+///
+/// A colon is not a path character, so `https://example.invalid/a.md`
+/// arrives here as `https` and `//example.invalid/a.md`; the second has
+/// an empty first segment and is dropped by the caller. That is the
+/// whole of the URL handling, and it is a consequence of the character
+/// set rather than a special case bolted beside it.
+fn path_tokens(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    for ch in line.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '-' | '/') {
+            current.push(ch);
+        } else if !current.is_empty() {
+            out.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
+}
+
+/// A document this line tells a reader to open, which this tree does not
+/// have a directory for.
+///
+/// Reported rather than resolved: the gate does not claim the file is
+/// missing, only that the path is anchored somewhere this repository is
+/// not. Those are different failures and the second is the one a clone
+/// suffers from.
+#[must_use]
+pub(crate) fn outside_the_tree(line: &str, dirs: &BTreeSet<String>) -> Option<String> {
+    path_tokens(line).into_iter().find(|token| {
+        let trimmed = token.trim_end_matches(['.', '-']);
+        if !CITED_EXTENSIONS.iter().any(|ext| trimmed.ends_with(ext)) {
+            return false;
+        }
+        let Some((first, _)) = trimmed.split_once('/') else {
+            return false;
+        };
+        // A segment that does not begin with a letter is not a name this
+        // tree could have anchored: `../assets/app.css` walks up from
+        // the file that carries it and is resolved by the link
+        // assertion, and `.sprawling/BUILDING.md` is a path inside a
+        // city rather than inside this repository.
+        if !first.starts_with(|ch: char| ch.is_ascii_alphabetic()) {
+            return false;
+        }
+        !dirs.contains(first)
+    })
+}
+
+/// Whether a line of a source file is prose rather than code.
+///
+/// Only prose is read for cited documents. In code, a string that looks
+/// like a path is usually an address inside a city - `lab/room1/notes.md`
+/// names a wall in a test fixture, not a file in this repository - and
+/// there are seventy-nine of those. Reading them would produce a list of
+/// offenders that is wrong in every entry, which is worse than not
+/// looking.
+fn is_prose(rel: &str, line: &str) -> bool {
+    if rel.ends_with(".md") || rel.ends_with(".html") {
+        return true;
+    }
+    rel.ends_with(".rs") && line.trim_start().starts_with("//")
+}
 
 /// Whether a line carries a path that names somebody's home directory.
 ///
@@ -143,7 +269,9 @@ fn link_targets(text: &str) -> Vec<String> {
 /// Checks that a filtered tree would stand on its own.
 pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
     let mut violations = Vec::new();
-    let kept: BTreeSet<String> = published(root)?.into_iter().collect();
+    let listed = published(root)?;
+    let dirs = directory_names(&listed);
+    let kept: BTreeSet<String> = listed.into_iter().collect();
     for rel in &kept {
         let full = root.join(rel);
         // Anything that reads as text is checked for machine paths; a
@@ -167,6 +295,24 @@ pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
                     violation: format!("names `{found}`"),
                     alternative: "write the path relative to the city or the repository, or \
                                   use a placeholder a reader can substitute"
+                        .to_owned(),
+                });
+            }
+            if is_prose(rel, line)
+                && let Some(cited) = outside_the_tree(line, &dirs)
+            {
+                violations.push(Violation {
+                    gate: "release",
+                    location: format!("{rel}:{}", number.saturating_add(1)),
+                    rule: "a published document may not cite a path anchored outside this \
+                           repository"
+                        .to_owned(),
+                    violation: format!("`{cited}` starts at a directory this tree does not have"),
+                    alternative: "decide which of the two is misfiled: move this file to \
+                                  local/ if it is one machine's working note, bring the \
+                                  cited document into the tree if it is an authority, or \
+                                  write down here what it says. A reader who clones this \
+                                  repository has nowhere else to look"
                         .to_owned(),
                 });
             }
@@ -332,6 +478,78 @@ mod tests {
         // character count; the report must still carry the path.
         let chinese = machine_path(r"日志里写的是 C:\Users\someone\city").unwrap();
         assert!(chinese.starts_with(":\\users\\"), "{chinese}");
+    }
+
+    #[test]
+    fn a_document_anchored_outside_the_repository_is_caught_and_shorthand_is_not() {
+        let dirs: BTreeSet<String> = ["crates", "docs", "src", "tools", "xtask", "local", "target"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+
+        // The case that happened. Six files cited this; no other
+        // assertion in this gate said anything about it.
+        assert_eq!(
+            outside_the_tree("see `WORKSPACE/FRONTEND-METHOD.md` section 4", &dirs).as_deref(),
+            Some("WORKSPACE/FRONTEND-METHOD.md")
+        );
+        assert!(outside_the_tree("WORKSPACE/sprawling-ui/UX-DECISIONS.md", &dirs).is_some());
+
+        // Crate-relative shorthand is how every SPEC here is written.
+        // Flagging it would send eleven people to rewrite prose that was
+        // never wrong.
+        assert!(outside_the_tree("// tools/exec.rs", &dirs).is_none());
+        assert!(outside_the_tree("`read src/lex.rs` differs by", &dirs).is_none());
+        assert!(outside_the_tree("crates/web/src/board.rs", &dirs).is_none());
+        assert!(outside_the_tree("see local/Handoff.md", &dirs).is_none());
+
+        // A URL is somebody else's tree. The colon ends the token, so
+        // what reaches the test has an empty first segment.
+        assert!(outside_the_tree("https://example.invalid/a/b.md", &dirs).is_none());
+        // A relative walk upwards is the link assertion's business, and
+        // a path inside a city is not a path inside this repository.
+        assert!(outside_the_tree("[a](../../docs/frontend-method.md)", &dirs).is_none());
+        assert!(outside_the_tree("edit `.sprawling/BUILDING.md`", &dirs).is_none());
+        // The build directory is not published and still exists.
+        assert!(outside_the_tree("written to target/screens/tokens.css", &dirs).is_none());
+        // A word with no extension is not a citation.
+        assert!(outside_the_tree("and/or, either/or", &dirs).is_none());
+        // Trailing punctuation must not hide the extension.
+        assert!(outside_the_tree("open WORKSPACE/notes.md.", &dirs).is_some());
+    }
+
+    #[test]
+    fn only_prose_is_read_for_citations() {
+        // A city address in a fixture is not a path in this repository,
+        // and there are seventy-nine of them.
+        assert!(!is_prose(
+            "crates/city/src/building.rs",
+            "    assert!(a(\"lab/x.md\"));"
+        ));
+        assert!(is_prose(
+            "crates/city/src/building.rs",
+            "//! see docs/glossary.md"
+        ));
+        assert!(is_prose("crates/web/web-SPEC.md", "anything at all"));
+        assert!(is_prose(
+            "crates/web/screens/board.html",
+            "<!-- a comment -->"
+        ));
+    }
+
+    #[test]
+    fn directory_names_carry_no_depth() {
+        let names = directory_names(&[
+            "crates/runtime/src/tools/exec.rs".to_owned(),
+            "README.md".to_owned(),
+        ]);
+        for present in ["crates", "runtime", "src", "tools", "local"] {
+            assert!(names.contains(present), "{present} is a directory here");
+        }
+        assert!(!names.contains("WORKSPACE"));
+        // The file itself is not a directory.
+        assert!(!names.contains("exec.rs"));
+        assert!(!names.contains("README.md"));
     }
 
     #[test]

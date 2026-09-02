@@ -187,7 +187,7 @@ Apart from this page and the getting-started guide, the docs are in English.
 - Want to put it to work: [`docs/getting-started.zh-CN.md`](docs/getting-started.zh-CN.md) → [`docs/operating.md`](docs/operating.md).
 - Want to change it: [`ARCHITECTURE.md`](ARCHITECTURE.md) → [`AGENTS.md`](AGENTS.md) → the code and tests of the neighboring modules.
 
-Also available: [`docs/logging.md`](docs/logging.md) (why logs are not history), [`docs/third-party.md`](docs/third-party.md) (whose shoulders we stand on, and the license obligations). [`docs/City.md`](docs/City.md) and [`docs/templates/`](docs/templates/) are the documents the city writes into buildings—agents read them, and so can you.
+Also available: [`docs/logging.md`](docs/logging.md) (why logs are not history), [`docs/frontend-method.md`](docs/frontend-method.md) (how a screen is built, and why the client is not hand-written), [`docs/third-party.md`](docs/third-party.md) (whose shoulders we stand on, and the license obligations). [`docs/City.md`](docs/City.md) and [`docs/templates/`](docs/templates/) are the documents the city writes into buildings—agents read them, and so can you.
 
 ## Contributing
 

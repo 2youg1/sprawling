@@ -14,7 +14,7 @@
 //! demand a ruling for every touch of `xtask/`, which made changing the price
 //! of a rule as expensive as breaking one — and that width is the recorded
 //! mechanical reason the no-JavaScript rule outlived its argument by a year
-//! (`WORKSPACE/FRONTEND-METHOD.md` section 4). What is left is the one shape
+//! (`docs/frontend-method.md` section 4). What is left is the one shape
 //! nobody may take without a ruling: a gate loosened while carrying the work
 //! it would otherwise have to pass.
 //!
