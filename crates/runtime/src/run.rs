@@ -21,7 +21,8 @@ use serde_json::{Map, Value};
 use crate::catalog::SkillPin;
 use crate::handoff::Handoff;
 use crate::prefix::FrozenPrefix;
-use crate::turn::{CallShape, Interrupt, Opening, PhaseOutcome, Turn, Window};
+use crate::turn::{CallShape, Interrupt, PhaseOutcome, Turn};
+use crate::window::{Opening, Window};
 
 /// Everything constant about one run. Assembled by the caller, because
 /// what a prefix contains and which tools exist are decisions of the city

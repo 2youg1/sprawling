@@ -18,10 +18,10 @@ use std::sync::mpsc;
 use kernel::{Address, AxCode, AxError, EventDraft, EventKind, EventRef};
 use kernel::{EventRecord, Ledger, Locator, Model, Payload, RunId, TimeMs};
 use memory::{Cas, JsonlLedger};
+use runtime::bench::{BenchOutcome, ToolBench};
 use runtime::prefix::{FrozenPrefix, FrozenSegment, SegmentSlot};
 use runtime::run::{RunHooks, RunPlan, SafePoint, drive};
-use runtime::turn::{BenchOutcome, CallShape, Interrupt, ToolBench};
-use runtime::{EditTool, ExecTool, StatusTool};
+use runtime::{EditTool, ExecTool, Interrupt, StatusTool};
 
 use crate::effect;
 use crate::views::{Views, pursuit_from};
@@ -2081,7 +2081,7 @@ impl RunWorker {
             parent,
             budget_turns: DISPATCH_TURN_BUDGET,
             budget,
-            shape: CallShape {
+            shape: runtime::turn::CallShape {
                 model: site.model.id.clone(),
                 // The model's own ceiling, not a number chosen here.
                 // With thinking enabled this budget covers reasoning and

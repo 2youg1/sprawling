@@ -246,7 +246,6 @@ status = "gated, with a register of the files that predate the rule"
 [file_length.predating]
 "crates/sprawling/src/assembly.rs" = 11461
 "crates/web/src/app.rs" = 3916
-"crates/runtime/src/turn.rs" = 1716
 "crates/web/src/city_view.rs" = 1554
 
 [session_resident]

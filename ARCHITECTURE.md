@@ -422,11 +422,13 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | gateway::cost | crates/gateway/src/cost.rs | per-call settlement, with the provider's own figure preferred | decision | S3 | built |
 | gateway::credential | crates/gateway/src/credential.rs | custody: capture, replace with a reference, redeem at the wire, renew before expiry | adapter | S3 | built |
 
-### runtime (21) — one run, from dispatch to freeze
+### runtime (23) — one run, from dispatch to freeze
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
 | runtime::turn | crates/runtime/src/turn.rs | the turn typestate: four phases, four cancellation-safe points | typestate | S2 | built |
+| runtime::bench | crates/runtime/src/bench.rs | which door one tool call goes through, in which order, and what a refusal becomes | decision | V3 | built |
+| runtime::window | crates/runtime/src/window.rs | the run's conversation history: the volatile half of a request | value | V3 | built |
 | runtime::prefix | crates/runtime/src/prefix.rs | frozen prefix assembly in four segments, each hashed | decision | S2 | built |
 | runtime::handoff | crates/runtime/src/handoff.rs | freezing and resuming: the five-section artifact and its one construction point | value | S2 | built |
 | runtime::fork | crates/runtime/src/fork.rs | a new run whose in-window history is a byte-identical prefix of another | decision | S1 | built |

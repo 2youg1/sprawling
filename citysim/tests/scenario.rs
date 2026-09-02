@@ -21,7 +21,7 @@ use kernel::{
     Address, ClockStampGranularity, CostTier, Effect, FrozenConfig, ModelReturn, Payload,
     RenderIntent, RunId, Temporal, ToolCall, ToolMeta, ToolName, ToolOutcome, WriteDomain,
 };
-use runtime::turn::ToolBench;
+use runtime::bench::ToolBench;
 
 /// The bench the scenarios drive: the real one (S3.14), carrying
 /// whichever tools a scenario wants registered.

@@ -24,7 +24,7 @@ use kernel::{
     Address, ClockStampGranularity, CostTier, Effect, FrozenConfig, ModelReturn, Payload,
     RenderIntent, RunId, Temporal, ToolCall, ToolMeta, ToolName, ToolOutcome, WriteDomain,
 };
-use runtime::turn::ToolBench;
+use runtime::bench::ToolBench;
 
 fn bench_with(tools: Vec<Box<dyn kernel::Tool>>) -> ToolBench {
     let domain = WriteDomain::new(vec![Address::parse("sim/lobby/room1").unwrap()]).unwrap();

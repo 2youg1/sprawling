@@ -116,7 +116,13 @@ pub fn fork_draft(from: RunId, at_seq: Seq, new_run: RunId, t: TimeMs, who: Stri
     -> Result<EventDraft, AxError>;      // data = {"from": …, "at_seq": …}
 ```
 
-### 8-3 runtime::turn（S2.01；形状 5 typestate 机）
+### 8-3 runtime::turn（S2.01；形状 5 typestate 机）＋bench／window（V3.39）
+
+**V3.39：一个 typestate 机、一张工作台、一份会话历史，三种形状住一个文件。** 1,716 → 918（turn）＋740（bench）＋109（window）。
+- `bench`（形状 1 判定）：`ToolBench`／`BenchOutcome` 与三条承重次序（去重先于副作用；exec 的 discard 预报先于 Write 门；Deny 以 `tool_result` 回去而不结束回合）。它拥有的是**次序**；工具本身以 `Box<dyn Tool>` 递入，沙盒在缝上，副作用不归它。
+  **它原本坐在第一个 `mod tests` 之后**——一个文件长成这样的机制在 V3.30 已经记过：没有边界的地方，新代码落在光标所在的行。
+- `window`（形状 2 值）：`Window`／`Opening`。一条不变量在每一个入口上成立——**连续的 user 内容并进已开的那条消息，而不另开一条**；steer、工具结果与开场任务是同一条规则的三扇门。
+- 公开面只改定义模块，**不新增任何根重导出**（`runtime::Opening` 原就在根上；`ToolBench` 原就只能走模块路径，今天仍然）。
 
 ```rust
 pub struct Turn<S> { /* run、who、t、state —— 全私有；相内数据在别的相不可表示 */ }

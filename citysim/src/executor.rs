@@ -20,12 +20,13 @@ use kernel::{
     IdemKey, Locator, Payload, RunId, Seq, Temporal, TimeMs,
 };
 use memory::Checkpoint;
+use runtime::bench::{BenchOutcome, ToolBench};
 use runtime::clock::StampGate;
 use runtime::handoff::Handoff;
 use runtime::pipeline;
 use runtime::prefix::{FrozenPrefix, FrozenSegment, SegmentSlot};
 use runtime::run::{RunHooks, RunPlan, SafePoint, drive};
-use runtime::turn::{BenchOutcome, CallShape, Interrupt, ToolBench};
+use runtime::turn::{CallShape, Interrupt};
 use serde_json::{Map, Value};
 
 use crate::mem_ledger::MemLedger;

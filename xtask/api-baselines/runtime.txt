@@ -39,6 +39,7 @@ impl runtime::StatusSnapshot
 impl runtime::StatusTool
 impl runtime::StatusTool
 impl runtime::Watchdog
+impl runtime::bench::ToolBench
 impl runtime::catalog::Catalog
 impl runtime::catalog::Catalog
 impl runtime::clock::ClockStamp
@@ -69,7 +70,6 @@ impl runtime::run::Run<runtime::run::Active>
 impl runtime::run::Run<runtime::run::Active>
 impl runtime::run::Run<runtime::run::Frozen>
 impl runtime::run::Run<runtime::run::Frozen>
-impl runtime::turn::ToolBench
 impl runtime::turn::Turn<runtime::turn::Assembling>
 impl runtime::turn::Turn<runtime::turn::Assembling>
 impl runtime::turn::Turn<runtime::turn::Calling>
@@ -82,7 +82,7 @@ impl runtime::turn::TurnCancelled
 impl runtime::turn::TurnCancelled
 impl runtime::turn::TurnReport
 impl runtime::turn::TurnReport
-impl runtime::turn::Window
+impl runtime::window::Window
 pub const runtime::diagnostics::Level::ALL: [runtime::diagnostics::Level; 5]
 pub const runtime::diagnostics::Level::DEFAULT: runtime::diagnostics::Level
 pub const runtime::diagnostics::REDACTED: &str
@@ -98,6 +98,7 @@ pub enum runtime::Opening
 pub enum runtime::PhaseOutcome<Next>
 pub enum runtime::SegmentSlot
 pub enum runtime::VerifiedLine
+pub enum runtime::bench::BenchOutcome
 pub enum runtime::catalog::Expansion
 pub enum runtime::compaction::Content
 pub enum runtime::compaction::Strategy
@@ -107,9 +108,8 @@ pub enum runtime::mode::Admission
 pub enum runtime::prefix::SegmentSlot
 pub enum runtime::replay::VerifiedLine
 pub enum runtime::run::Advance
-pub enum runtime::turn::BenchOutcome
-pub enum runtime::turn::Opening
 pub enum runtime::turn::PhaseOutcome<Next>
+pub enum runtime::window::Opening
 pub fn runtime::AbsentSandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
 pub fn runtime::AbsentSandbox::run(&mut self, &runtime::SandboxJob) -> core::result::Result<runtime::SandboxOutcome, kernel::error::AxError>
 pub fn runtime::EchoSandbox::new() -> runtime::EchoSandbox
@@ -157,6 +157,14 @@ pub fn runtime::Watchdog::new() -> runtime::Watchdog
 pub fn runtime::Watchdog::on_provider_failure(&mut self) -> runtime::Disposal
 pub fn runtime::Watchdog::on_stall(&mut self, &kernel::stall::StallVerdict) -> runtime::Disposal
 pub fn runtime::admits(runtime::mode::Mode, &runtime::mode::Produced) -> runtime::mode::Admission
+pub fn runtime::bench::ToolBench::for_job(self, kernel::address::Address, kernel::locator::Locator) -> runtime::bench::ToolBench
+pub fn runtime::bench::ToolBench::grant(&mut self, kernel::approval::ClusterKey)
+pub fn runtime::bench::ToolBench::invoke(&mut self, &kernel::tool::ToolCall, &kernel::idem::IdemKey, &kernel::gate::GateContext) -> core::result::Result<runtime::bench::BenchOutcome, kernel::error::AxError>
+pub fn runtime::bench::ToolBench::meta_of(&self, &str) -> core::option::Option<&kernel::tool::ToolMeta>
+pub fn runtime::bench::ToolBench::new(kernel::write_domain::WriteDomain) -> runtime::bench::ToolBench
+pub fn runtime::bench::ToolBench::register(&mut self, alloc::boxed::Box<dyn kernel::tool::Tool>) -> core::result::Result<(), kernel::error::AxError>
+pub fn runtime::bench::ToolBench::taint_mut(&mut self) -> &mut kernel::taint::TaintSet
+pub fn runtime::bench::ToolBench::with_checkpoint(self, memory::checkpoint::Checkpoint, &str) -> runtime::bench::ToolBench
 pub fn runtime::build_prefix(runtime::prefix::PrefixPlan) -> core::result::Result<runtime::prefix::FrozenPrefix, kernel::error::AxError>
 pub fn runtime::catalog::Catalog::admit_skill(&mut self, runtime::catalog::CatalogEntry) -> core::result::Result<(), kernel::error::AxError>
 pub fn runtime::catalog::Catalog::admit_skill(&mut self, runtime::catalog::CatalogEntry) -> core::result::Result<(), kernel::error::AxError>
@@ -310,16 +318,8 @@ pub fn runtime::stamp(kernel::event::TimeMs, &[kernel::config::ClockZone]) -> co
 pub fn runtime::structure_of(&str) -> alloc::vec::Vec<runtime::digest::StructureNode>
 pub fn runtime::tools::parse_arm(&serde_json::map::Map<alloc::string::String, serde_json::value::Value>) -> core::result::Result<kernel::tool::ExecArm, kernel::error::AxError>
 pub fn runtime::tools::version_of(&[u8]) -> alloc::string::String
-pub fn runtime::turn::ToolBench::for_job(self, kernel::address::Address, kernel::locator::Locator) -> runtime::turn::ToolBench
-pub fn runtime::turn::ToolBench::grant(&mut self, kernel::approval::ClusterKey)
-pub fn runtime::turn::ToolBench::invoke(&mut self, &kernel::tool::ToolCall, &kernel::idem::IdemKey, &kernel::gate::GateContext) -> core::result::Result<runtime::turn::BenchOutcome, kernel::error::AxError>
-pub fn runtime::turn::ToolBench::meta_of(&self, &str) -> core::option::Option<&kernel::tool::ToolMeta>
-pub fn runtime::turn::ToolBench::new(kernel::write_domain::WriteDomain) -> runtime::turn::ToolBench
-pub fn runtime::turn::ToolBench::register(&mut self, alloc::boxed::Box<dyn kernel::tool::Tool>) -> core::result::Result<(), kernel::error::AxError>
-pub fn runtime::turn::ToolBench::taint_mut(&mut self) -> &mut kernel::taint::TaintSet
-pub fn runtime::turn::ToolBench::with_checkpoint(self, memory::checkpoint::Checkpoint, &str) -> runtime::turn::ToolBench
-pub fn runtime::turn::Turn<runtime::turn::Assembling>::assemble(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &runtime::prefix::FrozenPrefix, &runtime::turn::Window, &[kernel::model::ToolDef], &runtime::turn::CallShape) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Calling>>, kernel::error::AxError>
-pub fn runtime::turn::Turn<runtime::turn::Assembling>::assemble(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &runtime::prefix::FrozenPrefix, &runtime::turn::Window, &[kernel::model::ToolDef], &runtime::turn::CallShape) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Calling>>, kernel::error::AxError>
+pub fn runtime::turn::Turn<runtime::turn::Assembling>::assemble(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &runtime::prefix::FrozenPrefix, &runtime::window::Window, &[kernel::model::ToolDef], &runtime::turn::CallShape) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Calling>>, kernel::error::AxError>
+pub fn runtime::turn::Turn<runtime::turn::Assembling>::assemble(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &runtime::prefix::FrozenPrefix, &runtime::window::Window, &[kernel::model::ToolDef], &runtime::turn::CallShape) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::Calling>>, kernel::error::AxError>
 pub fn runtime::turn::Turn<runtime::turn::Assembling>::begin(kernel::event::RunId, alloc::string::String, kernel::event::TimeMs) -> runtime::turn::Turn<runtime::turn::Assembling>
 pub fn runtime::turn::Turn<runtime::turn::Assembling>::begin(kernel::event::RunId, alloc::string::String, kernel::event::TimeMs) -> runtime::turn::Turn<runtime::turn::Assembling>
 pub fn runtime::turn::Turn<runtime::turn::Calling>::call<'sink>(self, runtime::turn::Interrupt, &mut dyn kernel::ledger::Ledger, &mut dyn kernel::model::Model, &kernel::model::BuildingPolicy, core::option::Option<&mut (dyn core::ops::function::FnMut(&str) + 'sink)>) -> core::result::Result<runtime::turn::PhaseOutcome<runtime::turn::Turn<runtime::turn::ToolWave>>, kernel::error::AxError>
@@ -340,14 +340,15 @@ pub fn runtime::turn::TurnReport::refs(&self) -> &[kernel::event::EventRef]
 pub fn runtime::turn::TurnReport::refs(&self) -> &[kernel::event::EventRef]
 pub fn runtime::turn::TurnReport::wave_results(&self) -> &[kernel::model::ContentBlock]
 pub fn runtime::turn::TurnReport::wave_results(&self) -> &[kernel::model::ContentBlock]
-pub fn runtime::turn::Window::messages(&self) -> &[kernel::model::ChatMessage]
-pub fn runtime::turn::Window::new() -> runtime::turn::Window
-pub fn runtime::turn::Window::push_assistant(&mut self, alloc::vec::Vec<kernel::model::ContentBlock>)
-pub fn runtime::turn::Window::push_steer(&mut self, &str, &str)
-pub fn runtime::turn::Window::push_task_lines(&mut self, &str, &str, runtime::turn::Opening)
-pub fn runtime::turn::Window::push_tool_results(&mut self, alloc::vec::Vec<kernel::model::ContentBlock>)
 pub fn runtime::version_of(&[u8]) -> alloc::string::String
+pub fn runtime::window::Window::messages(&self) -> &[kernel::model::ChatMessage]
+pub fn runtime::window::Window::new() -> runtime::window::Window
+pub fn runtime::window::Window::push_assistant(&mut self, alloc::vec::Vec<kernel::model::ContentBlock>)
+pub fn runtime::window::Window::push_steer(&mut self, &str, &str)
+pub fn runtime::window::Window::push_task_lines(&mut self, &str, &str, runtime::window::Opening)
+pub fn runtime::window::Window::push_tool_results(&mut self, alloc::vec::Vec<kernel::model::ContentBlock>)
 pub mod runtime
+pub mod runtime::bench
 pub mod runtime::catalog
 pub mod runtime::clock
 pub mod runtime::compaction
@@ -364,6 +365,7 @@ pub mod runtime::replay
 pub mod runtime::run
 pub mod runtime::tools
 pub mod runtime::turn
+pub mod runtime::window
 pub runtime::Admission::Lands
 pub runtime::Admission::Refused
 pub runtime::Admission::Refused::alternative: &'static str
@@ -452,7 +454,7 @@ pub runtime::RunPlan::budget: kernel::budget::BudgetCap
 pub runtime::RunPlan::budget_turns: u32
 pub runtime::RunPlan::goal: alloc::string::String
 pub runtime::RunPlan::job: kernel::locator::Locator
-pub runtime::RunPlan::opening: runtime::turn::Opening
+pub runtime::RunPlan::opening: runtime::window::Opening
 pub runtime::RunPlan::parent: core::option::Option<kernel::event::RunId>
 pub runtime::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::RunPlan::prefix: runtime::prefix::FrozenPrefix
@@ -525,6 +527,14 @@ pub runtime::VerifiedLine::Known::record: kernel::event::EventRecord
 pub runtime::ZoneEntry::id: alloc::string::String
 pub runtime::ZoneEntry::local: alloc::string::String
 pub runtime::ZoneEntry::offset_min: i32
+pub runtime::bench::BenchOutcome::Duplicate
+pub runtime::bench::BenchOutcome::Pending
+pub runtime::bench::BenchOutcome::Pending::item: alloc::boxed::Box<kernel::approval::ApprovalItem>
+pub runtime::bench::BenchOutcome::Ran
+pub runtime::bench::BenchOutcome::Ran::fenced: core::option::Option<alloc::string::String>
+pub runtime::bench::BenchOutcome::Ran::outcome: kernel::tool::ToolOutcome
+pub runtime::bench::BenchOutcome::Refused
+pub runtime::bench::BenchOutcome::Refused::refusal: alloc::boxed::Box<kernel::error::AxError>
 pub runtime::catalog::CatalogEntry::disclosure: alloc::string::String
 pub runtime::catalog::CatalogEntry::expansion: alloc::string::String
 pub runtime::catalog::CatalogEntry::hash: core::option::Option<kernel::locator::B3Hash>
@@ -632,7 +642,7 @@ pub runtime::run::RunPlan::budget: kernel::budget::BudgetCap
 pub runtime::run::RunPlan::budget_turns: u32
 pub runtime::run::RunPlan::goal: alloc::string::String
 pub runtime::run::RunPlan::job: kernel::locator::Locator
-pub runtime::run::RunPlan::opening: runtime::turn::Opening
+pub runtime::run::RunPlan::opening: runtime::window::Opening
 pub runtime::run::RunPlan::parent: core::option::Option<kernel::event::RunId>
 pub runtime::run::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::run::RunPlan::prefix: runtime::prefix::FrozenPrefix
@@ -671,14 +681,6 @@ pub runtime::tools::StatusSnapshot::who: alloc::string::String
 pub runtime::tools::StatusSnapshot::worktree_disk: kernel::budget::ByteLen
 pub runtime::tools::StatusSnapshot::worktree_path: alloc::string::String
 pub runtime::tools::StatusSnapshot::write_domain: alloc::string::String
-pub runtime::turn::BenchOutcome::Duplicate
-pub runtime::turn::BenchOutcome::Pending
-pub runtime::turn::BenchOutcome::Pending::item: alloc::boxed::Box<kernel::approval::ApprovalItem>
-pub runtime::turn::BenchOutcome::Ran
-pub runtime::turn::BenchOutcome::Ran::fenced: core::option::Option<alloc::string::String>
-pub runtime::turn::BenchOutcome::Ran::outcome: kernel::tool::ToolOutcome
-pub runtime::turn::BenchOutcome::Refused
-pub runtime::turn::BenchOutcome::Refused::refusal: alloc::boxed::Box<kernel::error::AxError>
 pub runtime::turn::CallShape::effort: core::option::Option<kernel::model::Effort>
 pub runtime::turn::CallShape::max_tokens: u64
 pub runtime::turn::CallShape::model: alloc::string::String
@@ -687,10 +689,10 @@ pub runtime::turn::Interrupt::None
 pub runtime::turn::Interrupt::Steer
 pub runtime::turn::Interrupt::Steer::source: alloc::string::String
 pub runtime::turn::Interrupt::Steer::text: alloc::string::String
-pub runtime::turn::Opening::FromJob
-pub runtime::turn::Opening::WithPerson
 pub runtime::turn::PhaseOutcome::Advanced(Next)
 pub runtime::turn::PhaseOutcome::Cancelled(runtime::turn::TurnCancelled)
+pub runtime::window::Opening::FromJob
+pub runtime::window::Opening::WithPerson
 pub struct runtime::AbsentSandbox
 pub struct runtime::Breaker
 pub struct runtime::Catalog
@@ -733,6 +735,7 @@ pub struct runtime::TurnReport
 pub struct runtime::VerifiedLedger
 pub struct runtime::Watchdog
 pub struct runtime::ZoneEntry
+pub struct runtime::bench::ToolBench
 pub struct runtime::catalog::Catalog
 pub struct runtime::catalog::CatalogEntry
 pub struct runtime::catalog::SkillPin
@@ -772,11 +775,10 @@ pub struct runtime::turn::Assembling(_)
 pub struct runtime::turn::CallShape
 pub struct runtime::turn::Calling
 pub struct runtime::turn::Recording
-pub struct runtime::turn::ToolBench
 pub struct runtime::turn::ToolWave
 pub struct runtime::turn::Turn<S>
 pub struct runtime::turn::TurnCancelled
 pub struct runtime::turn::TurnReport
-pub struct runtime::turn::Window
+pub struct runtime::window::Window
 pub trait runtime::Sandbox
 pub type runtime::diagnostics::Sink = alloc::boxed::Box<(dyn core::ops::function::FnMut(&str) + core::marker::Send)>

@@ -32,8 +32,10 @@ pub use tools::StatusTool;
 pub use tools::parse_arm;
 pub use tools::version_of;
 
+pub mod bench;
 mod sandbox;
 pub mod turn;
+pub mod window;
 
 pub use sandbox::AbsentSandbox;
 pub use sandbox::EchoSandbox;
@@ -65,5 +67,6 @@ pub use prefix::{FrozenPrefix, FrozenSegment, SegmentSlot};
 pub use prefix::{PrefixPlan, SegmentCaps, SourceDoc, build_prefix};
 pub use replay::{VerifiedLedger, VerifiedLine};
 pub use run::{Advance, Run, RunHooks, RunPlan, SafePoint, drive};
-pub use turn::{Interrupt, Opening, PhaseOutcome, Turn, TurnCancelled, TurnReport};
+pub use turn::{Interrupt, PhaseOutcome, Turn, TurnCancelled, TurnReport};
 pub use watchdog::{Disposal, FreezeReason, Watchdog};
+pub use window::Opening;
