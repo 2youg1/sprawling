@@ -1,0 +1,70 @@
+cabal-version:   3.0
+name:            sprawling-adversary
+version:         0.0.1
+synopsis:        An adversarial property checker that attacks sprawling through the door an agent has
+description:
+  Out of the Rust workspace, out of the release, and out of `just check`. It
+  raises a throwaway city, serves it, drives it with `sprawling call`, asserts
+  relations between traces, and delivers what it finds as a Rust regression
+  test. See adversary-SPEC.md.
+
+license:         MPL-2.0
+author:          2youg1 and the sprawling contributors
+build-type:      Simple
+extra-doc-files: adversary-SPEC.md
+
+common strict
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns
+    -Wredundant-constraints -Wpartial-fields -Werror
+
+library
+  import:           strict
+  hs-source-dirs:   src
+  default-language: GHC2021
+  exposed-modules:
+    Sprawling.Door
+    Sprawling.Frame
+    Sprawling.Ground
+    Sprawling.Model
+    Sprawling.Regression
+
+  build-depends:
+    , aeson               >=2.1  && <2.3
+    , base                >=4.17 && <5
+    , bytestring          >=0.11
+    , containers          >=0.6
+    , directory           >=1.3
+    , filepath            >=1.4
+    , mtl                 >=2.2
+    , process             >=1.6
+    , QuickCheck          >=2.14
+    , quickcheck-dynamic  >=4.0  && <5
+    , temporary           >=1.3
+    , text                >=2.0
+
+test-suite adversary
+  import:           strict
+  type:             exitcode-stdio-1.0
+  main-is:          Main.hs
+  hs-source-dirs:   test
+  default-language: GHC2021
+
+  -- The served cities are read by a thread each. Without `-threaded` a reader
+  -- blocked on a pipe blocks the whole runtime, and the city it was draining
+  -- fills its buffer and stops answering.
+  ghc-options:      -threaded
+  build-depends:
+    , base
+    , bytestring
+    , containers
+    , directory
+    , filepath
+    , mtl
+    , QuickCheck
+    , quickcheck-dynamic
+    , sprawling-adversary
+    , tasty               >=1.4
+    , tasty-hunit         >=0.10
+    , tasty-quickcheck    >=0.10
+    , text
