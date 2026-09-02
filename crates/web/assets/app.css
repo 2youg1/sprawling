@@ -104,7 +104,19 @@ a { color: var(--TEXT); text-decoration: underline;
    runs edge to edge above a column that does not. Rows and tables may use
    the whole page width; prose may not, because width is a property of
    what is being read and not of the window it arrived in. */
-.centre > * { max-width: var(--width-page); margin-inline: auto; }
+/* The spine is a column, not a margin each child sets for itself.
+
+   Every child used to bound itself at the page width and centre what was
+   left, which aligns two children only while they are the same width: a
+   520px line of prose centred in the same region as a 1040px panel starts
+   256px further in, and a child that wrote a `margin` shorthand for its
+   own vertical rhythm silently dropped the centring altogether. Both
+   states shipped, on different pages, at the same time.
+
+   One centred column answers it once. A child is laid into the column
+   and starts where the column starts, whatever its own width, and a
+   margin it sets on itself can no longer move it. */
+.centre > * { min-width: 0; }
 .panel-scope, .empty-what, .said, .composer-key, .panel-source
     { max-width: var(--width-measure); }
 /* `stable` reserves the scrollbar's width whether or not one is showing,
@@ -144,6 +156,8 @@ a { color: var(--TEXT); text-decoration: underline;
                         align-items: flex-start; }
 .left-nav .city-state .standing { color: var(--TEXT_QUIET); font-size: var(--text-note); }
 .centre { grid-area: centre; background: var(--G1); overflow: auto;
+          display: grid; grid-template-columns: minmax(0, var(--width-page));
+          justify-content: center; align-content: start;
           padding: var(--space-wide); border: 1px solid var(--G3);
           border-radius: var(--corner-panel); corner-shape: var(--corner-panel-shape); }
 /* The standing column: facts that are true on every page. It stacks
