@@ -228,6 +228,13 @@ pub fn SessionView(
                     }
                 }
             }
+            // The sentence a person typed, above everything this run
+            // did with it. First on the page because it is the question
+            // the rest of the page answers, and because it is the one
+            // thing here somebody wrote themselves.
+            if let Some(ref asked) = row.task {
+                p { class: "session-task", "{asked}" }
+            }
             p { class: "panel-scope", "{word(Msg::SessionScope)}" }
             p { class: "panel-scope", "{word(Msg::SessionContextScope)}" }
         }
@@ -358,6 +365,7 @@ mod tests {
             gate: None,
             spent: None,
             said: None,
+            task: Some("read the ledger path twice".to_owned()),
         }
     }
 

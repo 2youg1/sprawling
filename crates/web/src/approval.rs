@@ -22,7 +22,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::lang::{Msg, say};
+use crate::lang::{Msg, fill, say};
 use channels::{ApprovalClass, ApprovalItem, ClientFrame, Locator, PolicyVerdict, TimeMs};
 use dioxus::prelude::*;
 
@@ -149,7 +149,10 @@ pub fn ApprovalsView(
                     class: if cluster.answer_individually { "cluster tainted" } else { "cluster" },
                     header {
                         span { class: "what", "{cluster.summary}" }
-                        span { class: "count", "{cluster.count()} waiting" }
+                        span { class: "count",
+                            {fill(word(Msg::ApprovalWaitingCount),
+                                  &[("count", &cluster.count().to_string())])}
+                        }
                         if cluster.answer_individually {
                             span { class: "note",
                                 "{word(Msg::ApprovalTainted)}"
@@ -166,7 +169,7 @@ pub fn ApprovalsView(
                                     let id = item.id.clone();
                                     move |_| on_frame.call(answer_command(&id, PolicyVerdict::Allow))
                                 },
-                                "allow"
+                                "{word(Msg::ApprovalAllow)}"
                             }
                             button {
                                 class: "deny",
@@ -174,7 +177,7 @@ pub fn ApprovalsView(
                                     let id = item.id.clone();
                                     move |_| on_frame.call(answer_command(&id, PolicyVerdict::Deny))
                                 },
-                                "refuse"
+                                "{word(Msg::ApprovalRefuse)}"
                             }
                         }
                     }

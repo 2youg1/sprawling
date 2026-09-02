@@ -406,6 +406,9 @@ pub fn Settings(
                     input {
                         id: "attach-url",
                         name: "base_url",
+                        // An address, on the domain RFC 2606 reserves for
+                        // examples. The same string in every language.
+                        // wording-ok: an address
                         placeholder: "https://api.provider.example/v1",
                         value: "{form.read().base_url}",
                         oninput: move |event| form.write().base_url = event.value(),
@@ -425,7 +428,12 @@ pub fn Settings(
                             };
                         },
                         option { value: "", "{word(Msg::SettingsWhichWire)}" }
+                        // Two wire formats, named by the firms that publish
+                        // them. `web::lang` refuses a phrase whose two
+                        // languages are equal, and each of these is.
+                        // wording-ok: a format's own name
                         option { value: "anthropic", "anthropic messages" }
+                        // wording-ok: a format's own name
                         option { value: "openai", "openai chat completions" }
                     }
                 }
@@ -536,7 +544,9 @@ pub fn Settings(
                         id: "subscription-provider",
                         name: "subscription_provider",
                         onchange: move |event| subscription.set(event.value()),
+                        // wording-ok: a provider's own name
                         option { value: "anthropic", "anthropic" }
+                        // wording-ok: a provider's own name
                         option { value: "openai", "openai" }
                     }
                 }

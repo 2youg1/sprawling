@@ -538,6 +538,7 @@ pub web::Meaning::Task
 pub web::Meaning::Task::task: alloc::string::String
 pub web::Msg::AlertAwaitingApproval
 pub web::Msg::AlertCannot
+pub web::Msg::AlertDismiss
 pub web::Msg::AlertNoRecovery
 pub web::Msg::AlertProviderNotAnswering
 pub web::Msg::AlertProviderTrouble
@@ -545,13 +546,16 @@ pub web::Msg::AlertRefused
 pub web::Msg::AlertRunFrozen
 pub web::Msg::AlertRunStopped
 pub web::Msg::AlertSomethingWaiting
+pub web::Msg::ApprovalAllow
 pub web::Msg::ApprovalNoneEscalated
 pub web::Msg::ApprovalNoneEscalatedWhat
 pub web::Msg::ApprovalNothingWaiting
+pub web::Msg::ApprovalRefuse
 pub web::Msg::ApprovalScope
 pub web::Msg::ApprovalSource
 pub web::Msg::ApprovalTainted
 pub web::Msg::ApprovalTitle
+pub web::Msg::ApprovalWaitingCount
 pub web::Msg::ArchiveAskingFiled
 pub web::Msg::ArchiveFiledLately
 pub web::Msg::ArchiveHits
@@ -607,6 +611,7 @@ pub web::Msg::BuildingAsking
 pub web::Msg::BuildingAskingRoom
 pub web::Msg::BuildingAskingRoomWhat
 pub web::Msg::BuildingAskingWhat
+pub web::Msg::BuildingDocSize
 pub web::Msg::BuildingFuel
 pub web::Msg::BuildingMounts
 pub web::Msg::BuildingNoDocument
@@ -681,6 +686,7 @@ pub web::Msg::CostOwnStream
 pub web::Msg::CostScope
 pub web::Msg::CostSource
 pub web::Msg::CostTokenLine
+pub web::Msg::CostUnpriced
 pub web::Msg::CostUnpricedCalls
 pub web::Msg::CostUnpricedScope
 pub web::Msg::CostUnpricedTitle
@@ -726,8 +732,13 @@ pub web::Msg::KeysScope
 pub web::Msg::KeysShow
 pub web::Msg::KeysTitle
 pub web::Msg::LedgerAnyPartOfName
+pub web::Msg::LedgerColumnAt
+pub web::Msg::LedgerColumnKind
+pub web::Msg::LedgerColumnSeq
+pub web::Msg::LedgerColumnWho
 pub web::Msg::LedgerEveryKind
 pub web::Msg::LedgerFilterNote
+pub web::Msg::LedgerFilteredOut
 pub web::Msg::LedgerFirstLineNote
 pub web::Msg::LedgerKindOfEvent
 pub web::Msg::LedgerNewer
@@ -1033,6 +1044,7 @@ pub web::RunRow::spent: core::option::Option<kernel::budget::UsdMicros>
 pub web::RunRow::started_at_seq: kernel::event::Seq
 pub web::RunRow::steps_done: u32
 pub web::RunRow::steps_planned: core::option::Option<u32>
+pub web::RunRow::task: core::option::Option<alloc::string::String>
 pub web::RunRow::turns: u32
 pub web::SavingsRow::label: alloc::string::String
 pub web::SavingsRow::saved: kernel::budget::UsdMicros

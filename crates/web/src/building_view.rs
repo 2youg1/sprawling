@@ -488,7 +488,8 @@ pub fn BuildingView(
                         Some(doc) => rsx! {
                             article { class: "doc",
                                 p { class: "doc-note",
-                                    "{doc.name} - {doc.bytes} bytes"
+                                    {fill(word(Msg::BuildingDocSize),
+                                          &[("name", &doc.name), ("bytes", &doc.bytes.to_string())])}
                                     if doc.truncated {
                                         "{word(Msg::BuildingTruncated)}"
                                     }

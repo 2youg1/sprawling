@@ -104,6 +104,15 @@ pub struct RunRow {
     /// the list shows so that a person can tell two sessions apart
     /// without opening either.
     pub said: Option<String>,
+    /// What the person asked for, as they typed it.
+    ///
+    /// Folded from `run_started`, where it has been on the wire all
+    /// along and no page read it. A session page that shows what a run
+    /// spent, which door holds it and what it last said, and never the
+    /// sentence it was given, is asking a reader to judge an answer
+    /// without the question - and the question is the one thing on that
+    /// page a person wrote themselves.
+    pub task: Option<String>,
 }
 
 /// What the model calls consumed, and what the city may not claim to know
@@ -453,6 +462,13 @@ impl Snapshot {
                         gate: None,
                         spent: None,
                         said: None,
+                        task: event
+                            .data()
+                            .as_map()
+                            .get("task")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned)
+                            .filter(|asked| !asked.trim().is_empty()),
                     },
                 );
             }

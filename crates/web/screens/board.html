@@ -12,7 +12,8 @@
   web::theme's own test; `app.css` is the file the product ships.
   Run `cargo test -p web` once before opening this file.
 
-  What this screen is, in one line: the plan tree, laid out by state. It
+  What this screen is, in one line: the Plan leaf of a building - the
+  standing goal, who answers its approvals, and the plan tree. It
   holds no state of its own — every column reads `BuildingAnswer.plan`,
   and the only thing a person can do from here is send somebody to a node
   that is ready. Dragging a card is deliberately absent: a node moves when
@@ -68,6 +69,48 @@
         <button type="button" class="tab">档案</button>
         <button type="button" class="tab">能连到什么</button>
       </div>
+
+      <!--
+        The two panels the Plan leaf draws above the board. They were
+        written straight into RSX and never settled here, which is why
+        this comment exists as well as the markup: `web::pursuit` is not
+        a page and never was, so there is no `pursuit.html` to write. It
+        is the head of this leaf, and a settled screen for a route the
+        router cannot produce would be a screen that judges a fiction.
+
+        The running state is drawn rather than the empty one: the empty
+        state uses the same three-part `Empty` grammar every page uses,
+        and what had never been looked at is the pair of controls.
+      -->
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">持续目标</h2>
+        </div>
+        <p class="panel-scope">这栋楼，直到活干完。</p>
+        <div class="panel-body">
+          <p class="pursuit-goal-said">把 Roadmap.md 里的叶子清空</p>
+          <p class="pursuit-verdict">在做 2.3，后面还有 4 片叶子</p>
+          <div class="pursuit-controls">
+            <button type="button" class="pursue">暂停</button>
+            <button type="button" class="pursue-clear">停止追</button>
+          </div>
+        </div>
+        <p class="panel-source">折自 pursuit_changed</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">谁来答</h2>
+        </div>
+        <p class="panel-scope">这栋楼里提出的审批</p>
+        <div class="panel-body">
+          <div class="autonomy-controls">
+            <button type="button" class="admit">由人来答</button>
+            <button type="button" class="admit">先搁着，等人来问</button>
+          </div>
+        </div>
+        <p class="panel-source">这栋楼自己写下的那一档</p>
+      </section>
 
       <section class="panel">
         <div class="panel-head">

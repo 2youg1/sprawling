@@ -331,7 +331,6 @@ pub fn LiveView(
     let lines = feed.lines().to_vec();
     let dropped = feed.dropped();
     let held = lines.len();
-    let known = runs.len();
     let last_seq = lines.last().map(|line| line.seq);
     let dropped_line = fill(word(Msg::LiveDropped), &[("dropped", &dropped.to_string())]);
     rsx! {
@@ -341,7 +340,17 @@ pub fn LiveView(
                 // page connects, so "no run has been dispatched here" is a
                 // sentence it has no standing to say. The overview reads
                 // the city's own count for that.
-                title: match (known, run) {
+                // The title reads the same count the figure does, so a
+                // panel cannot contradict its own body. It used to read
+                // how many runs the picker below had to offer, and the
+                // session page passes that picker an empty list on
+                // purpose - one session needs no chooser - so that page
+                // announced "nothing has happened since this page
+                // connected" above eight turns and a figure of 57. The
+                // live page had the same defect from the other side: a
+                // window holding only city events names no run, and it
+                // said nothing had happened while showing them.
+                title: match (held, run) {
                     (0, _) => word(Msg::LiveNothingSinceConnected).to_owned(),
                     (_, Some(_)) => word(Msg::LiveOneSession).to_owned(),
                     (_, None) => word(Msg::LiveEveryRun).to_owned(),
@@ -525,14 +534,19 @@ pub fn LiveView(
                     }
                 }
             }
+            // Which of the two empty states this is turns on whether the
+            // page is watching a session, not on how many the picker had
+            // to offer: the session page hands that picker an empty list
+            // and would otherwise tell a reader looking at a named room
+            // that no work has ever been sent anywhere.
             if feed.lines().is_empty() {
                 crate::panel::Empty {
-                    status: if known == 0 {
+                    status: if run.is_none() {
                         word(Msg::LiveNoRunYet).to_owned()
                     } else {
                         word(Msg::LiveNothingSince).to_owned()
                     },
-                    what: if known == 0 {
+                    what: if run.is_none() {
                         word(Msg::LiveNoRunYetWhat).to_owned()
                     } else {
                         word(Msg::LiveNothingSinceWhat).to_owned()

@@ -64,6 +64,17 @@ body { background: var(--G0); color: var(--TEXT);
 
 h1, h2, h3 { margin: 0; font-weight: var(--weight-heading); }
 h2 { font-size: var(--text-heading); color: var(--TEXT); }
+/* A page's own subject, wherever it is written: the room on a session
+   page, the lens on the record page, the building on a building page.
+   All three took a step at or below `heading` while every panel title
+   under them takes `title`, so the thing a page is about was outranked
+   by the sections describing it - and on the building page the subject
+   also carries the mono rule's `1em`, which resolved it to prose size.
+   The bar at the top still repeats the subject at `heading`; chrome
+   quieter than its subject is the right way round, and only the
+   inversion is a defect. */
+h1.address, .building-head h2 { font-size: var(--text-title);
+                               font-weight: var(--weight-title); }
 p { margin: 0; }
 /* Colour is never the only thing carrying a meaning, and here it cannot
    be the thing at all: ACCENT on the working surface measures Lc 45.7
@@ -90,7 +101,7 @@ a { color: var(--TEXT); text-decoration: underline;
           gap: var(--space-base); padding: var(--space-base) var(--space-pane);
           grid-template-columns: 200px minmax(0, 1fr);
           grid-template-rows: auto minmax(0, 1fr);
-          grid-template-areas: "top top" "nav centre"; }
+          grid-template-areas: ". top" "nav centre"; }
 
 /* One measure, and one page width.
 
@@ -124,15 +135,30 @@ a { color: var(--TEXT); text-decoration: underline;
    grows. `contain` stops a scroll that reaches the end of one pane from
    continuing in the pane behind it, which is how a list inside a panel
    used to drag the whole document. */
-.left-nav, .right-status, .centre, ol.lines, .doc-text
+.left-nav, .right-status, ol.lines, .doc-text
     { scrollbar-gutter: stable; overscroll-behavior: contain; }
+/* `both-edges` on the one box that centres a column inside itself.
+   Reserving on the end edge alone moves the centre of the remaining
+   space half a gutter to the left, so the content column sat 5px inside
+   the top bar above it - the two edges that were supposed to be one
+   spine. Reserving on both edges leaves the centre where it is, and the
+   column and the bar start at the same x whether or not a scrollbar is
+   showing. */
+.centre { scrollbar-gutter: stable both-edges; overscroll-behavior: contain; }
 .left-nav, .right-status { overflow: auto; }
 /* The bar states the page, and the counts a person checks from any page.
    Bounded and centred like the content under it, so the two share a
    spine; stopping the city moved out of here, because this bar says what
    the page is and halting says what the city is. */
+/* The bar sits over the page it names, not over the rail that lists the
+   other pages. It used to span both columns, and the spine it was
+   supposed to share with the content was measurably not there: its
+   1040px was centred over nav-plus-content and the panels' 1040px over
+   content alone, which put its left edge 101px inside theirs on every
+   screen. Sharing the column makes the two edges the same edge by
+   construction, with no arithmetic here that repeats the rail's width. */
 .top-bar { grid-area: top; color: var(--TEXT); display: flex; align-items: baseline;
-           gap: var(--space-base); padding-bottom: var(--space-snug);
+           gap: var(--space-base); flex-wrap: wrap; padding-bottom: var(--space-snug);
            border-bottom: 1px solid var(--G2);
            width: 100%; max-width: var(--width-page); margin-inline: auto; }
 .top-bar .address { font-size: var(--text-heading); font-weight: var(--weight-heading);
@@ -155,10 +181,17 @@ a { color: var(--TEXT); text-decoration: underline;
                         flex-direction: column; gap: var(--space-snug);
                         align-items: flex-start; }
 .left-nav .city-state .standing { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+/* The reading surface, and the only place a border was drawn around
+   emptiness: the region takes the whole of the grid's second row so that
+   it can scroll inside itself, and on the session page 409 of its 1035
+   pixels - 40% - were an outlined void under the last thing in it. The
+   step from the page's G0 to this G1 is what says "read here"; the
+   stroke on top of that step only said "this rectangle is empty", and a
+   surface that runs out of content should run out quietly. */
 .centre { grid-area: centre; background: var(--G1); overflow: auto;
           display: grid; grid-template-columns: minmax(0, var(--width-page));
           justify-content: center; align-content: start;
-          padding: var(--space-wide); border: 1px solid var(--G3);
+          padding: var(--space-wide) var(--space-wide) var(--space-section);
           border-radius: var(--corner-panel); corner-shape: var(--corner-panel-shape); }
 /* The standing column: facts that are true on every page. It stacks
    rather than runs across, because it is 264px wide and a row of counts
@@ -217,10 +250,16 @@ a { color: var(--TEXT); text-decoration: underline;
             border-radius: var(--corner-control); corner-shape: var(--corner-control-shape);
             padding: 7px 10px; display: flex; align-items: center; gap: var(--space-snug);
             font-size: var(--text-body); text-decoration: none; }
-.nav-item:hover { background: var(--G2); color: var(--TEXT); }
-.nav-item[aria-current="page"] { background: var(--G2); color: var(--TEXT);
+/* A fill means the pointer is here; the spine means the page is here.
+   Both marks used to be the same fill, so the current entry carried
+   three signals for one fact - G2, heading weight and the accent spine -
+   and its 190x37 block was the largest filled area on the page after the
+   two page surfaces. Furniture was the loudest object on screen. */
+.nav-item:hover { background: var(--G1); color: var(--TEXT); }
+.nav-item[aria-current="page"] { color: var(--TEXT);
                                  font-weight: var(--weight-heading);
                                  box-shadow: inset 2px 0 0 var(--ACCENT); }
+.nav-item[aria-current="page"]:hover { background: var(--G1); }
 .badge { margin-left: auto; background: var(--ALERT); color: var(--G0);
          border-radius: var(--corner-pill); corner-shape: var(--corner-pill-shape);
          padding: 0 6px; font-size: var(--text-label); font-weight: 700;
@@ -300,7 +339,28 @@ a { color: var(--TEXT); text-decoration: underline;
    so a page's heading was centred and the panels under it were not, and
    every page had two left edges 31px apart. Vertical rhythm belongs to
    the panel; the spine belongs to the region. */
+/* Where one panel ends is the panel's own business, and the rule that
+   says so spans the panel.
+
+   It used to be the `border-top` on `.panel-source`, and that had two
+   measured faults. The source line is prose and prose is capped at the
+   measure, so on the home page a 520px rule was closing a 1040px panel
+   while the row separators *inside* that panel ran the full 1040 - the
+   structural mark was half the width of the marks it outranks. And a
+   panel with nothing to say about provenance drew no rule at all, so
+   two questions were divided by 32px of air and nothing else, which is
+   the 24-to-32 ratio this stylesheet already records as too small a
+   step to read.
+
+   One rule width on the page now: this one, the row separators, and the
+   turn separators all span the content column. */
 .panel { display: block; margin-block: 0 var(--space-section); }
+/* One rung above the separators inside a panel, because it divides more:
+   a row boundary and a panel boundary drawn in the same ink read as one
+   list of equals, which is what the home page did between its last
+   session row and the next question. */
+.panel + .panel { border-top: 1px solid var(--G3);
+                  padding-block-start: var(--space-section); }
 .panel:last-child { margin-block-end: 0; }
 .panel-head { display: flex; align-items: baseline; gap: var(--space-base);
               flex-wrap: wrap; margin-bottom: var(--space-tight); }
@@ -312,9 +372,29 @@ a { color: var(--TEXT); text-decoration: underline;
 .panel-scope { color: var(--TEXT_QUIET); font-size: var(--text-note);
                margin-bottom: var(--space-base); }
 .panel-body { display: block; }
+/* Provenance is set off by space alone. Its rule moved up to the panel,
+   where it can span what it closes; a second rule here at half that
+   width would put two rule lengths within 24px of each other. */
 .panel-source { color: var(--TEXT_QUIET); font-size: var(--text-note);
-                margin-top: var(--space-base); padding-top: var(--space-snug);
-                border-top: 1px solid var(--G2); }
+                margin-top: var(--space-wide); }
+
+/* The settings page divides itself with bare `h2` section heads instead
+   of panels, and the base rule gives every heading `margin: 0`, so each
+   head sat hard against the hint line above it: "sign in with a
+   subscription" began 4px under the sentence closing the section before
+   it. They are panels in everything but name, so they take a panel's
+   boundary until somebody settles this page as panels - which is a
+   markup change, and `#/setup` has no settled screen to make it on.
+
+   They sit inside the one panel's body rather than beside it, which is
+   the structural oddity this rule is painting over and the reason it is
+   written down here: the whole page is a single panel whose body holds
+   five sections and whose provenance line closes all of them. */
+.settings .panel-body > h2 { margin-block-start: var(--space-section);
+                             padding-block-start: var(--space-section);
+                             border-top: 1px solid var(--G3);
+                             font-size: var(--text-title);
+                             font-weight: var(--weight-title); }
 
 /* A card is a panel's contents raised one step off the working surface. */
 .card { background: var(--G2); border: 1px solid var(--G3);
@@ -380,7 +460,17 @@ button[type="submit"]:hover:not(:disabled) { border-color: var(--TEXT); }
 button.quiet { background: transparent; border-color: var(--G3); color: var(--TEXT_QUIET); }
 button.quiet:hover:not(:disabled) { background: var(--G2); color: var(--TEXT); }
 :focus-visible { outline: 2px solid var(--ACCENT); outline-offset: 2px; }
-input, select, textarea { background: var(--G1); color: var(--TEXT); font: inherit;
+/* A field is a well, not a tile. It shipped at G1, which is the working
+   surface's own lightness, so the one box the reader types into was
+   exactly as light as the region behind it and said so only through a
+   1px stroke - measured on the home page, where `.composer-task` and
+   `.centre` both resolved to the same rung. A control that receives what a
+   person writes reads as recessed in every interface that has one, and
+   recessing it here costs no contrast: the ink is lighter than either
+   surface, so moving the surface down raises the reading. The step also
+   survives being placed on a card, where a G1 field was one rung below
+   its card and is now two. */
+input, select, textarea { background: var(--G0); color: var(--TEXT); font: inherit;
                           font-size: var(--text-body);
                           border: 1px solid var(--G4); border-radius: var(--corner-control);
                           corner-shape: var(--corner-control-shape); padding: 6px 9px;
@@ -713,7 +803,7 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
                  padding-top: var(--space-base); border-top: 1px solid var(--G2); }
 .interventions .note { flex-basis: 100%; }
 .filters input, .filters select { min-width: 160px; }
-.export textarea { width: 100%; background: var(--G1); color: var(--TEXT_QUIET);
+.export textarea { width: 100%; background: var(--G0); color: var(--TEXT_QUIET);
                    border: 1px solid var(--G3); border-radius: var(--corner-card);
                    corner-shape: var(--corner-card-shape); }
 
@@ -972,9 +1062,7 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 .session-back { display: inline-block; color: var(--TEXT_QUIET);
                 font-size: var(--text-note); margin-bottom: var(--space-snug); }
 .session-head .address { display: flex; align-items: center;
-                         gap: var(--space-snug); margin: 0;
-                         font-size: var(--text-heading);
-                         font-weight: var(--weight-heading); }
+                         gap: var(--space-snug); margin: 0; }
 .session-head .address .room { font-family: var(--font-mono); }
 .session-head .address .turn { color: var(--TEXT_QUIET);
                                font-size: var(--text-note);
@@ -1219,3 +1307,11 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 .pursue-clear { border: 1px solid var(--G2); color: var(--TEXT_QUIET);
                 background: none; padding: var(--space-tight) var(--space-snug);
                 cursor: pointer; }
+
+/* The sentence a person typed, at the top of the page that answers it.
+   Set as speech rather than as metadata: it is quoted from a person, so
+   it takes the reading measure and a rule on the side that marks it as
+   somebody else's words, the way `.said` marks the model's. */
+.session-task { max-width: var(--width-measure); color: var(--TEXT);
+                margin-top: var(--space-base); padding-left: var(--space-base);
+                border-left: 2px solid var(--ACCENT); }

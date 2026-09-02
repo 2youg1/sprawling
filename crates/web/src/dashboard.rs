@@ -288,7 +288,7 @@ pub fn CostsView(
                                     }
                                     span { class: "amount",
                                         if unpriced {
-                                            "unpriced"
+                                            "{word(Msg::CostUnpriced)}"
                                         } else {
                                             "{render_usd(row.spent)}"
                                         }

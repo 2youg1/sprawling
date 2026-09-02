@@ -251,7 +251,12 @@ pub fn CityView(
                 select {
                     name: "template",
                     onchange: move |event| template.set(event.value()),
+                    // A template names itself, and that name travels on the
+                    // wire. Translating it would show a reader a word the
+                    // city does not answer to.
+                    // wording-ok: a template's own name
                     option { value: "minimal", "minimal" }
+                    // wording-ok: a template's own name
                     option { value: "confidential", "confidential" }
                 }
                 button {

@@ -349,6 +349,7 @@ pub enum Msg {
     BuildingNothingFiled,
     BuildingNothingFiledWhat,
     BuildingTruncated,
+    BuildingDocSize,
     BuildingNoDocument,
     ApprovalNothingWaiting,
     ApprovalTitle,
@@ -357,6 +358,9 @@ pub enum Msg {
     ApprovalNoneEscalated,
     ApprovalNoneEscalatedWhat,
     ApprovalTainted,
+    ApprovalWaitingCount,
+    ApprovalAllow,
+    ApprovalRefuse,
     BinRestoreCheckpoint,
     BinRestoreStored,
     BinRebuild,
@@ -392,6 +396,11 @@ pub enum Msg {
     LedgerNewer,
     LedgerOlder,
     LedgerSkipped,
+    LedgerFilteredOut,
+    LedgerColumnSeq,
+    LedgerColumnAt,
+    LedgerColumnKind,
+    LedgerColumnWho,
     BuildingWaitingCount,
     SettingsInterfaceTitle,
     SettingsInterfaceScope,
@@ -423,6 +432,7 @@ pub enum Msg {
     CostTokenLine,
     CostUnpricedCalls,
     CostOwnStream,
+    CostUnpriced,
     ProgressNoPlan,
     TurnNumber,
     TurnTools,
@@ -460,6 +470,7 @@ pub enum Msg {
     KeysGo,
     KeysShow,
     AlertCannot,
+    AlertDismiss,
     AlertNoRecovery,
     AlertAwaitingApproval,
     AlertRunFrozen,
@@ -1378,6 +1389,10 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: " - shown up to the page's limit; the file on disk is longer",
             zh: " — 只显示到本页的上限；盘上的文件更长",
         },
+        Msg::BuildingDocSize => Phrase {
+            en: "{name} · {bytes} bytes",
+            zh: "{name} · {bytes} 字节",
+        },
         Msg::BuildingNoDocument => Phrase {
             en: "a building keeps five documents at most, and this one has not been written. The tabs above are the ones that exist.",
             zh: "一栋楼最多留五份文档，这一份还没写过。上面的页签是已经存在的那几份。",
@@ -1405,6 +1420,22 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::ApprovalNoneEscalatedWhat => Phrase {
             en: "a run reaches a person only when a door refuses to decide by itself - a write outside its domain, a discard with no way back, an action a policy has not yet settled. Until then work runs without asking.",
             zh: "只有门自己不敢决定时才会找到人——写到域外、删了没有回头路、策略还没定过的动作。在那之前活自己往下跑，不问。",
+        },
+        Msg::ApprovalWaitingCount => Phrase {
+            en: "{count} waiting",
+            zh: "{count} 条在等",
+        },
+        // Irreversible and reversible must not look alike, so these two
+        // differ in weight and position rather than in colour (SPEC 8-56 E).
+        // The words carry the same asymmetry: letting work through is
+        // stated plainly, refusing it names what it refuses.
+        Msg::ApprovalAllow => Phrase {
+            en: "allow",
+            zh: "放行",
+        },
+        Msg::ApprovalRefuse => Phrase {
+            en: "refuse",
+            zh: "拒绝",
         },
         Msg::ApprovalTainted => Phrase {
             en: "this one began with someone else's text: answered alone, and no policy can waive it",
@@ -1543,6 +1574,29 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "{skipped} newer record(s) skipped",
             zh: "略过了 {skipped} 条更新的记录",
         },
+        Msg::LedgerFilteredOut => Phrase {
+            en: "{count} record(s) hidden by this filter",
+            zh: "有 {count} 条记录被这个筛选挡住了",
+        },
+        // The four column heads of the record table. They name Ledger
+        // fields, and a field name is still a word a reader reads: on a
+        // Chinese page `seq` and `who` are as English as a sentence is.
+        Msg::LedgerColumnSeq => Phrase {
+            en: "seq",
+            zh: "序号",
+        },
+        Msg::LedgerColumnAt => Phrase {
+            en: "at",
+            zh: "时刻",
+        },
+        Msg::LedgerColumnKind => Phrase {
+            en: "kind",
+            zh: "类别",
+        },
+        Msg::LedgerColumnWho => Phrase {
+            en: "who",
+            zh: "谁",
+        },
         Msg::BuildingWaitingCount => Phrase {
             en: "{count} waiting. Looking is not taking: a signal leaves this queue when a run pulls it.",
             zh: "{count} 条在等。看一眼不等于取走：信号要等会话取走才离开这个队列。",
@@ -1679,6 +1733,12 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "{amount} of that arrived through this page's own stream",
             zh: "其中 {amount} 是从本页自己那条流里到的",
         },
+        // Where a dollar figure would be. Zero and unknown are different,
+        // and only one of them is ever true here.
+        Msg::CostUnpriced => Phrase {
+            en: "unpriced",
+            zh: "未计价",
+        },
         Msg::ProgressNoPlan => Phrase {
             en: "no plan",
             zh: "没有计划",
@@ -1715,9 +1775,15 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "stopped: {why}",
             zh: "停在：{why}",
         },
+        // Whose voice this is, said in the label. It read "what it said"
+        // on a row whose subject is a tool, and "it" on this page is the
+        // agent - so a reader took every collapsed tool output for the
+        // model's own reply and concluded the interface hides what the
+        // agent says. The model's prose is not collapsed and never was;
+        // this one word is what made the page look as though it were.
         Msg::TurnOutput => Phrase {
-            en: "what it said",
-            zh: "它说了什么",
+            en: "what this tool answered",
+            zh: "这个工具答了什么",
         },
         Msg::TurnOutputCut => Phrase {
             en: "{cut} more line(s), in the Ledger at {seq}",
@@ -1826,6 +1892,10 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::AlertCannot => Phrase {
             en: "cannot {action} on {subject}",
             zh: "不能对 {subject} 执行 {action}",
+        },
+        Msg::AlertDismiss => Phrase {
+            en: "dismiss this refusal",
+            zh: "关掉这条拒绝",
         },
         Msg::AlertNoRecovery => Phrase {
             en: "no way out was recorded with this refusal",
@@ -2543,6 +2613,7 @@ mod tests {
             Msg::BuildingNothingFiled,
             Msg::BuildingNothingFiledWhat,
             Msg::BuildingTruncated,
+            Msg::BuildingDocSize,
             Msg::BuildingNoDocument,
             Msg::ApprovalNothingWaiting,
             Msg::ApprovalTitle,
@@ -2551,6 +2622,9 @@ mod tests {
             Msg::ApprovalNoneEscalated,
             Msg::ApprovalNoneEscalatedWhat,
             Msg::ApprovalTainted,
+            Msg::ApprovalWaitingCount,
+            Msg::ApprovalAllow,
+            Msg::ApprovalRefuse,
             Msg::BinRestoreCheckpoint,
             Msg::BinRestoreStored,
             Msg::BinRebuild,
@@ -2586,6 +2660,11 @@ mod tests {
             Msg::LedgerNewer,
             Msg::LedgerOlder,
             Msg::LedgerSkipped,
+            Msg::LedgerFilteredOut,
+            Msg::LedgerColumnSeq,
+            Msg::LedgerColumnAt,
+            Msg::LedgerColumnKind,
+            Msg::LedgerColumnWho,
             Msg::BuildingWaitingCount,
             Msg::SettingsInterfaceTitle,
             Msg::SettingsInterfaceScope,
@@ -2617,6 +2696,7 @@ mod tests {
             Msg::CostTokenLine,
             Msg::CostUnpricedCalls,
             Msg::CostOwnStream,
+            Msg::CostUnpriced,
             Msg::ProgressNoPlan,
             Msg::TurnNumber,
             Msg::TurnTools,
@@ -2654,6 +2734,7 @@ mod tests {
             Msg::KeysGo,
             Msg::KeysShow,
             Msg::AlertCannot,
+            Msg::AlertDismiss,
             Msg::AlertNoRecovery,
             Msg::AlertAwaitingApproval,
             Msg::AlertRunFrozen,
@@ -2961,6 +3042,7 @@ mod tests {
                 | Msg::BuildingNothingFiled
                 | Msg::BuildingNothingFiledWhat
                 | Msg::BuildingTruncated
+                | Msg::BuildingDocSize
                 | Msg::BuildingNoDocument
                 | Msg::ApprovalNothingWaiting
                 | Msg::ApprovalTitle
@@ -2969,6 +3051,9 @@ mod tests {
                 | Msg::ApprovalNoneEscalated
                 | Msg::ApprovalNoneEscalatedWhat
                 | Msg::ApprovalTainted
+                | Msg::ApprovalWaitingCount
+                | Msg::ApprovalAllow
+                | Msg::ApprovalRefuse
                 | Msg::BinRestoreCheckpoint
                 | Msg::BinRestoreStored
                 | Msg::BinRebuild
@@ -3004,6 +3089,11 @@ mod tests {
                 | Msg::LedgerNewer
                 | Msg::LedgerOlder
                 | Msg::LedgerSkipped
+                | Msg::LedgerFilteredOut
+                | Msg::LedgerColumnSeq
+                | Msg::LedgerColumnAt
+                | Msg::LedgerColumnKind
+                | Msg::LedgerColumnWho
                 | Msg::BuildingWaitingCount
                 | Msg::SettingsInterfaceTitle
                 | Msg::SettingsInterfaceScope
@@ -3035,6 +3125,7 @@ mod tests {
                 | Msg::CostTokenLine
                 | Msg::CostUnpricedCalls
                 | Msg::CostOwnStream
+                | Msg::CostUnpriced
                 | Msg::ProgressNoPlan
                 | Msg::TurnNumber
                 | Msg::TurnTools
@@ -3072,6 +3163,7 @@ mod tests {
                 | Msg::KeysGo
                 | Msg::KeysShow
                 | Msg::AlertCannot
+                | Msg::AlertDismiss
                 | Msg::AlertNoRecovery
                 | Msg::AlertAwaitingApproval
                 | Msg::AlertRunFrozen

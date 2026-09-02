@@ -55,6 +55,33 @@ This is the wall the whole method rests on. The moment "improve the structure wh
 
 **What this gate is and is not.** It compares *authored* affordances, not a computed accessibility tree. A computed tree needs a browser, a browser needs a binary this build does not ship, and a gate that cannot run offline is a gate that stops running. Comparing the computed tree against a running client is still worth doing, and it is a person's job with a browser open. The gate catches the drift that actually happened: a `role`, an `aria-label` or an `aria-current` dropped during step 3, which is invisible because the page still renders and the pixels still match, and the only thing lost is what a person who cannot see the pixels was going to be told.
 
+### Which changes owe step 1, and which do not
+
+Two modules skipped step 1 without anyone noticing, and they are the two
+halves of the same hole. `screens/dispatch.html` settled a component that
+was then deleted, so a screen outlived its route. `web::pursuit` was
+written straight into RSX with no screen at all. Neither was caught,
+because nothing here said what a screen file is *for*.
+
+> **A screen is settled per route, not per module.** One `.html` file
+> exists for each destination the router can produce, and for nothing
+> else. A module that is not itself a destination is settled on the
+> screen of the destination that draws it.
+
+That is decidable by reading `web::route`: the destinations and their
+leaves are the closed list, and a file with no destination behind it is
+a screen judging a page nobody can open. `web::pursuit` draws the two
+panels above the plan board, so it belongs in `screens/board.html`; it
+never needed a `pursuit.html`, and writing one would have produced a
+settled screen for a page that does not exist.
+
+**The other exemption is smaller and sharper: step 1 settles markup, so
+a change that alters no markup does not owe it.** New wording, a new
+binding, a handler, a token value, a stylesheet rule that changes how
+existing markup is painted — all of these are judged in the browser and
+by `cargo xtask render`, not by re-settling a screen. A change that adds,
+removes or re-nests an element owes step 1 on the screen of its route.
+
 ### Step 5 — open the screen in an engine and measure it
 
 ```bash
@@ -150,3 +177,22 @@ The panic, arithmetic and `unsafe` bans (crash prevention); the determinism rule
 ### Kept as taste, exempt by definition
 
 Module layout, `pub(crate)` by default, the glossary, comment discipline, the language table, colour from `web::theme`.
+
+## 5 What none of the five steps reads
+
+Every step above reads `crates/web/screens/` or `crates/web/src/`. **The
+running client is read by neither**, and the cost of that is on the
+record twice. Three English sentences lived on the cost page for a whole
+stage, and the cost page has no settled screen, so no gate had ever
+looked at it; the settings page grew a form whose three fields stepped
+down the right margin, and settled screens do not include the settings
+page either. Both were found the same way: build the client, run a city,
+photograph it.
+
+`xtask wording` closes one part of this by reading the *client* rather
+than the screens — a word a reader is given has to come from the phrase
+table, on every page, settled or not. What it cannot do is see a layout,
+and a page with no settled screen still has nobody measuring where its
+boxes land. Until a destination has a screen file, **a person with a
+browser is that page's only gate**, and the screens are the list of
+pages that are not in that state.

@@ -195,7 +195,10 @@ pub fn LedgerView(
                     }
                 }
                 if page.filtered_out > 0 {
-                    p { class: "filtered", "{page.filtered_out} record(s) hidden by this filter" }
+                    p { class: "filtered",
+                        {crate::lang::fill(word(Msg::LedgerFilteredOut),
+                                           &[("count", &page.filtered_out.to_string())])}
+                    }
                 }
                 if page.rows.is_empty() {
                     // Three states a reader cannot otherwise tell apart:
@@ -218,10 +221,10 @@ pub fn LedgerView(
                     table { class: "records",
                         thead {
                             tr {
-                                th { "seq" }
-                                th { "at" }
-                                th { "kind" }
-                                th { "who" }
+                                th { "{word(Msg::LedgerColumnSeq)}" }
+                                th { "{word(Msg::LedgerColumnAt)}" }
+                                th { "{word(Msg::LedgerColumnKind)}" }
+                                th { "{word(Msg::LedgerColumnWho)}" }
                             }
                         }
                         tbody {

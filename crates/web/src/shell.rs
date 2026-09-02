@@ -139,7 +139,7 @@ pub fn Root(
                         span { class: "refusal-way", "{told.recovery}" }
                         button {
                             class: "refusal-close",
-                            "aria-label": "dismiss",
+                            "aria-label": "{word(crate::lang::Msg::AlertDismiss)}",
                             onclick: move |_| on_dismiss.call(()),
                             "\u{00d7}"
                         }

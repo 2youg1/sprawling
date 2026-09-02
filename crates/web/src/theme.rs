@@ -226,8 +226,42 @@ pub const CORNER_SCALES: [(&str, u16, u16); 4] = [
 /// The interface pane of the settings page says where the setting lives,
 /// because a preference the product obeys and never mentions is a
 /// preference the reader cannot find.
-pub const FONT_SANS: &str =
-    "system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, Arial, sans-serif";
+///
+/// **Four OFL faces lead, and the platform stack is kept whole behind
+/// them.** Every name before `system-ui` is SIL Open Font License 1.1 and
+/// is drawn for an interface at 14-20px rather than for a page. A reader
+/// who has one installed gets a face designed for this size; a reader who
+/// has none gets, byte for byte, what this interface gave them before -
+/// the face their own platform dresses its own interface in. **The stack
+/// can therefore improve a machine and cannot regress one**, which is the
+/// only shape in which a font preference is worth spending a stack on.
+///
+/// **Lato was measured and dropped, and that is the rule this entry
+/// states.** It is OFL, it is the one OFL interface face already installed
+/// on the machine this was settled on, and set beside the platform face at
+/// both 15px and 20px/600 against the same Han fallback it is a lateral
+/// move: narrower letterforms, a lighter bold, no gain the eye can name. A
+/// stack entry that changes what a reader sees without improving it is
+/// worse than no entry, because it makes the interface's appearance depend
+/// on which machine somebody opened it on and buys nothing for that. **A
+/// face earns a place here by beating the platform default, not by being
+/// free.**
+///
+/// The licence is a constraint on what may be *named as a target*, not on
+/// what is distributed: this product ships no font file at all, and the
+/// test below is what holds that. Naming a proprietary platform face in
+/// the tail incurs nothing, because naming is not distribution - but a
+/// face the reader cannot legally go and install is not a design target,
+/// and the four that lead are ones anybody may.
+///
+/// **No OFL interface face is installed by default on any of the three
+/// desktops**, so on a machine nobody has furnished, this stack resolves
+/// to the same platform face as before. That is a statement about the
+/// world rather than about this table, and the way to change what one
+/// reader sees is to install one of the four - no rebuild, because a
+/// system stack is read at paint time.
+pub const FONT_SANS: &str = "Inter, 'IBM Plex Sans', 'Source Sans 3', 'Public Sans', \
+     system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, Arial, sans-serif";
 
 /// Numbers, identifiers, hashes and addresses take the fixed-width face.
 /// A second family rather than `tabular-nums` alone: a column of digits
