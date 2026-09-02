@@ -46,7 +46,7 @@ I don’t sell APIs and I can’t afford a hard drive full of your data, so ever
 
 ## What it is
 
-One binary, one browser page. The client is Rust compiled to WebAssembly and embedded inside that binary. There is no second client; the build chain contains neither npm nor node—this is enforced by a gate, not by good intentions.
+One binary, one browser page. The client is Rust compiled to WebAssembly and embedded inside that binary, so building this repository needs neither npm nor node. That is a property of the client shipped here rather than a rule imposed on you: **the client is replaceable.** Anything that speaks the WebSocket protocol in `crates/channels` is a client, in whatever language you and your agents write best, and a gate that once forbade JavaScript in this tree was removed for exactly that reason — it was excluding architectures rather than defects.
 
 The directory tree on disk *is* the space: a **City** is a directory tree, a project is a **Building**, an agent’s workspace is a **Room**.
 

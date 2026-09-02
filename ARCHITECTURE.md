@@ -10,7 +10,7 @@
 
 ## 1 What runs
 
-One process, one page. The client is Rust compiled to WebAssembly and embedded in the binary at build time; there is no second client, and no npm or node appears in the build chain rather than a convention.
+One process, one page. The client is Rust compiled to WebAssembly and embedded in the binary at build time, so no npm or node appears in the build chain. That is what this client is, not what a client must be: the wire in `crates/channels` is the seam, and a second client written against it in any language is a supported thing to build. The gate that once forbade JavaScript source in this tree was removed because it excluded architectures rather than defects.
 
 ```
                       one machine

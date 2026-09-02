@@ -60,9 +60,9 @@ Every row is enforced by a machine. Violating one turns CI red with a message na
 | Take colour from `web::theme`; express a colour as a ratio of the gamut limit. | `xtask color` |
 | Keep sizes inside their budget, and the badges in `README.md` in step with the artifacts they measure. `just dist` rewrites them; nobody types a size into a document. | `xtask budget` |
 | Publish nothing that names one machine's home directory or its working notes. | `xtask release` |
-| Fix the cause when a gate goes red. Changing `xtask/`, root `Cargo.toml`, `deny.toml`, `clippy.toml`, `justfile`, or `.github/` requires a `Verdict:` trailer — that is, an explicit ruling from the person. | `xtask guard` |
+| Fix the cause when a gate goes red. Changing `xtask/`, root `Cargo.toml`, `deny.toml`, `clippy.toml`, `justfile`, or `.github/` **in the same commit as `crates/`, `citysim/` or `fuzz/`** requires a `Verdict:` trailer — that is, an explicit ruling from the person. Re-pricing a rule in a commit of its own does not. | `xtask guard` |
 
-The `guard` row is the load-bearing one: it closes the single universal escape hatch, which is loosening a gate in order to pass it. Changes to `xtask/`, the `justfile`, the root `Cargo.toml`, the lint configuration or a module-table row carry a trailer recording the person's ruling.
+The `guard` row is the load-bearing one: it closes the single universal escape hatch, which is loosening a gate in order to pass it. What the machine looks for is the pair — a gate change and the source that gate judges, arriving together, so that one green run reports both. A commit whose whole diff is gate machinery is a re-pricing, and it needs no ruling: its diff says nothing except that a rule now costs something different, which is exactly what a reviewer has to read. Charging a ruling for that too is what once kept a rule alive a year past its argument.
 
 **Every gate has been seen red.** Each had a violation injected when it went live and was confirmed to bite; a gate that has never failed is indistinguishable from a gate that does not exist. Four occasions when a gate changed the design rather than being loosened are in [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 

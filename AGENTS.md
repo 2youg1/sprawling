@@ -68,6 +68,8 @@ Violating any of these turns CI red with a message naming the rule, the violatio
 
 The last row is the load-bearing one: it closes the single universal escape hatch, which is loosening a gate in order to pass it. It deliberately does **not** close the other door: a rule whose price has changed may be re-priced in a commit of its own, and doing so is ordinary work rather than an exception.
 
+**What the machine decides is the pair.** It asks whether one commit changes gate machinery (`xtask/`, `.github/`, the root manifest, `deny.toml`, `clippy.toml`, `rust-toolchain.toml`, the `justfile`, or a module-table row it removes) *and* changes the source those gates judge (`crates/`, `citysim/`, `fuzz/`). Both sides present without a trailer is the shortcut. One side alone is not: a gate change travelling by itself is the re-pricing the paragraph above protects, and product work touching no gate machinery never meets this rule at all.
+
 **Every rule that excludes an architecture carries a re-pricing condition.** A rule that was right when it was written is not thereby right now; the parameter that made it right is written beside it, and when that parameter moves the rule is re-argued rather than obeyed. Rules that exclude a *defect* — the panic bans, the arithmetic bans, the determinism rules — carry no such condition, because nothing about them expires.
 
 ## The view layer is exempt from the ceremony

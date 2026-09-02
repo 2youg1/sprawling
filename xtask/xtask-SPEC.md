@@ -13,8 +13,8 @@
 | lexicon | 禁用词命中即红；数据面 `xtask/lexicon.toml` |
 | modmap | `crates/**/src/**/*.rs` ↔ ARCHITECTURE.md §6 模块表一一对应；状态列一致性；索引文件零逻辑 |
 | depmap | crate 依赖边 ⊆ §2 depmap 块；`pub trait` 仅现于 §3 缝清单文件 |
-| guard | 触及门自身的提交必须携 `Verdict:` 尾注 |
-| ax | 仓库无 JS/TS 源文件；我们的命令面（justfile／CI 步骤／build.rs／*.sh）不调用 npm/node 族 |
+| guard | 改动门自身、又同时改动门所判源码的提交，必须携 `Verdict:` 尾注 |
+| ax | 定稿屏（`crates/web/screens/*.html`）写下的角色、可及名、当前页标记与地标元素，客户端（`crates/web/src`）也提供 |
 | spec | 生成 `<crate>-SPEC.md` 骨架（Daily Loop 的 `just spec`） |
 | secret（S2.12 上线） | 全仓＋夹具扫 secret shape（判定复用 `kernel::secret::scan`，无内联豁免）；兼查 `Sealed::expose` 调用点白名单 |
 | specalign（S2.12 上线） | kernel 枚举 ↔ kernel-SPEC §8-1／§8-4 表逐 variant：消费真 enum（AxCode::ALL／EventKind::ALL）对表作证，计数、归属、carrier／窗类逐项同 |
@@ -32,10 +32,10 @@
 | 逻辑漏进 lib.rs／索引文件 | modmap | 纯索引文件只许注释、属性、mod、use |
 | 偷加依赖边、绕过分层 | depmap | 实际边 ⊆ 文档边；kernel 恒零内部依赖 |
 | 娱乐性抽象（无第二实现的 trait） | depmap | `pub trait` 只许出现在缝清单文件 |
-| 放宽 lint／改门过门／删表行 | guard | 门自身变更必须携用户 verdict 尾注 |
+| 放宽 lint／改门过门／删表行 | guard | 门自身变更与被判源码同处一枚提交时，必须携用户 verdict 尾注 |
 | 词汇漂移、自造同义词 | lexicon | 附录 A 禁用词的机器子集，命中即红 |
 | 忘记许可头或版权行 | header | 五行逐字节比对 |
-| 引入 JS/TS 或 node 构建步 | ax | 扩展名扫描＋命令面 token 扫描（C1） |
+| 翻译定稿屏时丢掉 `role`／`aria-label`／`aria-current` | ax | 两侧同一读法取出可及面，屏上有而客户端无即红 |
 | stub／todo!／unwrap 蒙混 | （不在本 crate）workspace lints | clippy deny 已覆盖，本 crate 不重复 |
 | 一个函数里塞进整条流程（模型最常见的结构失效） | length | 超过行数预算即红，报出函数名、行数与预算 |
 
@@ -43,13 +43,14 @@
 
 - 每门在违规夹具上报告非零、在干净仓库上报告零（单测覆盖解析与判定核心）。
 - 违规输出恒为 three-part 形：rule｜violation｜alternative，附 `gate` 名与 `file:line`。
-- `cargo xtask gates` 在本仓库当前状态全绿；人为注入六类违规（表外文件、lib.rs 加 fn、暗依赖边、缝外 pub trait、禁用词、.js 文件）各能单独触红。
+- `cargo xtask gates` 在本仓库当前状态全绿；人为注入六类违规（表外文件、lib.rs 加 fn、暗依赖边、缝外 pub trait、禁用词、定稿屏上有而客户端没有的 `role`）各能单独触红。
 - 全部代码过 workspace lints（无 unwrap/expect/panic/索引/切片/裸算术/as）。
 
 ## 3 假设与歧义
 
 - 「注释与标识符扫描」简化为整行子串扫描：中文禁用词只会出现在注释与文档，英文禁用词不构成合法标识符片段。误伤由 `lexicon-ok:` 行内豁免兜住。
 - guard 本地默认只查 HEAD 一枚提交（工作树未提交的改动不查——门只对可判定对象作证）；CI 以 `--range` 查整个变更集：pull request 取 `base..head`，push 取 `before..after`。**只判 tip 一枚是一个洞**：一个 PR 可以把放宽门的那枚提交夹在中间，再用一枚干净的 tip 过关。区间两端解不出来时（改写过历史的 push、首次 push）回落到 HEAD 并明说回落了，不得让一个解不开的区间读起来像一个干净的区间。
+- **guard 只对「门变更与被判源码同处一枚提交」索裁定（V3.25）**。被判源码是一张封闭前缀表：`crates/`／`citysim/`／`fuzz/`。两边都在一枚提交里，就是这道门要关的那条捷径：活在提交里，本该拒绝它的规则也在同一枚提交里，一次绿的运行同时报掉两者。**全部改动都在门自身的那一枚提交是重新定价，属日常工作**（AGENTS.md `guard` 行原文如此）：它的 diff 除了「这条规则现在标价不同了」什么都不说，而那正是评审人要看的东西，一个签名反而把它遮住。旧口径（凡触及 `xtask/` 即索裁定）把重新定价收得与破规一样贵，而那正是禁 JavaScript 一条比它的论据多活一年的机制性原因（`WORKSPACE/FRONTEND-METHOD.md` §4）。**留下的洞是故意的并记在此**：先一枚放松、再一枚过门，两枚都不被索裁定。堵它就得为每一次重新定价收一次裁定，而那个价钱正是本条要取消的。
 - **guard 区分「门怎么判」与「门产出了什么」（P3.01，用户裁定）**。`xtask/api-baselines/` 不在保护面内，而 `xtask/src/apisync.rs` 仍在。理由是两道门曾经互相矛盾：`apisync` 命令公开面一变就跑 `cargo xtask apisync --write`，而那就是写进 `xtask/`；两条同时遵守，等于**每一次公开面变更都要一次裁定**，而一个次次都要签的字会贬值成仪式。重生一份 baseline 放松不了任何东西：`apisync` 仍然拿它与实时 API 逐行比，且 diff 就在提交里给评审人看。**这条不得推广到其它目录**：判据是「该文件由门自己生成且被门自己校验」，不是「改起来麻烦」。
 - 附录 A 中语境依赖的禁用词（如 session 指本城运行时、建筑指项目时）不入机器数据面，由评审执行；lexicon.toml 内以注释记录此边界。
 
@@ -114,10 +115,10 @@ pub(crate) struct Violation {
 
 ## 10 实现逻辑
 
-1. **walk**：手写递归（不引 walkdir），跳过 `.git`／`target`／`node_modules`，输出按路径字符串排序——报告顺序确定，diff 可比。路径统一正斜杠（Windows 反斜杠归一），因为模块表以正斜杠书写。**隔离区**：仓库根 `local/`（gitignore，恒不入库）存 Handoff 与本机备忘；从仓库根扫描的三门（header／lexicon／ax）排除它——门只对入库对象作证，非入库物可引用历史词汇与本机路径。modmap／depmap 只扫 `crates/`，嵌套的 `crates/**/local` 仍被封闭清单咬住，无洞。
+1. **walk**：手写递归（不引 walkdir），跳过 `.git`／`target`／`node_modules`，输出按路径字符串排序——报告顺序确定，diff 可比。路径统一正斜杠（Windows 反斜杠归一），因为模块表以正斜杠书写。**隔离区**：仓库根 `local/`（gitignore，恒不入库）存 Handoff 与本机备忘；从仓库根扫描的四门（header／lexicon／secret／color）排除它——门只对入库对象作证，非入库物可引用历史词汇与本机路径。modmap／depmap 只扫 `crates/`，嵌套的 `crates/**/local` 仍被封闭清单咬住，无洞。
 2. **modmap**：模块行判据＝竖线表行、第 2 列以 `crates/` 开头以 `.rs` 结尾、第 1 列含 `::`、恰六列、第 6 列 ∈ 状态枚举——这组条件把 §3 缝表（四列）与 §10 卡（清单行）天然排除。双向对账：表有文件无（状态≠未建 才要求在盘）；盘有表无（lib.rs 与索引文件豁免）；盘有且状态＝未建 → 「状态未翻转」。索引文件判据：文件名去 `.rs` 后与同目录某子目录同名，且该子目录内有表内文件。
 3. **depmap**：§2 围栏块 ```` ```depmap ```` 为机器权威；`cargo metadata --format-version 1 --no-deps` 输出经 serde_json::Value 读取；只查 normal＋build 依赖（dev 依赖留给测试自由）。子集断言而非相等断言——空壳期合法。
-4. **guard**：`git rev-list` 取区间（缺省 HEAD 单枚；无提交则跳过并说明），`git diff-tree --root` 取动过的文件，`git show -s --format=%B` 取信息；保护路径命中或 ARCHITECTURE 模块行被**移除**而信息无 `Verdict:` 行首 → 红。移除的定义是路径级的：某 `crates/**.rs` 路径出现在删除行（`-|`）且不出现在任何新增行（`+|`）——状态翻转在 diff 里是「删一行加一行」，它是最高频的合法编辑，若被误判为删行索 verdict，门就在训练绕门习惯。
+4. **guard**：`git rev-list` 取区间（缺省 HEAD 单枚；无提交则跳过并说明），`git diff-tree --root` 取动过的文件，`git show -s --format=%B` 取信息；一枚提交**两边各非空**且信息无 `Verdict:` 行首 → 红。一边是门面（保护路径命中，或 ARCHITECTURE 模块行被**移除**），另一边是被判源码（`crates/`／`citysim/`／`fuzz/`）。两边各自由一个纯函数从文件列表算出（`gate_faces`／`judged_faces`），**于是规则能对着一份路径列表断言而不需要一个带提交的仓库**；拒词只点名前三条被判路径，一份列了八十条路径的拒词没人读。移除的定义是路径级的：某 `crates/**.rs` 路径出现在删除行（`-|`）且不出现在任何新增行（`+|`）——状态翻转在 diff 里是「删一行加一行」，它是最高频的合法编辑，若被误判为删行索 verdict，门就在训练绕门习惯。
 5. **vocabulary（R1.15，挂在 lexicon 门下）**：两条断言，各修一种第二权威。①**退役词必须指向被定义过的词**——`lexicon.toml` 说哪种说法作废，`docs/glossary.md` 说该用哪个词，此前无人让二者对账，于是一条退役词可以指向一个词汇表从未定义的名字，而照门的建议改词的人会落到一个没有释义的词上。判据宽一格：replacement 命中任一词汇表**粗体词**或含 `.md`（指向一份文件也是一种定义）。②**能被机器数出来的数不由文档手写**——产品面文档里每一处手写门数都至少陈旧过一次（四份文档写「ten gates」而实际跑十二道）。故读 `gates::COUNT` 与文档对账，中英两种写法（`ten gates`／`十二门`）各认一组，且**刻意只认已经烂过的那几种形状**：一条会猜的规则就是一条会在别的正文上乱咬的规则。
 6. **release（P4.14 上线，P5.05 增第三条断言）**：公开树**由过滤生成**而不由手工挑选，分类是一条**封闭的前缀规则**（`is_scaffolding`）；未被规则点名的一律归产品面——**失败方向是故意的**：未分类的文件出现在产物里会被人看见，反过来则悤声消失。三条断言：①公开树上零脚手架路径；②产品文档不得链向或在正文里点名脚手架（无链的「去看 SPEC」最好写也最难发现，故扫全文而不只扫链接）；③**任何发布文件不得携家目录路径**（`machine_path`）。第三条的口径是**隐私而非整洁**：`/tmp`、`/etc`、`C:/windows` 是关于一类机器的事实，而且「绝对路径被拒」那三条测试必须写出一个绝对路径——典型反例先咬住的正是它们，故规则收窄到家目录形状（`:\users\`／`:/users/`／`/home/`／`/root/` 等七种，大小写不计）。扫描面是**全部可读成文本的发布文件**，不只 `.md`：源码与清单里的硬编码家目录更坏而不是更好。报告只截二十字符，因为把整行引进 CI 日志就是把它再公开一次；文件自豁免（同 secret／color 两门的先例：写不出不包含待检形状的检测器）。
 7. **badge（P5）**：读数与 `budget` 同源（同一 `measure()`），故不存在第二个数字权威。每个可称重的 gated 行若在 `budgets.toml` 里带 `badge_label`，即渲染一张 `docs/badges/<行名>.svg`。三条纪律：①**颜色不自选**——灰阶取自 `crates/web/src/theme.rs` 的 `GRAY_RAMP`（复用 color 门已有的解析器），OKLCH→sRGB 的换算在此一次算清，因为 SVG 要被任意浏览器渲染，而 `oklch()` 的支持面不覆盖旧版；墨色恒不低于 `INFORMATION_FLOOR`，一条断言钉住。②**平台自报**——二进制体积逐平台不同，故 `badge_platform` 指名哪台机器有权刷新它，别的平台既不写也不判，否则三个平台会互相覆盖同一个文件。③**陈旧即红**——`budget` 门在能称重时比对已提交的 SVG 与当场渲染的 SVG，不同即红并给出 `cargo xtask badge --write`；称不出（本机没构建产物）则沉默，与该门既有的沉默口径一致。`just dist` 末尾调用它，于是发一次 release 就刷新一次，没有人需要去改一个数字。
@@ -146,7 +147,7 @@ serde＋serde_json（cargo metadata 解析；工作区已钉）；toml（lexicon
 
 行数预算 200 **不**硬编码在门里，它是 `xtask/budgets.toml` 的一行（`[function_length]`）——那份登记表自述是「设计所声明的每一项预算」，而它已经持着非字节的预算（`kernel_mutation` 的百分比、`ledger_append` 的毫秒）。数字的来历写在那一行的注释里，改它受 guard 看守。
 
-MPL 头三行；保护路径清单（xtask/、.github/、deny.toml、Cargo.toml、rust-toolchain.toml、clippy.toml、justfile）；状态枚举四值；JS 扩展名族与 node 命令族。各随其权威变更而改，改动本身受 guard 看守。
+MPL 头三行；保护路径清单（xtask/、.github/、deny.toml、Cargo.toml、rust-toolchain.toml、clippy.toml、justfile）；被判源码前缀清单（crates/、citysim/、fuzz/）；状态枚举四值；`ax` 的三个可及属性与四个地标元素。各随其权威变更而改，改动本身受 guard 看守。
 
 ## 15 影响面
 
@@ -154,7 +155,7 @@ CI 与 justfile 调用面；ARCHITECTURE.md §6/§2/§3 的表格式即本 crate
 
 ## 16 测试与约束
 
-单测：modmap 行解析（正例/六列不齐/状态非法/缝表不误伤）；索引文件判定；lexicon 命中与 `lexicon-ok:` 豁免；depmap 块解析；ax token 化（`node_modules` 不误伤 `node`）；header 比对（CRLF）；隔离区前缀判定（`local/` 命中、`localx/` 不命中）。约束：全门无网络、无写盘（spec 子命令除外——它只新建不覆盖）；输出顺序确定。
+单测：modmap 行解析（正例/六列不齐/状态非法/缝表不误伤）；索引文件判定；lexicon 命中与 `lexicon-ok:` 豁免；depmap 块解析；ax 可及面取出（HTML 与 RSX 两种写法归一）；header 比对（CRLF）；隔离区前缀判定（`local/` 命中、`localx/` 不命中）；guard 两边判定（混合提交索裁定、单独重新定价不索、基线同步不误伤）。约束：全门无网络、无写盘（spec 子命令除外——它只新建不覆盖）；输出顺序确定。
 
 ## 17 模型体验
 
