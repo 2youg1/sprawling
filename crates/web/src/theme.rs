@@ -787,6 +787,18 @@ mod tests {
     /// also what keeps `xtask color` correct - a file full of `oklch()`
     /// inside the tree would be a second place a colour is written, and
     /// the gate is right to refuse one whether or not a person typed it.
+    ///
+    /// **Absent is not stale, and the difference is the whole test.** A
+    /// path under `target/` is absent in every fresh clone, which is its
+    /// first normal state rather than a defect - writing it and passing
+    /// is what a fresh clone is owed. Drift is the red worth keeping:
+    /// bytes that disagree with the tables mean the tables moved while a
+    /// prototype was still linking the old file, so the screen somebody
+    /// was looking at was rendered with tokens the product no longer
+    /// installs. `xtask render` already reads the two states apart this
+    /// way (xtask-SPEC.md, the fifteenth gate); this test did not, so it
+    /// failed on every clean checkout while telling the reader to commit
+    /// a path that cannot be committed.
     #[test]
     fn the_design_screens_read_the_same_tokens_the_product_installs() {
         let want = format!(
@@ -801,11 +813,18 @@ mod tests {
             .join("target")
             .join("screens")
             .join("tokens.css");
-        if std::fs::read_to_string(&path).ok().as_deref() != Some(want.as_str()) {
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(&path, &want).unwrap();
-            panic!("screens/tokens.css was stale; it has been rewritten - commit it");
+        let found = std::fs::read_to_string(&path).ok();
+        if found.as_deref() == Some(want.as_str()) {
+            return;
         }
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, &want).unwrap();
+        assert!(
+            found.is_none(),
+            "target/screens/tokens.css disagreed with the token tables and has been \
+             rewritten: every screen opened since the tables last moved was rendered \
+             with tokens the product no longer installs. Reopen the screens."
+        );
     }
 
     #[test]
