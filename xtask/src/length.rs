@@ -504,7 +504,12 @@ mod tests {
             .expect("xtask lives one level under the repo root");
         let budget = limit(&root, FILE_ROW).unwrap();
         let pinned = predating(&root).unwrap();
-        assert!(!pinned.is_empty(), "the register records the debt it owes");
+        // No assertion that the register is non-empty. It held while
+        // there was a file left to split and turned red the moment the
+        // last one landed, which made finishing the work look like
+        // breaking the gate. What is worth holding is the property each
+        // row must have, over however many rows there are - and an empty
+        // register is this rule's finished state, not its failure.
         for (rel, lines) in &pinned {
             assert!(
                 *lines > budget,

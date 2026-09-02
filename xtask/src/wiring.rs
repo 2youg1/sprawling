@@ -41,7 +41,11 @@ use crate::walk;
 
 const SPEC: &str = "crates/channels/channels-SPEC.md";
 const WIRE_DIR: &str = "crates/channels/src";
-const WORKER: &str = "crates/sprawling/src/assembly.rs";
+/// Where the assembly point lives. A directory rather than a file: the
+/// gate wants the declaration of `run_command`, not its address, and
+/// pinning the address meant that splitting the assembly point moved the
+/// arms out from under the gate while leaving the gate green about it.
+const WORKER_DIR: &str = "crates/sprawling/src";
 const CLIENT: &str = "crates/web/src";
 
 /// Which side is supposed to reach a verb.
@@ -159,14 +163,21 @@ fn cells(line: &str) -> Option<Vec<String>> {
 /// An arm answering with `not_built` is on the wire and has no executor,
 /// which is exactly the state the client may not draw a control for.
 fn performed(root: &Path, all: &[String]) -> Result<BTreeSet<String>, XtaskError> {
-    let text = walk::read_text(&root.join(WORKER))?;
-    let Some(start) = text.find("fn run_command") else {
+    let mut found = None;
+    for file in walk::files_with_ext(&root.join(WORKER_DIR), &["rs"])? {
+        let text = walk::read_text(&file)?;
+        if let Some(start) = text.find("fn run_command") {
+            found = Some(text.get(start..).unwrap_or_default().to_owned());
+            break;
+        }
+    }
+    let Some(body) = found else {
         return Err(XtaskError::Doc {
-            file: WORKER.to_owned(),
-            msg: "no `run_command` here to read the arms of".to_owned(),
+            file: WORKER_DIR.to_owned(),
+            msg: "no `run_command` under here to read the arms of".to_owned(),
         });
     };
-    let body = text.get(start..).unwrap_or_default();
+    let body = body.as_str();
     let mut out = BTreeSet::new();
     for name in all {
         let arm = format!("channels::Command::{name}");
