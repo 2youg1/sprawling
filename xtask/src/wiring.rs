@@ -26,7 +26,7 @@
 //! on.
 //!
 //! **Three sources, no copies.** The variants come from the real `enum
-//! Command` parsed out of `crates/channels/src/wire.rs`; whether the city
+//! Command` parsed out of whichever `channels` module declares it; whether the city
 //! can perform one comes from the arms of `assembly::run_command`;
 //! whether a person can ask for one comes from `crates/web/src`. The SPEC
 //! contributes the one fact none of the three can state - which side is
@@ -40,7 +40,7 @@ use crate::report::{Violation, XtaskError};
 use crate::walk;
 
 const SPEC: &str = "crates/channels/channels-SPEC.md";
-const WIRE: &str = "crates/channels/src/wire.rs";
+const WIRE_DIR: &str = "crates/channels/src";
 const WORKER: &str = "crates/sprawling/src/assembly.rs";
 const CLIENT: &str = "crates/web/src";
 
@@ -90,26 +90,31 @@ fn violation(rule: &str, subject: String, alternative: &str) -> Violation {
 /// its own input wrongly produces a list of offenders that is wrong in
 /// every entry.
 fn variants(root: &Path, enum_name: &str) -> Result<Vec<String>, XtaskError> {
-    let text = walk::read_text(&root.join(WIRE))?;
-    let parsed = syn::parse_file(&text).map_err(|err| XtaskError::Doc {
-        file: WIRE.to_owned(),
-        msg: format!("this file does not parse as Rust: {err}"),
-    })?;
-    for item in &parsed.items {
-        let syn::Item::Enum(declared) = item else {
-            continue;
-        };
-        if declared.ident == enum_name {
-            return Ok(declared
-                .variants
-                .iter()
-                .map(|found| found.ident.to_string())
-                .collect());
+    let dir = root.join(WIRE_DIR);
+    let mut sources: Vec<std::path::PathBuf> = walk::files_with_ext(&dir, &["rs"])?;
+    sources.sort();
+    for source in sources {
+        let text = walk::read_text(&source)?;
+        let parsed = syn::parse_file(&text).map_err(|err| XtaskError::Doc {
+            file: walk::rel(root, &source),
+            msg: format!("this file does not parse as Rust: {err}"),
+        })?;
+        for item in &parsed.items {
+            let syn::Item::Enum(declared) = item else {
+                continue;
+            };
+            if declared.ident == enum_name {
+                return Ok(declared
+                    .variants
+                    .iter()
+                    .map(|found| found.ident.to_string())
+                    .collect());
+            }
         }
     }
     Err(XtaskError::Doc {
-        file: WIRE.to_owned(),
-        msg: format!("no `enum {enum_name}` here"),
+        file: WIRE_DIR.to_owned(),
+        msg: format!("no module here declares `enum {enum_name}`"),
     })
 }
 
