@@ -559,7 +559,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::waiting | crates/web/src/waiting.rs | everything that cannot move until a person answers, in one place | decision | V3 | built |
 | web::record | crates/web/src/record.rs | one history, in three lenses, at one address | decision | V3 | built |
 
-### browser (6), protocol (2), bin (12)
+### browser (6), protocol (2), bin (27)
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -572,7 +572,22 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | protocol::mcp | crates/protocol/src/mcp.rs | reaching an MCP server, and the seam its transports sit behind | adapter | P4 | built |
 | protocol::acp | crates/protocol/src/acp.rs | the other direction: an outside editor driving this city | decision | P4 | built |
 | bin::main | crates/sprawling/src/main.rs | the command line, each subcommand refused honestly until it exists | adapter | S0 | built |
-| bin::assembly | crates/sprawling/src/assembly.rs | the assembly point: the dirtiest component and the only omniscient one | adapter | S0 | built |
+| bin::assembly | crates/sprawling/src/assembly.rs | the assembly point: the worker every module below writes methods for, the one clock sample, and the one door a command enters by | adapter | S0 | built |
+| bin::assembly::genesis | crates/sprawling/src/assembly/genesis.rs | forming a city in a directory, taking a folder in as a building, and what a restart finds | adapter | V3 | built |
+| bin::assembly::naming | crates/sprawling/src/assembly/naming.rs | the wire's words and the kernel's, translated one way each | decision | V3 | built |
+| bin::assembly::folds | crates/sprawling/src/assembly/folds.rs | everything a worker inherits from a history it did not write, in one verified pass | projection | V3 | built |
+| bin::assembly::building_page | crates/sprawling/src/assembly/building_page.rs | one building, as the files in it say it is | projection | V3 | built |
+| bin::assembly::credentials | crates/sprawling/src/assembly/credentials.rs | what this city can sign in as, and what it may call | adapter | V3 | built |
+| bin::assembly::mcp | crates/sprawling/src/assembly/mcp.rs | reaching the MCP servers a building's configuration names | adapter | V3 | built |
+| bin::assembly::dispatching | crates/sprawling/src/assembly/dispatching.rs | one dispatch, from what a person asked to the run that froze | adapter | V3 | built |
+| bin::assembly::waking | crates/sprawling/src/assembly/waking.rs | the two ways a resident who is not working is set going | adapter | V3 | built |
+| bin::assembly::workbench | crates/sprawling/src/assembly/workbench.rs | where a run stands, and the bench it is given to work at | adapter | V3 | built |
+| bin::assembly::freezing | crates/sprawling/src/assembly/freezing.rs | what a run is frozen with: its plan, and the handoff that resumes it | adapter | V3 | built |
+| bin::assembly::driving | crates/sprawling/src/assembly/driving.rs | one drive, the three hooks that touch the ledger while it runs, and what it leaves | adapter | V3 | built |
+| bin::assembly::settling | crates/sprawling/src/assembly/settling.rs | what a drive left, on the ledger before it is made true | adapter | V3 | built |
+| bin::assembly::reviewing | crates/sprawling/src/assembly/reviewing.rs | what a run offers a building it may not write in, and what merging it costs | adapter | V3 | built |
+| bin::assembly::plans | crates/sprawling/src/assembly/plans.rs | one building's plan: who holds what, what is ready, and how far red reaches | adapter | V3 | built |
+| bin::assembly::commanding | crates/sprawling/src/assembly/commanding.rs | the verbs a person sends, and what each one does to the city | adapter | V3 | built |
 | bin::serving | crates/sprawling/src/serving.rs | how a city is stood up and served: the key at the door, the desk, the one writer thread | adapter | V3 | built |
 | bin::mcp_stdio | crates/sprawling/src/mcp_stdio.rs | an MCP server as a child process, one line per message | adapter | R1 | built |
 | bin::mcp_http | crates/sprawling/src/mcp_http.rs | an MCP server over HTTP: one request, one message, no session | adapter | R1 | built |

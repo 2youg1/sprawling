@@ -1045,9 +1045,14 @@ P7 起交付形态入册：`just package` 的产物名、`QUICKSTART.md`、READM
 **那是 `projection`，§9 的形状 7。** 一个文件里两个形状，正是那一行说的判据。
 
 **先例已经在这个 crate 里**：V3.17 把 `assembly::read_spine` 搬成 `bin::plan_view`，同样是从装配点里取出一个投影。
-本卡沿用它的落法：**兄弟模块，不是 `assembly/` 子目录**。子目录会让 `assembly.rs` 变成 `modmap` 眼里的索引文件
-（`xtask/src/modmap.rs` 的 `is_index_name`），而索引文件只准放声明——那等于要求 12,078 行**一次全部**拆完。
-兄弟模块让这条债可以一刀一刀还。
+本卡沿用它的落法：**兄弟模块，不是 `assembly/` 子目录**。
+
+> **V3.43 改正了下面这条理由，它读错了门。** 原文写：「子目录会让 `assembly.rs` 变成 `modmap` 眼里的索引文件
+> （`xtask/src/modmap.rs` 的 `is_index_name`），而索引文件只准放声明——那等于要求 12,078 行**一次全部**拆完。」
+> `xtask/src/modmap.rs` 的判定顺序是 `if let Some(row) = table.get(rel) { … } else if is_index_name(…)`：
+> **登记在模块表里的文件永远走不到索引检查。** `assembly.rs` 可以保留自己的行、继续持有代码，
+> 同时 `assembly/` 挂子模块。兄弟模块对本卡仍是对的选择（`Views` 是投影，不是 `RunWorker` 的一部分），
+> 但那个选择的理由是形状，不是这条不存在的限制。
 
 ### 搬走什么
 
@@ -1095,9 +1100,95 @@ V3.38 同理：`RunWorker::handle` 的参数从 `channels::wire::Command` 变成
 
 **没搬走什么**：`execution_engine`／`CITY_VERIFIER`／`local_model_facts` 留在 `assembly`，因为它们是 `RunWorker` 在一轮活里用的东西，不是端城用的。
 
-**剩下的债写在这里，因为它不是拆分能还的**：`assembly.rs` 仍有 10,695 行，其中 `RunWorker` 一个类型约 3,700 行、22 个私有字段，
-`mod tests` 约 5,600 行。把 `impl RunWorker` 的方法散到兄弟模块要把 22 个字段改成 `pub(crate)`——
-那是用一个诚实的大文件换几个不诚实的小文件。真正的修法是 ARCHITECTURE §5 已经写下的那条：
-**invert the model seam**，让 `RunWorker` 接收模型适配器而不是自己从 endpoint book 造一个，
-于是策略可以被 citysim 用一颗种子驱动，端到端的那 5,600 行测试也就有了 `crates/sprawling/tests/` 这个去处。
-这件事没有卡，也没有人裁定过要不要做。
+**剩下的债写在这里**：`assembly.rs` 仍有 10,695 行，其中 `RunWorker` 一个类型约 3,700 行、22 个私有字段，
+`mod tests` 约 5,600 行。
+
+> **V3.43 改正了下面这条结论。** 原文写：「把 `impl RunWorker` 的方法散到兄弟模块要把 22 个字段改成 `pub(crate)`——
+> 那是用一个诚实的大文件换几个不诚实的小文件」，并据此判定这条债不是拆分能还的。
+> **前半句只对兄弟模块成立。** 子模块看得见父模块的私有项（Rust Reference, *Visibility and Privacy*:
+> "If an item is private, it may be accessed by the current module and its descendants"），
+> 所以 `impl RunWorker` 拆进 `assembly/` 的子模块**一个字段的可见性都不必动**。详见 §8-39。
+
+
+## 8-39 装配点成为一棵模块树，十五条签名被消掉（V3.43；`bin::assembly::*`）
+
+`bin::assembly` 10,695 → 一棵树，每个文件在 1000 行以内，`[file_length.predating]` 的最后一行被划掉。
+**这一刀先改正两条被记录在案、而且都是假的理由**（§8-37 与 §8-38 的引文块），再动代码。
+
+### 为什么是子模块，不是兄弟模块
+
+`RunWorker` 22 个私有字段。**子模块看得见父模块的私有项**——Rust Reference 的 *Visibility and Privacy*：
+"If an item is private, it may be accessed by the current module and its descendants"。
+于是 `RunWorker` 的定义留在 `assembly.rs`，`impl RunWorker` 的方法散进 `assembly/*.rs`，
+**可见性一个字不动**：crate 里 `assembly` 之外的任何模块看到的仍是今天那张脸。
+兄弟模块做不到这件事，V3.30 与 V3.42 因此付了 `pub(crate)` 的价；本卡不付。
+
+### 缝在哪：先量再切
+
+切缝取自一次 LCOM 测量（66 个方法对 21 个字段的接触矩阵），不取行数。读数：
+`city_root` 被 21 个方法碰，`ledger` 与 `governance` 各 8，`inboxes` 5，`vault` 4，**其余 15 个字段各 ≤ 2 且成簇不交叉**：
+
+| 簇 | 碰它的方法 | 落到 |
+|---|---|---|
+| `vault`／`expiries`／`logins` | `renew_if_stale`／`login_with`／`put_secret`／`resolver` | `assembly::credentials` |
+| `inboxes`／`joins`／`requests`／`goals` | `lay_out_workbench`／`open_desks`／`settle_desks`／`settle`／`deliver_handback` | `assembly::workbench`＋`assembly::settling` |
+| `pursuits`／`delegator` | `set_pursuit`／`pursue` | `assembly::commanding` |
+| `interrupts`／`watching` | `attach_interrupts`／`watch`／`drive_dispatch` | `assembly.rs`（装的两个钩子）＋`assembly::driving` |
+| `knocks` | `knock`／`answer_knocks` | `assembly::dispatching` |
+
+**这份读数说的是 `RunWorker` 是五个类**，而本卡只把它们搬进各自的文件、让边界看得见；
+把它们变成真的对象要先分开「判定」与「记账」（每个簇的方法都在 `self.record(...)` 写账本），那是 ARCHITECTURE §5 的
+invert the model seam，仍然没有卡，仍然要人先裁一次。**本卡不假装做过它。**
+
+### 门给这一刀定的价：十五条签名必须被修好
+
+`xtask/src/length.rs` 的豁免键是 `路径::函数名`，而 `guard::strikes_only_exemptions` 的 rustdoc 写死了
+"an over-long signature may be fixed or left alone, never relocated with its excuse"。
+`assembly.rs` 里有十五条超标签名，**它们随文件搬家就失去豁免**，所以逐条消掉。
+消法是同一条：**总在一起走、从不被单独选择的值，是一个还没有名字的值**（`Reporter` 的 doc 写下的先例）。
+
+| 新值 | 它是什么 | 消掉了 |
+|---|---|---|
+| `Assignment` | 一次派活是什么：地址、模式、天花板、谁把它交下来（深度由它推出，不再第二次传） | `dispatch_in` 6→3、`lay_out_workbench` 7→4、`stand_up` 5→2、`settle` 5→3 |
+| `Given` | 这一轮活被给了什么：brief、task、goal，与那份字节的 pin | `freeze_plan` 9→4 |
+| `Driving` | 一次 drive 跑在什么上面：适配器、工作台、信号桌、写根、围栏域、身份 | `drive_dispatch` 9→3 |
+| `Ending` | 一次 drive 以什么结束：结局、被抬起来的审批、代表桌 | `conclude` 10→3 |
+| `Sweep` | drive 之后要收的东西：围栏、被抬起来的审批、job locator | `settle_desks` 11→4 |
+| `Reach` | 这一轮活够得到谁：邻里与代表 | `status_tool` 7→4 |
+| `Entered` | 一个人为接一个 endpoint 输入了什么：名字、base URL、兼容格式、密钥、鉴权头 | `endpoint_of` 5→1、`probe_endpoint` 5→1、`attach_endpoint` 6→2 |
+| `Ceilings` | 一行模型声明的两个上限：上下文与最大输出 | `select_model` 5→4 |
+
+`record_for` 的五参消得不需要新类型：`effect::Line` 已经装着 `who`／`addr`／`kind`／`data`，
+调用点原本就在把它拆开再递进去，改成整份递。
+`settle_requests` 与 `settle_desks` 另外收掉四个参数，因为 `who`／`run_id`／`write_root`／`building`
+**本来就是 `Site` 的字段**，调用点在一个一个地从 `site` 里取出来递；`fence_scope` 成为 `Site` 上的方法，
+于是「围栏落在楼上还是落在房间上」在本模块只有一个答案。
+三处 `#[expect(clippy::too_many_arguments)]` 随之报「这条压制没有被用到」而自己清掉——**修好之后压制自己消失，正是它该有的形状**。
+
+### 十六个子模块，与两次为了行数之外的理由再切的缝
+
+`assembly.rs` 756 行，十六个子模块各在 1000 行以内。其中两刀是重新分配时切的，而切缝仍取自形状：
+`settling` 里 `settle_requests` 回答的是「一个不能直接写的楼怎么收下这次改动」，那是评审与合并，成 `reviewing`；
+`dispatching` 里 `wake`／`knock`／`answer_knocks` 回答的是「一个没在干活的居民怎么被叫起来」，成 `waking`。
+`configure_building`／`create_building`／`adopt_building`／`startup_scan` 从动词表挪进 `genesis`：
+**`form_city` 本来就在调 `adopt_building`**，一座城怎么长出楼、重启后看见什么，和一个人发一个动词不是一件事。
+
+### 测试跟着它咬的那个模块，一份夹具留在父模块
+
+`mod tests` 5,576 行，一百个测试函数。**先量后放**：3,490 行只用这个 crate 已经公开的面，
+本来可以按 `assembly_door.rs` 与 `web/tests/pages.rs` 的先例去 `crates/sprawling/tests/`。**没有那样做，理由是夹具。**
+`fake_openai`（一台按脚本作答的 OpenAI 服务器）、`worker_with_provider`、`completion` 这一簇 443 行，
+被两边同时需要：`what_a_worker_holds_is_what_a_restart_rebuilds` 要用它造一段历史再去核 `Standing::fold`，
+而 `tests/` 里的验收测试也要用它。**`#[cfg(test)]` 的东西到不了 `tests/`，`tests/` 的东西到不了 `src/`**——
+分家就要养两份同名夹具，那是一个夹具两个权威。
+
+所以整套留在 `src/`：夹具成为 `assembly::fixture`（父模块下的 `#[cfg(test)] mod`，十六个子模块都从 `super` 够得到），
+每个测试搬到**它咬的那个模块**旁边。**crate 的公开面因此一个条目都没有增加**——
+`ledger_dir`／`Views`／`Standing`／`CommandDesk` 全部仍是 `pub(crate)`，`api-baselines` 只多了两行
+`impl sprawling::assembly::RunWorker`：`RunWorker` 的方法现在写在三个文件里，`cargo public-api` 就记三个 impl 块。
+
+### 验收
+
+`cargo xtask length` 里 `assembly.rs` 的钉子被划掉而不是被调小；`[argument_count.predating]` 少十五行。
+两者都是纯删除，所以 `guard::strikes_only_exemptions` 放行，不需要 `Verdict:` trailer；
+budgets.toml 里那两段已经失真的注释单独一枚提交改，因为改注释会让豁免形状判定失效。

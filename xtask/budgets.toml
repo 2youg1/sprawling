@@ -177,23 +177,14 @@ status = "gated, with a register of the signatures that predate the rule"
 # is what policy looks like when it has no object to live in.
 [argument_count.predating]
 names = [
-  "crates/sprawling/src/assembly.rs::settle_desks", # 11
-  "crates/sprawling/src/assembly.rs::conclude",    # 10
   "crates/collab/src/workshop.rs::new",            # 9
-  "crates/sprawling/src/assembly.rs::drive_dispatch", # 9
-  "crates/sprawling/src/assembly.rs::freeze_plan", # 9
-  "crates/sprawling/src/assembly.rs::settle_requests", # 8
   "crates/collab/src/inbox.rs::new",               # 7
   "crates/runtime/src/tools/exec.rs::new",         # 7
-  "crates/sprawling/src/assembly.rs::lay_out_workbench", # 7
-  "crates/sprawling/src/assembly.rs::status_tool", # 7
   "crates/collab/src/signal_tool.rs::new",         # 6
   "crates/kernel/src/gate.rs::govern",             # 6
   "crates/kernel/src/gate.rs::item",               # 6
   "crates/kernel/src/highlight.rs::scan",          # 6
   "crates/runtime/src/turn.rs::assemble",          # 6
-  "crates/sprawling/src/assembly.rs::attach_endpoint", # 6
-  "crates/sprawling/src/assembly.rs::dispatch_in", # 6
   "crates/sprawling/src/effect.rs::of",            # 6
   "crates/sprawling/src/effect.rs::shelf",         # 6
   "crates/browser/src/act.rs::frame_for",          # 5
@@ -209,12 +200,6 @@ names = [
   "crates/runtime/src/handoff.rs::new",            # 5
   "crates/runtime/src/run.rs::drive",              # 5
   "crates/runtime/src/turn.rs::call",              # 5
-  "crates/sprawling/src/assembly.rs::endpoint_of", # 5
-  "crates/sprawling/src/assembly.rs::probe_endpoint", # 5
-  "crates/sprawling/src/assembly.rs::record_for",  # 5
-  "crates/sprawling/src/assembly.rs::select_model", # 5
-  "crates/sprawling/src/assembly.rs::settle",      # 5
-  "crates/sprawling/src/assembly.rs::stand_up",    # 5
   "crates/sprawling/src/console.rs::drive",        # 5
 ]
 
@@ -241,7 +226,6 @@ status = "gated, with a register of the files that predate the rule"
 #
 # Delete a row by doing the split, never by raising its number.
 [file_length.predating]
-"crates/sprawling/src/assembly.rs" = 10695
 
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"
