@@ -76,10 +76,28 @@
 # Microcopy in two languages is most of the weight, as it was at F2.05
 # and P3.06 - it is the product's voice rather than padding. Headroom
 # against the 2 MB budget is 3.4x, and the ratchet holds from here.
+# V3.44-V3.50 records 672,246, and the gap it closes is not a regression:
+# it is the first reading taken since the client was last built. The
+# 57.4 KB above the ux-14 line is v0.0.3's own front-end work - the
+# session page, the board, the plan tree, the record and waiting pages,
+# the pursuit panel, `web::phase` and `web::prompt` - none of which had
+# ever been weighed, because nothing in `just check` builds the wasm and
+# nobody had run `just build-web` through the whole stage. The badge said
+# so all along and was not read either.
+#
+# This session's own share is 317 B, measured rather than estimated:
+# the client was built once from this tree and once from 506145c with
+# only `app.css`, `theme.rs`, `lang.rs` and `dashboard.rs` reverted, and
+# both dist directories were weighed the same way (670,483 against
+# 670,166). Two font stacks, three phrases and the comments that record
+# why they exist.
+#
+# The line therefore moves to what the product actually weighs today, and
+# the ratchet holds from here. Headroom against the 2 MB budget is 3.1x.
 [frontend_artifact]
 what = "the client the browser downloads, gzipped, fonts excluded"
 budget_bytes = 2097152
-best_bytes = 614807
+best_bytes = 672246
 slack_bytes = 20480
 measured_by = "just build-web, then just gates (the whole dist directory, recursive)"
 status = "gated"
