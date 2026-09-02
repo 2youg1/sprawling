@@ -287,6 +287,11 @@ pub fn SessionView(
                 crate::building_view::BuildingView {
                     addr: building_of(&addr).unwrap_or_else(|| addr.clone()),
                     answer: building.clone(),
+                    // The session page asks for one building, never for
+                    // the city, so it has no pursuit list to hand on. An
+                    // empty one draws the "set a goal" form, which is the
+                    // honest thing to offer where nothing is known.
+                    pursuits: Vec::new(),
                     inbox: None,
                     signals: snapshot.signals_seen(),
                     live,

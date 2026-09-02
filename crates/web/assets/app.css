@@ -1143,3 +1143,31 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 /* The tab says it too. A warning a person has to open a tab to find
    arrives after the turn it was about. */
 .session-tabs .tab.alert { color: var(--ALERT); }
+
+/* The standing goal: what a building is working towards on its own.
+   Read-only above, two buttons below. The verdict is quiet because it is
+   the city's own reading of whether anything is left to do, not an
+   instruction to the person - "finished: nothing is ready and nobody is
+   working" is a statement, and a statement that shouted would look like
+   a fault. */
+.pursuit-goal-said { margin: 0 0 var(--space-tight); color: var(--TEXT);
+                     overflow-wrap: break-word; }
+.pursuit-verdict { margin: 0 0 var(--space-snug); color: var(--TEXT_QUIET);
+                   font-size: var(--text-note); }
+/* Set, and stop. Side by side because they are the same size of
+   decision; stacking them would make one look like the default. */
+.pursuit-controls, .autonomy-controls {
+    display: flex; gap: var(--space-snug); align-items: baseline; }
+.pursuit-form { display: flex; flex-direction: column;
+                gap: var(--space-tight); margin-top: var(--space-snug); }
+.pursuit-form label { color: var(--TEXT_QUIET); font-size: var(--text-note); }
+.pursuit-goal { width: 100%; max-width: var(--width-measure); }
+/* The one verb on this panel that starts work carries the accent; the
+   one that stops it does not, because stopping is always allowed and
+   never needs encouraging. */
+.pursue { border: 1px solid var(--ACCENT); color: var(--TEXT);
+          background: none; padding: var(--space-tight) var(--space-snug);
+          cursor: pointer; }
+.pursue-clear { border: 1px solid var(--G2); color: var(--TEXT_QUIET);
+                background: none; padding: var(--space-tight) var(--space-snug);
+                cursor: pointer; }

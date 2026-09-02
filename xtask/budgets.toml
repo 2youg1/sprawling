@@ -245,7 +245,7 @@ status = "gated, with a register of the files that predate the rule"
 # Delete a row by doing the split, never by raising its number.
 [file_length.predating]
 "crates/sprawling/src/assembly.rs" = 11461
-"crates/web/src/app.rs" = 3926
+"crates/web/src/app.rs" = 3916
 "crates/runtime/src/turn.rs" = 1716
 "crates/web/src/city_view.rs" = 1554
 "crates/gateway/src/dialect.rs" = 1280

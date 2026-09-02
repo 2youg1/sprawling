@@ -17,13 +17,13 @@ use std::process::ExitCode;
 use crate::report::{self, Violation, XtaskError};
 use crate::{
     apisync, ax, budget, color, depmap, guard, header, length, lexicon, modmap, release, secret,
-    specalign,
+    specalign, wiring,
 };
 
 /// How many gates run. The array below is typed by it, so the number and
 /// the list are one token apart and cannot disagree; `vocabulary` reads
 /// it so no document has to hold a copy.
-pub(crate) const COUNT: usize = 13;
+pub(crate) const COUNT: usize = 14;
 
 pub(crate) fn run(root: &Path, range: Option<&str>) -> ExitCode {
     let results: [(&'static str, Result<Vec<Violation>, XtaskError>); COUNT] = [
@@ -35,6 +35,7 @@ pub(crate) fn run(root: &Path, range: Option<&str>) -> ExitCode {
         ("secret", secret::check(root)),
         ("color", color::check(root)),
         ("ax", ax::check(root)),
+        ("wiring", wiring::check(root)),
         ("budget", budget::check(root)),
         ("specalign", specalign::check(root)),
         ("apisync", apisync::check(root, range)),

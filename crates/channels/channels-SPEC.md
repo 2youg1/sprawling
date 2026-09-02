@@ -467,3 +467,55 @@ pub struct Delta { pub run: RunId, pub text: String }
 3. **没人看时不开流。** 装配层只在有客户端时装 sink；`RunHooks.deltas` 为 `None` 的 run 走原本的阻塞调用，字节不差。于是 citysim 与离线重放的路径一字未改。
 
 **服务端半边（V3.12）在 `gateway`：** `kernel::Model` 多一个 `call_streaming(req, onto)`，默认实现就是 `call` 并且不报告任何增量——一个没有流的适配器因此是诚实的而不是坏的。`gateway::endpoint` 覆盖它：请求带 `stream: true`，逐行读 SSE，`dialect::increment_of` 只认各 dialect 用于助手散文的那个字段（工具参数与 thinking 块一律不报——半个工具参数不是短一点的工具参数），最后 `dialect::settled_from_stream` 把帧重装成**非流式的那个形状**，交给同一个 `response_from_wire`。**结算答案因此只有一个解析器**：流式调用与阻塞调用不可能对同一个回复得出两个结论。流被切断仍然表现为读取错误，永不表现为一个变短的回答。
+
+## 19 每个动词从哪里够得到（`xtask wiring` 的数据面）
+
+**这张表存在的理由，是一次已经发生过的失效。** v0.0.3 的审计发现 `assembly::run_command` 只匹配 22 个 Command 里的 14 个，
+六个动词落进 catch-all——其中 Takeover／Rollback／CreatePolicy **在线上、画在客户端、由任何东西执行不了**，
+而 Cancel 与 Steer 在 run 不处于安全点时失败，恰好是人最需要它们的那一刻。
+`not_built` 的 rustdoc 当时就写着「**在这里被回绝的动词不得作为控件出现在客户端**」——那是一条**没有任何机器在看的规矩**。
+
+反方向同样会失效，而且更安静：**一个城做得到、却没有任何控件够得到的能力，没有人会收到抱怨**，
+因为不存在的按钮不会有人去点。`Pursue`（V3.22 的「城自己走」）与 `SetAutonomy` 就是这样漏掉的，
+这也正是完成判据第 2 条一直没验收的机制原因——**在浏览器里打不开它**。
+
+### 19-1 reach 的四个取值
+
+| 取值 | 含义 | 门要求什么 |
+|---|---|---|
+| `client` | 人用的动词，客户端必须画得出 | `crates/web/src` 里有发出点，且 `run_command` 不以 `not_built` 作答 |
+| `push` | 由外部服务推进来，不是人点的 | 只要求 `run_command` 能执行；客户端有没有它都不看 |
+| `handshake` | 在握手层被吃掉，进不到 `run_command` | 两侧都不要求 |
+| `sealed` | 线上不可拼写 | 两侧都不要求；客户端**若**出现即为红 |
+
+### 19-2 表
+
+| Command | reach | 说明 |
+|---|---|---|
+| `Dispatch` | client | 派活，产品的正面 |
+| `Login` | client | 登录一个 provider |
+| `ProbeEndpoint` | client | 问一个端点它供应什么 |
+| `ConfigureBuilding` | client | 改一栋楼的规矩 |
+| `AttachEndpoint` | client | 把一个端点挂上 |
+| `SelectModel` | client | 选一个模型 |
+| `Fork` | client | 从一条线上分出第二条 |
+| `CreateBuilding` | client | 起一栋楼 |
+| `Steer` | client | 中途换方向 |
+| `Cancel` | client | 停下这一个 |
+| `Halt` | client | 停下一个范围 |
+| `Release` | client | 放开一个范围 |
+| `Approve` | client | 答一条审批 |
+| `SetAutonomy` | client | 定一栋楼的 Autonomy（三态） |
+| `Pursue` | client | 设一个持续追的目标，以及暂停／恢复／清除 |
+| `Attach` | client | 传一份附件 |
+| `Takeover` | client | 人接管一条在跑的线 |
+| `Rollback` | client | 回到一个检查点 |
+| `CreatePolicy` | client | 把一条裁定变成一条常规 |
+| `BatchByBuilding` | client | 按楼成批派活 |
+| `Wake` | push | 外面发生了一件事；地址由 watch 表与 triage 决定，调用方说不出房间 |
+| `Auth` | handshake | 出示配对令牌，`server::decide_handshake` 吃掉它 |
+| `PutSecret` | sealed | 唯一没有字节形式的 Command；`Sealed<String>` 在线上不可居留 |
+
+**`client` 而尚未落地的四个**（`Attach`／`Takeover`／`Rollback`／`CreatePolicy`／`BatchByBuilding`）今天由 `not_built` 作答，
+所以门对它们要求的是**客户端不画**——`not_built` 的 rustdoc 说的就是这件事，现在有机器看着了。
+它们的 reach 仍写 `client`，因为那是它们做完之后该去的地方；写成别的取值等于把「还没做」记成「不该做」。

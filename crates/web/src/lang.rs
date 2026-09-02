@@ -246,6 +246,21 @@ pub enum Msg {
     // The city's own standing, at the foot of the nav.
     CityRunning,
     CityRunningIdle,
+    PursuitTitle,
+    PursuitScope,
+    PursuitSource,
+    PursuitEmpty,
+    PursuitEmptyWhat,
+    PursuitSet,
+    PursuitPause,
+    PursuitResume,
+    PursuitClear,
+    PursuitGoalLabel,
+    AutonomyTitle,
+    AutonomyScope,
+    AutonomySource,
+    AutonomyOwner,
+    AutonomyDeferred,
     CityStopped,
     CityUnwell,
     CountRunning,
@@ -943,6 +958,66 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::FirstDispatchSource => Phrase {
             en: "nothing has been sent out yet, so all three words are guesses: the only building there is, mode build, and this city's default depth.",
             zh: "还没有派过活，所以三个词全是猜的：楼取城里唯一的一栋，模式取 build，思考深度取城的默认。",
+        },
+        Msg::PursuitTitle => Phrase {
+            en: "standing goal",
+            zh: "持续目标",
+        },
+        Msg::PursuitScope => Phrase {
+            en: "this building, until the work runs out",
+            zh: "这栋楼，直到活干完",
+        },
+        Msg::PursuitSource => Phrase {
+            en: "folded from pursuit_changed",
+            zh: "折自 pursuit_changed",
+        },
+        Msg::PursuitEmpty => Phrase {
+            en: "this building is not pursuing anything.",
+            zh: "这栋楼没有在追任何目标。",
+        },
+        Msg::PursuitEmptyWhat => Phrase {
+            en: "set a goal and the city hands out ready work by itself, stopping when nothing is ready and nothing is in flight.",
+            zh: "设一个目标，这座城就会自己派出就绪的活；就绪集空且无在途时停下。",
+        },
+        Msg::PursuitSet => Phrase {
+            en: "pursue this",
+            zh: "开始追",
+        },
+        Msg::PursuitPause => Phrase {
+            en: "pause",
+            zh: "暂停",
+        },
+        Msg::PursuitResume => Phrase {
+            en: "resume",
+            zh: "继续",
+        },
+        Msg::PursuitClear => Phrase {
+            en: "stop pursuing",
+            zh: "停止追",
+        },
+        Msg::PursuitGoalLabel => Phrase {
+            en: "what this building is working towards",
+            zh: "这栋楼要达成什么",
+        },
+        Msg::AutonomyTitle => Phrase {
+            en: "who answers",
+            zh: "谁来答",
+        },
+        Msg::AutonomyScope => Phrase {
+            en: "approvals raised in this building",
+            zh: "这栋楼里提出的审批",
+        },
+        Msg::AutonomySource => Phrase {
+            en: "the rung this building states",
+            zh: "这栋楼自己写下的那一档",
+        },
+        Msg::AutonomyOwner => Phrase {
+            en: "a person answers",
+            zh: "由人来答",
+        },
+        Msg::AutonomyDeferred => Phrase {
+            en: "hold until somebody asks",
+            zh: "先搁着，等人来问",
         },
         Msg::CityRunning => Phrase {
             en: "this city is running.",
@@ -2346,6 +2421,21 @@ mod tests {
             Msg::FirstDispatchScope,
             Msg::FirstDispatchKeys,
             Msg::FirstDispatchSource,
+            Msg::PursuitTitle,
+            Msg::PursuitScope,
+            Msg::PursuitSource,
+            Msg::PursuitEmpty,
+            Msg::PursuitEmptyWhat,
+            Msg::PursuitSet,
+            Msg::PursuitPause,
+            Msg::PursuitResume,
+            Msg::PursuitClear,
+            Msg::PursuitGoalLabel,
+            Msg::AutonomyTitle,
+            Msg::AutonomyScope,
+            Msg::AutonomySource,
+            Msg::AutonomyOwner,
+            Msg::AutonomyDeferred,
             Msg::CityRunning,
             Msg::CityRunningIdle,
             Msg::CityStopped,
@@ -2746,6 +2836,21 @@ mod tests {
                 | Msg::FirstDispatchScope
                 | Msg::FirstDispatchKeys
                 | Msg::FirstDispatchSource
+                | Msg::PursuitTitle
+                | Msg::PursuitScope
+                | Msg::PursuitSource
+                | Msg::PursuitEmpty
+                | Msg::PursuitEmptyWhat
+                | Msg::PursuitSet
+                | Msg::PursuitPause
+                | Msg::PursuitResume
+                | Msg::PursuitClear
+                | Msg::PursuitGoalLabel
+                | Msg::AutonomyTitle
+                | Msg::AutonomyScope
+                | Msg::AutonomySource
+                | Msg::AutonomyOwner
+                | Msg::AutonomyDeferred
                 | Msg::CityRunning
                 | Msg::CityRunningIdle
                 | Msg::CityStopped
@@ -3120,7 +3225,7 @@ mod tests {
     /// a test that read the directory would be testing the machine it ran
     /// on. A view added without a line here is a view whose English can
     /// escape, which is the failure this table exists to make loud.
-    const VIEWS: [(&str, &str); 24] = [
+    const VIEWS: [(&str, &str); 25] = [
         ("alert.rs", include_str!("alert.rs")),
         ("board.rs", include_str!("board.rs")),
         ("app.rs", include_str!("app.rs")),
@@ -3142,6 +3247,7 @@ mod tests {
         ("waiting.rs", include_str!("waiting.rs")),
         ("progress.rs", include_str!("progress.rs")),
         ("prompt.rs", include_str!("prompt.rs")),
+        ("pursuit.rs", include_str!("pursuit.rs")),
         ("reach.rs", include_str!("reach.rs")),
         ("settings.rs", include_str!("settings.rs")),
         ("vitals.rs", include_str!("vitals.rs")),

@@ -60,7 +60,7 @@ Violating any of these turns CI red with a message naming the rule, the violatio
 | Take the time as a parameter. The single sampling point is `bin::assembly`. | `clippy.toml` disallowed methods |
 | Use `BTreeMap` on kernel decision paths; keep floats out of ledger payloads; start tasks from the one spawn point. | review, plus the citysim determinism scenarios |
 | One name per concept, taken from the glossary. | `xtask lexicon` with `xtask/lexicon.toml` |
-| Change a crate's public surface and its SPEC before a release, not before every commit. | `xtask apisync`, at release |
+| Keep each crate's committed baseline equal to its live public surface — this is checked on every run. Move the crate's SPEC in the same change-set as a baseline edit — this is checked over a release range. | `xtask apisync` |
 | Keep credentials as `secret:realm/name` references; let plaintext reach the vault only. | `xtask secret` |
 | Take colour from `web::theme`; express a colour as a ratio of the gamut limit. | `xtask color` |
 | Keep sizes inside their budget, and badges in step with the artifacts. | `xtask budget` |

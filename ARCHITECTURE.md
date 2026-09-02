@@ -507,6 +507,8 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 |---|---|---|---|---|---|
 | web::app | crates/web/src/app.rs | what the client believes, folded forward from events; holds no business state | projection | S4 | built |
 | web::board | crates/web/src/board.rs | the plan tree laid out by state; five columns, no state of its own, nothing here can move a node | projection | V3 | built |
+| web::command | crates/web/src/command.rs | every command frame this client sends, built in one place | value | V3 | built |
+| web::pursuit | crates/web/src/pursuit.rs | what a building is working towards on its own, and who answers for it | adapter | V3 | built |
 | web::socket | crates/web/src/socket.rs | the only place in this crate that talks to the server | adapter | S4 | built |
 | web::pace | crates/web/src/pace.rs | how often this page may change, and what a burst of frames folds into | decision | R2 | built |
 | web::keys | crates/web/src/keys.rs | what a keystroke means, and the one sequence that cannot strand a reader | decision | R2 | built |

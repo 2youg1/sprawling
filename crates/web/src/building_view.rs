@@ -189,6 +189,10 @@ pub fn class_of(token: channels::Token) -> &'static str {
 pub fn BuildingView(
     addr: Address,
     answer: Option<BuildingAnswer>,
+    /// The city's standing goals. Read from the city answer rather than
+    /// the building one: a pursuit is declared at the depth-zero
+    /// position, so the city is the thing that knows about all of them.
+    pursuits: Vec<channels::PursuitLine>,
     /// What waits in the room this page last asked about.
     inbox: Option<InboxAnswer>,
     /// How many signal events the stream has carried. A change means the
@@ -412,6 +416,15 @@ pub fn BuildingView(
             }
             match showing {
                 Leaf::Plan => rsx! {
+                    crate::pursuit::PursuitView {
+                        addr: answer.addr.clone(),
+                        pursuits: pursuits.clone(),
+                        on_frame,
+                    }
+                    crate::pursuit::AutonomyView {
+                        scope: channels::HaltScope::Building(answer.addr.clone()),
+                        on_frame,
+                    }
                     crate::board::BoardView { answer: answer.clone() }
                 },
                 Leaf::Room(ref room) => rsx! {

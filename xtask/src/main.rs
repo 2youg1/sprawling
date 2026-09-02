@@ -31,6 +31,7 @@ mod spec;
 mod specalign;
 mod vocabulary;
 mod walk;
+mod wiring;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -93,6 +94,7 @@ fn main() -> ExitCode {
         },
         Some("secret") => report::finish("secret", secret::check(&root)),
         Some("specalign") => report::finish("specalign", specalign::check(&root)),
+        Some("wiring") => report::finish("wiring", wiring::check(&root)),
         Some("apisync") if args.iter().any(|a| a == "--write") => match apisync::write(&root) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => report::internal_failure(&err),
@@ -149,7 +151,7 @@ fn range_arg(args: &[String]) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|color|ax|specalign|apisync|guard> [--range a..b] [--write]"
+        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|color|ax|wiring|specalign|apisync|guard> [--range a..b] [--write]"
     );
     eprintln!(
         "       cargo xtask spec <crate> | budget | badge [--write] | mem [pid] | sbom | package | repro [--full]"

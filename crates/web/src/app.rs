@@ -1444,7 +1444,7 @@ pub fn Root(
                     button {
                         class: "quiet",
                         r#type: "button",
-                        onclick: move |_| on_frame.call(halt_command(!snapshot.is_halted())),
+                        onclick: move |_| on_frame.call(crate::command::halt(!snapshot.is_halted())),
                         if snapshot.is_halted() {
                             "{word(crate::lang::Msg::ReleaseCity)}"
                         } else {
@@ -1535,6 +1535,7 @@ pub fn Root(
                         crate::building_view::BuildingView {
                             addr: addr.clone(),
                             answer: building.clone(),
+                            pursuits: crate::command::pursuits_of(city.as_ref()),
                             inbox: inbox.clone(),
                             signals: snapshot.signals_seen(),
                             live,
@@ -1592,17 +1593,6 @@ fn standing_of(snapshot: &Snapshot) -> crate::lang::Msg {
         return crate::lang::Msg::CityRunningIdle;
     }
     crate::lang::Msg::CityRunning
-}
-
-fn halt_command(halting: bool) -> channels::ClientFrame {
-    let scope = channels::HaltScope::City;
-    let idem =
-        channels::IdemKey::derive(&RunId::CITY, Seq::FIRST, b"halt-from-the-control-surface");
-    channels::ClientFrame::Command(Box::new(if halting {
-        channels::WireCommand::Halt { scope, idem }
-    } else {
-        channels::WireCommand::Release { scope, idem }
-    }))
 }
 
 /// The live client: it holds the snapshot the stream folds into, and
