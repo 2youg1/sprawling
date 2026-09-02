@@ -58,6 +58,7 @@ Every row is enforced by a machine. Violating one turns CI red with a message na
 | Change a crate's public surface and its SPEC in the same commit. Adding one `pub use` line is a public-surface change. | `xtask apisync` |
 | Keep credentials as `secret:realm/name` references; let plaintext reach the Vault only. | `xtask secret` |
 | Take colour from `web::theme`; express a colour as a ratio of the gamut limit. | `xtask color` |
+| Keep a page's shape: one left edge down the centre column, a panel's head at the top of its own panel, nothing wider than the region holding it. The screens are opened in a real engine and measured; no browser means the gate says it skipped. | `xtask render` |
 | Keep sizes inside their budget, and the badges in `README.md` in step with the artifacts they measure. `just dist` rewrites them; nobody types a size into a document. | `xtask budget` |
 | Publish nothing that names one machine's home directory or its working notes. | `xtask release` |
 | Fix the cause when a gate goes red. Changing `xtask/`, root `Cargo.toml`, `deny.toml`, `clippy.toml`, `justfile`, or `.github/` **in the same commit as `crates/`, `citysim/` or `fuzz/`** requires a `Verdict:` trailer — that is, an explicit ruling from the person. Re-pricing a rule in a commit of its own does not. | `xtask guard` |

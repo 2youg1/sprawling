@@ -79,7 +79,7 @@ The last row is the load-bearing one: it closes the single universal escape hatc
 
 The view layer is held to the machine rules that survive it: the panic bans, colour from `web::theme`, and the size budget. Its correctness is judged by looking at it in a browser, against the same stylesheet the product ships.
 
-**What replaces the ceremony is a method, not nothing.** [`docs/frontend-method.md`](docs/frontend-method.md) is how a screen gets built here: settle it in HTML against the shipped stylesheet, translate it with `dx translate`, add only bindings, and accept it with `cargo xtask ax`. Read it before changing a screen — it also records the one defect the translator has, which you must catch by hand every time.
+**What replaces the ceremony is a method, not nothing.** [`docs/frontend-method.md`](docs/frontend-method.md) is how a screen gets built here: settle it in HTML against the shipped stylesheet, translate it with `dx translate`, add only bindings, and accept it with `cargo xtask ax` and `cargo xtask render` — the first reads what both sides wrote down, the second opens the screen in a real engine and measures where its boxes landed. Read it before changing a screen — it also records the one defect the translator has, which you must catch by hand every time.
 
 **Tests use the same doors as production code.** To exercise something internal, put a seam on that face and give it a second adapter, or drive it from outside through citysim. Test modules may relax lints locally with `#[allow]` on the test module; production code carries them as written.
 

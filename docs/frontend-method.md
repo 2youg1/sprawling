@@ -55,6 +55,18 @@ This is the wall the whole method rests on. The moment "improve the structure wh
 
 **What this gate is and is not.** It compares *authored* affordances, not a computed accessibility tree. A computed tree needs a browser, a browser needs a binary this build does not ship, and a gate that cannot run offline is a gate that stops running. Comparing the computed tree against a running client is still worth doing, and it is a person's job with a browser open. The gate catches the drift that actually happened: a `role`, an `aria-label` or an `aria-current` dropped during step 3, which is invisible because the page still renders and the pixels still match, and the only thing lost is what a person who cannot see the pixels was going to be told.
 
+### Step 5 — open the screen in an engine and measure it
+
+```bash
+cargo xtask render
+```
+
+**This step exists because the four above all read source, and a stylesheet's rules do not collide in source.** They collide in the cascade. Two rules that each read correctly where they were written laid the composer's four panel parts out as a row — title mid-line, the box the work is written in floated to the top right — and put a second left edge on every page, 31px from the first. The tree was green throughout: every gate, every test. The defect was visible to anyone who opened the page and invisible to everything that read the files.
+
+The gate renders each settled screen in whatever Chromium-family browser the machine has, and asserts three properties of where the boxes landed: a page has one left edge, a panel's head is the top of its own panel, and nothing is wider than the region holding it. Properties rather than a screenshot comparison, because a screenshot diff fails on a font hint and passes on a page nobody photographed.
+
+No browser on the machine means the gate prints that it skipped and judges nothing — `SPRAWLING_BROWSER` names one explicitly. A person still looks at the result; what the gate removes is the class of defect that survives *because* nobody looked.
+
 ## 3 What `dx translate` does, measured
 
 `dx` 0.7.x, measured 2026-09-01 against real slices of `prototype.html` plus five corner cases.

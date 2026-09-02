@@ -23,6 +23,7 @@ mod mem;
 mod modmap;
 mod package;
 mod release;
+mod render;
 mod report;
 mod repro;
 mod sbom;
@@ -49,6 +50,7 @@ fn main() -> ExitCode {
         Some("gates") => gates::run(&root, range.as_deref()),
         Some("color") => report::finish("color", color::check(&root)),
         Some("ax") => report::finish("ax", ax::check(&root)),
+        Some("render") => report::finish("render", render::check(&root)),
         Some("budget") => match budget::report(&root) {
             Ok(text) => {
                 print!("{text}");
@@ -151,7 +153,7 @@ fn range_arg(args: &[String]) -> Option<String> {
 
 fn usage() {
     eprintln!(
-        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|color|ax|wiring|specalign|apisync|guard> [--range a..b] [--write]"
+        "usage: cargo xtask <gates|header|lexicon|modmap|depmap|secret|color|ax|render|wiring|specalign|apisync|guard> [--range a..b] [--write]"
     );
     eprintln!(
         "       cargo xtask spec <crate> | budget | badge [--write] | mem [pid] | sbom | package | repro [--full]"
