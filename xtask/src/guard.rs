@@ -49,6 +49,9 @@ const PROTECTED_FILES: [&str; 5] = [
 /// still compares it against the live API, and the diff is in the
 /// commit for a reviewer to read.
 const PRODUCED_PREFIXES: [&str; 1] = ["xtask/api-baselines/"];
+/// The register of what predates a rule, which the same rule orders to
+/// be cleaned as the work is done.
+const REGISTER: &str = "xtask/budgets.toml";
 /// What the gates judge, as opposed to how the gates decide.
 ///
 /// A gate change travelling with the source it judges is the shortcut:
@@ -84,7 +87,12 @@ pub(crate) fn check(root: &Path, range: Option<&str>) -> Result<Vec<Violation>, 
         let message = git_text(root, &["show", "-s", "--format=%B", sha])?;
         let removes_a_row =
             files.iter().any(|f| f == "ARCHITECTURE.md") && deletes_module_row(root, sha)?;
-        let gates = gate_faces(&files, removes_a_row);
+        let strike = files.iter().any(|f| f == REGISTER)
+            && strikes_only_exemptions(&git_text(
+                root,
+                &["show", "--format=", sha, "--", REGISTER],
+            )?);
+        let gates = gate_faces(&files, removes_a_row, strike);
         let judged = judged_faces(&files);
         let has_trailer = message
             .lines()
@@ -128,8 +136,13 @@ fn is_judged(file: &str) -> bool {
 ///
 /// Pure over a file list, so the rule is asserted against paths rather
 /// than against a repository with commits in it.
-fn gate_faces(files: &[String], removes_a_module_row: bool) -> Vec<String> {
-    let mut faces: Vec<String> = files.iter().filter(|f| is_protected(f)).cloned().collect();
+fn gate_faces(files: &[String], removes_a_module_row: bool, register_strike: bool) -> Vec<String> {
+    let mut faces: Vec<String> = files
+        .iter()
+        .filter(|f| is_protected(f))
+        .filter(|f| !(register_strike && *f == REGISTER))
+        .cloned()
+        .collect();
     if removes_a_module_row {
         faces.push("ARCHITECTURE.md (module-table row deletion)".to_owned());
     }
@@ -149,6 +162,70 @@ fn judged_faces(files: &[String]) -> Vec<String> {
         faces.push("and others".to_owned());
     }
     faces
+}
+
+/// Striking an exemption is the one budgets.toml edit that cannot
+/// loosen anything, and the length rule orders it: a file back under
+/// budget **must** leave the register, or the gate refuses it as "no
+/// longer an exception". So the work and the strike are one change by
+/// construction, and charging a ruling for that pair would charge one
+/// for every split this repository has left to do.
+///
+/// The reasoning is `PRODUCED_PREFIXES`', narrowed to a diff shape
+/// rather than a directory: a removed register row moves an item from
+/// "held to its own pin" to "held to the budget like everything else",
+/// which is a tightening whichever way it is read. **Only removals.** An
+/// added row is a new exemption and re-arms the gate, including the
+/// added row that would carry an exemption to the address an item moved
+/// to — an over-long signature may be fixed or left alone, never
+/// relocated with its excuse.
+///
+/// Pure over the diff text, so the rule is asserted without a
+/// repository, exactly as `row_path` is.
+fn strikes_only_exemptions(diff: &str) -> bool {
+    let mut struck = 0usize;
+    for line in diff.lines() {
+        if line.starts_with("+++") || line.starts_with("---") {
+            continue;
+        }
+        if line.starts_with('+') {
+            return false;
+        }
+        if let Some(rest) = line.strip_prefix('-') {
+            if !is_exemption_row(rest) {
+                return false;
+            }
+            struck = struck.saturating_add(1);
+        }
+    }
+    struck > 0
+}
+
+/// Whether one register line names a source item and its exemption:
+/// `"crates/a/src/b.rs" = 1234` (a file's pin) or
+/// `"crates/a/src/b.rs::name",` (a signature's, comment optional).
+/// Every other line in the file — a budget, a comment, a table header —
+/// answers `false`, so an edit that touches one is judged as before.
+fn is_exemption_row(line: &str) -> bool {
+    let trimmed = line.trim();
+    let Some(rest) = trimmed.strip_prefix('"') else {
+        return false;
+    };
+    let Some((subject, tail)) = rest.split_once('"') else {
+        return false;
+    };
+    let names_a_source_item = subject.contains("/src/")
+        && (subject.ends_with(".rs") || subject.contains(".rs::"))
+        && !subject.contains(' ');
+    let tail = tail.trim();
+    let states_an_exemption = match tail.strip_prefix('=') {
+        Some(pin) => {
+            let pin = pin.trim();
+            !pin.is_empty() && pin.chars().all(|c| c.is_ascii_digit())
+        }
+        None => tail == "," || tail.starts_with(",#") || tail.starts_with(", #"),
+    };
+    names_a_source_item && states_an_exemption
 }
 
 /// A module row counts as *removed* only when its `crates/**.rs` path appears
@@ -259,7 +336,7 @@ pub(crate) fn git_lines(root: &Path, args: &[&str]) -> Result<Vec<String>, Xtask
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
-    use super::{gate_faces, is_protected, judged_faces, row_path};
+    use super::{gate_faces, is_protected, judged_faces, row_path, strikes_only_exemptions};
 
     fn paths(list: &[&str]) -> Vec<String> {
         list.iter().map(|p| (*p).to_owned()).collect()
@@ -270,7 +347,7 @@ mod tests {
     #[test]
     fn a_gate_loosened_beside_the_work_it_judges_is_the_shape_that_needs_a_ruling() {
         let mixed = paths(&["clippy.toml", "crates/kernel/src/plan.rs"]);
-        assert!(!gate_faces(&mixed, false).is_empty());
+        assert!(!gate_faces(&mixed, false, false).is_empty());
         assert!(!judged_faces(&mixed).is_empty());
     }
 
@@ -286,7 +363,10 @@ mod tests {
             "AGENTS.md",
             "README.md",
         ]);
-        assert!(!gate_faces(&alone, false).is_empty(), "still a gate change");
+        assert!(
+            !gate_faces(&alone, false, false).is_empty(),
+            "still a gate change"
+        );
         assert!(
             judged_faces(&alone).is_empty(),
             "nothing the gates judge rides along"
@@ -298,7 +378,7 @@ mod tests {
     #[test]
     fn ordinary_source_work_is_not_a_gate_change() {
         let work = paths(&["crates/web/src/board.rs", "crates/web/screens/board.html"]);
-        assert!(gate_faces(&work, false).is_empty());
+        assert!(gate_faces(&work, false, false).is_empty());
     }
 
     /// What a gate produced is not how a gate decides: a public-surface
@@ -310,7 +390,50 @@ mod tests {
             "xtask/api-baselines/kernel.txt",
             "crates/kernel/src/share.rs",
         ]);
-        assert!(gate_faces(&pair, false).is_empty());
+        assert!(gate_faces(&pair, false, false).is_empty());
+    }
+
+    /// The length rule orders the strike in the same change as the
+    /// split, so charging a ruling for the pair would charge one for
+    /// every split that is left. A removal cannot loosen anything: the
+    /// file it names goes from its own pin to the budget everyone else
+    /// is held to.
+    #[test]
+    fn striking_an_exemption_beside_the_split_that_earned_it_is_not_a_gate_change() {
+        let diff = "--- a/xtask/budgets.toml\n\
+                    +++ b/xtask/budgets.toml\n\
+                    @@ -246,7 +246,6 @@\n\
+                     [file_length.predating]\n\
+                    -\"crates/memory/src/jsonl.rs\" = 1194\n\
+                     \"crates/web/src/app.rs\" = 3916\n";
+        assert!(strikes_only_exemptions(diff));
+        let pair = paths(&["xtask/budgets.toml", "crates/memory/src/jsonl.rs"]);
+        assert!(gate_faces(&pair, false, true).is_empty());
+        assert!(
+            !gate_faces(&pair, false, false).is_empty(),
+            "the same paths without the strike shape stay guarded"
+        );
+    }
+
+    /// Every other budgets.toml edit is judged as before. Raising a
+    /// budget is the loosening this gate exists for; adding a row is a
+    /// new exemption; and carrying an exemption to the address an item
+    /// moved to is an addition too, so a signature is fixed or left
+    /// alone rather than relocated with its excuse.
+    #[test]
+    fn a_widened_budget_or_a_new_exemption_is_still_a_gate_change() {
+        let widened = "@@\n-budget_lines = 1000\n+budget_lines = 2000\n";
+        assert!(!strikes_only_exemptions(widened));
+        let added = "@@\n+\"crates/web/src/app.rs\" = 3916\n";
+        assert!(!strikes_only_exemptions(added));
+        let moved = "@@\n\
+                     -\"crates/sprawling/src/assembly.rs::conclude\", # 10\n\
+                     +\"crates/sprawling/src/serving.rs::conclude\", # 10\n";
+        assert!(!strikes_only_exemptions(moved));
+        let comment = "@@\n-# the eight files that predate the rule\n";
+        assert!(!strikes_only_exemptions(comment));
+        let nothing = "@@\n context only\n";
+        assert!(!strikes_only_exemptions(nothing), "a strike must be there");
     }
 
     /// A refusal that lists eighty paths is a refusal nobody reads.
@@ -323,7 +446,7 @@ mod tests {
             "crates/a/src/four.rs",
             "crates/a/src/five.rs",
         ]);
-        let named = judged_faces(&many);
+        let named: Vec<String> = judged_faces(&many);
         assert_eq!(named.len(), 4);
         assert_eq!(named.last().map(String::as_str), Some("and others"));
     }
