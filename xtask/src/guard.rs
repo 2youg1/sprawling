@@ -172,60 +172,82 @@ fn judged_faces(files: &[String]) -> Vec<String> {
 /// for every split this repository has left to do.
 ///
 /// The reasoning is `PRODUCED_PREFIXES`', narrowed to a diff shape
-/// rather than a directory: a removed register row moves an item from
-/// "held to its own pin" to "held to the budget like everything else",
-/// which is a tightening whichever way it is read. **Only removals.** An
-/// added row is a new exemption and re-arms the gate, including the
-/// added row that would carry an exemption to the address an item moved
-/// to — an over-long signature may be fixed or left alone, never
-/// relocated with its excuse.
+/// rather than a directory: **the register may only shrink**, and both
+/// shapes of shrinking are here. A removed row moves an item from "held
+/// to its own pin" to "held to the budget like everything else"; a pin
+/// replaced by a smaller pin holds the same file to a shorter length.
+/// Neither can loosen anything, whichever way it is read.
+///
+/// What still re-arms the gate: a new row, a pin that grows, a budget
+/// that moves, a comment, or the added row that would carry an
+/// exemption to the address an item moved to — an over-long signature
+/// may be fixed or left alone, never relocated with its excuse.
 ///
 /// Pure over the diff text, so the rule is asserted without a
 /// repository, exactly as `row_path` is.
 fn strikes_only_exemptions(diff: &str) -> bool {
-    let mut struck = 0usize;
+    let mut removed: Vec<Row> = Vec::new();
+    let mut added: Vec<Row> = Vec::new();
     for line in diff.lines() {
         if line.starts_with("+++") || line.starts_with("---") {
             continue;
         }
-        if line.starts_with('+') {
-            return false;
-        }
-        if let Some(rest) = line.strip_prefix('-') {
-            if !is_exemption_row(rest) {
-                return false;
+        if let Some(rest) = line.strip_prefix('+') {
+            match exemption_row(rest) {
+                Some(row) => added.push(row),
+                None => return false,
             }
-            struck = struck.saturating_add(1);
+        } else if let Some(rest) = line.strip_prefix('-') {
+            match exemption_row(rest) {
+                Some(row) => removed.push(row),
+                None => return false,
+            }
         }
     }
-    struck > 0
+    if removed.is_empty() {
+        return false;
+    }
+    added.iter().all(|grew| {
+        removed.iter().any(|shrank| {
+            shrank.subject == grew.subject
+                && matches!((shrank.pin, grew.pin), (Some(was), Some(now)) if now < was)
+        })
+    })
 }
 
-/// Whether one register line names a source item and its exemption:
-/// `"crates/a/src/b.rs" = 1234` (a file's pin) or
-/// `"crates/a/src/b.rs::name",` (a signature's, comment optional).
+/// One line of a register: what it exempts, and the length it pins when
+/// it pins one.
+struct Row<'line> {
+    subject: &'line str,
+    pin: Option<u64>,
+}
+
+/// Reads one register line: `"crates/a/src/b.rs" = 1234` (a file's pin)
+/// or `"crates/a/src/b.rs::name",` (a signature's, comment optional).
 /// Every other line in the file — a budget, a comment, a table header —
-/// answers `false`, so an edit that touches one is judged as before.
-fn is_exemption_row(line: &str) -> bool {
+/// answers `None`, so an edit that touches one is judged as before.
+fn exemption_row(line: &str) -> Option<Row<'_>> {
     let trimmed = line.trim();
-    let Some(rest) = trimmed.strip_prefix('"') else {
-        return false;
-    };
-    let Some((subject, tail)) = rest.split_once('"') else {
-        return false;
-    };
+    let rest = trimmed.strip_prefix('"')?;
+    let (subject, tail) = rest.split_once('"')?;
     let names_a_source_item = subject.contains("/src/")
         && (subject.ends_with(".rs") || subject.contains(".rs::"))
         && !subject.contains(' ');
+    if !names_a_source_item {
+        return None;
+    }
     let tail = tail.trim();
-    let states_an_exemption = match tail.strip_prefix('=') {
-        Some(pin) => {
-            let pin = pin.trim();
-            !pin.is_empty() && pin.chars().all(|c| c.is_ascii_digit())
+    match tail.strip_prefix('=') {
+        Some(pin) => pin.trim().parse().ok().map(|pin| Row {
+            subject,
+            pin: Some(pin),
+        }),
+        // A list entry, with or without the count a reviewer reads.
+        None => {
+            let after = tail.strip_prefix(',')?.trim_start();
+            (after.is_empty() || after.starts_with('#')).then_some(Row { subject, pin: None })
         }
-        None => tail == "," || tail.starts_with(",#") || tail.starts_with(", #"),
-    };
-    names_a_source_item && states_an_exemption
+    }
 }
 
 /// A module row counts as *removed* only when its `crates/**.rs` path appears
