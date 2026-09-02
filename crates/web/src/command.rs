@@ -172,3 +172,135 @@ pub fn select_command(form: &SelectForm, answer: &EndpointsAnswer) -> Option<Wir
         max_output_tokens: 0,
     })
 }
+
+/// What a person typed into the building form, and whether it is a
+/// command yet.
+///
+/// A building is a top-level address, so an address with a slash in it
+/// is refused here as well as at the server — shown before the person
+/// presses anything rather than after.
+#[must_use]
+pub fn create_command(addr: &str, template: &str) -> Option<ClientFrame> {
+    let addr = Address::parse(addr.trim()).ok()?;
+    if addr.as_str().contains('/') {
+        return None;
+    }
+    let template = channels::TemplateName::parse(template.trim()).ok()?;
+    Some(ClientFrame::Command(Box::new(
+        channels::WireCommand::CreateBuilding {
+            idem: channels::IdemKey::derive(
+                &channels::RunId::CITY,
+                channels::Seq::FIRST,
+                addr.as_str().as_bytes(),
+            ),
+            addr,
+            template,
+        },
+    )))
+}
+
+/// What a person typed into the selected building's form, and whether it
+/// is a dispatch yet.
+///
+/// A run needs somewhere to work and something that counts as done, so
+/// both are required here rather than defaulted: a dispatch with an
+/// invented goal is a run that cannot report it finished.
+#[must_use]
+pub fn dispatch_command(building: &str, task: &str, goal: &str) -> Option<ClientFrame> {
+    // Work happens in a room, not at a building's root: living there
+    // would hand a run the whole building's write domain. The room used
+    // to be `room1` for every dispatch this page sent, so two pieces of
+    // work started from the same tower wrote over each other's files.
+    // The city opens a room from the name instead, and the name comes
+    // from the work rather than from a counter (city-SPEC.md 8-13).
+    // What a Dispatch frame looks like is `app::dispatch_command`'s
+    // answer and only its answer - this page decides the address.
+    crate::app::dispatch_command(
+        &format!("{}/{}", building.trim(), session_name(task)),
+        task,
+        goal,
+        "plan",
+        // This page asks for two lines and a building; how hard to think
+        // is chosen where the whole form is, at the bottom of the window.
+        None,
+    )
+}
+
+/// The name this page gives a session it starts: the first few words of
+/// the task, which is what the person just wrote and will recognise in a
+/// list of folders an hour later.
+fn session_name(task: &str) -> String {
+    let head: Vec<&str> = task.split_whitespace().take(4).collect();
+    let joined = head.join(" ");
+    // A name is one segment; anything the segment rules refuse is left
+    // to `SessionName::parse`, which refuses the whole command rather
+    // than inventing a spelling nobody typed.
+    joined.replace(['/', '\\', ':'], "-")
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "test code"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sending_work_needs_a_room_and_a_task_and_nothing_else() {
+        assert!(dispatch_command("lab", "fix the timer", "the test passes").is_some());
+        assert!(
+            dispatch_command("lab", "  ", "the test passes").is_none(),
+            "a run with nothing to do is not a command"
+        );
+        assert!(
+            dispatch_command("lab", "fix the timer", "").is_some(),
+            "an empty goal is how this city spells a conversation, not a missing field"
+        );
+        assert!(
+            dispatch_command("", "fix the timer", "the test passes").is_none(),
+            "there is no building called nothing"
+        );
+    }
+
+    #[test]
+    fn work_is_sent_to_a_room_and_never_to_a_buildings_root() {
+        let Some(ClientFrame::Command(command)) =
+            dispatch_command("lab", "fix the timer", "the test passes")
+        else {
+            panic!("a complete form is a command");
+        };
+        let channels::WireCommand::Dispatch { addr, session, .. } = *command else {
+            panic!("the send-work form makes a dispatch");
+        };
+        assert_eq!(addr.as_str(), "lab");
+        // The room is opened by the city from this name, and the name is
+        // the work rather than a counter. Every dispatch from this page
+        // used to go to `room1`, so the second piece of work started
+        // from a tower wrote over the first one's files.
+        let named = session.expect(
+            "without a name the city has nothing to open a room from, and the run would hold the \
+             whole building's write domain",
+        );
+        assert_eq!(named.as_str(), "fix the timer");
+
+        let Some(ClientFrame::Command(second)) = dispatch_command(
+            "lab",
+            "fix the timer again, and this time read the failing case first",
+            "the test passes",
+        ) else {
+            panic!("a complete form is a command");
+        };
+        let channels::WireCommand::Dispatch { session, .. } = *second else {
+            panic!("the send-work form makes a dispatch");
+        };
+        assert_eq!(
+            session.map(|name| name.as_str().to_owned()),
+            Some("fix the timer again,".to_owned()),
+            "a long task still yields a name short enough to be a folder"
+        );
+    }
+}

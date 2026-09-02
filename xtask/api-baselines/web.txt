@@ -446,7 +446,7 @@ pub web::Destination::waiting: core::option::Option<u32>
 pub web::DisplayList::camera: web::Camera
 pub web::DisplayList::faces: alloc::vec::Vec<web::Face>
 pub web::DisplayList::ground: alloc::vec::Vec<web::Face>
-pub web::DisplayList::labels: alloc::vec::Vec<web::city_view::Label>
+pub web::DisplayList::labels: alloc::vec::Vec<web::isometry::Label>
 pub web::DisplayList::outline: core::option::Option<[(i32, i32); 4]>
 pub web::Dropped::Files(alloc::vec::Vec<alloc::string::String>)
 pub web::Dropped::Text(alloc::string::String)

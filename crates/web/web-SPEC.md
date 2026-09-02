@@ -1743,3 +1743,19 @@ pub fn given(records: &[EventRecord], run: RunId) -> Given;
 **这不是一次接口变更**：公开路径仍是 `channels::DiscardAnswer` 一类，字段与签名一字未动，
 变的只是 `cargo public-api` 记录的定义模块——答面与命令从 `channels::wire` 各自搬进了自己的文件
 （channels-SPEC §8-1）。记在这里是因为 `apisync` 判的是「基线动了就要有一份 SPEC 同行」。
+
+## 8-61 城市这张图分成三块（V3.40）
+
+`web::city_view` 1,554 → 397（页面）＋403（`isometry`）＋717（`skyline`），两个构造子回到 `web::command`。
+
+**切法是「谁需要知道什么」**：
+- `isometry`（形状 1）：把地面上的一个点投到屏幕上，并围着已经画出来的东西求窗口。它**不知道建筑是什么**——只投点、拼多边形属性、求视窗。
+- `skyline`（形状 1）：一座城长什么样——地址决定位置、资产数的对数决定高度、计划完成度决定墙上那条亮带。画家序是全序，所以同一座城两次渲染逐字节相同，这正是无头测试能判这张图的前提。
+- `city_view`（形状 7）：页面本身。控件、选中、缩放与平移状态，以及一次点击的含义。
+- `create_command`／`dispatch_command`／`session_name` 移入 `web::command`——**构造子是控件变成动词的那道口**，与 V3.33 同一条理由；`xtask wiring` 判的就是这道口。
+  顺带消掉一处重名：本页的 `dispatch_command` 是 `app::dispatch_command` 的页内包装（它只决定地址），两者同名而不同层，放进同一个文件后这件事第一次看得见。
+
+**一条超长签名被消掉而不是被搬走（V3.35a 的规矩）**：`along(a, b, num, den, fall)` 五个参数，
+现在是 `Edge { from, to }` 上的 `at(part: Part, fall: i32)`。四个调用点原本都在重复同一条边与同一个分母 8，
+`Edge` 让「一扇窗的四个角落在同一堵墙上」成为类型上的事实，而不是四行里各写一遍的巧合。
+`argument_count` 登记表因此少一行；**豁免不许跟着函数搬家**。

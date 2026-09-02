@@ -529,7 +529,9 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::keys | crates/web/src/keys.rs | what a keystroke means, and the one sequence that cannot strand a reader | decision | R2 | built |
 | web::palette | crates/web/src/palette.rs | one box that reaches every page, building and session, and how a query ranks them | decision | R2 | built |
 | web::turn | crates/web/src/turn.rs | a session's events folded into the rounds a person reads: what was said, what it cost, what each call came to, and what a door said about it | decision | R2 | built |
-| web::city_view | crates/web/src/city_view.rs | the isometric canvas: one geometry for projection and its inverse | decision | S4 | built |
+| web::city_view | crates/web/src/city_view.rs | the city page: the picture, the controls around it, and what a click means | projection | S4 | built |
+| web::isometry | crates/web/src/isometry.rs | where a point on the ground lands on the screen, and the window around what was drawn | decision | V3 | built |
+| web::skyline | crates/web/src/skyline.rs | what a city of buildings looks like: height from assets, a lit band from the plan | decision | V3 | built |
 | web::progress | crates/web/src/progress.rs | the one place a progress bar is drawn, for all three of its callers | decision | S4 | built |
 | web::dashboard | crates/web/src/dashboard.rs | cost in five cuts, with shares against the authoritative total | decision | S4 | built |
 | web::live | crates/web/src/live.rs | watching one session as it happens, in a window that says what it dropped | decision | S4 | built |
