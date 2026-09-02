@@ -165,16 +165,20 @@ budget_arguments = 4
 measured_by = "cargo xtask length (syn signatures)"
 status = "gated, with a register of the signatures that predate the rule"
 
-# The forty-two signatures that predate the rule (2026-09-02), worst
-# first. A name not on this list is refused outright, so the list cannot
-# grow; a signature is struck from it by giving the values that travel
-# together a name, never by widening the budget.
+# The signatures that predate the rule (2026-09-02), worst first. A name
+# not on this list is refused outright, so the list cannot grow; a
+# signature is struck from it by giving the values that travel together a
+# name, never by widening the budget. Forty-two when the rule was drawn,
+# twenty-four now.
 #
-# Sixteen of the forty-two are in one file, and the top six are all in
-# it. That is the file rule's finding reached from another direction:
-# `bin::assembly` is declared `adapter` - "thin, no policy" - and holds
-# the city's dispatch policy instead. An eleven-parameter private method
-# is what policy looks like when it has no object to live in.
+# Sixteen of the original forty-two were in `bin::assembly`, and so were
+# the worst six. That was the file rule's finding reached from another
+# direction: the module is declared `adapter` - "thin, no policy" - and
+# held the city's dispatch policy instead, and an eleven-parameter
+# private method is what policy looks like when it has no object to live
+# in. V3.43 spent fifteen of them, because splitting that file into
+# `assembly/` would otherwise have carried each excuse to a new address -
+# which is the one budgets.toml edit `guard` will not treat as a strike.
 [argument_count.predating]
 names = [
   "crates/collab/src/workshop.rs::new",            # 9
@@ -209,8 +213,10 @@ budget_lines = 1000
 measured_by = "cargo xtask length"
 status = "gated, with a register of the files that predate the rule"
 
-# The files that were already over the line on the day it was
-# drawn (2026-09-02), each pinned at the length it had that day.
+# The files that were already over the line on the day it was drawn
+# (2026-09-02), each pinned at the length it had that day. Eleven of
+# them; the table is empty, and an empty table is this rule's finished
+# state rather than a gap in it.
 #
 # `crates/web/src/lang.rs` is 3,217 lines and is not here: its module-map
 # row states the shape `data`, and the same exemption the function rule
@@ -224,7 +230,9 @@ status = "gated, with a register of the files that predate the rule"
 # back under budget_lines must be struck from the list, so **it removes
 # itself** as the work gets done.
 #
-# Delete a row by doing the split, never by raising its number.
+# Delete a row by doing the split, never by raising its number. The last
+# row to go was `bin::assembly` at 10,695 lines (V3.43), and it left the
+# table the way the rule asks: the split was done, not the number.
 [file_length.predating]
 
 [session_resident]
