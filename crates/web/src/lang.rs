@@ -420,6 +420,9 @@ pub enum Msg {
     CostNoneBilled,
     CostNoneBilledWhat,
     CostCutEmpty,
+    CostTokenLine,
+    CostUnpricedCalls,
+    CostOwnStream,
     ProgressNoPlan,
     TurnNumber,
     TurnTools,
@@ -1661,6 +1664,21 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "this cut has nothing in it: no call has been attributed to a {dimension} yet",
             zh: "这个切面是空的：还没有调用被归到某个{dimension}上",
         },
+        Msg::CostTokenLine => Phrase {
+            en: "{input} in, {output} out, {cache} from cache",
+            zh: "进 {input}，出 {output}，缓存命中 {cache}",
+        },
+        Msg::CostUnpricedCalls => Phrase {
+            en: "{count} call(s) came back with no price: a subscription or a local model \
+                 reports what it used, not what it cost. Those calls are counted in tokens \
+                 above and in no dollar figure anywhere.",
+            zh: "有 {count} 次调用回来时没带价钱：订阅或本地模型报的是用了多少，不是花了多少。\
+                 这些调用计在上面的 token 里，不计在任何一个金额里。",
+        },
+        Msg::CostOwnStream => Phrase {
+            en: "{amount} of that arrived through this page's own stream",
+            zh: "其中 {amount} 是从本页自己那条流里到的",
+        },
         Msg::ProgressNoPlan => Phrase {
             en: "no plan",
             zh: "没有计划",
@@ -2596,6 +2614,9 @@ mod tests {
             Msg::CostNoneBilled,
             Msg::CostNoneBilledWhat,
             Msg::CostCutEmpty,
+            Msg::CostTokenLine,
+            Msg::CostUnpricedCalls,
+            Msg::CostOwnStream,
             Msg::ProgressNoPlan,
             Msg::TurnNumber,
             Msg::TurnTools,
@@ -3011,6 +3032,9 @@ mod tests {
                 | Msg::CostNoneBilled
                 | Msg::CostNoneBilledWhat
                 | Msg::CostCutEmpty
+                | Msg::CostTokenLine
+                | Msg::CostUnpricedCalls
+                | Msg::CostOwnStream
                 | Msg::ProgressNoPlan
                 | Msg::TurnNumber
                 | Msg::TurnTools

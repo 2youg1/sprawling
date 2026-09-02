@@ -247,11 +247,16 @@ pub fn CostsView(
                 },
                 source: word(Msg::CostSource).to_owned(),
                 p { class: "consumed",
-                    "{crate::readout::render_tokens(usage.input)} in, {crate::readout::render_tokens(usage.output)} out, {crate::readout::render_tokens(usage.cache_read)} from cache"
+                    {fill(word(Msg::CostTokenLine), &[
+                        ("input", &crate::readout::render_tokens(usage.input)),
+                        ("output", &crate::readout::render_tokens(usage.output)),
+                        ("cache", &crate::readout::render_tokens(usage.cache_read)),
+                    ])}
                 }
                 if usage.unpriced_calls > 0 {
                     p { class: "unpriced",
-                        "{usage.unpriced_calls} call(s) came back with no price: a subscription or a local model reports what it used, not what it cost. Those calls are counted in tokens above and in no dollar figure anywhere."
+                        {fill(word(Msg::CostUnpricedCalls),
+                              &[("count", &usage.unpriced_calls.to_string())])}
                     }
                 }
                 if nothing_yet {
@@ -294,7 +299,7 @@ pub fn CostsView(
                     }
                 }
                 p { class: "spent-line",
-                    "{render_usd(spent)} of that arrived through this page's own stream"
+                    {fill(word(Msg::CostOwnStream), &[("amount", &render_usd(spent))])}
                 }
             }
         }
