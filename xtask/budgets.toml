@@ -146,6 +146,81 @@ status = "gated"
 # but a reader looking for one thing pays for every line above it either
 # way, and in the file that prompted this rule the tests were 6,133 of
 # the 12,078.
+# "The ideal number of arguments for a function is zero. Next comes one,
+# followed closely by two. Three arguments should be avoided where
+# possible. More than three requires very special justification - and
+# then shouldn't be used anyway." A long parameter list is a data clump:
+# the values that always travel together are one value that has not been
+# given a name yet, and this repository already contains the fix it is
+# asking for. `Reporter` says it in its own doc - "Four values that
+# always travel together and are never chosen independently, so they
+# travel as one".
+#
+# The budget is 4 rather than Bob's 3, because 3 is the number a
+# constructor for a three-field value legitimately needs and the gate
+# should not argue with those.
+[argument_count]
+what = "one function's parameters, not counting a receiver"
+budget_arguments = 4
+measured_by = "cargo xtask length (syn signatures)"
+status = "gated, with a register of the signatures that predate the rule"
+
+# The forty-two signatures that predate the rule (2026-09-02), worst
+# first. A name not on this list is refused outright, so the list cannot
+# grow; a signature is struck from it by giving the values that travel
+# together a name, never by widening the budget.
+#
+# Sixteen of the forty-two are in one file, and the top six are all in
+# it. That is the file rule's finding reached from another direction:
+# `bin::assembly` is declared `adapter` - "thin, no policy" - and holds
+# the city's dispatch policy instead. An eleven-parameter private method
+# is what policy looks like when it has no object to live in.
+[argument_count.predating]
+names = [
+  "crates/sprawling/src/assembly.rs::settle_desks", # 11
+  "crates/sprawling/src/assembly.rs::conclude",    # 10
+  "crates/collab/src/workshop.rs::new",            # 9
+  "crates/sprawling/src/assembly.rs::drive_dispatch", # 9
+  "crates/sprawling/src/assembly.rs::freeze_plan", # 9
+  "crates/sprawling/src/assembly.rs::settle_requests", # 8
+  "crates/sprawling/src/assembly.rs::spawn_worker", # 8
+  "crates/collab/src/inbox.rs::new",               # 7
+  "crates/runtime/src/tools/exec.rs::new",         # 7
+  "crates/sprawling/src/assembly.rs::lay_out_workbench", # 7
+  "crates/sprawling/src/assembly.rs::status_tool", # 7
+  "crates/collab/src/signal_tool.rs::new",         # 6
+  "crates/kernel/src/gate.rs::govern",             # 6
+  "crates/kernel/src/gate.rs::item",               # 6
+  "crates/kernel/src/highlight.rs::scan",          # 6
+  "crates/runtime/src/turn.rs::assemble",          # 6
+  "crates/sprawling/src/assembly.rs::attach_endpoint", # 6
+  "crates/sprawling/src/assembly.rs::dispatch_in", # 6
+  "crates/sprawling/src/effect.rs::of",            # 6
+  "crates/sprawling/src/effect.rs::shelf",         # 6
+  "crates/browser/src/act.rs::frame_for",          # 5
+  "crates/city/src/archive.rs::entry",             # 5
+  "crates/collab/src/pr_tool.rs::new",             # 5
+  "crates/kernel/src/config.rs::freeze",           # 5
+  "crates/kernel/src/gate.rs::commitment",         # 5
+  "crates/kernel/src/gate.rs::delegation",         # 5
+  "crates/kernel/src/gate.rs::discard",            # 5
+  "crates/kernel/src/gate.rs::spend",              # 5
+  "crates/runtime/src/digest.rs::digest_once",     # 5
+  "crates/runtime/src/fork.rs::fork_draft",        # 5
+  "crates/runtime/src/handoff.rs::new",            # 5
+  "crates/runtime/src/run.rs::drive",              # 5
+  "crates/runtime/src/turn.rs::call",              # 5
+  "crates/sprawling/src/assembly.rs::endpoint_of", # 5
+  "crates/sprawling/src/assembly.rs::probe_endpoint", # 5
+  "crates/sprawling/src/assembly.rs::record_for",  # 5
+  "crates/sprawling/src/assembly.rs::select_model", # 5
+  "crates/sprawling/src/assembly.rs::settle",      # 5
+  "crates/sprawling/src/assembly.rs::stand_up",    # 5
+  "crates/sprawling/src/console.rs::drive",        # 5
+  "crates/web/src/app.rs::dispatch_command",       # 5
+  "crates/web/src/city_view.rs::along",            # 5
+]
+
 [file_length]
 what = "one source file under a crate's src/, every line of it, tests included"
 budget_lines = 1000

@@ -54,7 +54,7 @@ Violating any of these turns CI red with a message naming the rule, the violatio
 |---|---|
 | Return failure through `Result`. No `unwrap`, `expect`, `panic!`, `todo!`, `unreachable!`, bare indexing or slicing in non-test code. Checked arithmetic; `TryFrom` for narrowing; no `as` casts; no `unsafe`. | workspace lints, `-D warnings` |
 | One module, one file, semantically named. Register the file in the module map, then create it. Keep `lib.rs` and index files free of logic. | `xtask modmap` |
-| Keep a function inside 200 lines and a file inside 1000, tests included. Files that predate the rule are pinned in the register and may only shrink; a pin that comes back under budget is struck. | `xtask length` with `xtask/budgets.toml` |
+| Keep a function inside 200 lines and 4 parameters, and a file inside 1000 lines, tests included. Values that always travel together are one value: give them a name. What predates a rule is listed in the register, may only shrink, and is struck once it is no longer needed. | `xtask length` with `xtask/budgets.toml` |
 | Default to `pub(crate)`. Declare a `pub` trait only in a file on the seam list. | `xtask depmap` |
 | Start every `.rs` file with the MPL-2.0 notice, then the copyright line. | `xtask header` |
 | Take the time as a parameter. The single sampling point is `bin::assembly`. | `clippy.toml` disallowed methods |

@@ -315,7 +315,7 @@ mod tests {
         let text = std::fs::read_to_string(root.join("xtask").join("budgets.toml")).unwrap();
         let register: toml::Value = toml::from_str(&text).unwrap();
         let table = register.as_table().unwrap();
-        assert_eq!(table.len(), 11, "the design states eleven budgets");
+        assert_eq!(table.len(), 12, "the design states twelve budgets");
         for (name, row) in table {
             assert!(
                 row.get("status").and_then(toml::Value::as_str).is_some(),

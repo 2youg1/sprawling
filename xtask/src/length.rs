@@ -75,9 +75,14 @@ const FILE_ROW: &str = "file_length";
 /// was drawn, each with the length it had that day.
 const PREDATING: &str = "predating";
 
+/// The register row that states how many parameters a function may take.
+const ARG_ROW: &str = "argument_count";
+
 pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
     let body_limit = limit(root, ROW)?;
     let file_limit = limit(root, FILE_ROW)?;
+    let arg_limit = limit(root, ARG_ROW)?;
+    let excused = excused(root)?;
     let predating = predating(root)?;
     let shapes = modmap::shapes(root)?;
     let mut violations = Vec::new();
@@ -111,6 +116,9 @@ pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
         for found in measure(&parsed.items) {
             if found.lines > body_limit {
                 violations.push(over(&rel, &found, body_limit));
+            }
+            if found.args > arg_limit && !excused.contains(&key(&rel, &found.name)) {
+                violations.push(too_many_arguments(&rel, &found, arg_limit));
             }
         }
     }
@@ -199,6 +207,25 @@ pub(crate) struct Found {
     pub(crate) name: String,
     pub(crate) line: usize,
     pub(crate) lines: usize,
+    /// Parameters, not counting a receiver. `self` is what the method is
+    /// for, never an argument somebody had to decide to pass.
+    pub(crate) args: usize,
+}
+
+fn too_many_arguments(rel: &str, found: &Found, limit: usize) -> Violation {
+    Violation {
+        gate: "length",
+        location: format!("{rel}:{}", found.line),
+        rule: format!(
+            "a function takes at most {limit} parameters \
+             (xtask/budgets.toml, {ARG_ROW})"
+        ),
+        violation: format!("{} takes {}", found.name, found.args),
+        alternative: "the ones that always travel together are one value: give them a struct \
+                      with a name, as `Reporter` did for the four that describe who is \
+                      reporting a change to a plan"
+            .to_owned(),
+    }
 }
 
 fn over(rel: &str, found: &Found, limit: usize) -> Violation {
@@ -220,7 +247,11 @@ fn limit(root: &Path, row: &str) -> Result<usize, XtaskError> {
     let register = crate::budget::register(root)?;
     let stated = register
         .get(row)
-        .and_then(|found| found.get("budget_lines"))
+        .and_then(|found| {
+            found
+                .get("budget_lines")
+                .or_else(|| found.get("budget_arguments"))
+        })
         .and_then(toml::Value::as_integer)
         .ok_or_else(|| XtaskError::Doc {
             file: "xtask/budgets.toml".to_owned(),
@@ -265,11 +296,7 @@ fn measure(items: &[syn::Item]) -> Vec<Found> {
                 if skipped(&function.attrs) {
                     continue;
                 }
-                out.push(found(
-                    &function.sig.ident.to_string(),
-                    function.sig.fn_token.span(),
-                    function.block.span(),
-                ));
+                out.push(found(&function.sig, function.block.span()));
             }
             syn::Item::Mod(module) => {
                 if skipped(&module.attrs) {
@@ -290,11 +317,7 @@ fn measure(items: &[syn::Item]) -> Vec<Found> {
                     if skipped(&function.attrs) {
                         continue;
                     }
-                    out.push(found(
-                        &function.sig.ident.to_string(),
-                        function.sig.fn_token.span(),
-                        function.block.span(),
-                    ));
+                    out.push(found(&function.sig, function.block.span()));
                 }
             }
             syn::Item::Trait(declared) => {
@@ -311,11 +334,7 @@ fn measure(items: &[syn::Item]) -> Vec<Found> {
                     if skipped(&function.attrs) {
                         continue;
                     }
-                    out.push(found(
-                        &function.sig.ident.to_string(),
-                        function.sig.fn_token.span(),
-                        body.span(),
-                    ));
+                    out.push(found(&function.sig, body.span()));
                 }
             }
             _ => {}
@@ -324,14 +343,52 @@ fn measure(items: &[syn::Item]) -> Vec<Found> {
     out
 }
 
-fn found(name: &str, signature: proc_macro2::Span, body: proc_macro2::Span) -> Found {
-    let start = signature.start().line;
+fn found(signature: &syn::Signature, body: proc_macro2::Span) -> Found {
+    let start = signature.fn_token.span().start().line;
     let end = body.end().line;
     Found {
-        name: name.to_owned(),
+        name: signature.ident.to_string(),
         line: start,
         lines: end.saturating_sub(start).saturating_add(1),
+        // A receiver is not a parameter. `&self` is what makes the
+        // function a method, not a value somebody chose to thread
+        // through it, and counting it would charge every method one
+        // argument it never had a say in.
+        args: signature
+            .inputs
+            .iter()
+            .filter(|input| matches!(input, syn::FnArg::Typed(_)))
+            .count(),
     }
+}
+
+/// How a function is named in the register: the file it lives in and its
+/// own name. Two functions in one file cannot share a name, and a name
+/// alone would excuse every `new` in the workspace at once.
+fn key(rel: &str, name: &str) -> String {
+    format!("{rel}::{name}")
+}
+
+/// The functions whose parameter lists predate the rule.
+fn excused(root: &Path) -> Result<BTreeSet<String>, XtaskError> {
+    let register = crate::budget::register(root)?;
+    let Some(listed) = register
+        .get(ARG_ROW)
+        .and_then(|row| row.get(PREDATING))
+        .and_then(|table| table.get("names"))
+        .and_then(toml::Value::as_array)
+    else {
+        return Ok(BTreeSet::new());
+    };
+    let mut out = BTreeSet::new();
+    for value in listed {
+        let named = value.as_str().ok_or_else(|| XtaskError::Doc {
+            file: "xtask/budgets.toml".to_owned(),
+            msg: format!("{ARG_ROW}.{PREDATING} holds something that is not a name"),
+        })?;
+        out.insert(named.to_owned());
+    }
+    Ok(out)
 }
 
 /// Whether this item is one of the two the gate does not measure.
@@ -358,6 +415,69 @@ fn skipped(attrs: &[syn::Attribute]) -> bool {
 )]
 mod tests {
     use super::*;
+
+    /// A receiver is not a parameter, and a data clump is.
+    #[test]
+    fn a_receiver_is_not_an_argument_and_everything_else_is() {
+        let source = "\
+            struct S;\n\
+            impl S {\n\
+              fn free() {}\n\
+              fn borrowed(&self) {}\n\
+              fn owned(self, a: u8) {}\n\
+              fn mutable(&mut self, a: u8, b: u8, c: u8, d: u8) {}\n\
+              fn clump(&self, a: u8, b: u8, c: u8, d: u8, e: u8) {}\n\
+            }\n";
+        let parsed = syn::parse_file(source).unwrap();
+        let counted: Vec<(String, usize)> = measure(&parsed.items)
+            .into_iter()
+            .map(|found| (found.name, found.args))
+            .collect();
+        assert_eq!(
+            counted,
+            [
+                ("free".to_owned(), 0),
+                ("borrowed".to_owned(), 0),
+                ("owned".to_owned(), 1),
+                ("mutable".to_owned(), 4),
+                ("clump".to_owned(), 5),
+            ]
+        );
+    }
+
+    /// Every excused signature must still exist and must still be over
+    /// the budget. A name that no longer names anything is a licence
+    /// waiting to be spent by whoever writes that function next.
+    #[test]
+    fn every_excused_signature_is_a_real_one_that_is_still_over() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(Path::to_path_buf)
+            .expect("xtask lives one level under the repo root");
+        let budget = limit(&root, ARG_ROW).unwrap();
+        let excused = excused(&root).unwrap();
+        assert!(!excused.is_empty(), "the register records the debt it owes");
+        let shapes = modmap::shapes(&root).unwrap();
+        let mut still_over = BTreeSet::new();
+        for file in sources(&root).unwrap() {
+            let rel = walk::rel(&root, &file);
+            if shapes.get(&rel).is_some_and(|shape| shape == "data") {
+                continue;
+            }
+            let text = walk::read_text(&file).unwrap();
+            let parsed = syn::parse_file(&text).unwrap();
+            for item in measure(&parsed.items) {
+                if item.args > budget {
+                    still_over.insert(key(&rel, &item.name));
+                }
+            }
+        }
+        let spent: Vec<&String> = excused.difference(&still_over).collect();
+        assert!(
+            spent.is_empty(),
+            "these are excused and no longer need to be; strike them:\n{spent:#?}"
+        );
+    }
 
     /// The register is the authority for both numbers, and both are read
     /// from it by name. A row that stops stating its budget must fail
