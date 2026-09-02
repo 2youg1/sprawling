@@ -8,6 +8,7 @@
 
 mod arbiter;
 mod archive_tool;
+mod claim_effect;
 mod claim_tool;
 mod delegate_tool;
 mod draft;
@@ -25,7 +26,8 @@ mod workshop_tool;
 
 pub use arbiter::{Circumstance, Escalation, Level, arbitrate, conflict_payload};
 pub use archive_tool::{ARCHIVE_KINDS, ArchiveDesk, ArchiveEffect, ArchiveTool, Held};
-pub use claim_tool::{ClaimDesk, ClaimEffect, ClaimTool, evidence_of, still_true};
+pub use claim_effect::{ClaimEffect, evidence_of, still_true};
+pub use claim_tool::{ClaimDesk, ClaimTool};
 pub use delegate_tool::{DelegateDesk, DelegateTool, Delegated};
 pub use draft::{Draft, Drafts, HoldToken, Resolution, Return, Submission};
 pub use fanin::{Artifact, Claim, FanIn, Joined, PrivateQuestion};

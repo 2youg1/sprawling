@@ -458,6 +458,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | collab::goal_tool | crates/collab/src/goal_tool.rs | the face goal detection and arbitration show a model | adapter | P3 | built |
 | collab::pr_tool | crates/collab/src/pr_tool.rs | the face pull requests show a model: open, list, check | adapter | P3 | built |
 | collab::archive_tool | crates/collab/src/archive_tool.rs | writing something down so the next run need not be told twice | adapter | P4 | built |
+| collab::claim_effect | crates/collab/src/claim_effect.rs | what a claim on a plan node left behind, and whether the file still agrees with it | value | V3 | built |
 | collab::claim_tool | crates/collab/src/claim_tool.rs | the face `Roadmap.md` shows a model: one claimed row at a time | adapter | P4 | built |
 | collab::workshop_tool | crates/collab/src/workshop_tool.rs | the face a workshop shows a model: lay out, ask the join, judge it | adapter | P1 | built |
 | collab::triage | crates/collab/src/triage.rs | where something from outside lands, and whether it starts work | decision | P3 | built |

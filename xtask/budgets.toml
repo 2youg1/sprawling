@@ -227,7 +227,7 @@ budget_lines = 1000
 measured_by = "cargo xtask length"
 status = "gated, with a register of the files that predate the rule"
 
-# The eleven files that were already over the line on the day it was
+# The files that were already over the line on the day it was
 # drawn (2026-09-02), each pinned at the length it had that day.
 #
 # `crates/web/src/lang.rs` is 3,217 lines and is not here: its module-map
@@ -253,8 +253,6 @@ status = "gated, with a register of the files that predate the rule"
 "crates/channels/src/server.rs" = 1235
 "crates/memory/src/jsonl.rs" = 1194
 "crates/kernel/src/plan.rs" = 1085
-"crates/web/src/settings.rs" = 1067
-"crates/collab/src/claim_tool.rs" = 1061
 
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"

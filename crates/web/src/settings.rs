@@ -20,7 +20,7 @@
 
 use crate::lang::{Msg, fill, say};
 use channels::{ChosenSummary, ClientFrame, DialectKind, EndpointSummary, EndpointsAnswer};
-use channels::{IdemKey, LoginStep, ModelTag, ProviderName, Query, RunId, Seq, WireCommand};
+use channels::{LoginStep, ModelTag, Query};
 use dioxus::prelude::*;
 
 use crate::socket::Enrolment;
@@ -193,79 +193,6 @@ fn consequence_of(tag: ModelTag) -> Msg {
     }
 }
 
-/// The command a filled form asks for, or `None` while it is not ready.
-///
-/// Returning `None` rather than a half-built command is what keeps
-/// [`ready`] the only statement of what a complete form is.
-/// One login step, ready to send.
-///
-/// Pure and separate from the button so both steps are decided in one
-/// place: the key is derived from the step itself, so pressing "start"
-/// twice begins one login while "finish" carries a key of its own.
-#[must_use]
-pub fn login_command(provider: &str, step: LoginStep) -> Option<WireCommand> {
-    let provider = ProviderName::parse(provider.trim()).ok()?;
-    let material = match &step {
-        LoginStep::Begin => format!("login-begin:{}", provider.as_str()),
-        LoginStep::Code { code } => format!("login-code:{}:{code}", provider.as_str()),
-    };
-    Some(WireCommand::Login {
-        provider,
-        step,
-        idem: IdemKey::derive(&RunId::CITY, Seq::FIRST, material.as_bytes()),
-    })
-}
-
-#[must_use]
-pub fn attach_command(form: &AttachForm) -> Option<WireCommand> {
-    if ready(form) != AttachReadiness::Ready {
-        return None;
-    }
-    let name = ProviderName::parse(form.name.trim()).ok()?;
-    let base_url = form.base_url.trim().to_owned();
-    Some(WireCommand::AttachEndpoint {
-        name,
-        // The idempotency key is derived from what the person entered,
-        // so pressing the button twice attaches once.
-        idem: IdemKey::derive(&RunId::CITY, Seq::FIRST, base_url.as_bytes()),
-        base_url,
-        dialect: form.dialect?,
-        secret: form.secret.clone(),
-        auth_header: None,
-        admit: form.admit.clone(),
-    })
-}
-
-/// The command that asks a base URL what it serves, without attaching
-/// anything.
-///
-/// It needs the same filled form an attachment does, because a probe
-/// that guessed the dialect would be asking a different question from
-/// the one the attachment will ask.
-#[must_use]
-pub fn probe_command(form: &AttachForm) -> Option<WireCommand> {
-    if ready(form) != AttachReadiness::Ready {
-        return None;
-    }
-    let name = ProviderName::parse(form.name.trim()).ok()?;
-    let base_url = form.base_url.trim().to_owned();
-    Some(WireCommand::ProbeEndpoint {
-        name,
-        // Distinct from the attach key on the same URL: asking and
-        // registering are two acts, and one must not deduplicate the
-        // other away.
-        idem: IdemKey::derive(
-            &RunId::CITY,
-            Seq::FIRST,
-            format!("probe:{base_url}").as_bytes(),
-        ),
-        base_url,
-        dialect: form.dialect?,
-        secret: form.secret.clone(),
-        auth_header: None,
-    })
-}
-
 /// What an enrolment answer means to the person watching, and what it
 /// leaves behind. Pure, so the sentence and the reference are decided in
 /// one place rather than inside a browser callback.
@@ -370,31 +297,6 @@ pub(crate) fn models_of(answer: &EndpointsAnswer, endpoint: &str) -> Vec<String>
         .collect()
 }
 
-/// The command a filled model form asks for, or `None` while it is not
-/// ready.
-#[must_use]
-pub fn select_command(form: &SelectForm, answer: &EndpointsAnswer) -> Option<WireCommand> {
-    if select_ready(form, answer) != SelectReadiness::Ready {
-        return None;
-    }
-    let endpoint = ProviderName::parse(form.endpoint.trim()).ok()?;
-    let model = form.model.trim().to_owned();
-    Some(WireCommand::SelectModel {
-        idem: IdemKey::derive(
-            &RunId::CITY,
-            Seq::FIRST,
-            format!("{}/{model}", form.endpoint).as_bytes(),
-        ),
-        endpoint,
-        model,
-        tag: form.tag?,
-        // The model's own facts, not numbers invented on this page. The
-        // server holds the catalogue; zero means "take what it says".
-        context_tokens: 0,
-        max_output_tokens: 0,
-    })
-}
-
 /// How many models an endpoint serves, said.
 fn model_count(lang: crate::lang::Lang, count: usize) -> String {
     fill(
@@ -485,7 +387,7 @@ pub fn Settings(
                 onsubmit: move |event| {
                     event.prevent_default();
                     let filled = form.read().clone();
-                    if let Some(command) = attach_command(&filled) {
+                    if let Some(command) = crate::command::attach_command(&filled) {
                         on_frame.call(ClientFrame::Command(Box::new(command)));
                     }
                 },
@@ -577,7 +479,7 @@ pub fn Settings(
                         disabled: ready(&form.read()) != AttachReadiness::Ready,
                         onclick: move |_| {
                             let filled = form.read().clone();
-                            if let Some(command) = probe_command(&filled) {
+                            if let Some(command) = crate::command::probe_command(&filled) {
                                 on_frame.call(ClientFrame::Command(Box::new(command)));
                             }
                         },
@@ -641,7 +543,7 @@ pub fn Settings(
                 button {
                     r#type: "button",
                     onclick: move |_| {
-                        if let Some(command) = login_command(&subscription.read(), LoginStep::Begin)
+                        if let Some(command) = crate::command::login_command(&subscription.read(), LoginStep::Begin)
                         {
                             on_frame.call(ClientFrame::Command(Box::new(command)));
                         }
@@ -673,7 +575,7 @@ pub fn Settings(
                             onclick: move |_| {
                                 let typed = code.read().trim().to_owned();
                                 code.set(String::new());
-                                if let Some(command) = login_command(
+                                if let Some(command) = crate::command::login_command(
                                     &subscription.read(),
                                     LoginStep::Code { code: typed },
                                 ) {
@@ -692,7 +594,7 @@ pub fn Settings(
                     let served = answer.clone();
                     move |event: FormEvent| {
                         event.prevent_default();
-                        if let Some(command) = select_command(&choice.read(), &served) {
+                        if let Some(command) = crate::command::select_command(&choice.read(), &served) {
                             on_frame.call(ClientFrame::Command(Box::new(command)));
                         }
                     }
@@ -854,6 +756,9 @@ pub fn Settings(
 )]
 mod tests {
     use super::*;
+    // The forms are read here; the frames they turn into are
+    // `crate::command`'s, and these assertions check the crossing.
+    use channels::WireCommand;
 
     fn answer() -> EndpointsAnswer {
         EndpointsAnswer {
@@ -889,10 +794,11 @@ mod tests {
             SelectReadiness::ModelNotServed,
             "the refusal the server would give, given before the person presses anything"
         );
-        assert!(select_command(&form, &served).is_none());
+        assert!(crate::command::select_command(&form, &served).is_none());
         form.model = "m-large".to_owned();
         assert_eq!(select_ready(&form, &served), SelectReadiness::Ready);
-        let command = select_command(&form, &served).expect("a ready form is a command");
+        let command =
+            crate::command::select_command(&form, &served).expect("a ready form is a command");
         match command {
             WireCommand::SelectModel {
                 model,
@@ -998,7 +904,7 @@ mod tests {
             admit: Vec::new(),
         };
         assert!(
-            attach_command(&form).is_none(),
+            crate::command::attach_command(&form).is_none(),
             "a half-built command would be a second statement of what a complete form is"
         );
         form.base_url = "https://api.example.test/v1".to_owned();
@@ -1009,7 +915,7 @@ mod tests {
             secret,
             idem,
             ..
-        }) = attach_command(&form)
+        }) = crate::command::attach_command(&form)
         else {
             panic!("a ready form asks to attach");
         };
@@ -1019,7 +925,9 @@ mod tests {
         assert_eq!(secret, None);
         // Pressing twice attaches once: the key is derived from what was
         // entered, not from when the button was pressed.
-        let Some(WireCommand::AttachEndpoint { idem: again, .. }) = attach_command(&form) else {
+        let Some(WireCommand::AttachEndpoint { idem: again, .. }) =
+            crate::command::attach_command(&form)
+        else {
             panic!("a ready form asks to attach");
         };
         assert_eq!(idem, again);
