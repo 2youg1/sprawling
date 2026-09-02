@@ -142,6 +142,7 @@ fn plan(budget_turns: u32) -> RunPlan {
         .unwrap(),
         policy: BuildingPolicy::default(),
         tools: Vec::new(),
+        skills: Vec::new(),
     }
 }
 

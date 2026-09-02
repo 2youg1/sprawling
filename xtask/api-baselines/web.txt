@@ -11,6 +11,7 @@ impl web::Feed
 impl web::Field
 impl web::Filter
 impl web::Frame
+impl web::Given
 impl web::Kind
 impl web::Lang
 impl web::Lens
@@ -39,6 +40,7 @@ pub const web::FILED_LATELY_MAX: usize
 pub const web::Field::ALL: [web::Field; 3]
 pub const web::GRAY_CHROMA: u16
 pub const web::GRAY_RAMP: [(&str, u16); 11]
+pub const web::HASH_GLIMPSE: usize
 pub const web::HELD_RECORDS: usize
 pub const web::HUE_ALERT: u16
 pub const web::HUE_AXIS: u16
@@ -62,7 +64,7 @@ pub const web::TEXT_SURFACE_CEILING: &str
 pub const web::TEXT_TOKENS: [(&str, u16, u16); 4]
 pub const web::TILE_WIDTH: u32
 pub const web::TYPE_SCALE: [(&str, u16, u16, u16); 6]
-pub const web::Tab::ALL: [web::Tab; 4]
+pub const web::Tab::ALL: [web::Tab; 5]
 pub const web::WINDOW: usize
 pub const web::ZOOM_STOPS: [u32; 3]
 pub enum web::Act
@@ -93,6 +95,7 @@ pub enum web::ProviderHealth
 pub enum web::Raise
 pub enum web::ReturnPath
 pub enum web::RoomQueue
+pub enum web::Sighting
 pub enum web::Subject
 pub enum web::Tab
 pub enum web::Target
@@ -132,6 +135,8 @@ pub fn web::Field::sentence(self) -> web::Msg
 pub fn web::Field::slot(self) -> &'static str
 pub fn web::Filter::keeps(&self, &kernel::event::EventRecord) -> bool
 pub fn web::Frame::attr(&self) -> alloc::string::String
+pub fn web::Given::bytes(&self) -> u64
+pub fn web::Given::disturbed(&self) -> bool
 pub fn web::Kind::word(self) -> web::Msg
 pub fn web::Lang::endonym(self) -> &'static str
 pub fn web::Lang::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -166,6 +171,7 @@ pub fn web::Plan::ink(&self, web::Field) -> &'static str
 pub fn web::Plan::is_chosen(&self, web::Field) -> bool
 pub fn web::Plan::value(&self, web::Field) -> &str
 pub fn web::ProgressBar(web::progress::ProgressBarProps) -> dioxus_core::innerlude::Element
+pub fn web::PromptView(web::prompt::PromptViewProps) -> dioxus_core::innerlude::Element
 pub fn web::ProviderHealth::word(self) -> web::Msg
 pub fn web::ReachForm(web::reach::ReachFormProps) -> dioxus_core::innerlude::Element
 pub fn web::RecordView(web::record::RecordViewProps) -> dioxus_core::innerlude::Element
@@ -244,6 +250,8 @@ pub fn web::fork_command(kernel::event::RunId, kernel::event::Seq) -> channels::
 pub fn web::from_event(&dioxus_core::events::Event<dioxus_html::events::drag::DragData>) -> web::Dropped
 pub fn web::from_fragment(&str) -> core::option::Option<web::View>
 pub fn web::gamut_chroma_ceiling(u16, u16) -> u16
+pub fn web::given(&[kernel::event::EventRecord], kernel::event::RunId) -> web::Given
+pub fn web::glimpse(&str) -> &str
 pub fn web::head_facts(web::Lang, &web::RunRow) -> [web::Fact; 4]
 pub fn web::hold(&mut alloc::vec::Vec<kernel::event::EventRecord>, impl core::iter::traits::collect::IntoIterator<Item = kernel::event::EventRecord>, core::option::Option<kernel::event::RunId>)
 pub fn web::inbox(alloc::vec::Vec<kernel::approval::ApprovalItem>) -> alloc::vec::Vec<web::Cluster>
@@ -313,6 +321,7 @@ pub struct web::Alerts
 pub struct web::AttachForm
 pub struct web::Bar
 pub struct web::BinRow
+pub struct web::Block
 pub struct web::Call
 pub struct web::Camera
 pub struct web::Cluster
@@ -325,6 +334,7 @@ pub struct web::Fact
 pub struct web::Feed
 pub struct web::Filter
 pub struct web::Frame
+pub struct web::Given
 pub struct web::Line
 pub struct web::Link
 pub struct web::Offer
@@ -341,6 +351,7 @@ pub struct web::SavingsRow
 pub struct web::SeatRow
 pub struct web::Shelf
 pub struct web::Sign
+pub struct web::Skill
 pub struct web::Snapshot
 pub struct web::Stalled
 pub struct web::Stroke<'a>
@@ -357,6 +368,7 @@ pub use web::LedgerView
 pub use web::LiveView
 pub use web::Palette
 pub use web::ProgressBar
+pub use web::PromptView
 pub use web::ReachForm
 pub use web::RecordView
 pub use web::RecycleBinView
@@ -404,6 +416,9 @@ pub web::BinRow::discarded_at: kernel::event::TimeMs
 pub web::BinRow::restored: bool
 pub web::BinRow::return_path: web::ReturnPath
 pub web::BinRow::what: alloc::string::String
+pub web::Block::bytes: u64
+pub web::Block::hash: alloc::string::String
+pub web::Block::slot: alloc::string::String
 pub web::Call::at: kernel::event::Seq
 pub web::Call::outcome: web::Outcome
 pub web::Call::output: core::option::Option<web::Output>
@@ -462,6 +477,9 @@ pub web::Frame::height: u32
 pub web::Frame::width: u32
 pub web::Frame::x: i32
 pub web::Frame::y: i32
+pub web::Given::blocks: alloc::vec::Vec<web::Block>
+pub web::Given::skills: alloc::vec::Vec<web::Skill>
+pub web::Given::turn: usize
 pub web::Kind::Building
 pub web::Kind::Page
 pub web::Kind::Session
@@ -763,6 +781,21 @@ pub web::Msg::PhaseHalted
 pub web::Msg::PhaseRunning
 pub web::Msg::PhaseWaiting
 pub web::Msg::ProgressNoPlan
+pub web::Msg::PromptAtTurn
+pub web::Msg::PromptBytes
+pub web::Msg::PromptNoSkills
+pub web::Msg::PromptNoSkillsWhat
+pub web::Msg::PromptNone
+pub web::Msg::PromptNoneWhat
+pub web::Msg::PromptScope
+pub web::Msg::PromptSkillChanged
+pub web::Msg::PromptSkillFirst
+pub web::Msg::PromptSkillSame
+pub web::Msg::PromptSkillsScope
+pub web::Msg::PromptSkillsSource
+pub web::Msg::PromptSkillsTitle
+pub web::Msg::PromptSource
+pub web::Msg::PromptTitle
 pub web::Msg::ProviderDegraded
 pub web::Msg::ProviderHealthy
 pub web::Msg::ProviderLost
@@ -789,6 +822,7 @@ pub web::Msg::SessionSpentIs
 pub web::Msg::SessionTabChanges
 pub web::Msg::SessionTabCost
 pub web::Msg::SessionTabDocs
+pub web::Msg::SessionTabPrompt
 pub web::Msg::SessionTabTurns
 pub web::Msg::SessionTurnOrdinal
 pub web::Msg::SessionUnknown
@@ -989,8 +1023,15 @@ pub web::SeatRow::spent: core::option::Option<kernel::budget::UsdMicros>
 pub web::SeatRow::turns: u32
 pub web::Shelf::building: kernel::address::Address
 pub web::Shelf::hits: alloc::vec::Vec<channels::wire::ArchiveHit>
+pub web::Sighting::Changed
+pub web::Sighting::Changed::was: alloc::string::String
+pub web::Sighting::First
+pub web::Sighting::Same
 pub web::Sign::count: u64
 pub web::Sign::what: web::Msg
+pub web::Skill::hash: alloc::string::String
+pub web::Skill::name: alloc::string::String
+pub web::Skill::sighting: web::Sighting
 pub web::Stalled::addr: kernel::address::Address
 pub web::Stalled::phase: web::Phase
 pub web::Stalled::turns: u32
@@ -1002,6 +1043,7 @@ pub web::Subject::Run
 pub web::Tab::Changes
 pub web::Tab::Cost
 pub web::Tab::Docs
+pub web::Tab::Prompt
 pub web::Tab::Turns
 pub web::TagRow::chosen: core::option::Option<channels::wire::ChosenSummary>
 pub web::TagRow::consequence: web::Msg

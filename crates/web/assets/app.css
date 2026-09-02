@@ -1117,3 +1117,29 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
    one loud colour and it means the same thing here as everywhere else in
    this interface: a person is needed. */
 .phase.alert { background: var(--ALERT); }
+
+/* -------------------------------------------- what a run was given to read */
+/* Nothing here is computed by the page: every hash and every byte count is
+   lifted out of a record. So the rows are read like a receipt - one line per
+   block, the hash in the middle, the size at the end where the weight of the
+   sentence belongs. */
+.prompt-block, .prompt-skill { display: flex; flex-wrap: wrap;
+                               align-items: baseline; gap: var(--space-snug);
+                               padding: var(--space-snug) 0;
+                               border-bottom: 1px solid var(--G2);
+                               font-size: var(--text-note); }
+.prompt-slot, .prompt-name { flex: none; color: var(--TEXT); }
+.prompt-hash { font-variant-numeric: tabular-nums; color: var(--TEXT_QUIET);
+               overflow-wrap: anywhere; }
+.prompt-bytes { margin-left: auto; flex: none; color: var(--TEXT_QUIET);
+                font-variant-numeric: tabular-nums; }
+.prompt-said { margin-left: auto; flex: none; color: var(--TEXT_QUIET); }
+/* A skill whose bytes moved while nobody was looking is the one row here
+   that asks for a person, so it takes the one loud colour - the same
+   meaning it carries everywhere else in this interface. */
+.prompt-skill.alert { border-left: 2px solid var(--ALERT);
+                      padding-left: var(--space-snug); }
+.prompt-skill.alert .prompt-said { color: var(--ALERT); }
+/* The tab says it too. A warning a person has to open a tab to find
+   arrives after the turn it was about. */
+.session-tabs .tab.alert { color: var(--ALERT); }

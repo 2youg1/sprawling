@@ -2712,6 +2712,11 @@ impl RunWorker {
             prefix,
             policy: site.rules.policy().clone(),
             tools,
+            // From the catalog rather than from a second scan of the
+            // shelves: the catalog already decided what this run can
+            // reach, and reading the shelf again would answer that
+            // question a second time at a different instant.
+            skills: workbench.catalog.borrow().skill_pins(),
         };
 
         // The norms are filled by the machine: their addresses are known
@@ -3828,6 +3833,10 @@ impl RunWorker {
                 name: holding.name.clone(),
                 disclosure: holding.disclosure.clone(),
                 expansion: holding.addr.as_str().to_owned(),
+                // What the shelf held at this scan. The run records it,
+                // so a document that changes content behind the same
+                // name is a difference somebody can see later.
+                hash: Some(holding.hash),
             })?;
         }
         for absent in shelves.missing(rules.reading_room()) {

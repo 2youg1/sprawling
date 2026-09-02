@@ -348,7 +348,9 @@ impl StampGate {
 ### 8-11 runtime::catalog（S3.10；形状 6＋渲染）
 
 ```rust
-pub struct CatalogEntry { pub name: String, pub disclosure: String, pub expansion: String }
+pub struct CatalogEntry { pub name: String, pub disclosure: String, pub expansion: String,
+                          pub hash: Option<B3Hash> }   // V3.27：架上那份文档被读到时的哈希
+pub struct SkillPin { pub name: String, pub hash: B3Hash }   // V3.27
 pub struct Catalog { /* tools: BTreeMap<ToolName,…>、skills: BTreeMap、mode: Option<Mode> —— 私有 */ }
 impl Catalog {
     pub fn new() -> Catalog;
@@ -358,8 +360,12 @@ impl Catalog {
     pub fn render(&self) -> String;              // Resident 段的 catalog 部分：段头一行自述＋一行一件；BTreeMap 序恒定
     pub fn tool_defs(&self) -> Vec<ToolDef>;     // ChatRequest.tools 的唯一来源
     pub fn expand(&self, name: &str) -> Option<&str>;   // 第二级披露（怎么用）
+    pub fn skill_pins(&self) -> Vec<SkillPin>;   // V3.27：本 Run 拿到了哪几份，当时各是什么字节
 }
 ```
+
+- **`hash` 是 `Option`，而那个 `None` 不是「没算」**：目录里另有两类条目的正文由本构建自己握着（mode 的纪律、dev 那一条），它们背后没有一份能在无人看着时改掉的文档。
+- **pin 从 catalog 取，不重扫一遍书架**：catalog 已经是「本 Run 能够到什么」的权威，再扫一次就是在另一个时刻对同一个问题给第二个答案。
 
 **P6.02：`render()` 与 `set_mode()` 接线**。它们自 S3.10 写下就**一个生产调用者都没有**，只有自己的测试在调。后果不是「少了一行文字」：工具走 `ChatRequest.tools` 到得了模型，而**阅览室准入的 SKILL 与本 Run 所处的 mode 从未到达任何模型**——`city::library` 的准入判定因此是一道没有下游的门。
 
@@ -563,7 +569,11 @@ pub struct RunPlan {                 // 一个 Run 的全部常量，调用方�
     pub budget_turns: u32, pub budget: BudgetCap,         // R2.11：回合上限，以及花销天花板
     pub shape: CallShape,
     pub prefix: FrozenPrefix, pub policy: BuildingPolicy, pub tools: Vec<ToolDef>,
+    pub skills: Vec<SkillPin>,                            // V3.27：阅览室准进了什么，当时各是什么字节
 }
+```
+
+- **`skills` 写进 `run_started` 载荷，且无条件写**（空则空数组），理由与 budget 两栏同一条：一个时有时无的 key 是一个读者得猜的形状，而「这栋楼一个都没准进」本身就是一件值得记下的事。进账本而不只留在进程里，是因为「它变了没有」需要一个**早一次的读取**，而进程一走就只剩账本说得出这一轮到底拿到了哪些字节。
 
 #[non_exhaustive] pub enum SafePoint { BeforeAssemble{turn:u32}, BeforeCall{turn:u32}, BeforeWave{turn:u32}, BeforeSpawn{turn:u32} }
 pub enum Advance { Turned, Concluded(Completion) }        // 穷尽；新结局逼每个调用方表态

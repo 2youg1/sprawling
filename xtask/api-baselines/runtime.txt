@@ -170,6 +170,8 @@ pub fn runtime::catalog::Catalog::render(&self) -> alloc::string::String
 pub fn runtime::catalog::Catalog::render(&self) -> alloc::string::String
 pub fn runtime::catalog::Catalog::set_mode(&mut self, runtime::mode::Mode)
 pub fn runtime::catalog::Catalog::set_mode(&mut self, runtime::mode::Mode)
+pub fn runtime::catalog::Catalog::skill_pins(&self) -> alloc::vec::Vec<runtime::catalog::SkillPin>
+pub fn runtime::catalog::Catalog::skill_pins(&self) -> alloc::vec::Vec<runtime::catalog::SkillPin>
 pub fn runtime::catalog::Catalog::tool_defs(&self) -> alloc::vec::Vec<kernel::model::ToolDef>
 pub fn runtime::catalog::Catalog::tool_defs(&self) -> alloc::vec::Vec<kernel::model::ToolDef>
 pub fn runtime::clock::ClockStamp::render(&self) -> alloc::string::String
@@ -373,6 +375,7 @@ pub runtime::BreakerVerdict::Open
 pub runtime::BreakerVerdict::Open::after: u32
 pub runtime::CatalogEntry::disclosure: alloc::string::String
 pub runtime::CatalogEntry::expansion: alloc::string::String
+pub runtime::CatalogEntry::hash: core::option::Option<kernel::locator::B3Hash>
 pub runtime::CatalogEntry::name: alloc::string::String
 pub runtime::ChildStatus::kind: kernel::delegation::DelegateKind
 pub runtime::ChildStatus::room: kernel::address::Address
@@ -455,6 +458,7 @@ pub runtime::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::RunPlan::prefix: runtime::prefix::FrozenPrefix
 pub runtime::RunPlan::run: kernel::event::RunId
 pub runtime::RunPlan::shape: runtime::turn::CallShape
+pub runtime::RunPlan::skills: alloc::vec::Vec<runtime::catalog::SkillPin>
 pub runtime::RunPlan::task: alloc::string::String
 pub runtime::RunPlan::tools: alloc::vec::Vec<kernel::model::ToolDef>
 pub runtime::RunPlan::who: alloc::string::String
@@ -489,6 +493,8 @@ pub runtime::SegmentSlot::Building
 pub runtime::SegmentSlot::City
 pub runtime::SegmentSlot::Resident
 pub runtime::SegmentSlot::Run
+pub runtime::SkillPin::hash: kernel::locator::B3Hash
+pub runtime::SkillPin::name: alloc::string::String
 pub runtime::SourceDoc::addr: kernel::address::Address
 pub runtime::SourceDoc::bytes: core::option::Option<alloc::vec::Vec<u8>>
 pub runtime::StatusSnapshot::addr: kernel::address::Address
@@ -521,11 +527,14 @@ pub runtime::ZoneEntry::local: alloc::string::String
 pub runtime::ZoneEntry::offset_min: i32
 pub runtime::catalog::CatalogEntry::disclosure: alloc::string::String
 pub runtime::catalog::CatalogEntry::expansion: alloc::string::String
+pub runtime::catalog::CatalogEntry::hash: core::option::Option<kernel::locator::B3Hash>
 pub runtime::catalog::CatalogEntry::name: alloc::string::String
 pub runtime::catalog::Expansion::Said
 pub runtime::catalog::Expansion::Said::text: alloc::string::String
 pub runtime::catalog::Expansion::Skill
 pub runtime::catalog::Expansion::Skill::addr: alloc::string::String
+pub runtime::catalog::SkillPin::hash: kernel::locator::B3Hash
+pub runtime::catalog::SkillPin::name: alloc::string::String
 pub runtime::clock::ClockStamp::utc_ms: kernel::event::TimeMs
 pub runtime::clock::ClockStamp::zones: alloc::vec::Vec<runtime::clock::ZoneEntry>
 pub runtime::clock::ZoneEntry::id: alloc::string::String
@@ -629,6 +638,7 @@ pub runtime::run::RunPlan::policy: kernel::model::BuildingPolicy
 pub runtime::run::RunPlan::prefix: runtime::prefix::FrozenPrefix
 pub runtime::run::RunPlan::run: kernel::event::RunId
 pub runtime::run::RunPlan::shape: runtime::turn::CallShape
+pub runtime::run::RunPlan::skills: alloc::vec::Vec<runtime::catalog::SkillPin>
 pub runtime::run::RunPlan::task: alloc::string::String
 pub runtime::run::RunPlan::tools: alloc::vec::Vec<kernel::model::ToolDef>
 pub runtime::run::RunPlan::who: alloc::string::String
@@ -711,6 +721,7 @@ pub struct runtime::RunPlan
 pub struct runtime::SandboxJob
 pub struct runtime::SandboxOutcome
 pub struct runtime::SegmentCaps
+pub struct runtime::SkillPin
 pub struct runtime::SourceDoc
 pub struct runtime::StampGate
 pub struct runtime::StatusSnapshot
@@ -724,6 +735,7 @@ pub struct runtime::Watchdog
 pub struct runtime::ZoneEntry
 pub struct runtime::catalog::Catalog
 pub struct runtime::catalog::CatalogEntry
+pub struct runtime::catalog::SkillPin
 pub struct runtime::clock::ClockStamp
 pub struct runtime::clock::StampGate
 pub struct runtime::clock::ZoneEntry

@@ -188,6 +188,7 @@ pub fn run_scenario(scenario: Scenario) -> Result<ScenarioReport, AxError> {
         prefix,
         policy: BuildingPolicy::default(),
         tools: Vec::new(),
+        skills: Vec::new(),
     };
 
     let bench_who = who.clone();

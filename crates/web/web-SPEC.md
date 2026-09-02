@@ -1604,6 +1604,30 @@ pub fn waits_for(row: &PlanRow) -> String;
 - **挂成楼的第一个页签**（计划解析得出来时），不占第七个导航目的地：六个目的地是 §8-53 的裁定，而看板是**计划树的一张脸**，不是第七件要看的东西。
 - **`xtask ax` 在这张卡上咬了一次**：定稿屏上写了 `role=tablist`／`role=tab`，客户端的页签没有。**撤回定稿屏而不是加进客户端**——楼页签的 ARIA 是它自己的一张卡，只改一边正是这道门存在要抓的那种漂移。两边要加就一起加。
 
+### 8-59 这一轮到底发了什么给模型（V3.26＋V3.27）
+
+```rust
+pub struct Block { pub slot: String, pub hash: String, pub bytes: u64 }
+pub enum Sighting { First, Same, Changed { was: String } }
+pub struct Skill { pub name: String, pub hash: String, pub sighting: Sighting }
+pub struct Given { pub blocks: Vec<Block>, pub turn: usize, pub skills: Vec<Skill> }
+impl Given { pub fn bytes(&self) -> u64; pub fn disturbed(&self) -> bool; }
+pub const HASH_GLIMPSE: usize = 12;
+pub fn glimpse(hash: &str) -> &str;
+pub fn given(records: &[EventRecord], run: RunId) -> Given;
+#[component] pub fn PromptView(given: Given) -> Element;
+// session：Tab 第五个取值 Prompt，ALL 从 4 变 5
+```
+
+- **不新增查询，也不动线格式。** 两半的材料都已经在客户端手里：`prompt_assembled` 携着逐段 `{slot, hash, len}`，`run_started` 自 V3.27 起携着 `skills:[{name, hash}]`，而 `EventRecord` 把载荷原样送到页面。**多一个 `Query` 就是多一个同一事实的答面**，而那个答面只会在与记录不一致时才有意思。`WIRE_V` 因此不动。
+- **一个入口而不是两个（`given`）**：两半回答的是同一个问题——这一轮拿到了什么。分成两次调用，调用方就能把一轮的提示词画在另一轮的技能旁边。
+- **什么都不重算。** 页面上每一个哈希、每一个字节数都是从记录里取出来的；一个自己再哈希一遍四段的页面，就是「这一轮发了什么」的第二个权威。
+- **比对的对象是这座城自己的历史，不是一份签名**：拿本次 `run_started` 的 pin 与 `seq` 更小的、最新一条提到同名技能的 `run_started` 相比。三态各不相同：首次见到没有可比的东西，未变是一句值得说出口的安心话，变了才是唯一要人看一眼的。它只能说**这变了**，永远不说**这安全**。
+- **选哪一条早的读数，按 `seq` 而不按切片里的次序**：回填与直播是两次投递，信手里的顺序等于拿「哪一次请求后答」当成「哪一次更新」。一条断言钉住这件事。
+- **变了这件事写在页签上**（`.tab.alert`）：一个要人先点开才看得到的警告，到达得比它所关于的那一轮晚。
+- **四个槽名不翻译**：city／building／resident／run 是账本自己的词，也是花费页分钱所用的同一组词；把它们译成中文会让同一个概念在两页上叫两个名字。
+- **哈希只显前 12 位**：一个完整 BLAKE3 横在卡片上是一堵墙而不是一个事实；真要逐字比对的人该去读账本。
+
 ## 9 工作流程
 
 （随 S4.05 填：从 `socket` 建连、握手校验、事件流入口，到 `app` 求值视图、DOM 应用与画布绘制的完整通路。）

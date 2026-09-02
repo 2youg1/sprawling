@@ -60,6 +60,9 @@ pub fn dev_entry() -> CatalogEntry {
                     step: say which of the three this work needs and why, and wait for the \
                     person to grant it. Do not start the change in the mode you are in now."
             .to_owned(),
+        // Text this build holds, not a document on a shelf: there is
+        // nothing behind it that could change while nobody is looking.
+        hash: None,
     }
 }
 
@@ -105,6 +108,7 @@ impl Mode {
             name: format!("mode:{}", self.as_str()),
             disclosure: disclosure.to_owned(),
             expansion: expansion.to_owned(),
+            hash: None,
         }
     }
 }

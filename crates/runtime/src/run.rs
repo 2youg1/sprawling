@@ -18,6 +18,7 @@ use kernel::{
 };
 use serde_json::{Map, Value};
 
+use crate::catalog::SkillPin;
 use crate::handoff::Handoff;
 use crate::prefix::FrozenPrefix;
 use crate::turn::{CallShape, Interrupt, Opening, PhaseOutcome, Turn, Window};
@@ -54,6 +55,12 @@ pub struct RunPlan {
     pub prefix: FrozenPrefix,
     pub policy: BuildingPolicy,
     pub tools: Vec<ToolDef>,
+    /// The skills this run's reading room admitted, and what each one
+    /// hashed to when the shelf was read. Written into `run_started`
+    /// beside `parent` and the budget, and for the same reason: once
+    /// the process that read the shelf is gone, the ledger is the only
+    /// thing that can still say which bytes this run was given.
+    pub skills: Vec<SkillPin>,
 }
 
 /// A steer changes what the model reads next, so the driver folds it into
@@ -195,6 +202,24 @@ impl Run<Active> {
         started.insert(
             "tokens".to_owned(),
             Value::Number(plan.budget.tokens.get().into()),
+        );
+        // Unconditional for the same reason the budget is: a key that
+        // comes and goes is a shape a reader has to guess at, and "this
+        // building admits nothing" is a fact worth recording rather than
+        // an absence to infer.
+        started.insert(
+            "skills".to_owned(),
+            Value::Array(
+                plan.skills
+                    .iter()
+                    .map(|pin| {
+                        let mut row = Map::new();
+                        row.insert("name".to_owned(), Value::String(pin.name.clone()));
+                        row.insert("hash".to_owned(), Value::String(pin.hash.to_string()));
+                        Value::Object(row)
+                    })
+                    .collect(),
+            ),
         );
         ledger.append(EventDraft {
             run: plan.run,

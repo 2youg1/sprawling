@@ -531,7 +531,8 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::panel | crates/web/src/panel.rs | the one version of a centre panel: conclusion, scope, body, and where the numbers came from | decision | F2 | built |
 | web::phase | crates/web/src/phase.rs | what a session is doing, in the one vocabulary every surface reads from | data | V3 | built |
 | web::sessions | crates/web/src/sessions.rs | the first screen: the box that starts work, and the table its rows land in | decision | V3 | built |
-| web::session | crates/web/src/session.rs | one session: the four questions a person arrives with, and four readings of what it did | decision | V3 | built |
+| web::session | crates/web/src/session.rs | one session: the four questions a person arrives with, and five readings of what it did | decision | V3 | built |
+| web::prompt | crates/web/src/prompt.rs | what a run was given: the four frozen blocks of its prompt, and whether an admitted skill's bytes moved since the city last looked | projection | V3 | built |
 | web::waiting | crates/web/src/waiting.rs | everything that cannot move until a person answers, in one place | decision | V3 | built |
 | web::record | crates/web/src/record.rs | one history, in three lenses, at one address | decision | V3 | built |
 

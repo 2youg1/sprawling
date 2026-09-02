@@ -193,6 +193,23 @@ pub enum Msg {
     SessionTabChanges,
     SessionTabCost,
     SessionTabDocs,
+    SessionTabPrompt,
+    // What the run was actually sent, and what it was allowed to reach.
+    PromptTitle,
+    PromptScope,
+    PromptSource,
+    PromptAtTurn,
+    PromptBytes,
+    PromptNone,
+    PromptNoneWhat,
+    PromptSkillsTitle,
+    PromptSkillsScope,
+    PromptSkillsSource,
+    PromptNoSkills,
+    PromptNoSkillsWhat,
+    PromptSkillFirst,
+    PromptSkillSame,
+    PromptSkillChanged,
     SessionScope,
     SessionSource,
     SessionUnknown,
@@ -737,6 +754,75 @@ pub fn phrase(msg: Msg) -> Phrase {
         Msg::SessionTabDocs => Phrase {
             en: "documents",
             zh: "文档",
+        },
+        Msg::SessionTabPrompt => Phrase {
+            en: "prompt",
+            zh: "提示词",
+        },
+        Msg::PromptTitle => Phrase {
+            en: "this is what went to the model",
+            zh: "发给模型的就是这些",
+        },
+        Msg::PromptScope => Phrase {
+            en: "the four frozen blocks of the prefix, in the order they are cached. The \
+                 words city, building, resident and run are the ledger's own.",
+            zh: "前缀的四个冻结块，按缓存的顺序排。city、building、resident、run 四个词是账本自己的写法。",
+        },
+        Msg::PromptSource => Phrase {
+            en: "read out of this session's own prompt_assembled records; nothing here is \
+                 hashed a second time.",
+            zh: "从这条会话自己的 prompt_assembled 记录里读出；这里没有任何东西被重新算一遍哈希。",
+        },
+        Msg::PromptAtTurn => Phrase {
+            en: "assembled at turn {n}",
+            zh: "第 {n} 轮组装的",
+        },
+        Msg::PromptBytes => Phrase {
+            en: "{n} bytes",
+            zh: "{n} 字节",
+        },
+        Msg::PromptNone => Phrase {
+            en: "this session has not assembled a prompt yet.",
+            zh: "这条会话还没有组装过提示词。",
+        },
+        Msg::PromptNoneWhat => Phrase {
+            en: "the first one is written when the first turn opens.",
+            zh: "第一份在第一轮开始时落账。",
+        },
+        Msg::PromptSkillsTitle => Phrase {
+            en: "what this session was allowed to open",
+            zh: "这条会话被允许打开的东西",
+        },
+        Msg::PromptSkillsScope => Phrase {
+            en: "the reading room this building admits, and what each document hashed to \
+                 when the shelf was read.",
+            zh: "这栋楼准进的阅览室，以及扫架时每份文档的哈希。",
+        },
+        Msg::PromptSkillsSource => Phrase {
+            en: "pinned in run_started, and compared with the newest earlier session that \
+                 was given the same name.",
+            zh: "钉在 run_started 里，与拿到同一个名字的上一条会话相比。",
+        },
+        Msg::PromptNoSkills => Phrase {
+            en: "this building admits no skills.",
+            zh: "这栋楼一个技能都没准进。",
+        },
+        Msg::PromptNoSkillsWhat => Phrase {
+            en: "the reading room is a list a person writes in BUILDING.md; a name not on \
+                 the shelves is left out rather than promised.",
+            zh: "阅览室是人在 BUILDING.md 里写的一张单子；单上有而架上没有的名字会被略去，而不是先应承下来。",
+        },
+        Msg::PromptSkillFirst => Phrase {
+            en: "first time this city recorded it",
+            zh: "这座城第一次记下它",
+        },
+        Msg::PromptSkillSame => Phrase {
+            en: "same bytes as last time",
+            zh: "与上次字节相同",
+        },
+        Msg::PromptSkillChanged => Phrase {
+            en: "changed since last time, when it was {was}",
+            zh: "自上次以来变了，当时是 {was}",
         },
         Msg::SessionScope => Phrase {
             en: "one work line in one room. Everything it did is under the tabs.",
@@ -2214,6 +2300,22 @@ mod tests {
             Msg::SessionTabChanges,
             Msg::SessionTabCost,
             Msg::SessionTabDocs,
+            Msg::SessionTabPrompt,
+            Msg::PromptTitle,
+            Msg::PromptScope,
+            Msg::PromptSource,
+            Msg::PromptAtTurn,
+            Msg::PromptBytes,
+            Msg::PromptNone,
+            Msg::PromptNoneWhat,
+            Msg::PromptSkillsTitle,
+            Msg::PromptSkillsScope,
+            Msg::PromptSkillsSource,
+            Msg::PromptNoSkills,
+            Msg::PromptNoSkillsWhat,
+            Msg::PromptSkillFirst,
+            Msg::PromptSkillSame,
+            Msg::PromptSkillChanged,
             Msg::SessionScope,
             Msg::SessionSource,
             Msg::SessionUnknown,
@@ -2598,6 +2700,22 @@ mod tests {
                 | Msg::SessionTabChanges
                 | Msg::SessionTabCost
                 | Msg::SessionTabDocs
+                | Msg::SessionTabPrompt
+                | Msg::PromptTitle
+                | Msg::PromptScope
+                | Msg::PromptSource
+                | Msg::PromptAtTurn
+                | Msg::PromptBytes
+                | Msg::PromptNone
+                | Msg::PromptNoneWhat
+                | Msg::PromptSkillsTitle
+                | Msg::PromptSkillsScope
+                | Msg::PromptSkillsSource
+                | Msg::PromptNoSkills
+                | Msg::PromptNoSkillsWhat
+                | Msg::PromptSkillFirst
+                | Msg::PromptSkillSame
+                | Msg::PromptSkillChanged
                 | Msg::SessionScope
                 | Msg::SessionSource
                 | Msg::SessionUnknown
@@ -3002,7 +3120,7 @@ mod tests {
     /// a test that read the directory would be testing the machine it ran
     /// on. A view added without a line here is a view whose English can
     /// escape, which is the failure this table exists to make loud.
-    const VIEWS: [(&str, &str); 23] = [
+    const VIEWS: [(&str, &str); 24] = [
         ("alert.rs", include_str!("alert.rs")),
         ("board.rs", include_str!("board.rs")),
         ("app.rs", include_str!("app.rs")),
@@ -3023,6 +3141,7 @@ mod tests {
         ("sessions.rs", include_str!("sessions.rs")),
         ("waiting.rs", include_str!("waiting.rs")),
         ("progress.rs", include_str!("progress.rs")),
+        ("prompt.rs", include_str!("prompt.rs")),
         ("reach.rs", include_str!("reach.rs")),
         ("settings.rs", include_str!("settings.rs")),
         ("vitals.rs", include_str!("vitals.rs")),

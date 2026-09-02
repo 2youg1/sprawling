@@ -121,12 +121,15 @@ pub enum Tab {
     Changes,
     Cost,
     Docs,
+    /// What was sent, as opposed to what came back. Last because it is
+    /// the one a person opens on purpose rather than on arrival.
+    Prompt,
 }
 
 impl Tab {
     /// Every tab, in reading order: what it did, what that changed, what
-    /// it cost, and what it wrote down.
-    pub const ALL: [Tab; 4] = [Tab::Turns, Tab::Changes, Tab::Cost, Tab::Docs];
+    /// it cost, what it wrote down, and what it was sent.
+    pub const ALL: [Tab; 5] = [Tab::Turns, Tab::Changes, Tab::Cost, Tab::Docs, Tab::Prompt];
 
     /// What the tab is called.
     #[must_use]
@@ -136,6 +139,7 @@ impl Tab {
             Self::Changes => Msg::SessionTabChanges,
             Self::Cost => Msg::SessionTabCost,
             Self::Docs => Msg::SessionTabDocs,
+            Self::Prompt => Msg::SessionTabPrompt,
         }
     }
 }
@@ -188,6 +192,10 @@ pub fn SessionView(
         };
     };
     let facts = head_facts(lang(), row);
+    // Folded once, above the tabs, because the tab strip itself has to
+    // say when a skill's bytes moved: a warning a person has to open a
+    // tab to see arrives after the turn it was about.
+    let given = crate::prompt::given(&records, run);
     let phase = row.phase;
     let turns = row.turns;
     let mine: Vec<channels::EventRecord> = records
@@ -227,7 +235,7 @@ pub fn SessionView(
             for one in Tab::ALL {
                 button {
                     key: "{one:?}",
-                    class: "tab",
+                    class: if one == Tab::Prompt && given.disturbed() { "tab alert" } else { "tab" },
                     "aria-current": if tab() == one { "page" } else { "false" },
                     onclick: move |_| tab.set(one),
                     "{word(one.word())}"
@@ -271,6 +279,9 @@ pub fn SessionView(
                     live,
                     on_frame,
                 }
+            },
+            Tab::Prompt => rsx! {
+                crate::prompt::PromptView { given: given.clone() }
             },
             Tab::Docs => rsx! {
                 crate::building_view::BuildingView {
@@ -347,10 +358,15 @@ mod tests {
     /// The head says four things and only four. A page that reported
     /// whatever it happened to know would report a different set each
     /// time it was opened.
+    ///
+    /// The tabs are a separate count on purpose: the head answers what a
+    /// person arrives with, and a tab is a place to go afterwards. The
+    /// fifth is what the session was sent, which is a reading of the
+    /// same work rather than a fifth question at the door.
     #[test]
     fn the_head_answers_four_questions_and_no_others() {
         assert_eq!(head_facts(Lang::En, &row()).len(), 4);
-        assert_eq!(Tab::ALL.len(), 4);
+        assert_eq!(Tab::ALL.len(), 5);
     }
 
     /// The whole of the fourth question's answer: the city is not asked

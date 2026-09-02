@@ -20,7 +20,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use kernel::{Address, AxCode, AxError};
+use kernel::{Address, AxCode, AxError, B3Hash};
 
 /// Where the city's shared stock sits, under its reserved prefix.
 pub const LIBRARY_DIR: &str = "library";
@@ -41,6 +41,15 @@ pub struct Holding {
     /// author wrote to describe it. Taken rather than generated: a
     /// summary of a summary is a digest, and digests are suspect.
     pub disclosure: String,
+    /// What the whole document hashed to when this scan read it.
+    ///
+    /// Free: the scan already reads every byte to take the disclosure
+    /// line, so hashing costs one pass over bytes that are in hand. It
+    /// is here rather than computed by a reader because the answer a
+    /// reader wants is *whether this changed*, and that question needs
+    /// two readings taken at different times — a shelf that reported
+    /// only its current contents could never answer it.
+    pub hash: B3Hash,
     pub path: PathBuf,
     /// Where this holding sits, as the city spells it. Computed once at
     /// the scan that found the file, because a holding on a building's
@@ -178,6 +187,7 @@ fn shelve(
                     name,
                     section: section_name.clone(),
                     disclosure: first_line(&text),
+                    hash: B3Hash::digest(text.as_bytes()),
                     path: item,
                     addr,
                 },

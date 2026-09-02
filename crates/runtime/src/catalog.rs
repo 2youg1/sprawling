@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use kernel::{AxCode, AxError, ToolDef, ToolMeta};
+use kernel::{AxCode, AxError, B3Hash, ToolDef, ToolMeta};
 
 use crate::mode::Mode;
 
@@ -26,6 +26,23 @@ pub struct CatalogEntry {
     pub name: String,
     pub disclosure: String,
     pub expansion: String,
+    /// What the document behind this entry hashed to when the shelf was
+    /// read. `None` for an entry the catalog holds as text of its own,
+    /// which has no document to change behind anybody's back.
+    pub hash: Option<B3Hash>,
+}
+
+/// One skill, and what it hashed to when this run was given it.
+///
+/// Written into `run_started`, because the question it answers — did
+/// this file change since the city last looked — needs two readings
+/// taken at different times, and the ledger is where this city keeps a
+/// reading it can still compare against later. A file that changes
+/// content while keeping its name is what an injection looks like.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillPin {
+    pub name: String,
+    pub hash: B3Hash,
 }
 
 /// What a second-level disclosure turns out to be.
@@ -157,6 +174,24 @@ impl Catalog {
         self.tools.values().cloned().collect()
     }
 
+    /// What this run was given, and what each one hashed to.
+    ///
+    /// Taken from the catalog rather than from a second scan of the
+    /// shelves: the catalog is already the authority on what a run can
+    /// reach, and a second reading would be a second answer to that
+    /// question taken at a different instant.
+    pub fn skill_pins(&self) -> Vec<SkillPin> {
+        self.skills
+            .iter()
+            .filter_map(|(name, entry)| {
+                entry.hash.map(|hash| SkillPin {
+                    name: name.clone(),
+                    hash,
+                })
+            })
+            .collect()
+    }
+
     /// Second-level disclosure. Tools expand to their schema via
     /// `tool_defs` (the wire always carries it); skills and the mode
     /// expand through here.
@@ -224,6 +259,7 @@ mod tests {
                 name: "review".to_owned(),
                 disclosure: "review a diff".to_owned(),
                 expansion: "run it before merging".to_owned(),
+                hash: Some(B3Hash::digest(b"review a diff")),
             })
             .unwrap();
         catalog.set_mode(Mode::PlanGoal);

@@ -35,6 +35,7 @@ pub city::Cadence::EveryMinutes(u64)
 pub city::Cadence::WeeklyAt(u64)
 pub city::Holding::addr: kernel::address::Address
 pub city::Holding::disclosure: alloc::string::String
+pub city::Holding::hash: kernel::locator::B3Hash
 pub city::Holding::name: alloc::string::String
 pub city::Holding::path: std::path::PathBuf
 pub city::Holding::section: alloc::string::String

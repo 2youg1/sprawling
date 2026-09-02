@@ -289,6 +289,7 @@ mod tests {
                 name: "review".to_owned(),
                 disclosure: "how this building reviews".to_owned(),
                 expansion: ".sprawling/library/review.md".to_owned(),
+                hash: None,
             })
             .unwrap();
 
