@@ -34,20 +34,20 @@ impl RunWorker {
                 // sentence typed into the composer has, so the composer
                 // sends the goal empty and this reads it as it always
                 // did.
-                let session = self.session_for(&addr, session, &task)?;
-                let addr = self.room_for(addr, session.as_ref())?;
-                // Written into the session's own layer rather than held
-                // beside the run: the ladder that resolves city ->
-                // building -> room is already the authority on how hard
-                // a run thinks, and a second store would be a second
-                // answer. Chosen once, it holds for every later run in
-                // that room.
-                if let Some(effort) = effort {
-                    city::write_effort(&self.city_root, &addr, effort)?;
-                }
+                //
+                // The session and the effort travel into the dispatch
+                // rather than being spent here, because opening a room
+                // and writing its configuration are the first two things
+                // this city puts on disk for a dispatch, and nothing may
+                // be written until the city has agreed to take the work.
+                // Doing either here would put that rule in a second
+                // place, and leave the entrances that dispatch without a
+                // person holding the older, wrong one.
                 self.dispatch_in(
                     Assignment {
                         addr,
+                        session,
+                        effort,
                         mode: mode_of(&mode),
                         budget,
                         parent: None,
@@ -350,7 +350,12 @@ impl RunWorker {
             // budget - this is the same piece of work, interrupted.
             self.dispatch_in(
                 Assignment {
+                    // The room this work was interrupted in already
+                    // exists: this is the same piece of work carrying
+                    // on, not a session being opened.
                     addr: job.addr,
+                    session: None,
+                    effort: None,
                     mode: runtime::Mode::PlanGoal,
                     budget: job.budget,
                     parent: None,

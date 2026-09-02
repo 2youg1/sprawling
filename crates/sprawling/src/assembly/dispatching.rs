@@ -6,7 +6,7 @@
 //! Who gets woken, and where the work lands.
 
 use kernel::{Address, AxCode, AxError, EventKind};
-use kernel::{Locator, RunId, TimeMs};
+use kernel::{Locator, Model, RunId, TimeMs};
 
 use crate::serving::CommandDesk;
 
@@ -24,15 +24,33 @@ use super::{
 /// address in front of it. This one knocks: it starts a run for a
 /// resident who is not working, because a message nobody is there to
 /// read is the same as no message.
-/// What one dispatch is, before anything is built for it.
+/// What one dispatch is, as the caller asked for it.
 ///
-/// Four values that reach every phase below together and are never
-/// chosen independently: standing the run up, laying out its bench,
-/// freezing its plan, settling its desks and concluding it all name the
-/// same address, mode and ceiling. Passed side by side they were four
+/// Four of these reach every phase below together and are never chosen
+/// independently: standing the run up, laying out its bench, freezing
+/// its plan, settling its desks and concluding it all name the same
+/// address, mode and ceiling. Passed side by side they were four
 /// parameters on six signatures, and the depth had to be derived twice.
+///
+/// The other two are spent in `dispatch_in`'s prologue and never seen
+/// again, and they are here rather than beside it because opening a room
+/// is the first thing this city writes for a dispatch. A caller that
+/// opened it would put the rule "agree before you write" in a second
+/// place, and the entrance that dispatches without a person - a knock, a
+/// schedule, a delegate - is the one that would not hold it.
 pub(super) struct Assignment {
+    /// Where the work was sent: a building when a room is still to be
+    /// opened for it, a room when there already is one.
     pub(super) addr: Address,
+    /// The room to open under that address, when the caller named a
+    /// session. The prologue spends it, and that is the line where
+    /// `addr` stops being what was asked for and becomes where the run
+    /// works.
+    pub(super) session: Option<kernel::SessionName>,
+    /// How hard the runs in that room think from here on, when the
+    /// caller said. It is written into the room's own configuration
+    /// layer, so it cannot be answered before the room exists.
+    pub(super) effort: Option<kernel::Effort>,
     pub(super) mode: runtime::Mode,
     pub(super) budget: kernel::BudgetCap,
     /// The run that handed this work down, when somebody did.
@@ -63,6 +81,22 @@ pub(super) struct Given {
     pub(super) task: String,
     pub(super) goal: String,
     pub(super) job: Locator,
+}
+
+/// What the city agreed to before it wrote anything for this dispatch.
+///
+/// Every refusal a dispatch can owe cheaply is answered to produce this
+/// value, and none of it touches the city: the four fields are read from
+/// files a person wrote and from the endpoint book the ledger folds. It
+/// exists so that the answer is computed once - `stand_up` takes it
+/// apart into the `Site` rather than asking the same questions again,
+/// which would put a second authority behind a credential renewal that
+/// may reach the network.
+pub(super) struct Agreed {
+    pub(super) building: city::Building,
+    pub(super) rules: city::BuildingRules,
+    pub(super) model: gateway::ModelEntry,
+    pub(super) adapter: Box<dyn Model + Send>,
 }
 
 pub(super) struct Knock {
@@ -173,28 +207,87 @@ pub(crate) fn acp_dispatch(
 }
 
 impl RunWorker {
+    /// Every refusal this dispatch can owe before it costs anything.
+    ///
+    /// **Nothing here writes, and that is the whole of the phase.** A
+    /// halted city that laid a job file down would leave a task in a
+    /// room no run ever opened, and so would a city with no model behind
+    /// the tag; the two are one rule, so they are answered in one place
+    /// and the first thing written happens on the other side of it.
+    ///
+    /// The order of the judgements is the order a caller is entitled to
+    /// them. A halted city answers "halted" rather than "no model is
+    /// chosen", because the halt is the one a person can lift and the
+    /// recovery line is the third part of what an `AxError` promises.
+    ///
+    /// # Errors
+    /// Refuses a halted scope, the reserved subtree, rules that will not
+    /// load, a tag with no model behind it, an endpoint that is no
+    /// longer attached, a confidential building whose model would leave
+    /// this machine, and a subscription credential that will not renew.
+    pub(super) fn agree_to_work(&mut self, addr: &Address) -> Result<Agreed, AxError> {
+        if let Some(scope) = self.halted_by(addr) {
+            return Err(AxError::failure(
+                AxCode::GateDenied,
+                "dispatch work",
+                addr.as_str().to_owned(),
+            )
+            .with_recovery(format!(
+                "{scope} is halted; release it to let work in again. Runs already going are \
+                 unaffected - stopping one is `cancel`"
+            )));
+        }
+        // The building's own rules decide which models this run may
+        // reach, so they are read before one is chosen.
+        let building = city::Building::of(addr)?;
+        let rules = city::load(&self.city_root, building.addr())?;
+        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
+        // A subscription credential that expires mid-run is a run that
+        // dies on its second turn, so it is renewed before the run
+        // starts rather than after a call comes back refused. The
+        // endpoint a login attached carries the provider's own name.
+        self.renew_if_stale(&chosen.endpoint.name.clone())?;
+        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
+        let model = chosen.entry.clone();
+        let adapter = self.adapter_for(&chosen)?;
+        Ok(Agreed {
+            building,
+            rules,
+            model,
+            adapter,
+        })
+    }
+
     /// One dispatch under a stated mode. The mode decides nothing until
     /// the work is offered back to the building: what it changes is the
     /// evidence that offer has to carry.
     pub(super) fn dispatch_in(
         &mut self,
-        at: Assignment,
+        mut at: Assignment,
         task: String,
         goal: String,
     ) -> Result<Dispatched, AxError> {
         // Nothing is written before the city agrees to take the work:
         // a halted city that laid a job file down would leave a task in
         // a room no run ever opened.
-        if let Some(scope) = self.halted_by(&at.addr) {
-            return Err(AxError::failure(
-                AxCode::GateDenied,
-                "dispatch work",
-                at.addr.as_str().to_owned(),
-            )
-            .with_recovery(format!(
-                "{scope} is halted; release it to let work in again. Runs already going are \
-                 unaffected - stopping one is `cancel`"
-            )));
+        let agreed = self.agree_to_work(&at.addr)?;
+        // Naming the work costs one call to the digest model, so it is
+        // asked after the city has agreed rather than before: a person
+        // does not pay a provider to name work this city was never going
+        // to take.
+        let session = self.session_for(&at.addr, at.session.take(), &task)?;
+        // The first thing this city writes for a dispatch, and the line
+        // where `addr` stops being where the work was sent and becomes
+        // where the run works.
+        at.addr = self.room_for(at.addr, session.as_ref())?;
+        // Written into the session's own layer rather than held beside
+        // the run: the ladder that resolves city -> building -> room is
+        // already the authority on how hard a run thinks, and a second
+        // store would be a second answer. Chosen once, it holds for
+        // every later run in that room - and for this one, which is why
+        // it is written before the configuration is frozen.
+        if let Some(effort) = at.effort {
+            city::write_effort(&self.city_root, &at.addr, effort)?;
         }
         // The task file exists first, then the run exists: the job on
         // disk is what the agent reads, and the copy in the store is
@@ -232,7 +325,7 @@ impl RunWorker {
         // two values, both carried whole rather than taken apart into a
         // row of locals every phase below would then have to be handed
         // one at a time.
-        let mut site = self.stand_up(&at, &given)?;
+        let mut site = self.stand_up(agreed, &at, &given)?;
         let desks = self.open_desks(&site, &at.addr)?;
 
         // What the model may see, what routes the call it makes, and
@@ -315,6 +408,11 @@ impl RunWorker {
         self.dispatch_in(
             Assignment {
                 addr,
+                // The address is already where the work happens: every
+                // caller of this one is the city dispatching into a room
+                // that exists, rather than a person opening a session.
+                session: None,
+                effort: None,
                 mode: runtime::Mode::PlanGoal,
                 budget: kernel::BudgetCap::default(),
                 parent: None,
@@ -597,6 +695,55 @@ mod tests {
         assert!(
             !asked.contains("user: drop the glaze order"),
             "only the person's entrance can render as the person"
+        );
+    }
+
+    /// A dispatch the city will not take leaves nothing a person can
+    /// find.
+    ///
+    /// `dispatch_in` opens by saying so - a halted city that laid a job
+    /// file down would leave a task in a room no run ever opened - and
+    /// the halt was the only door that held it. The room was opened and
+    /// the brief was written before the tag was resolved, so a dispatch
+    /// to a building nobody raised was refused for having no model and
+    /// left a building, a room and a `JOB.md` behind: files a person can
+    /// see that no record in the one history mentions.
+    ///
+    /// The code is asserted beside the disk because the two are separate
+    /// promises. The caller is owed `E_CONFIG_INVALID` here - nothing is
+    /// attached, so no tag names a model - and moving the judgement in
+    /// front of the write must not change which refusal that is.
+    #[test]
+    fn a_dispatch_the_city_will_not_take_leaves_no_room_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        init_city(dir.path()).unwrap();
+        let mut worker = RunWorker::new(
+            dir.path(),
+            gateway::Custodian::in_memory(),
+            runtime::diagnostics::Diagnostics::off(),
+        )
+        .unwrap();
+        let refused = worker
+            .handle(channels::Command::Dispatch {
+                addr: Address::parse("gamma").unwrap(),
+                task: "say something".to_owned(),
+                goal: "an answer".to_owned(),
+                mode: channels::ModeTag::parse("build").unwrap(),
+                budget: kernel::BudgetCap::default(),
+                idem: kernel::IdemKey::derive(&RunId::CITY, kernel::Seq::FIRST, b"dispatch"),
+                session: Some(kernel::SessionName::parse("one").unwrap()),
+                effort: None,
+            })
+            .unwrap_err();
+
+        assert_eq!(
+            *refused.code(),
+            AxCode::ConfigInvalid,
+            "a city with nothing attached refuses a dispatch for having no model: {refused}"
+        );
+        assert!(
+            !dir.path().join("gamma").exists(),
+            "a refused dispatch raised a building nobody asked for"
         );
     }
 

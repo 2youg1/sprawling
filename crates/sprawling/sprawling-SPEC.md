@@ -1192,3 +1192,158 @@ invert the model seam，仍然没有卡，仍然要人先裁一次。**本卡不
 `cargo xtask length` 里 `assembly.rs` 的钉子被划掉而不是被调小；`[argument_count.predating]` 少十五行。
 两者都是纯删除，所以 `guard::strikes_only_exemptions` 放行，不需要 `Verdict:` trailer；
 budgets.toml 里那两段已经失真的注释单独一枚提交改，因为改注释会让豁免形状判定失效。
+
+## 8-40 判据先于副作用：一次派活在城答应之前不写任何东西（轨道一卡 1）
+
+`dispatch_in` 的开篇注释一字不差地写着这条规矩——「Nothing is written before the city agrees to take
+the work: a halted city that laid a job file down would leave a task in a room no run ever opened」——
+而代码只守住了停摆那一道。**本节把那句注释变成代码的形状。**
+
+### 量出来的现状
+
+一次派活从人发出的动词到第一次写，走过三段，其中两段先写后判：
+
+| 顺序 | 在哪 | 做什么 | 能不能拒绝 | 写不写 |
+|---|---|---|---|---|
+| 1 | `commanding::run_command` Dispatch 臂 | `session_for` | `E_INVALID_ARGS`（取不到名字） | 否，但**要花一次 Digest 模型调用** |
+| 2 | 同上 | `room_for` → `city::open_room` | 存储错 | **写：房间目录**（`create_dir`） |
+| 3 | 同上 | `city::write_effort` | 配置错 | **写：房间的 CONFIG.toml** |
+| 4 | `dispatching::dispatch_in` | `halted_by` | `E_GATE_DENIED` | 否 |
+| 5 | 同上 | `city::write_brief` | 存储错 | **写：`JOB.md`** |
+| 6 | 同上 | `cas.put` | 存储错 | 写：CAS 对象（`.sprawling/` 内，内容寻址） |
+| 7 | `workbench::stand_up` | `Building::of`／`city::load`／`load_config`／`Router::select`／`renew_if_stale`／`adapter_for`／`Identity::load` | `E_INVALID_ARGS`／`E_CONFIG_INVALID`／`E_GATE_DENIED` | 否 |
+| 8 | 同上 | `run_id_for`／`governance.sent`／worktree 租约 | 存储错 | 写 |
+
+本机实测（`sprawling call` 打到一座刚 init 的城）：派活到从没立过的楼 `gamma`，得到
+`E_CONFIG_INVALID「no model is chosen for this tag」`——**来自第 7 段的 `Router::select`**——
+而磁盘上留下 `<city>/gamma/one/JOB.md`，账本只有 `seq 0 city_initialized`。
+**第 2 段与第 5 段跑在第 7 段之前，这就是全部的病因。** 不是写域逃逸：`Work ".sprawling/evil"`
+得到 `E_INVALID_ARGS` 且一字节未落，保留子树守得住。
+
+### 判据
+
+**一次派活在城答应之前不写任何东西；城一答应，第一件被写下的就是房间。**
+
+「城答应」由一处回答，穷尽如下，且每一条都只读不写：保留子树（`Building::of`）、停摆
+（`halted_by`）、楼的规矩读得出（`city::load`）、tag 后面有模型且端点还在且不违反 confidential
+（`Router::select`）、订阅凭证续得上（`renew_if_stale`）、适配器造得出（`adapter_for`）。
+
+**留在答应之后的两条拒绝，各有其理由，写在这里而不是被含糊过去**：
+
+- `city::load_config` 读城／楼／居民三层。它**必须**在 `write_effort` 之后，因为同一次派活写下的
+  effort 要被这一次跑读到（「Chosen once, it holds for every later run in that room」）。把它提前
+  会让这次派活看不见自己刚写下的那一层——那是行为改变，不是顺序整理。
+- `city::Identity::load` 只在**文件权限**上拒绝；文件不存在读作 ephemeral。那是机器的故障而不是
+  这座城的判据，与「派活到没立过的楼」不是一类。
+
+两者拒绝时留下的是**一间空房间**，而那间房间是城已经答应之后开的：人要的房间开出来了，然后他自己写坏的
+配置挡住了这次跑。这与「城拒绝了却留下一间没人开过的屋子」不是同一件事。
+
+### 接口
+
+```rust
+/// 城在写下任何东西之前答应的那些事。
+pub(super) struct Standing {
+    building: city::Building,
+    rules: city::BuildingRules,
+    model: gateway::ModelEntry,
+    adapter: Box<dyn Model + Send>,
+}
+
+impl RunWorker {
+    /// 每一条这次派活可能欠下的拒绝，在它花掉任何东西之前。
+    pub(super) fn agree_to_work(&mut self, addr: &Address) -> Result<Standing, AxError>;
+    /// 站位，接过城已经答应的那部分。
+    pub(super) fn stand_up(&mut self, agreed: Standing, at: &Assignment, given: &Given)
+        -> Result<Site, AxError>;
+}
+```
+
+`Standing` 的四样东西在 `stand_up` 里原样进 `Site`，**不留第二份**：`Site` 的字段一个不增一个不减，
+拆开归位即可。`agree_to_work` 住在 `dispatching.rs` 而不是 `workbench.rs`，理由是尺寸也是位置：
+`workbench.rs` 997 行、离 1000 行的文件门只剩三行，而这条规矩的那句注释本来就写在 `dispatching.rs`。
+
+### `Assignment` 多两个字段，理由是规矩不能有两个家
+
+`session_for`／`room_for`／`write_effort` 必须搬进 `dispatch_in`，**否则这条规矩就有两个家**：
+`dispatch_in` 是唯一被所有派活入口共用的地方（人发的动词、批准后续跑的活、`wake`／`tick`／`knock`／
+委派共用的 `dispatch`），而房间是在人发的那条臂上开的。把答应放进 `dispatch_in` 而把开房间留在臂上，
+等于让敲门那条路照旧先写后判；把答应也放到臂上，就要在三个调用点各算一次，`renew_if_stale` 会走两趟网。
+
+于是 `Assignment` 从四个字段变六个：
+
+```rust
+pub(super) struct Assignment {
+    /// 活被送到哪儿。还要开房间时它是一座楼，已经有房间时它就是那个房间。
+    addr: Address,
+    /// 要在那座楼下开的房间，当调用方点了名。序幕用掉它，而序幕正是 `addr`
+    /// 从「人要的地方」变成「跑干活的地方」的那一行。
+    session: Option<kernel::SessionName>,
+    /// 那间房里的跑从此想多久，当调用方说了。写进房间自己的配置层，
+    /// 所以它答不到房间存在之前去。
+    effort: Option<kernel::Effort>,
+    mode: runtime::Mode,
+    budget: kernel::BudgetCap,
+    parent: Option<RunId>,
+}
+```
+
+`session` 与 `effort` 只活到序幕结束，而 `addr`／`mode`／`budget`／`parent` 穿过每一个相位——
+一个值里两种寿命，这是本卡自认的代价。**换来的是这条规矩只有一处能被违反**，而上一版的形状是
+它有两处、且其中一处没人看着。四个已有字段的语义逐字不变；三个不开房间的调用点写 `session: None,
+effort: None`，那正是 `session_for`／`room_for` 对它们本来就有的答案。
+
+### 序幕的顺序，以及为什么是这个顺序
+
+```rust
+let agreed = self.agree_to_work(&at.addr)?;        // 只读；第一条拒绝在这里
+let session = self.session_for(&at.addr, at.session.take(), &task)?;  // 可能花一次 Digest 调用
+at.addr = self.room_for(at.addr, session.as_ref())?;                  // ← 第一次写
+if let Some(effort) = at.effort { city::write_effort(&self.city_root, &at.addr, effort)?; }
+let brief = city::write_brief(...)?;
+...
+let mut site = self.stand_up(agreed, &at, &given)?;
+```
+
+**`session_for` 排在答应之后**：它可能向 Digest 模型要一个名字，而为一件城不会接的活付一次模型调用，
+是这条规矩的钱那一面。**`halted_by` 并入 `agree_to_work`**：它本来就是唯一守住的那道门，
+现在与其余五道站在一起，于是「城答应什么」读一处就够。
+
+**采钟点不动**（ARCH §10）：`run_id_for` 的 `now_ms()` 仍在 `renew_if_stale` 之后，
+采样次数与相对先后逐字不变；变的只是两者之间多了几次文件写，而那不是任何账本值的输入。
+
+### 谁答哪一个错误码，逐字不变
+
+`agree_to_work` 里判据的先后就是今天的先后，因此**没有一个调用方会看到与今天不同的码**：
+停摆答 `E_GATE_DENIED` 而不是 `E_CONFIG_INVALID`（否则会把一个能自己解除的停摆说成要去接 provider），
+保留地址答 `E_INVALID_ARGS`。派活到没立过的楼仍答 `E_CONFIG_INVALID`——
+**这一条是刻意保下来的**：轨道二的模型把「楼在不在这里不问」记为一件量出来的产品事实
+（`adversary/src/Sprawling/Model.hs` 的 `refusal`），改码等于要那份模型跟着改，
+而本卡不碰 `adversary/`。加一道「楼必须存在」的前置判断会正好破坏它——这是不选那个修法的第二个理由，
+第一个理由是它只修一半（`acme` 真在而没挂 provider 时 `<city>/acme/one/JOB.md` 照旧留下）。
+
+### CAS 那一次 `put` 留在原位，理由写在这里
+
+`cas.put(brief.segment_text())` 仍在 `stand_up` 之前，所以严格地说「答应之后」并非一个字节都不写：
+`.sprawling/cas/` 会多一个对象。**留它的理由**：CAS 是内容寻址且去重的，同样的字节写第二次就是同一份，
+它不可能在城里留下一间没人开过的屋子；而把它挪到答应之后，`run_id_for` 就得从一个此刻还没入库的
+摘要拼出 `cas:b3-…`，于是「locator 钉住的是库里的那些字节」这条权威会有第二处。
+本节的判据因此写作「城里人看得见的东西」，而不是含糊的「任何东西」。
+
+### 验收
+
+1. **红转绿（Rust，本仓）**：`a_dispatch_the_city_will_not_take_leaves_no_room_behind`——
+   一座刚 init、没挂任何 provider 的城，派活到 `gamma/one`，必须得到 `E_CONFIG_INVALID`，
+   且 `gamma` 目录不存在。今天它红在第二条断言上。
+2. **红转绿（Haskell，轨道二的检验器）**：`open finding` 那一组两条转绿——`nothingBehind`
+   （被拒的派活不改变城的目录树）与 `listsOnlyRaised`（`city_view` 只列被立起来过的楼）。
+   跑法见 `HANDOFF-2-adversary.md`；这两条断言是本卡的验收标准，不许为了让它绿而改动它们。
+3. **不回归**：`sprawling` 全部单测绿；`a_dispatch_with_no_goal_leaves_no_job_file_and_says_the_person_is_here`
+   与 `work_in_a_review_building_reaches_it_only_after_someone_else_checks_it` 直接盯着序幕与租约这两支。
+4. `just check` 绿。
+
+### 文档同步
+
+本节；`ARCHITECTURE.md` §5 第 3–4 步（派活先答应再写，房间是第一件被写下的东西）；
+`crates/sprawling/sprawling-SPEC.md` §8-31 的相位表（`stand_up` 多收一个归位值）。
+`city` 与 `channels` 的公开面不变，故 `api-baselines` 不动。

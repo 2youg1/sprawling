@@ -15,8 +15,8 @@ use runtime::{EditTool, ExecTool, StatusTool};
 use crate::effect;
 
 use super::{
-    Assignment, Given, PYTHON_WASM_ENV, RunWorker, autonomy_name, connect_mcp, mounts_under,
-    new_inbox, now_ms, run_id_for, transport_site,
+    Agreed, Assignment, Given, PYTHON_WASM_ENV, RunWorker, autonomy_name, connect_mcp,
+    mounts_under, new_inbox, now_ms, run_id_for, transport_site,
 };
 
 /// The sandbox this build carries, if it carries one.
@@ -207,41 +207,44 @@ pub(super) fn status_snapshot(situation: Situation<'_>) -> runtime::StatusSnapsh
 }
 
 impl RunWorker {
-    /// Settles where this run stands, before anything is built for it.
+    /// Settles where this run stands, once the city has agreed to take
+    /// the work.
     ///
-    /// The building's rules, the model behind them, who the run is, and
-    /// the tree it writes in are one phase rather than three, because
-    /// they interlock: a lease is named after the run, the run's id is
-    /// minted after a credential renewal that may reach the network, and
-    /// which credential that is comes from the rules. Cutting them apart
-    /// would move a clock sample, and the single sampling point is not
-    /// something a structural change may relocate.
+    /// What the agreement answered arrives as `agreed` rather than being
+    /// asked again: asking twice would put a second authority behind a
+    /// credential renewal that may reach the network. What is left is
+    /// one phase because it interlocks - a lease is named after the run,
+    /// and the run's id is minted after that renewal - so cutting it
+    /// apart would move a clock sample, which a structural change may
+    /// not relocate.
+    ///
+    /// The frozen configuration is read here rather than in the
+    /// agreement, and the reason is the room: a dispatch that names an
+    /// effort writes it into the room's own layer as the room is opened,
+    /// so a configuration frozen any earlier would leave this run blind
+    /// to the setting it just made.
     ///
     /// # Errors
-    /// Propagates a building that cannot be read, rules or configuration
-    /// that will not load, a tag with no model behind it, a credential
-    /// that will not renew, and whatever the checkpoint or the worktree
-    /// says about lending a tree out.
-    pub(super) fn stand_up(&mut self, at: &Assignment, given: &Given) -> Result<Site, AxError> {
+    /// Propagates configuration that will not load, a resident
+    /// description that cannot be read, and whatever the checkpoint or
+    /// the worktree says about lending a tree out.
+    pub(super) fn stand_up(
+        &mut self,
+        agreed: Agreed,
+        at: &Assignment,
+        given: &Given,
+    ) -> Result<Site, AxError> {
         let addr = &at.addr;
-        // The building's own rules decide which models this run may
-        // reach, so they are read before one is chosen.
-        let building = city::Building::of(addr)?;
-        let rules = city::load(&self.city_root, building.addr())?;
+        let Agreed {
+            building,
+            rules,
+            model,
+            adapter,
+        } = agreed;
         // City, building and resident layers, resolved once and frozen
         // for the whole run: re-reading them mid-run would let the two
         // halves of one session be shaped by two different settings.
         let config = city::load_config(&self.city_root, addr)?;
-        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
-        // A subscription credential that expires mid-run is a run that
-        // dies on its second turn, so it is renewed before the run
-        // starts rather than after a call comes back refused. The
-        // endpoint a login attached carries the provider's own name.
-        self.renew_if_stale(&chosen.endpoint.name.clone())?;
-        let chosen = self.book.select(kernel::ModelTag::Main, rules.policy())?;
-        let model = chosen.entry.clone();
-        let adapter = self.adapter_for(&chosen)?;
-
         // Who runs this: the address's own URBANITE.md when it has one,
         // and an ephemeral worker when it does not. The identity supplies
         // the resident segment, so the same resident reads the same

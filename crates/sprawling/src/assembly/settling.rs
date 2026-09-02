@@ -350,6 +350,8 @@ impl RunWorker {
             let child = self.dispatch_in(
                 Assignment {
                     addr: work.room,
+                    session: None,
+                    effort: None,
                     mode: at.mode,
                     budget: at.budget,
                     parent: Some(run_id),

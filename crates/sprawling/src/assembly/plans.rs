@@ -254,6 +254,8 @@ impl RunWorker {
                     self.dispatch_in(
                         Assignment {
                             addr: addr.clone(),
+                            session: None,
+                            effort: None,
                             mode: runtime::Mode::PlanGoal,
                             budget: kernel::BudgetCap::default(),
                             parent: None,

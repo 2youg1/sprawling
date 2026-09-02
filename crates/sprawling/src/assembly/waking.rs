@@ -191,6 +191,8 @@ impl RunWorker {
                 let outcome = self.dispatch_in(
                     Assignment {
                         addr: knock.addr.clone(),
+                        session: None,
+                        effort: None,
                         mode: knock.mode,
                         budget: knock.budget,
                         parent: None,

@@ -44,7 +44,7 @@ mod workbench;
 
 pub(crate) use building_page::read_building;
 use credentials::{Ceilings, Chosen, Entered};
-use dispatching::{Assignment, DISPATCH_TURN_BUDGET, Given, Knock, run_id_for};
+use dispatching::{Agreed, Assignment, DISPATCH_TURN_BUDGET, Given, Knock, run_id_for};
 pub(crate) use dispatching::{Dispatched, acp_dispatch};
 use driving::{Driven, Driving};
 use folds::{Governance, HALTED, RELEASED, artifact_of, new_inbox};
