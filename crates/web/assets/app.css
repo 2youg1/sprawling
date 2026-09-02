@@ -407,6 +407,20 @@ button:active:not(:disabled), .nav-item:active, .tab:active,
    A form that carries `.panel` is not: the panel grammar states its own
    display, which beats this rule on specificity, so the two cannot
    collide again. */
+/* A form is a row of controls that ends in the button that submits them,
+   and `flex-end` is what lines that button up with the boxes beside it:
+   a field carries a label above itself and a button does not, so aligning
+   on the bottom edge is the only thing that puts them on one line.
+
+   **A form that turns the axis must state the alignment again.** On the
+   cross axis of a column, `flex-end` means the right-hand edge, so every
+   column form below inherited an instruction to push its own controls
+   off to the right - which is how the settings page came to show three
+   fields descending the right margin in a staircase. Each of them says
+   `align-items: stretch` for that reason, and a new column form must.
+
+   A form that carries `.panel` is neither: the panel grammar states its
+   own display, which beats this rule on specificity. */
 form { display: flex; gap: var(--space-snug); align-items: flex-end; flex-wrap: wrap;
        margin: var(--space-base) 0; }
 
@@ -1048,7 +1062,8 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 .admit { display: block; margin-top: var(--space-snug); }
 .admit-row { display: flex; align-items: baseline; gap: var(--space-snug);
              padding: var(--space-tight) 0; }
-.choose { display: flex; flex-direction: column; gap: var(--space-snug); }
+.choose { display: flex; flex-direction: column; align-items: stretch;
+          gap: var(--space-snug); }
 /* A step of a login somebody is in the middle of. Numbered by position
    rather than by a stored counter: this page holds no progress, so a
    person who finished the login elsewhere finds the step simply gone. */
@@ -1078,7 +1093,7 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
    empty state rather than a banner: it is what the page looks like when
    the building is empty, and it disappears by itself. */
 .start-here { display: block; margin-top: var(--space-base); }
-.new-building, .send-work { display: flex; flex-direction: column;
+.new-building, .send-work { display: flex; flex-direction: column; align-items: stretch;
                             gap: var(--space-snug); margin-top: var(--space-base); }
 /* Following the end of a feed. A checkbox and its word, on one line. */
 .follow { display: inline-flex; align-items: baseline; gap: var(--space-tight);
@@ -1088,7 +1103,8 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 .recycle-bin { display: block; }
 /* What a building's runs may reach. A form, and the one place a person
    states it. */
-.reach { display: flex; flex-direction: column; gap: var(--space-snug); }
+.reach { display: flex; flex-direction: column; align-items: stretch;
+         gap: var(--space-snug); }
 
 /* One of the four things a session's head says. Peers, separated by
    space rather than by a rule: a divider between peers invites a reader
@@ -1190,7 +1206,7 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
    decision; stacking them would make one look like the default. */
 .pursuit-controls, .autonomy-controls {
     display: flex; gap: var(--space-snug); align-items: baseline; }
-.pursuit-form { display: flex; flex-direction: column;
+.pursuit-form { display: flex; flex-direction: column; align-items: stretch;
                 gap: var(--space-tight); margin-top: var(--space-snug); }
 .pursuit-form label { color: var(--TEXT_QUIET); font-size: var(--text-note); }
 .pursuit-goal { width: 100%; max-width: var(--width-measure); }
