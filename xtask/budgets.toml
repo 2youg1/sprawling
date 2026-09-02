@@ -136,6 +136,51 @@ budget_lines = 200
 measured_by = "cargo xtask length (syn spans, not brace counting)"
 status = "gated"
 
+# A long function hides a flow of control; a long file hides where
+# anything is. The second is what the person asked for on 2026-09-02,
+# after the largest file reached 12,078 lines and iteration on it began
+# costing more than the split would.
+#
+# Tests count. A `#[cfg(test)] mod tests` is exempt from the *function*
+# rule, because a long test is a different question from a long body -
+# but a reader looking for one thing pays for every line above it either
+# way, and in the file that prompted this rule the tests were 6,133 of
+# the 12,078.
+[file_length]
+what = "one source file under a crate's src/, every line of it, tests included"
+budget_lines = 1000
+measured_by = "cargo xtask length"
+status = "gated, with a register of the files that predate the rule"
+
+# The eleven files that were already over the line on the day it was
+# drawn (2026-09-02), each pinned at the length it had that day.
+#
+# `crates/web/src/lang.rs` is 3,217 lines and is not here: its module-map
+# row states the shape `data`, and the same exemption the function rule
+# grants it holds for the file rule, for the same reason. A table of
+# every word the client says is looked things up in, not navigated.
+#
+# This list has three properties, and it needs all three to be an
+# honest debt rather than a licence. A file it does not name is refused
+# at budget_lines outright, so **it cannot grow**. A file it does name
+# may not exceed its pin, so **no offender grows**. And a file that comes
+# back under budget_lines must be struck from the list, so **it removes
+# itself** as the work gets done.
+#
+# Delete a row by doing the split, never by raising its number.
+[file_length.predating]
+"crates/sprawling/src/assembly.rs" = 12078
+"crates/web/src/app.rs" = 3926
+"crates/runtime/src/turn.rs" = 1716
+"crates/web/src/city_view.rs" = 1554
+"crates/gateway/src/dialect.rs" = 1280
+"crates/channels/src/wire.rs" = 1278
+"crates/channels/src/server.rs" = 1235
+"crates/memory/src/jsonl.rs" = 1194
+"crates/kernel/src/plan.rs" = 1085
+"crates/web/src/settings.rs" = 1067
+"crates/collab/src/claim_tool.rs" = 1061
+
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"
 budget_bytes = 31457280

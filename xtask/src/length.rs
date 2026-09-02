@@ -3,14 +3,29 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Copyright (c) 2026 2youg1 and the sprawling contributors
 
-//! Function-length gate: a function nobody reads to the end turns the
-//! build red.
+//! Length gate: a body nobody reads to the end, and a file nobody can
+//! navigate, both turn the build red.
 //!
-//! The unit is a production function, not a file. Any honest file
-//! threshold lights up eight files across four crates at once, which is
-//! a project rather than a gate; the function threshold has one job,
-//! which is to stop a whole flow of control from being written into one
-//! body again.
+//! Two units, because they fail differently. A long **function** hides a
+//! flow of control; a long **file** hides where anything is, and costs
+//! every reader who has to find one thing in it.
+//!
+//! **The file rule is a re-pricing, and here is the parameter that
+//! moved.** This gate used to measure functions only, and said so: any
+//! honest file threshold lit up eight files across four crates at once,
+//! "which is a project rather than a gate". That was a true reading of
+//! the cost and a fair reason to wait. The person has now asked for that
+//! project, on the ground that the largest file - 12,078 lines - was
+//! costing more per iteration than the split would cost once. So the
+//! threshold arrives with a register of the files that predate it, each
+//! pinned at the length it had on the day the line was drawn.
+//!
+//! **The register can only shrink, and it cleans itself.** A file it does
+//! not name is refused at the budget outright, so the list cannot grow. A
+//! file it does name may not exceed its pinned length, so no offender
+//! grows. And a file that has come back under the budget must be struck
+//! from the register, which turns the exception into something that
+//! removes itself rather than something that has to be remembered.
 //!
 //! **The measurement parses.** Finding where a function begins and ends
 //! by counting braces per line is wrong in three ways this repository
@@ -28,7 +43,14 @@
 //! (a Dioxus component's body is markup, with no steps to follow), and
 //! any file whose module-map row states the shape `data`
 //! (ARCHITECTURE.md section 9, shape 6: data with no branches).
+//!
+//! The `data` exemption covers the file rule as well as the function
+//! rule, for the reason that granted it: a table is looked things up in
+//! rather than navigated, so its length costs a reader nothing. That is
+//! why `web::lang`, 3,217 lines of every word the client says in two
+//! languages, is not in the register below.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use syn::spanned::Spanned;
@@ -46,27 +68,130 @@ const SOURCE_DIRS: [&str; 3] = ["crates", "xtask/src", "citysim/src"];
 /// other budget the design states rather than inside this file.
 const ROW: &str = "function_length";
 
+/// The register row that states how long a file may be.
+const FILE_ROW: &str = "file_length";
+
+/// The sub-table naming the files that were already over the line when it
+/// was drawn, each with the length it had that day.
+const PREDATING: &str = "predating";
+
 pub(crate) fn check(root: &Path) -> Result<Vec<Violation>, XtaskError> {
-    let limit = limit(root)?;
+    let body_limit = limit(root, ROW)?;
+    let file_limit = limit(root, FILE_ROW)?;
+    let predating = predating(root)?;
     let shapes = modmap::shapes(root)?;
     let mut violations = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
     for file in sources(root)? {
         let rel = walk::rel(root, &file);
         if shapes.get(&rel).is_some_and(|shape| shape == "data") {
             continue;
         }
         let text = walk::read_text(&file)?;
+        let lines = text.lines().count();
+        seen.insert(rel.clone());
+        match predating.get(&rel) {
+            None => {
+                if lines > file_limit {
+                    violations.push(too_long(&rel, lines, file_limit));
+                }
+            }
+            Some(&pinned) => {
+                if lines > pinned {
+                    violations.push(grew(&rel, lines, pinned));
+                } else if lines <= file_limit {
+                    violations.push(no_longer_an_exception(&rel, lines, file_limit));
+                }
+            }
+        }
         let parsed = syn::parse_file(&text).map_err(|err| XtaskError::Doc {
             file: rel.clone(),
             msg: format!("this file does not parse as Rust: {err}"),
         })?;
         for found in measure(&parsed.items) {
-            if found.lines > limit {
-                violations.push(over(&rel, &found, limit));
+            if found.lines > body_limit {
+                violations.push(over(&rel, &found, body_limit));
             }
         }
     }
+    // A row naming a file that is no longer measured - renamed, split
+    // away, or deleted - is a pin nothing holds. Left alone it would
+    // silently re-admit that path if anybody ever recreated it.
+    for stale in predating.keys().filter(|rel| !seen.contains(*rel)) {
+        violations.push(Violation {
+            gate: "length",
+            location: format!("xtask/budgets.toml [{FILE_ROW}.{PREDATING}]"),
+            rule: "every file the register pins is a file this gate measures".to_owned(),
+            violation: format!("{stale} is pinned and no longer here"),
+            alternative: "delete the row: the debt it recorded has been paid or moved".to_owned(),
+        });
+    }
     Ok(violations)
+}
+
+fn too_long(rel: &str, lines: usize, limit: usize) -> Violation {
+    Violation {
+        gate: "length",
+        location: rel.to_owned(),
+        rule: format!("a source file stays inside {limit} lines (xtask/budgets.toml, {FILE_ROW})"),
+        violation: format!("{lines} lines"),
+        alternative: "give each responsibility in it its own file and name, and let this one \
+                      keep the part that routes between them"
+            .to_owned(),
+    }
+}
+
+fn grew(rel: &str, lines: usize, pinned: usize) -> Violation {
+    Violation {
+        gate: "length",
+        location: rel.to_owned(),
+        rule: format!(
+            "a file the register pins may only get smaller \
+             (xtask/budgets.toml, {FILE_ROW}.{PREDATING})"
+        ),
+        violation: format!("{lines} lines, pinned at {pinned}"),
+        alternative: "put the new code in a file of its own: this one is already over the \
+                      budget and is waiting to be split"
+            .to_owned(),
+    }
+}
+
+fn no_longer_an_exception(rel: &str, lines: usize, limit: usize) -> Violation {
+    Violation {
+        gate: "length",
+        location: format!("xtask/budgets.toml [{FILE_ROW}.{PREDATING}]"),
+        rule: "an exception that is no longer needed is struck from the register".to_owned(),
+        violation: format!("{rel} is {lines} lines, inside the {limit} the rule states"),
+        alternative: "delete its row: the split is done, and a spent exception left in place \
+                      is a licence nobody decided to keep granting"
+            .to_owned(),
+    }
+}
+
+/// The files that were already over the line when it was drawn, each
+/// pinned at the length it had that day.
+fn predating(root: &Path) -> Result<BTreeMap<String, usize>, XtaskError> {
+    let register = crate::budget::register(root)?;
+    let Some(table) = register
+        .get(FILE_ROW)
+        .and_then(|row| row.get(PREDATING))
+        .and_then(toml::Value::as_table)
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let mut out = BTreeMap::new();
+    for (rel, value) in table {
+        let stated = value.as_integer().ok_or_else(|| XtaskError::Doc {
+            file: "xtask/budgets.toml".to_owned(),
+            msg: format!("{FILE_ROW}.{PREDATING}.{rel} is not a line count"),
+        })?;
+        let pinned = usize::try_from(stated).map_err(|_| XtaskError::Doc {
+            file: "xtask/budgets.toml".to_owned(),
+            msg: format!("{FILE_ROW}.{PREDATING}.{rel} is not a line count: {stated}"),
+        })?;
+        out.insert(rel.clone(), pinned);
+    }
+    Ok(out)
 }
 
 /// One function, as the gate sees it.
@@ -91,19 +216,19 @@ fn over(rel: &str, found: &Found, limit: usize) -> Violation {
     }
 }
 
-fn limit(root: &Path) -> Result<usize, XtaskError> {
+fn limit(root: &Path, row: &str) -> Result<usize, XtaskError> {
     let register = crate::budget::register(root)?;
     let stated = register
-        .get(ROW)
-        .and_then(|row| row.get("budget_lines"))
+        .get(row)
+        .and_then(|found| found.get("budget_lines"))
         .and_then(toml::Value::as_integer)
         .ok_or_else(|| XtaskError::Doc {
             file: "xtask/budgets.toml".to_owned(),
-            msg: format!("{ROW} states no budget_lines"),
+            msg: format!("{row} states no budget_lines"),
         })?;
     usize::try_from(stated).map_err(|_| XtaskError::Doc {
         file: "xtask/budgets.toml".to_owned(),
-        msg: format!("{ROW}.budget_lines is not a line count: {stated}"),
+        msg: format!("{row}.budget_lines is not a line count: {stated}"),
     })
 }
 
@@ -233,6 +358,44 @@ fn skipped(attrs: &[syn::Attribute]) -> bool {
 )]
 mod tests {
     use super::*;
+
+    /// The register is the authority for both numbers, and both are read
+    /// from it by name. A row that stops stating its budget must fail
+    /// loudly rather than fall back to something this file believes.
+    #[test]
+    fn both_limits_come_from_the_register_and_neither_has_a_default() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(Path::to_path_buf)
+            .expect("xtask lives one level under the repo root");
+        assert_eq!(limit(&root, ROW).unwrap(), 200);
+        assert_eq!(limit(&root, FILE_ROW).unwrap(), 1000);
+        assert!(limit(&root, "a_row_nobody_wrote").is_err());
+    }
+
+    /// Every pin is a debt, so every pin must be above the budget it
+    /// excuses. A row at or below it is not an exception, it is a licence
+    /// somebody forgot to spend, and `no_longer_an_exception` reports it.
+    #[test]
+    fn every_pinned_file_is_over_the_budget_it_is_excused_from() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(Path::to_path_buf)
+            .expect("xtask lives one level under the repo root");
+        let budget = limit(&root, FILE_ROW).unwrap();
+        let pinned = predating(&root).unwrap();
+        assert!(!pinned.is_empty(), "the register records the debt it owes");
+        for (rel, lines) in &pinned {
+            assert!(
+                *lines > budget,
+                "{rel} is pinned at {lines}, which the {budget}-line rule already allows"
+            );
+            assert!(
+                root.join(rel).exists(),
+                "{rel} is pinned and not in the tree"
+            );
+        }
+    }
 
     fn lengths(source: &str) -> Vec<(String, usize)> {
         let parsed = syn::parse_file(source).unwrap();
