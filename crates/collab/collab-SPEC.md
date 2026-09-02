@@ -371,32 +371,50 @@ impl Triage {
 - **判不出不是错误**，是「一个人读它」：回一个错误只会让调用方去发明一个兼容处理。
 - **`because` 恒在场**：它是这层唯一的可观测面，因为四路的差别在别处（谁被派活），不在这个返回值里。
 
-### 8-12 collab::claim_tool（P4.01；形状 4 适配器）
+### 8-12 collab::claim_tool（P4.01；V3.19 长出两个动作；形状 4 适配器）
 
 ```rust
 pub enum ClaimEffect {
-    Claimed  { index: u64, item: String },
-    Finished { index: u64, item: String, evidence: Locator },
-    Released { index: u64, item: String },
+    Claimed { id: NodeId, item: String },
+    /// 一个被放下的节点。携 `PlanExit` 而不是携一个动词：出口是计划门禁
+    /// 造出来的东西，把它的两个臂抄进第二个枚举，就是对「一个节点可以
+    /// 怎么离开」的第二份意见。
+    PutDown { id: NodeId, item: String, exit: PlanExit },
+    Split   { parent: NodeId, children: Vec<String> },
 }
-pub struct ClaimDesk { /* who、room、roadmap 文本、本次 drive 持有的行、effects —— 私有 */ }
+impl ClaimEffect {
+    pub fn id(&self) -> &NodeId;
+    pub fn expected_before(&self) -> RoadmapStatus;
+    pub fn kind(&self) -> EventKind;          // 由出口决定，不由调用方决定
+    pub fn payload(&self, who: &str) -> Result<Payload, AxError>;
+}
+pub struct ClaimDesk { /* who、room、roadmap 文本、本次 drive 持有的 Held、effects —— 私有 */ }
 impl ClaimDesk {
     pub fn new(who: String, room: Address, roadmap: String) -> ClaimDesk;
     pub fn take_effects(&mut self) -> Vec<ClaimEffect>;
-    pub fn roadmap(&self) -> Option<&str>;   // Some 仅当本次 drive 改过；工人据此写盘一次
+    pub fn roadmap(&self) -> Option<&str>;    // Some 仅当本次 drive 改过；工人据此写盘一次
+    pub fn holding(&self) -> Option<&NodeId>;
+    pub fn abandon(&mut self) -> Result<(), AxError>;   // 冻结路径花掉仍被持有的 Held
 }
+pub fn evidence_of(text: &str, id: &NodeId) -> Option<Locator>;
+pub fn still_true(text: &str, effect: &ClaimEffect) -> bool;
 pub struct ClaimTool { /* meta、Rc<RefCell<ClaimDesk>> —— 私有 */ }
 impl ClaimTool { pub fn new(desk: Rc<RefCell<ClaimDesk>>) -> Result<ClaimTool, AxError>; }
 ```
 
-四个动作：`list`（还没人做的行）、`claim`（认领一行）、`finish`（携证据结项）、`release`（交回）。
+六个动作：`list`（就绪的、在做的、卡住的）、`claim`（认领一个节点）、`finish`（携证据结项）、`block`（携原因报卡住）、`release`（携原因交回）、`split`（拆成子节点）。
 
-- **`Roadmap.md` 是唯一权威，不另立认领登记表**。第二份登记表就是第二个「这一行归谁」的答案，而漂移的恒是没人读的那一份。文件本身既被人读、被 `tally` 数、又被这个工具改——一处事实，三个读者。
-- **状态迁移由文件的当前状态判，不由调用者声明**：`claim` 只接受 `Not started`，`finish`／`release` 只接受 `In progress`。拒词报出该行此刻的状态并指向下一个可认领的行号——「不行」会教模型改写参数再试，「3 号在做，5 号空着」不会。
-- **一次 drive 只持有一行**：一个 Run 同时占两行，会让两行的进度都读不出来，因为「正在做什么」的单位就是行。第二次 `claim` 恒拒并报出已持有的行号。
-- **`finish` 恒要 Locator**：证据由 `kernel::set_roadmap_status` 在写入点强制，本模块不重复判定——`Done` 缺证据的行正是 `tally` 拒绝计入分子的那种行。
+- **`Roadmap.md` 是唯一权威，不另立认领登记表**。第二份登记表就是第二个「这一个节点归谁」的答案，而漂移的恒是没人读的那一份。文件本身既被人读、被 `PlanTree::progress` 数、又被这个工具改——一处事实，三个读者。
+- **六个动作长在同一条 catalog 行上，不新开工具**（V3.19 的正面理由）。模型每一轮读的**行数**是成本，一行背后的**动词数**不是。
+- **收口是字节数，量出来的**：四个动作的 `plan` 条目是 **548 B**（disclosure ＋ schema 的紧凑 JSON），六个动作是 **547 B**，一条断言钉住它不超过 548。省下的字节来自把 Locator 文法从 schema 移进拒词——**一句重复了拒词内容的说明，是每一轮都在付、只读一次的字节**。schema 里没有的东西，模型第一次写错时会从三段式拒词里拿到。
+- **状态迁移由 `kernel::PlanTree` 从计划自身判，不由调用者声明**：`claim` 只从就绪集里取（叶子、无人认领、依赖全绿），`finish`／`block`／`release` 只能作用于**本次 drive 认领的那个节点**。拒词报出此刻的状态并指向一个真能拿的节点——「不行」会教模型改写参数再试，「2.3 在做，2.4 就绪」不会。
+- **一次 drive 只持有一个节点**，理由与旧版同：一个 Run 同时占两个节点，两个节点的进度都读不出来。
+- **计划门禁就是那个 `Held` 值**（V3.21）：它由 `PlanTree::claim` 铸出，只能花在 `finish`（绿）或 `stop`（红／交回）上。**没有第三个出口**——一个只是结束了的 run 由 `abandon` 把它花在 `FrozeWithoutEvidence` 上，于是「认领了却没交代」这一态在冻结之后不可达。这正是 `blockage` 里红色的来处。
+- **`split` 之后本次 drive 不再持有那根枝**：它拿到的那件活现在是几片，它接下来该拿其中一片。写盘前先把新文本重新解析并 `PlanTree::build` 一次，**拆不出合法树就一个字节都不写**。
+- **`block` 与 `release` 都必须带一句原因**，且原因**随记录走而不是随表格走**：表格只有位置说「Blocked」，一句话该住在 `roadmap_blocked` 的载荷里，在表里再放一份就是同一句话的第二个权威。
+- **哪一种记录由出口决定**（`ClaimEffect::kind`）：绿→`roadmap_finished`，红→`roadmap_blocked`，交回→`roadmap_released`，拆→`roadmap_split`。工人不再自己 match 一遍，于是「停下来意味着什么」只有一个答案。
 - **效果穷尽**（同 `SignalEffect`／`GoalEffect`／`PrEffect`，故意不加 `#[non_exhaustive]`）：每个变体都是工人必须写下的一条账，新增一个变体应当是写入处的编译错误。
-- **并发口径（诚实边界）**：今天工人一次驱动一个 Run，故 desk 手上的行状态在 `claim` 那一刻是当下事实。工人写盘前重读文件，行若已不是预期状态则丢弃该效果并留一条诊断，而不是覆盖——于是并发 Run 到来时的退化是「第二个认领没生效且说了出来」，不是「两个 Run 都以为自己拥有该行」。
+- **并发口径（诚实边界）**：工人写盘前重读文件，**每个节点只核第一条效果**——一个先认领再结项的 run 两条效果都是它自己按派活时的文件顺序产出的，拿第二条去问磁盘，等于问「我自己刚才那条落盘了没有」，而它没有：desk 是最后整份写一次。行若已不是预期状态则整组丢弃并留一条诊断，而不是覆盖。
 
 ## 8.5 两个设计
 

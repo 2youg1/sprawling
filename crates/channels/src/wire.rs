@@ -3,7 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // Copyright (c) 2026 2youg1 and the sprawling contributors
 
-//! The process boundary's vocabulary: twenty Commands, eleven Queries, and
+//! The process boundary's vocabulary: the Commands, the Queries, and
 //! the Event push. Encoding is JSON because the receiving
 //! end is a browser and a human reading a network panel is a design goal.
 //!
@@ -26,9 +26,9 @@
 
 use kernel::{
     Address, ApprovalId, ApprovalItem, Autonomy, AxCode, AxError, B3Hash, BudgetCap, DialectKind,
-    Effort, EventKind, EventRecord, FileChange, GitOid, IdemKey, McpServer, ModelTag,
-    PolicyVerdict, Progress, Restoration, RunId, SandboxLimits, Sealed, Seq, SessionName, TimeMs,
-    UsdMicros,
+    Effort, EventKind, EventRecord, FileChange, GitOid, IdemKey, McpServer, ModelTag, NodeId,
+    PolicyVerdict, Progress, PursuitState, Restoration, RoadmapStatus, RunId, SandboxLimits,
+    Sealed, Seq, SessionName, TimeMs, UsdMicros,
 };
 use serde::{Deserialize, Serialize};
 
@@ -47,12 +47,16 @@ use serde::{Deserialize, Serialize};
 ///    still saying it (V3.13). It is not an event: it has no sequence
 ///    number, it is never written down, and a client that missed one has
 ///    lost nothing.
-pub const WIRE_V: u32 = 12;
+/// 13: the plan is a tree, so a building's answer carries its nodes,
+///    what each is worth and what is ready; a branch that is stuck says
+///    so once, at the node it is stuck at; and a city can be given a
+///    goal it works towards until the work runs out (V3.17-V3.23).
+pub const WIRE_V: u32 = 13;
 
 /// The Command surface, in declaration order.
 /// This table feeds [`schema_hash`]; a connection whose peer computes a
 /// different hash is refused rather than served a half-understood protocol.
-pub const COMMAND_NAMES: [&str; 22] = [
+pub const COMMAND_NAMES: [&str; 23] = [
     "Dispatch",
     "Wake",
     "Login",
@@ -74,6 +78,7 @@ pub const COMMAND_NAMES: [&str; 22] = [
     "Approve",
     "CreatePolicy",
     "SetAutonomy",
+    "Pursue",
     "Auth",
 ];
 
@@ -191,11 +196,31 @@ pub enum HaltScope {
     Workshop(Address),
 }
 
+/// What a `Pursue` command does to a pursuit.
+///
+/// `Clear` and `Pause` are different actions and both exist: pausing
+/// keeps the goal so it can be taken up again, and clearing throws it
+/// away. Cancelling a *run* is a third thing again, and it has its own
+/// command.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PursuitStep {
+    /// Declare one, replacing any goal this building already had.
+    Set {
+        goal: String,
+    },
+    Pause,
+    Resume,
+    Clear,
+}
+
 /// Commands change state, require authorization, and are idempotent.
 ///
 /// Deliberately *not* `#[non_exhaustive]`: the schema hash is this type's
-/// version mechanism, so the assembly layer must handle all eighteen and a
-/// new one fails to compile until somebody decides what it does.
+/// version mechanism, so the assembly layer must handle every one of them
+/// and a new one fails to compile until somebody decides what it does.
+/// That is the rule that keeps a button off the client until the city can
+/// answer the frame behind it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Command<Secret = Sealed<String>> {
@@ -359,6 +384,16 @@ pub enum Command<Secret = Sealed<String>> {
         autonomy: Autonomy,
         idem: IdemKey,
     },
+    /// A goal the city keeps working towards until the work runs out.
+    ///
+    /// One frame with four steps rather than four frames: a person who
+    /// can set a goal can pause it, and splitting that into separate
+    /// commands would let a client offer one without the other.
+    Pursue {
+        addr: Address,
+        step: PursuitStep,
+        idem: IdemKey,
+    },
     /// Something happened outside. The city never asks whether anything
     /// did; the service holding the connection pushes, and this is the
     /// shape a push takes once it is inside.
@@ -413,6 +448,7 @@ impl<Secret> Command<Secret> {
             Self::Approve { .. } => "Approve",
             Self::CreatePolicy { .. } => "CreatePolicy",
             Self::SetAutonomy { .. } => "SetAutonomy",
+            Self::Pursue { .. } => "Pursue",
             Self::Auth { .. } => "Auth",
         }
     }
@@ -440,6 +476,7 @@ impl<Secret> Command<Secret> {
             | Self::Approve { ref idem, .. }
             | Self::CreatePolicy { ref idem, .. }
             | Self::SetAutonomy { ref idem, .. }
+            | Self::Pursue { ref idem, .. }
             | Self::AttachEndpoint { ref idem, .. }
             | Self::SelectModel { ref idem, .. } => Some(idem),
             Self::PutSecret { .. } | Self::Auth { .. } => None,
@@ -596,6 +633,7 @@ impl From<WireCommand> for Command {
                 idem,
             },
             Command::CreatePolicy { from_item, idem } => Self::CreatePolicy { from_item, idem },
+            Command::Pursue { addr, step, idem } => Self::Pursue { addr, step, idem },
             Command::SetAutonomy {
                 scope,
                 autonomy,
@@ -797,19 +835,79 @@ pub struct CityAnswer {
     pub frozen: u64,
     /// One entry per building whose roadmap the city could read.
     pub buildings: Vec<BuildingProgress>,
+    /// The standing goals this city is working towards, if any.
+    pub pursuits: Vec<PursuitLine>,
 }
 
 /// A building's plan, as its own `Roadmap.md` states it.
 ///
 /// `problems` carries the rows the table could not state — a row with a
-/// status outside the five words, or a column count that is not four. The
-/// interface shows them: a plan that quietly drops the lines it could not
-/// parse would report progress against a denominator nobody chose.
+/// status outside the five words, a column count that is not six, or a
+/// dependency that runs in a circle. The interface shows them: a plan
+/// that quietly drops the lines it could not parse would report progress
+/// against a denominator nobody chose.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildingProgress {
     pub addr: Address,
     pub progress: Progress,
     pub problems: Vec<String>,
+    /// What is stuck, one line per cause. Never one per symptom: a plan
+    /// with one real problem sends one line, and the seventeen nodes
+    /// waiting behind it are a count on that line rather than seventeen
+    /// more of them.
+    pub blocked: Vec<BlockedLine>,
+    /// How many nodes could be started right now. The number that says
+    /// whether a city with a standing goal has anything left to do.
+    pub ready: u32,
+}
+
+/// One cause, and how much is waiting behind it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockedLine {
+    /// The node it is stuck at.
+    pub source: NodeId,
+    /// The whole sentence: which branch, which node, and why.
+    pub line: String,
+    /// How many other nodes cannot move until this one does.
+    pub waiting: u32,
+}
+
+/// One node of a building's plan, flattened for a renderer.
+///
+/// The tree travels as rows in reading order rather than as nested
+/// objects: every face the client draws — the list, the board, a branch
+/// summary — wants a different grouping, and a shape that favoured one
+/// of them would make the others re-flatten it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanRow {
+    pub node: NodeId,
+    pub item: String,
+    pub status: RoadmapStatus,
+    /// This node's share of the whole plan, in billionths.
+    pub share_ppb: u64,
+    pub needs: Vec<NodeId>,
+    /// Whether a run could take it right now.
+    pub ready: bool,
+    /// Whether it carries work of its own. Only leaves are counted, so a
+    /// renderer that showed branches in the same column as leaves would
+    /// be showing the same work twice.
+    pub leaf: bool,
+    pub evidence: Option<String>,
+}
+
+/// A city's standing goal, if it has one.
+///
+/// `verdict` is the city's own reading of whether there is anything left
+/// to do, so a page never has to work out the stop condition for itself
+/// — which is what would give the condition a second authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PursuitLine {
+    pub addr: Address,
+    pub goal: String,
+    pub state: PursuitState,
+    /// One clause: working on 2.3, waiting for two runs, paused, or
+    /// finished.
+    pub verdict: String,
 }
 
 /// What is waiting for a person, as the Ledger recorded it.
@@ -857,6 +955,11 @@ pub struct BuildingAnswer {
     pub progress: Progress,
     /// Rows of the plan this build could not read. Shown, never dropped.
     pub problems: Vec<String>,
+    /// The plan tree, in reading order. Empty when the plan does not
+    /// parse, which `problems` then explains.
+    pub plan: Vec<PlanRow>,
+    /// What is stuck, one line per cause.
+    pub blocked: Vec<BlockedLine>,
     pub rooms: Vec<String>,
     pub docs: Vec<BuildingDoc>,
     pub archive: Vec<ArchiveLine>,

@@ -513,6 +513,23 @@ pub enum Msg {
     SettingsWhatIsAttached,
     SettingsModelCount,
     SettingsReadItAgain,
+    // The plan tree, laid out by state (V3.23).
+    BoardTitle,
+    BoardScope,
+    BoardSource,
+    BoardReady,
+    BoardWaiting,
+    BoardWorking,
+    BoardBlocked,
+    BoardDone,
+    BoardEmpty,
+    BoardEmptyWhat,
+    BoardStuck,
+    BoardStuckScope,
+    BoardStuckSource,
+    BoardWaitingBehind,
+    BoardWaitsFor,
+    BuildingPlanTab,
     // The settings page: the language switch itself.
     SettingsLanguage,
     SettingsLanguageScope,
@@ -1983,6 +2000,70 @@ pub fn phrase(msg: Msg) -> Phrase {
             en: "read it again",
             zh: "再读一次",
         },
+        Msg::BoardTitle => Phrase {
+            en: "the plan",
+            zh: "计划",
+        },
+        Msg::BoardScope => Phrase {
+            en: "only leaves count: a branch's work is its children, and counting both would count the same effort twice",
+            zh: "只有叶子算数：一根枝的活就是它的子节点，两边都算等于把同一份力气数两遍",
+        },
+        Msg::BoardSource => Phrase {
+            en: "drawn from this building's Roadmap.md, which holds every state there is; this page keeps none of its own",
+            zh: "画的是这栋楼的 Roadmap.md，状态全在那里，这一页自己不存",
+        },
+        Msg::BoardReady => Phrase {
+            en: "ready",
+            zh: "就绪",
+        },
+        Msg::BoardWaiting => Phrase {
+            en: "waiting",
+            zh: "等依赖",
+        },
+        Msg::BoardWorking => Phrase {
+            en: "working",
+            zh: "在做",
+        },
+        Msg::BoardBlocked => Phrase {
+            en: "stuck",
+            zh: "卡住",
+        },
+        Msg::BoardDone => Phrase {
+            en: "done",
+            zh: "完成",
+        },
+        Msg::BoardEmpty => Phrase {
+            en: "this building has no plan yet",
+            zh: "这栋楼还没有计划",
+        },
+        Msg::BoardEmptyWhat => Phrase {
+            en: "send somebody to write one, and the tree grows as they split the work",
+            zh: "派个人去写一份，随后他们每拆一次活，这棵树就长一层",
+        },
+        Msg::BoardStuck => Phrase {
+            en: "what is stuck",
+            zh: "卡住的",
+        },
+        Msg::BoardStuckScope => Phrase {
+            en: "one line per cause, never one per symptom",
+            zh: "一处原因一行，不是一个症状一行",
+        },
+        Msg::BoardStuckSource => Phrase {
+            en: "from the plan, and from the record that says why it stopped",
+            zh: "来自计划表，与说明它为什么停下的那条记录",
+        },
+        Msg::BoardWaitingBehind => Phrase {
+            en: "{n} behind it",
+            zh: "{n} 个节点在后面等",
+        },
+        Msg::BoardWaitsFor => Phrase {
+            en: "waits for {nodes}",
+            zh: "等 {nodes}",
+        },
+        Msg::BuildingPlanTab => Phrase {
+            en: "plan",
+            zh: "计划",
+        },
         Msg::SettingsLanguage => Phrase {
             en: "this interface reads in your language",
             zh: "这个界面说你的语言",
@@ -2448,6 +2529,22 @@ mod tests {
             Msg::SettingsWhatIsAttached,
             Msg::SettingsModelCount,
             Msg::SettingsReadItAgain,
+            Msg::BoardTitle,
+            Msg::BoardScope,
+            Msg::BoardSource,
+            Msg::BoardReady,
+            Msg::BoardWaiting,
+            Msg::BoardWorking,
+            Msg::BoardBlocked,
+            Msg::BoardDone,
+            Msg::BoardEmpty,
+            Msg::BoardEmptyWhat,
+            Msg::BoardStuck,
+            Msg::BoardStuckScope,
+            Msg::BoardStuckSource,
+            Msg::BoardWaitingBehind,
+            Msg::BoardWaitsFor,
+            Msg::BuildingPlanTab,
             Msg::SettingsLanguage,
             Msg::SettingsLanguageScope,
             Msg::SettingsLanguageSource,
@@ -2816,6 +2913,22 @@ mod tests {
                 | Msg::SettingsWhatIsAttached
                 | Msg::SettingsModelCount
                 | Msg::SettingsReadItAgain
+                | Msg::BoardTitle
+                | Msg::BoardScope
+                | Msg::BoardSource
+                | Msg::BoardReady
+                | Msg::BoardWaiting
+                | Msg::BoardWorking
+                | Msg::BoardBlocked
+                | Msg::BoardDone
+                | Msg::BoardEmpty
+                | Msg::BoardEmptyWhat
+                | Msg::BoardStuck
+                | Msg::BoardStuckScope
+                | Msg::BoardStuckSource
+                | Msg::BoardWaitingBehind
+                | Msg::BoardWaitsFor
+                | Msg::BuildingPlanTab
                 | Msg::SettingsLanguage
                 | Msg::SettingsLanguageScope
                 | Msg::SettingsLanguageSource => {}
@@ -2889,8 +3002,9 @@ mod tests {
     /// a test that read the directory would be testing the machine it ran
     /// on. A view added without a line here is a view whose English can
     /// escape, which is the failure this table exists to make loud.
-    const VIEWS: [(&str, &str); 22] = [
+    const VIEWS: [(&str, &str); 23] = [
         ("alert.rs", include_str!("alert.rs")),
+        ("board.rs", include_str!("board.rs")),
         ("app.rs", include_str!("app.rs")),
         ("approval.rs", include_str!("approval.rs")),
         ("archive_search.rs", include_str!("archive_search.rs")),

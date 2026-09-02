@@ -469,6 +469,7 @@ pub web::Lang::En
 pub web::Lang::Zh
 pub web::Leaf::Archive
 pub web::Leaf::Doc(alloc::string::String)
+pub web::Leaf::Plan
 pub web::Leaf::Reach
 pub web::Leaf::Room(alloc::string::String)
 pub web::Lens::Archive
@@ -560,6 +561,21 @@ pub web::Msg::BinRollbackNote
 pub web::Msg::BinScope
 pub web::Msg::BinSource
 pub web::Msg::BinTitle
+pub web::Msg::BoardBlocked
+pub web::Msg::BoardDone
+pub web::Msg::BoardEmpty
+pub web::Msg::BoardEmptyWhat
+pub web::Msg::BoardReady
+pub web::Msg::BoardScope
+pub web::Msg::BoardSource
+pub web::Msg::BoardStuck
+pub web::Msg::BoardStuckScope
+pub web::Msg::BoardStuckSource
+pub web::Msg::BoardTitle
+pub web::Msg::BoardWaiting
+pub web::Msg::BoardWaitingBehind
+pub web::Msg::BoardWaitsFor
+pub web::Msg::BoardWorking
 pub web::Msg::BuildingArchiveTab
 pub web::Msg::BuildingAsking
 pub web::Msg::BuildingAskingRoom
@@ -571,6 +587,7 @@ pub web::Msg::BuildingNoDocument
 pub web::Msg::BuildingNoRooms
 pub web::Msg::BuildingNothingFiled
 pub web::Msg::BuildingNothingFiledWhat
+pub web::Msg::BuildingPlanTab
 pub web::Msg::BuildingReachTab
 pub web::Msg::BuildingRoomEmpty
 pub web::Msg::BuildingRoomEmptyWhat

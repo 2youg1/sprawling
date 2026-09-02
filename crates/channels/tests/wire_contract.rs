@@ -37,15 +37,15 @@ fn exposed() -> SocketAddr {
 
 #[test]
 fn the_command_and_query_tables_hold_their_declared_counts() {
-    // Twenty-two commands, fourteen queries. The count is not a style
+    // Twenty-three commands, fourteen queries. The count is not a style
     // choice - it is the wire's closed surface.
-    assert_eq!(COMMAND_NAMES.len(), 22, "command table");
+    assert_eq!(COMMAND_NAMES.len(), 23, "command table");
     assert_eq!(QUERY_NAMES.len(), 14, "query table");
 
     let mut sorted = COMMAND_NAMES.to_vec();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(sorted.len(), 22, "command names are distinct");
+    assert_eq!(sorted.len(), 23, "command names are distinct");
 
     let mut sorted = QUERY_NAMES.to_vec();
     sorted.sort_unstable();
@@ -80,14 +80,14 @@ fn the_schema_hash_is_stable_across_calls_and_covers_the_wire_version() {
         "schema hash changed - update channels-SPEC.md section 8-1 in the same commit"
     );
     assert_eq!(
-        WIRE_V, 12,
+        WIRE_V, 13,
         "the version rises when the grammar changes shape without a name changing"
     );
 }
 
 /// Pinned on the first green of S4.02. It is a function of WIRE_V and the two
 /// name tables, so any change to the protocol surface lands here first.
-const WIRE_SCHEMA_GOLDEN: &str = "4ac1b7b375c9a944a32920129e703673fe3d0092c3cea22c44da411f10855aac";
+const WIRE_SCHEMA_GOLDEN: &str = "f6fdc67b8de209dd6bbdb60e9632411ea73c79390ccf857112e2ebc402917fc2";
 
 // -------------------------------------------------------------- binding face
 
@@ -343,7 +343,10 @@ fn sample_of_every_command() -> Vec<Command> {
             scope: channels::HaltScope::City,
             idem,
         },
-        Command::BatchByBuilding { addr, idem },
+        Command::BatchByBuilding {
+            addr: addr.clone(),
+            idem,
+        },
         Command::Approve {
             item: kernel::ApprovalId::new("ap-1").unwrap(),
             verdict: kernel::PolicyVerdict::Allow,
@@ -356,6 +359,13 @@ fn sample_of_every_command() -> Vec<Command> {
         Command::SetAutonomy {
             scope: channels::HaltScope::City,
             autonomy: kernel::Autonomy::Owner,
+            idem,
+        },
+        Command::Pursue {
+            addr,
+            step: channels::PursuitStep::Set {
+                goal: "raise the east wing".to_owned(),
+            },
             idem,
         },
         Command::Auth {

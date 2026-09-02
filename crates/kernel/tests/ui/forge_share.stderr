@@ -1,0 +1,11 @@
+error[E0423]: cannot initialize a tuple struct which contains private fields
+  --> tests/ui/forge_share.rs:12:18
+   |
+12 |     let forged = kernel::Share(2_000_000_000);
+   |                  ^^^^^^^^^^^^^
+   |
+note: constructor is not visible here due to private fields
+  --> src/share.rs
+   |
+   | pub struct Share(u64);
+   |                  ^^^ private field

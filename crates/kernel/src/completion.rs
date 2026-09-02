@@ -97,23 +97,42 @@ impl Completion {
     }
 }
 
-/// Progress with a denominator: the Roadmap table rows.
+/// Progress with a denominator: the leaves of the plan tree.
 ///
 /// Unlike [`Completion`], progress carries serde: it is a reading of a
 /// file that the interface renders, not a claim that work finished. What
 /// must not be deserialisable is a `Done` — and that still is not.
+///
+/// **Two figures, because either alone misleads.** The share says how
+/// much of the plan is behind you and moves when a branch is divided
+/// generously; the leaf count says how many pieces the plan turned out
+/// to have and does not. A reader seeing `83% / 4 leaves left` can tell
+/// the difference between work finished and work redistributed, and a
+/// reader seeing one number cannot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlannedProgress {
     pub done: u32,
     pub blocked: u32,
     pub total: u32,
+    /// The share of the whole plan that is done, in billionths
+    /// (`kernel::share::WHOLE_PPB`). An integer, so two readings compare
+    /// the same way on every machine.
+    pub done_ppb: u64,
+    /// The share that is blocked or waiting for a person.
+    pub blocked_ppb: u64,
 }
 
 impl PlannedProgress {
     /// `(done, total)` — the renderer computes its own percentage from a
-    ///真 fraction, never from a claim.
+    /// real fraction, never from a claim.
     pub fn ratio(&self) -> (u32, u32) {
         (self.done, self.total)
+    }
+
+    /// `(done, whole)` in billionths: the same reading weighted by how
+    /// the plan divides itself, rather than by how many rows it has.
+    pub fn weighted(&self) -> (u64, u64) {
+        (self.done_ppb, crate::share::WHOLE_PPB)
     }
 }
 
@@ -190,8 +209,16 @@ mod tests {
             done: 3,
             blocked: 1,
             total: 9,
+            done_ppb: 250_000_000,
+            blocked_ppb: 0,
         };
         assert_eq!(planned.ratio(), (3, 9));
+        assert_eq!(
+            planned.weighted(),
+            (250_000_000, crate::share::WHOLE_PPB),
+            "a quarter of the plan behind three of nine rows: the two \
+             figures are not the same reading"
+        );
         // UnplannedProgress has no ratio method — nothing to assert at
         // runtime; the S2.11 trybuild case pins the absence.
         let unplanned = UnplannedProgress {

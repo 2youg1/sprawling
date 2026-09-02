@@ -14,6 +14,7 @@ mod alert;
 mod app;
 mod approval;
 mod archive_search;
+mod board;
 mod building_view;
 mod city_view;
 mod dashboard;

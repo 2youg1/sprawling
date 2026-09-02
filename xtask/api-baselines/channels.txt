@@ -56,10 +56,15 @@ pub channels::BindFace::Exposed
 pub channels::BindFace::Loopback
 pub channels::BindVerdict::Refuse(kernel::error::AxError)
 pub channels::BindVerdict::Serve(channels::BindFace)
+pub channels::BlockedLine::line: alloc::string::String
+pub channels::BlockedLine::source: kernel::plan::NodeId
+pub channels::BlockedLine::waiting: u32
 pub channels::BuildingAnswer::addr: kernel::address::Address
 pub channels::BuildingAnswer::archive: alloc::vec::Vec<channels::ArchiveLine>
+pub channels::BuildingAnswer::blocked: alloc::vec::Vec<channels::BlockedLine>
 pub channels::BuildingAnswer::docs: alloc::vec::Vec<channels::BuildingDoc>
 pub channels::BuildingAnswer::mcp: alloc::vec::Vec<kernel::config::McpServer>
+pub channels::BuildingAnswer::plan: alloc::vec::Vec<channels::PlanRow>
 pub channels::BuildingAnswer::problems: alloc::vec::Vec<alloc::string::String>
 pub channels::BuildingAnswer::progress: kernel::completion::Progress
 pub channels::BuildingAnswer::rooms: alloc::vec::Vec<alloc::string::String>
@@ -69,8 +74,10 @@ pub channels::BuildingDoc::name: alloc::string::String
 pub channels::BuildingDoc::text: alloc::string::String
 pub channels::BuildingDoc::truncated: bool
 pub channels::BuildingProgress::addr: kernel::address::Address
+pub channels::BuildingProgress::blocked: alloc::vec::Vec<channels::BlockedLine>
 pub channels::BuildingProgress::problems: alloc::vec::Vec<alloc::string::String>
 pub channels::BuildingProgress::progress: kernel::completion::Progress
+pub channels::BuildingProgress::ready: u32
 pub channels::ChangesAnswer::base: kernel::locator::GitOid
 pub channels::ChangesAnswer::files: alloc::vec::Vec<kernel::change::FileChange>
 pub channels::ChangesAnswer::head: core::option::Option<kernel::locator::GitOid>
@@ -81,6 +88,7 @@ pub channels::ChosenSummary::tag: kernel::model::ModelTag
 pub channels::CityAnswer::active: u64
 pub channels::CityAnswer::buildings: alloc::vec::Vec<channels::BuildingProgress>
 pub channels::CityAnswer::frozen: u64
+pub channels::CityAnswer::pursuits: alloc::vec::Vec<channels::PursuitLine>
 pub channels::CityAnswer::runs: alloc::vec::Vec<channels::RunSummary>
 pub channels::ClientAssets::Disk(std::path::PathBuf)
 pub channels::ClientAssets::Embedded(&'static [channels::EmbeddedFile])
@@ -151,6 +159,10 @@ pub channels::Command::ProbeEndpoint::dialect: kernel::model::DialectKind
 pub channels::Command::ProbeEndpoint::idem: kernel::idem::IdemKey
 pub channels::Command::ProbeEndpoint::name: channels::ProviderName
 pub channels::Command::ProbeEndpoint::secret: core::option::Option<alloc::string::String>
+pub channels::Command::Pursue
+pub channels::Command::Pursue::addr: kernel::address::Address
+pub channels::Command::Pursue::idem: kernel::idem::IdemKey
+pub channels::Command::Pursue::step: channels::PursuitStep
 pub channels::Command::PutSecret
 pub channels::Command::PutSecret::name: alloc::string::String
 pub channels::Command::PutSecret::realm: alloc::string::String
@@ -246,6 +258,23 @@ pub channels::MetricsAnswer::events: u64
 pub channels::MetricsAnswer::runs_active: u64
 pub channels::MetricsAnswer::runs_frozen: u64
 pub channels::MetricsAnswer::signals_waiting: u64
+pub channels::PlanRow::evidence: core::option::Option<alloc::string::String>
+pub channels::PlanRow::item: alloc::string::String
+pub channels::PlanRow::leaf: bool
+pub channels::PlanRow::needs: alloc::vec::Vec<kernel::plan::NodeId>
+pub channels::PlanRow::node: kernel::plan::NodeId
+pub channels::PlanRow::ready: bool
+pub channels::PlanRow::share_ppb: u64
+pub channels::PlanRow::status: kernel::spine::RoadmapStatus
+pub channels::PursuitLine::addr: kernel::address::Address
+pub channels::PursuitLine::goal: alloc::string::String
+pub channels::PursuitLine::state: kernel::pursuit::PursuitState
+pub channels::PursuitLine::verdict: alloc::string::String
+pub channels::PursuitStep::Clear
+pub channels::PursuitStep::Pause
+pub channels::PursuitStep::Resume
+pub channels::PursuitStep::Set
+pub channels::PursuitStep::Set::goal: alloc::string::String
 pub channels::Query::ApprovalQueue
 pub channels::Query::ArchiveSearch
 pub channels::Query::ArchiveSearch::needle: alloc::string::String
@@ -318,7 +347,7 @@ pub channels::Welcome::city: core::option::Option<kernel::address::Address>
 pub channels::Welcome::resume_from: core::option::Option<kernel::event::Seq>
 pub channels::Welcome::schema: kernel::locator::B3Hash
 pub channels::Welcome::wire_v: u32
-pub const channels::COMMAND_NAMES: [&str; 22]
+pub const channels::COMMAND_NAMES: [&str; 23]
 pub const channels::HISTORY_MAX: u32
 pub const channels::QUERY_NAMES: [&str; 14]
 pub const channels::WIRE_V: u32
@@ -336,6 +365,7 @@ pub enum channels::HandshakeVerdict
 pub enum channels::Intervention
 pub enum channels::LoginStep
 pub enum channels::NoSecret
+pub enum channels::PursuitStep
 pub enum channels::Query
 pub enum channels::ServerFrame
 pub enum channels::SessionState
@@ -386,6 +416,7 @@ pub struct channels::ApprovalsAnswer
 pub struct channels::ArchiveAnswer
 pub struct channels::ArchiveHit
 pub struct channels::ArchiveLine
+pub struct channels::BlockedLine
 pub struct channels::BuildingAnswer
 pub struct channels::BuildingDoc
 pub struct channels::BuildingProgress
@@ -407,7 +438,9 @@ pub struct channels::InboxAnswer
 pub struct channels::MetricsAnswer
 pub struct channels::ModeTag(_)
 pub struct channels::PairingToken(_)
+pub struct channels::PlanRow
 pub struct channels::ProviderName(_)
+pub struct channels::PursuitLine
 pub struct channels::RegistryAnswer
 pub struct channels::RegistryLine
 pub struct channels::Reply(_)
@@ -447,11 +480,14 @@ pub use channels::Locator
 pub use channels::McpServer
 pub use channels::McpTransport
 pub use channels::ModelTag
+pub use channels::NodeId
 pub use channels::Payload
 pub use channels::PlannedProgress
 pub use channels::PolicyVerdict
 pub use channels::Progress
+pub use channels::PursuitState
 pub use channels::Restoration
+pub use channels::RoadmapStatus
 pub use channels::RunId
 pub use channels::SandboxLimits
 pub use channels::Sealed
@@ -464,5 +500,6 @@ pub use channels::Token
 pub use channels::Tokens
 pub use channels::UnplannedProgress
 pub use channels::UsdMicros
+pub use channels::WHOLE_PPB
 pub use channels::WriteDomain
 pub use channels::markdown

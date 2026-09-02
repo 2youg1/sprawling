@@ -14,7 +14,7 @@ kernel 是纯判定函数层：只吃入参吐 verdict，零内部 crate 依赖�
 | S1.01 | `error` | 2 值类型＋6 数据面 | AxError 七字段；AxCode 35（S2 期初增 `E_STORAGE_FATAL`；P3.01 删 `E_SIGNAL_UNKNOWN`）；carrier 声明位 |
 | S1.02 | `address` | 2 值类型 | 相对 city root 路径 newtype；WriteDomain 原语；reserved prefix 判定 |
 | S1.02 | `locator` | 2 值类型 | `cas:`／`file:` 文法解析与呈现；fail-closed |
-| S1.03 | `event` | 2 值类型 | EventKind 61（S1.03 建 55，P2.09 增 `autonomy_changed`，P4.01 增 roadmap 三件，R1.14 增 `login_started`，P3.01 增 `endpoint_probed`）；in-window／record-only 二分；EventRecord 规范字节；EventRef 私有铸造 |
+| S1.03 | `event` | 2 值类型 | EventKind 64（S1.03 建 55，P2.09 增 `autonomy_changed`，P4.01 增 roadmap 三件，R1.14 增 `login_started`，P3.01 增 `endpoint_probed`，V3.19 增 `roadmap_split`／`roadmap_blocked`，V3.22 增 `pursuit_changed`）；in-window／record-only 二分；EventRecord 规范字节；EventRef 私有铸造 |
 | S1.04 | `version` | 2 值类型 | 乐观并发：Version 单调值＋base 新鲜度判定 |
 | S1.04 | `idem` | 2 值类型 | IdemKey 确定性派生（BLAKE3 XOF 16 字节＋版本字节） |
 | S1.05 | `consts_external` | 6 数据面 | 外部事实常量 5 项 |
@@ -38,7 +38,7 @@ Stage 2 落地其余 18 个 kernel 模块（§8-10…§8-27）。**施工序＝�
 ## 2 验收标准
 
 - 每模块单测过 workspace lints（非测试代码零 unwrap/expect/panic/索引切片/裸算术/as）。
-- `EventKind` 61 个 variant、`AxCode` 35 个 variant 与本文 §8-4／§8-1 表逐 variant 一致（S2 起 `xtask specalign` 机器断言，本期人工核对入卡备注）。
+- `EventKind` 64 个 variant、`AxCode` 35 个 variant 与本文 §8-4／§8-1 表逐 variant 一致（S2 起 `xtask specalign` 机器断言，本期人工核对入卡备注）。
 - 每个 EventKind 恰属 in-window／record-only 之一；in-window 恰 8 件。
 - 每个 AxCode 恰有一个 carrier 声明；装载期白名单恰 5 码且封闭。
 - golden EventRecord：规范字节入 insta 快照，跨平台逐字节稳定。
@@ -328,7 +328,7 @@ pub struct EventRef { seq: Seq, kind: EventKind }   // 字段私有；无公开�
 - 铸造纪律（15.3-1）：`EventRef` 唯二铸造路径＝Ledger append 流程（适配器持刚组装的 EventRecord 调 `to_ref`）与 replay 验链后逐条 `to_ref`。字段私有使字面量伪造编译不过（S2.11 trybuild 反例）。
 - `parse_line` 是读侧唯一入口：serde 反序列化＋Payload 复验；未知 kind 在此报错（呈现语义见 runtime::replay 章——携 `ig` 的行例外）。
 
-**EventKind 61 全集与二分（specalign 数据面；「入窗」＝InWindow，共 8）**：
+**EventKind 64 全集与二分（specalign 数据面；「入窗」＝InWindow，共 8）**：
 
 | 组 | kind | 窗类 |
 |---|---|---|
@@ -368,6 +368,9 @@ pub struct EventRef { seq: Seq, kind: EventKind }   // 字段私有；无公开�
 | 协作 | `roadmap_claimed` | record-only |
 | 协作 | `roadmap_finished` | record-only |
 | 协作 | `roadmap_released` | record-only |
+| 协作 | `roadmap_split` | record-only |
+| 协作 | `roadmap_blocked` | record-only |
+| 协作 | `pursuit_changed` | record-only |
 | 治理与设施 | `approval_requested` | record-only |
 | 治理与设施 | `approval_resolved` | record-only |
 | 治理与设施 | `policy_created` | record-only |
@@ -692,34 +695,144 @@ impl Registry {
 - Registry 是值不是存储：状态住调用方（S3 起由 projection 重建）；kernel 只定登记规则与查询面。
 - 评分归 eval（P3）；promotion 本期只登记不评分。
 
-### 8-19 kernel::spine（S2.08）
+### 8-19 kernel::spine（S2.08；V3.17 换底为六列树）
 
 ```rust
-#[non_exhaustive] pub enum RoadmapStatus { NotStarted, InProgress, Done, Blocked, AwaitingApproval }
-pub const ROADMAP_STATUS_SPELLINGS: [(RoadmapStatus, &str); 5];   // Not started｜In progress｜Done｜Blocked｜Awaiting approval（模板拼写，单套）
-#[non_exhaustive] pub enum EvidenceCell { Empty, Invalid { raw: String }, Present(Locator) }
-pub struct RoadmapRow { pub index: u64, pub item: String, pub status: RoadmapStatus, pub evidence: EvidenceCell }
-#[non_exhaustive] pub enum RoadmapShape { WellFormed { rows: Vec<RoadmapRow> }, Malformed { problems: Vec<String> } }
+pub enum RoadmapStatus { NotStarted, InProgress, Done, Blocked, AwaitingApproval }   // 携 serde（snake_case）
+pub const ROADMAP_STATUS_SPELLINGS: [(RoadmapStatus, &str); 5];   // 表内拼写，单套
+pub const ROADMAP_COLUMNS: usize = 6;
+impl RoadmapStatus { pub fn spelling(self) -> &'static str; }     // 唯一拼写产地
+pub enum EvidenceCell { Empty, Invalid { raw: String }, Present(Locator) }
+pub struct RoadmapRow { pub id: NodeId, pub item: String, pub weight: u32,
+                        pub needs: Vec<NodeId>, pub status: RoadmapStatus,
+                        pub evidence: EvidenceCell }
+pub enum RoadmapShape { WellFormed { rows: Vec<RoadmapRow> }, Malformed { problems: Vec<String> } }
+pub struct NewChild { pub item: String, pub weight: u32 }
 pub fn check_roadmap_shape(text: &str) -> RoadmapShape;
-pub fn set_roadmap_status(text: &str, index: u64, status: RoadmapStatus, evidence: Option<&Locator>) -> Result<String, AxError>;  // P4.01
+pub fn set_roadmap_status(text: &str, id: &NodeId, status: RoadmapStatus,
+                          evidence: Option<&Locator>) -> Result<String, AxError>;
+pub fn insert_children(text: &str, parent: &NodeId, children: &[NewChild]) -> Result<String, AxError>;
 
-pub const MEMO_OUTLINE_FIELDS: [&str; 6];    // Current goal｜Current stage｜Next action｜Blocked by｜Decision index｜Checkpoint index
-#[non_exhaustive] pub enum MemoShape { WellFormed, Malformed { missing: Vec<&'static str> } }
+pub const MEMO_OUTLINE_FIELDS: [&str; 6];
+pub enum MemoShape { WellFormed, Malformed { missing: Vec<&'static str> } }
 pub fn check_memo_shape(text: &str) -> MemoShape;
-
-// P1.09（gate）：目的地半边的门，与载荷半边的 egress 并列
-// pub struct EgressAllowlist; pub fn egress_target(&EgressAllowlist, &EgressTarget) -> EgressOutcome
-// 域名按标签边界匹配（notexample.com 不命中 example.com）；空表＝不通公网；回环与私网不算出网
-pub fn tally(rows: &[RoadmapRow]) -> Progress;   // P1.04：Progress／PlannedProgress／UnplannedProgress 携 serde
-// （与 Completion 相反：进度是界面要渲染的一次读数，不是「已完成」的主张；不可反序列化的仍是 Done）   // 对账规则 1：Done 且 Present 才计入分子；Blocked/AwaitingApproval 计 blocked
-#[non_exhaustive] pub enum ScopeChange { Keep, Add, Drop }        // 范围变更三动词（数据面，S3 projection 消费）
-#[non_exhaustive] pub enum WriteMoment { BeforeReport, AfterFeedback, OnPlanChange }  // 落盘三时机（同上）
+pub enum ScopeChange { Keep, Add, Drop }
+pub enum WriteMoment { BeforeReport, AfterFeedback, OnPlanChange }
 ```
 
-- **校形状与校证据分两道门**：`check_*` 只答写得像不像样（四列齐、状态在枚举、六字段在场）；证据真伪归对账（tally 不计无证 Done，Invalid 另标存疑——EvidenceCell 三分使两者可区分）。
-- 表解析：首个四列表头块；列数不等、状态拼写外、index 非数字逐条进 problems；Memo 只验大纲六字段存在（行首命中）。纯字符串处理，无 I/O。
-- **拼写单套且不区分大小写**（S5.09）：运行时文档全面英文化后，中英两套拼写会成为「一个 Resident 允许写什么」的第二个权威；而大小写不入契约是因为 `done` 这类行表达的事实表装得下，把它判成 Malformed 等于拿一个读者不接受的理由把该行逐出分母。
-- **写者与读者同住（P4.01）**：`set_roadmap_status` 是这张表唯一的编辑入口。别处拼一行 Markdown 就是对「一行长什么样」的第二份意见，而语法只能有一份。三条契约：只改首个四列表（与 `check_roadmap_shape` 同一块）；输出行规范化为 `| index | item | status | evidence |`，故**同一次改写两次得到同一字节**；`Done` 缺证据恒拒（`E_EVIDENCE_MISSING`）——那正是 `tally` 拒绝计入分子的那种行，允许写出来就是允许制造一个看起来完成、数字却不动的行。
+- **本模块只管文法，结构归 `plan`。** `check_*` 答「写得像不像一张 roadmap」；这些行**彼此怎么挂、各值多少、哪个能动**是 `kernel::plan` 的事。分开是因为两种坏法的修法不同：一行写错了改那一行，依赖成环了要重想这件事怎么排。
+- **六列，且索引是路径**（V3.17）。`| # | Item | Weight | Needs | Status | Evidence |`。`2.3.1` 挂在 `2.3` 下，于是**一张表就说清了多级计划**，不需要第二个文件描述层级；`Weight` 是同一父下诸行之间的**比例**（空格＝1，整层同乘不变），`Needs` 是必须先完成的行。旧四列表**不是被兼容而是被报告**：把四列当六列读会把状态词读进 weight 格，所以 `check_roadmap_shape` 报 `4 columns` 并让整栋楼落到 `Progress::Unplanned`——**一份读不懂的计划没有分母，这件事必须看得见。**
+- **拼写单套且不区分大小写**（S5.09）：运行时文档全面英文化后，中英两套拼写会成为「一个 Resident 允许写什么」的第二个权威；而大小写不入契约是因为 `done` 这类行表达的事实表装得下，把它判成 Malformed 等于拿一个读者不接受的理由把该行逐出分母。**线上拼写另有一套**（`snake_case` 标识符）：线帧是给程序读的，表格是给人读的，让客户端硬编码 `Awaiting approval` 正是短语表存在要防的事。
+- **写者与读者同住**：`set_roadmap_status` 与 `insert_children` 是这张表仅有的两个编辑入口，两者共用同一段「哪几行是这张表」的判定（`locate_table`／`body_row`）。三条契约不变：只改首个表；输出行规范化，故**同一次改写两次得到同一字节**；`Done` 缺证据恒拒（`E_EVIDENCE_MISSING`）。
+- **`insert_children` 只往后编号，不补空位**：一个计划索引是一个名字，复用它等于悄悄搬走别人的证据。子节点落在父节点**最后一个后代之后**，于是阅读顺序不变、昨天看到的编号今天仍指同一件活。
+- **`WriteMoment` 终于有了消费者**（V3.17）：正因为可写时刻是封闭的，读者才可以在两次写之间**持有已解析的树**而不是每问一次就把每栋楼的文件重解析一遍（`bin::plan_view`）。
+
+### 8-32 kernel::share（V3.17；形状 2 value）
+
+```rust
+pub struct Share(/* u64 私有：十亿分之一 */);
+pub const WHOLE_PPB: u64 = 1_000_000_000;
+impl Share {
+    pub const WHOLE: Share;                 // 唯一原点
+    pub const NONE:  Share;                 // 加不出来，故可公开
+    pub fn ppb(self) -> u64;
+    pub fn split(self, weights: &[u32]) -> Result<Vec<Share>, AxError>;   // 取走自己，分出恰好等于自己的诸份
+}
+pub fn gather(parts: &[Share]) -> Share;    // 自由函数，不是 Add
+```
+
+- **守恒不是被检查的规则，而是类型唯一能表达的事。** 份额只有两种来路：整份计划，或者**分掉另一份得到的一片**。`split` 按值取走输入，于是「凭空多出一份」拼不出来（trybuild `forge_share`）。没有构造器、没有算术、没有 `Deserialize`——**从文件里读回来的数字必须先从整体里分出来才能成为份额**，这正是 `PlanTree::build` 每次自根重分的理由：守恒是重新推导出来的，不是被信任的。
+- **这样就解掉了自评偏差**：一个 Agent 怎么切自己那一支都行，但它切不出比父节点更多的份。**封顶取代仲裁**，也就不需要「权重从哪来」的第二权威。
+- **十亿分之一而不是分数**：两份份额在任何机器上以同样方式比较与相加，反复细分不会把分母撑大，判定路径上没有浮点（ARCHITECTURE §10 规则 6）。整除余数按**先来先得**发给靠前的几份——这是一条规则而不是一次舍入，于是同一份计划在任何机器上分法相同。
+- **`gather` 是自由函数而不是 `Add`**：它是「一根枝的叶子加起来是多少」这件事，不是谁都可以随手做的算术。混了两份计划的调用方会得到饱和在整份上的结果，那是诚实答案。
+
+### 8-33 kernel::plan（V3.17–V3.21；形状 1 判定）
+
+```rust
+pub struct NodeId(/* String 私有：点分十进制 */);   // 携 Serialize；Deserialize 走 parse
+impl NodeId {
+    pub fn parse(raw: &str) -> Result<NodeId, AxError>;
+    pub fn parent(&self) -> Option<NodeId>;
+    pub fn ordinal(&self) -> u32;
+    pub fn depth(&self) -> usize;
+    pub fn is_ancestor_of(&self, other: &NodeId) -> bool;
+    pub fn ancestors(&self) -> Vec<NodeId>;
+    pub fn child(&self, ordinal: u32) -> Result<NodeId, AxError>;
+    pub fn as_str(&self) -> &str;
+}
+pub const NODE_DEPTH_MAX: usize = 10;
+
+pub enum StopCause { Blocked { note }, HandedBack { note }, FrozeWithoutEvidence,
+                     Stalled { repeats }, GateOverdue { waited_ms } }
+impl StopCause { pub fn status(&self) -> RoadmapStatus; pub fn is_red(&self) -> bool; pub fn line(&self) -> String; }
+
+pub struct Held(/* NodeId 私有 */);         // #[must_use]
+impl Held {
+    pub fn id(&self) -> &NodeId;
+    pub fn finish(self, evidence: Locator) -> PlanExit;   // 绿
+    pub fn stop(self, why: StopCause) -> PlanExit;        // 红，或回到就绪集
+}
+pub enum PlanExit { Finished { id, evidence }, Stopped { id, why } }
+
+pub struct PlanNode { pub row: RoadmapRow, pub share: Share, pub children: Vec<NodeId> }
+pub struct PlanTree { /* BTreeMap<NodeId, PlanNode> 私有 */ }
+impl PlanTree {
+    pub fn build(rows: Vec<RoadmapRow>) -> Result<PlanTree, AxError>;
+    pub fn get(&self, id: &NodeId) -> Option<&PlanNode>;
+    pub fn nodes(&self) -> impl Iterator<Item = &PlanNode>;
+    pub fn needs_of(&self, id: &NodeId) -> BTreeSet<NodeId>;
+    pub fn ready(&self) -> Vec<NodeId>;
+    pub fn claim(&self, id: &NodeId) -> Result<Held, AxError>;
+    pub fn progress(&self) -> Progress;
+}
+```
+
+- **构造点拒五种形状**（fail-closed，与 `Locator` 同）：索引重复、父行缺失、依赖指向不存在的行、依赖自指、依赖成环。第五种用 Kahn 剥层，剥不掉的就在环上，**报成一条走法而不是一个集合**——修的人需要看见该剪哪条边。拿到 `PlanTree` 的调用方因此永远不必再问「这份计划讲不讲得通」。
+- **一根枝把自己的份额整份分给子节点**，`build` 自根向下重分一次，于是**总量恒为整份计划**，不需要给分母编版本（上一轮提过的「分母版本化」在守恒之下是在解一个不存在的问题，已撤回）。
+- **只有叶子进分子**。一根枝的活就是它的子节点，两边都算等于把同一份力气数两遍；`build` 因此拒绝「枝说 Done 而子节点没说」，于是枝的状态列是一句读者可信的摘要而不是第二种意见。
+- **进度两个数一起走**（`PlannedProgress` 增 `done_ppb`／`blocked_ppb`）：份额说走了多少路，叶子数说这份计划最后原来有多少片。**只看份额会被慷慨的拆分骗**，只看叶子数不知道轻重；两个一起看，「先挑软柿子」的形状会自己显出来。
+- **就绪集是纯函数**：叶子、无人认领、且自己与**每一层祖先**的依赖都已 Done。祖先那一条是必须的——否则 `2.3.1` 会在 `2.3` 等的那件事还没好时就开工。
+- **`claim` 是拿到 `Held` 的唯一路径**，且三种拒绝各说各的：不在表里、是枝或已被拿走（`E_GOAL_CONFLICT`——两个 run 想要同一个节点就是目标冲突）、还在等什么（**点名等谁**）。第三段永远给出一个真能拿的节点。
+- **计划门禁就是 `Held` 的形状**（V3.21）：一个私有字段使它只能由 `claim` 铸出，两个按值取走的方法使它只能花在两扇门上。**没有第三个出口**；一个只是结束了的 run 把它花在 `FrozeWithoutEvidence` 上，那正是 `blockage` 里红色的来处。`HandedBack` 是唯一不红的停：它把节点放回就绪集，而把它和「卡住」合成一个取值，要么让没人拒绝过的活搁浅，要么在有人只是没预算了的时候把计划涂红。
+
+### 8-34 kernel::blockage（V3.20；形状 1 判定）
+
+```rust
+pub struct RedNode { pub at: NodeId, pub why: StopCause }
+pub struct Blockage { pub source: NodeId, pub why: StopCause, pub reaches: Vec<NodeId> }
+impl Blockage { pub fn line(&self) -> String; }
+pub struct Notice { pub to: String, pub about: NodeId, pub line: String }
+pub fn spread(tree: &PlanTree, red: &[RedNode]) -> Vec<Blockage>;
+pub fn notices(blocked: &[Blockage], holders: &BTreeMap<NodeId, String>) -> Vec<Notice>;
+```
+
+- **红不是新机制**：来源全是这座城已经记着的事实——冻结而无证据、门升给人超期、`kernel::stall` 判定原地打转、居民自己说卡住了。本模块只答那些事实答不了的一问：**既然 2.3.1 红了，还有什么动不了。**
+- **答案指名源头而不是罗列症状**：一份计划只有一个真问题时，产出是一条「整条 2.3 支线卡在 2.3.1」，而不是十七个红点让人自己往回找。首屏放得下一个原因，放不下一串后果。
+- **红走两条路，而它们是同一关系的两面**：沿树向上（子节点卡住则枝卡住），沿依赖边向前（等一个红节点就是等一件不会来的事）。`reaches` 恒不含 `source`，且**已自带原因的节点不算别人的后果**——顺着列表读下来，每个问题只遇到一次。
+- **`notices` 让交流由事实触发而不是由人触发**：每个 blockage 对每个持有者只发一条（一个信箱里四份同一个问题就是一个没人读的信箱），报告者不会收到自己那条。持有者是一个字符串而不是地址——kernel 不假设「谁持有」是一个地址，装配层用房间地址填它。
+
+### 8-35 kernel::pursuit（V3.22；形状 1 判定）
+
+```rust
+pub enum PursuitState { Running, Paused }        // 携 serde
+pub struct Pursuit { /* 私有；无 serde */ }
+impl Pursuit {
+    pub fn declare(at: &Delegator, goal: String) -> Result<Pursuit, AxError>;
+    pub fn goal(&self) -> &str;
+    pub fn state(&self) -> PursuitState;
+    pub fn pause(&mut self);
+    pub fn resume(&mut self);
+}
+pub enum PursuitVerdict { Work { next: NodeId }, Waiting { in_flight: u32 }, Paused, Finished }
+pub fn observe(state: PursuitState, ready: &[NodeId], in_flight: u32) -> PursuitVerdict;
+```
+
+- **施工计划里叫 Endless，这里按它是什么命名**：本仓已有三处叫 standing 的东西（`assembly::Standing`、`city::Standing`、`GoalEntry.standing`），再加一个会让词汇表出现第四个含义。
+- **一个社会停下来不是因为有人喊停，是因为没有就绪的活了。** 判据只此一条：就绪集为空**且**没有在途的 run。两半都要——就绪集空而四个 run 在跑，意思是活在别人手上，不是活干完了。
+- **钱明确不是判据**。本仓的成本面受众是 Agent（给它优化的材料），不是刹车；一个读预算的停机条件回答的是一个这里没人问的问题。
+- **`observe` 收状态而不收 `Pursuit`**：判定不依赖目标说了什么，而一个必须先持有 `Pursuit` 才能发问的读者，等于要拿深度零位才能**读**这座城。**声明是被守的动作，看不是。**
+- **子代理拼不出来**：`declare` 收 `&Delegator`，而 `Delegate` 造不出一个（trybuild `delegate_declares_pursuit`）。与 `delegation` 同一个两层守卫，理由也同一个：一个能让全城通宵干活的子代理，就是一个能替你决定通宵干什么的子代理。
+- **pause 与 clear 是两件事，都要**：暂停留着目标，清除把它丢掉（丢掉值本身，于是不会被误恢复）。取消一个 **run** 是第三件事，住在 run 那边。
 
 ### 8-20 kernel::completion（S2.08）
 

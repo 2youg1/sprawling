@@ -1159,11 +1159,15 @@ mod tests {
 
     fn planned(addr: &str, done: u32, total: u32, problems: Vec<String>) -> BuildingProgress {
         BuildingProgress {
+            blocked: Vec::new(),
+            ready: 0,
             addr: Address::parse(addr).unwrap(),
             progress: Progress::Planned(PlannedProgress {
                 done,
                 blocked: 0,
                 total,
+                done_ppb: 0,
+                blocked_ppb: 0,
             }),
             problems,
         }
@@ -1197,6 +1201,8 @@ mod tests {
     #[test]
     fn a_building_without_a_denominator_gets_no_invented_height() {
         let buildings = vec![BuildingProgress {
+            blocked: Vec::new(),
+            ready: 0,
             addr: Address::parse("yard").unwrap(),
             progress: Progress::Unplanned(UnplannedProgress {
                 steps: 40,

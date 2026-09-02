@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sprawling — 计划</title>
+<!--
+  Step 1 of the four-step method (WORKSPACE/FRONTEND-METHOD.md): the screen
+  is settled here, in plain HTML, and only then translated.
+
+  It carries no styles of its own. `tokens.css` is written into target/ by
+  web::theme's own test; `app.css` is the file the product ships.
+  Run `cargo test -p web` once before opening this file.
+
+  What this screen is, in one line: the plan tree, laid out by state. It
+  holds no state of its own — every column reads `BuildingAnswer.plan`,
+  and the only thing a person can do from here is send somebody to a node
+  that is ready. Dragging a card is deliberately absent: a node moves when
+  a run reports it moved, and a face that could move one would be a second
+  writer of the one table every progress figure is divided by.
+-->
+<link rel="stylesheet" href="../../../target/screens/tokens.css">
+<link rel="stylesheet" href="../assets/app.css">
+</head>
+<body>
+<main class="layout">
+
+  <header class="top-bar">
+    <span class="address">lab</span>
+    <span class="counts">
+      <span><b>1</b> 在跑</span>
+      <span><b>0</b> 等你</span>
+      <span><b>5</b> 栋楼</span>
+    </span>
+  </header>
+
+  <nav class="left-nav">
+    <div class="nav-group">
+      <a class="nav-item" href="#/">在做的事</a>
+      <a class="nav-item" href="#/waiting">等我的</a>
+      <a class="nav-item" href="#/record">记录</a>
+      <a class="nav-item" href="#/cost">花销</a>
+      <a class="nav-item" href="#/setup">设置</a>
+    </div>
+  </nav>
+
+  <section class="centre">
+
+    <div class="building">
+      <div class="building-head">
+        <h1 class="address">lab</h1>
+        <span class="progress">37% ／ 剩 5 片叶子</span>
+        <span class="rooms">3 个房间</span>
+      </div>
+
+      <!--
+        The tabs carry `aria-current` and no `role`, which is what the
+        client draws today. A tablist/tab pair would be better ARIA and
+        it is not this screen's to introduce: the tabs belong to the
+        building page, and adding a role here alone is exactly the drift
+        `xtask ax` exists to catch.
+      -->
+      <div class="tabs">
+        <button type="button" class="tab" aria-current="true">计划</button>
+        <button type="button" class="tab">Roadmap.md</button>
+        <button type="button" class="tab">Memo.md</button>
+        <button type="button" class="tab">Handoff.md</button>
+        <button type="button" class="tab">档案</button>
+        <button type="button" class="tab">能连到什么</button>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">卡住的</h2>
+          <span class="panel-figure">1</span>
+        </div>
+        <p class="panel-scope">一处原因一行，不是一个症状一行。后面等着的节点算成一个数。</p>
+        <div class="panel-body">
+          <p class="blocked-line">
+            <span class="phase alert" role="img" aria-label="卡住"></span>
+            <span class="said">支线 2 卡在 2.1：采石场关了</span>
+            <span class="turn">3 个节点在后面等</span>
+          </p>
+        </div>
+        <p class="panel-source">来自这栋楼的 Roadmap.md，与说明它为什么卡住的那条记录。</p>
+      </section>
+
+      <section class="panel board">
+        <div class="panel-head">
+          <h2 class="panel-title">计划</h2>
+          <span class="panel-figure">8</span>
+        </div>
+        <p class="panel-scope">只有叶子算数：一根枝的活就是它的子节点，两边都算等于把同一份力气数两遍。</p>
+
+        <div class="panel-body board-columns">
+
+          <div class="board-column">
+            <h3 class="board-heading">就绪 <span class="badge">2</span></h3>
+            <a class="board-card" href="#/">
+              <span class="board-node">1.2</span>
+              <span class="board-item">把窑接上电</span>
+              <span class="board-share">12%</span>
+            </a>
+            <a class="board-card" href="#/">
+              <span class="board-node">3</span>
+              <span class="board-item">写下测出来的数</span>
+              <span class="board-share">25%</span>
+            </a>
+          </div>
+
+          <div class="board-column">
+            <h3 class="board-heading">等依赖 <span class="badge">2</span></h3>
+            <div class="board-card quiet">
+              <span class="board-node">2.2</span>
+              <span class="board-item">上釉试样</span>
+              <span class="board-waits">等 2.1</span>
+            </div>
+            <div class="board-card quiet">
+              <span class="board-node">2.3</span>
+              <span class="board-item">整窑烧一次</span>
+              <span class="board-waits">等 2.2</span>
+            </div>
+          </div>
+
+          <div class="board-column">
+            <h3 class="board-heading">在做 <span class="badge">1</span></h3>
+            <div class="board-card">
+              <span class="phase running" role="img" aria-label="在跑"></span>
+              <span class="board-node">1.1</span>
+              <span class="board-item">量一遍读取路径</span>
+              <span class="board-share">12%</span>
+            </div>
+          </div>
+
+          <div class="board-column">
+            <h3 class="board-heading">卡住 <span class="badge">1</span></h3>
+            <div class="board-card">
+              <span class="phase alert" role="img" aria-label="卡住"></span>
+              <span class="board-node">2.1</span>
+              <span class="board-item">砌炉膛</span>
+              <span class="board-share">8%</span>
+            </div>
+          </div>
+
+          <div class="board-column">
+            <h3 class="board-heading">完成 <span class="badge">2</span></h3>
+            <div class="board-card done">
+              <span class="board-node">1.3</span>
+              <span class="board-item">列出候选做法</span>
+              <span class="board-share">12%</span>
+            </div>
+            <div class="board-card done">
+              <span class="board-node">4</span>
+              <span class="board-item">收尾记录</span>
+              <span class="board-share">25%</span>
+            </div>
+          </div>
+
+        </div>
+        <p class="panel-source">这张表只画 Roadmap.md，它自己不存任何状态。要推进一个节点，从「就绪」里点一个派个活。</p>
+      </section>
+
+    </div>
+
+  </section>
+</main>
+</body>
+</html>

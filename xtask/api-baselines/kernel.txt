@@ -31,6 +31,7 @@ impl core::fmt::Display for kernel::GitOid
 impl core::fmt::Display for kernel::IdemKey
 impl core::fmt::Display for kernel::Locator
 impl core::fmt::Display for kernel::ModelTag
+impl core::fmt::Display for kernel::NodeId
 impl core::fmt::Display for kernel::Range
 impl core::fmt::Display for kernel::RunId
 impl core::fmt::Display for kernel::SecretRef
@@ -44,6 +45,7 @@ impl kernel::Artifact
 impl kernel::AxCode
 impl kernel::AxError
 impl kernel::B3Hash
+impl kernel::Blockage
 impl kernel::BuildingPolicy
 impl kernel::ByteLen
 impl kernel::ChatRequest
@@ -61,21 +63,30 @@ impl kernel::Evidence
 impl kernel::GateRefusal
 impl kernel::GitOid
 impl kernel::GoalId
+impl kernel::Held
 impl kernel::IdemKey
 impl kernel::Locator
 impl kernel::ModelReturn
 impl kernel::ModelTag
+impl kernel::NodeId
 impl kernel::Payload
+impl kernel::PlanExit
+impl kernel::PlanNode
+impl kernel::PlanTree
 impl kernel::PlannedProgress
+impl kernel::Pursuit
 impl kernel::Range
 impl kernel::Registry
 impl kernel::ResidentId
+impl kernel::RoadmapStatus
 impl kernel::RunId
 impl kernel::Sealed<alloc::string::String>
 impl kernel::SecretRef
 impl kernel::Seq
 impl kernel::ServerLabel
 impl kernel::SessionName
+impl kernel::Share
+impl kernel::StopCause
 impl kernel::TaintSet
 impl kernel::TaintSource
 impl kernel::TimeMs
@@ -98,6 +109,7 @@ impl<'de> serde_core::de::Deserialize<'de> for kernel::B3Hash
 impl<'de> serde_core::de::Deserialize<'de> for kernel::GitOid
 impl<'de> serde_core::de::Deserialize<'de> for kernel::IdemKey
 impl<'de> serde_core::de::Deserialize<'de> for kernel::Locator
+impl<'de> serde_core::de::Deserialize<'de> for kernel::NodeId
 impl<'de> serde_core::de::Deserialize<'de> for kernel::Payload
 impl<'de> serde_core::de::Deserialize<'de> for kernel::SecretRef
 impl<'de> serde_core::de::Deserialize<'de> for kernel::SessionName
@@ -116,16 +128,22 @@ pub const fn kernel::Tokens::new(u64) -> kernel::Tokens
 pub const fn kernel::UsdMicros::get(self) -> u64
 pub const fn kernel::UsdMicros::new(u64) -> kernel::UsdMicros
 pub const kernel::AxCode::ALL: [kernel::AxCode; 35]
-pub const kernel::EventKind::ALL: [kernel::EventKind; 61]
+pub const kernel::EventKind::ALL: [kernel::EventKind; 64]
 pub const kernel::GENESIS_PREV: kernel::B3Hash
 pub const kernel::IDEM_DERIVE_V: u8
 pub const kernel::MEMO_OUTLINE_FIELDS: [&str; 6]
 pub const kernel::ModelTag::ALL: [kernel::ModelTag; 2]
+pub const kernel::NODE_DEPTH_MAX: usize
+pub const kernel::PLAN_WHOLE_PPB: u64
 pub const kernel::RESERVED_PREFIX: &str
+pub const kernel::ROADMAP_COLUMNS: usize
 pub const kernel::ROADMAP_STATUS_SPELLINGS: [(kernel::RoadmapStatus, &str); 5]
 pub const kernel::RunId::CITY: kernel::RunId
 pub const kernel::Seq::FIRST: kernel::Seq
+pub const kernel::Share::NONE: kernel::Share
+pub const kernel::Share::WHOLE: kernel::Share
 pub const kernel::Version::FIRST: kernel::Version
+pub const kernel::WHOLE_PPB: u64
 pub const kernel::consts_external::CACHE_BREAKPOINTS_MAX: u32
 pub const kernel::consts_external::EVENT_LOG_V: u32
 pub const kernel::consts_external::L0_TOOLS: [&str; 3]
@@ -176,10 +194,13 @@ pub enum kernel::How
 pub enum kernel::Lines
 pub enum kernel::Locator
 pub enum kernel::MemoShape
+pub enum kernel::PlanExit
 pub enum kernel::PolicyApplication
 pub enum kernel::PolicyExpiry
 pub enum kernel::PolicyVerdict
 pub enum kernel::Progress
+pub enum kernel::PursuitState
+pub enum kernel::PursuitVerdict
 pub enum kernel::Range
 pub enum kernel::RegisterVerdict
 pub enum kernel::RepairVerdict
@@ -189,6 +210,7 @@ pub enum kernel::ScopeChange
 pub enum kernel::ShedReason
 pub enum kernel::SpendVerdict
 pub enum kernel::StallVerdict
+pub enum kernel::StopCause
 pub enum kernel::Token
 pub enum kernel::VersionVerdict
 pub enum kernel::WindowClass
@@ -230,6 +252,7 @@ pub fn kernel::B3Hash::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> c
 pub fn kernel::B3Hash::digest(&[u8]) -> Self
 pub fn kernel::B3Hash::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernel::B3Hash::serialize<S: serde_core::ser::Serializer>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error>
+pub fn kernel::Blockage::line(&self) -> alloc::string::String
 pub fn kernel::BuildingPolicy::new(bool) -> Self
 pub fn kernel::ByteLen::checked_add(self, kernel::ByteLen) -> core::option::Option<kernel::ByteLen>
 pub fn kernel::ChatRequest::empty(&str, u64) -> kernel::ChatRequest
@@ -278,6 +301,9 @@ pub fn kernel::GitOid::parse(&str) -> core::option::Option<Self>
 pub fn kernel::GitOid::serialize<S: serde_core::ser::Serializer>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error>
 pub fn kernel::GoalId::as_str(&self) -> &str
 pub fn kernel::GoalId::new(impl core::convert::Into<alloc::string::String>) -> core::option::Option<kernel::GoalId>
+pub fn kernel::Held::finish(self, kernel::Locator) -> kernel::PlanExit
+pub fn kernel::Held::id(&self) -> &kernel::NodeId
+pub fn kernel::Held::stop(self, kernel::StopCause) -> kernel::PlanExit
 pub fn kernel::IdemKey::derive(&kernel::RunId, kernel::Seq, &[u8]) -> kernel::IdemKey
 pub fn kernel::IdemKey::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
 pub fn kernel::IdemKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -295,11 +321,40 @@ pub fn kernel::ModelReturn::bare(kernel::Payload, alloc::vec::Vec<kernel::ToolCa
 pub fn kernel::ModelReturn::from_response(kernel::ChatResponse, core::option::Option<kernel::UsdMicros>) -> core::result::Result<kernel::ModelReturn, kernel::AxError>
 pub fn kernel::ModelTag::as_str(&self) -> &'static str
 pub fn kernel::ModelTag::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernel::NodeId::ancestors(&self) -> alloc::vec::Vec<kernel::NodeId>
+pub fn kernel::NodeId::as_str(&self) -> &str
+pub fn kernel::NodeId::child(&self, u32) -> core::result::Result<kernel::NodeId, kernel::AxError>
+pub fn kernel::NodeId::depth(&self) -> usize
+pub fn kernel::NodeId::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
+pub fn kernel::NodeId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn kernel::NodeId::is_ancestor_of(&self, &kernel::NodeId) -> bool
+pub fn kernel::NodeId::ordinal(&self) -> u32
+pub fn kernel::NodeId::parent(&self) -> core::option::Option<kernel::NodeId>
+pub fn kernel::NodeId::parse(&str) -> core::result::Result<kernel::NodeId, kernel::AxError>
 pub fn kernel::Payload::as_map(&self) -> &serde_json::map::Map<alloc::string::String, serde_json::value::Value>
 pub fn kernel::Payload::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
 pub fn kernel::Payload::empty() -> Self
 pub fn kernel::Payload::new(serde_json::map::Map<alloc::string::String, serde_json::value::Value>) -> core::result::Result<Self, kernel::AxError>
+pub fn kernel::PlanExit::evidence(&self) -> core::option::Option<&kernel::Locator>
+pub fn kernel::PlanExit::id(&self) -> &kernel::NodeId
+pub fn kernel::PlanExit::status(&self) -> kernel::RoadmapStatus
+pub fn kernel::PlanNode::is_leaf(&self) -> bool
+pub fn kernel::PlanTree::build(alloc::vec::Vec<kernel::RoadmapRow>) -> core::result::Result<kernel::PlanTree, kernel::AxError>
+pub fn kernel::PlanTree::claim(&self, &kernel::NodeId) -> core::result::Result<kernel::Held, kernel::AxError>
+pub fn kernel::PlanTree::get(&self, &kernel::NodeId) -> core::option::Option<&kernel::PlanNode>
+pub fn kernel::PlanTree::is_empty(&self) -> bool
+pub fn kernel::PlanTree::len(&self) -> usize
+pub fn kernel::PlanTree::needs_of(&self, &kernel::NodeId) -> alloc::collections::btree::set::BTreeSet<kernel::NodeId>
+pub fn kernel::PlanTree::nodes(&self) -> impl core::iter::traits::iterator::Iterator<Item = &kernel::PlanNode>
+pub fn kernel::PlanTree::progress(&self) -> kernel::Progress
+pub fn kernel::PlanTree::ready(&self) -> alloc::vec::Vec<kernel::NodeId>
 pub fn kernel::PlannedProgress::ratio(&self) -> (u32, u32)
+pub fn kernel::PlannedProgress::weighted(&self) -> (u64, u64)
+pub fn kernel::Pursuit::declare(&kernel::Delegator, alloc::string::String) -> core::result::Result<kernel::Pursuit, kernel::AxError>
+pub fn kernel::Pursuit::goal(&self) -> &str
+pub fn kernel::Pursuit::pause(&mut self)
+pub fn kernel::Pursuit::resume(&mut self)
+pub fn kernel::Pursuit::state(&self) -> kernel::PursuitState
 pub fn kernel::Range::bytes(u64, u64) -> core::result::Result<Self, kernel::AxError>
 pub fn kernel::Range::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernel::Range::lines(u64, u64) -> core::result::Result<Self, kernel::AxError>
@@ -313,6 +368,7 @@ pub fn kernel::Registry::register_artifact(&mut self, kernel::Artifact) -> kerne
 pub fn kernel::Registry::register_resident(&mut self, kernel::ResidentId) -> kernel::RegisterVerdict
 pub fn kernel::ResidentId::as_str(&self) -> &str
 pub fn kernel::ResidentId::new(impl core::convert::Into<alloc::string::String>) -> core::option::Option<kernel::ResidentId>
+pub fn kernel::RoadmapStatus::spelling(self) -> &'static str
 pub fn kernel::RunId::as_bytes(&self) -> &[u8; 16]
 pub fn kernel::RunId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernel::RunId::from_bytes([u8; 16]) -> Self
@@ -338,6 +394,11 @@ pub fn kernel::SessionName::as_str(&self) -> &str
 pub fn kernel::SessionName::deserialize<D: serde_core::de::Deserializer<'de>>(D) -> core::result::Result<Self, <D as serde_core::de::Deserializer>::Error>
 pub fn kernel::SessionName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub fn kernel::SessionName::parse(&str) -> core::result::Result<Self, kernel::AxError>
+pub fn kernel::Share::ppb(self) -> u64
+pub fn kernel::Share::split(self, &[u32]) -> core::result::Result<alloc::vec::Vec<kernel::Share>, kernel::AxError>
+pub fn kernel::StopCause::is_red(&self) -> bool
+pub fn kernel::StopCause::line(&self) -> alloc::string::String
+pub fn kernel::StopCause::status(&self) -> kernel::RoadmapStatus
 pub fn kernel::TaintSet::contains(&self, &kernel::TaintSource) -> bool
 pub fn kernel::TaintSet::empty() -> kernel::TaintSet
 pub fn kernel::TaintSet::is_empty(&self) -> bool
@@ -389,21 +450,25 @@ pub fn kernel::egress_target(&kernel::EgressAllowlist, &kernel::EgressTarget) ->
 pub fn kernel::forecast(&kernel::ExecArm) -> kernel::DiscardForecast
 pub fn kernel::freeze(&kernel::LayeredValue<kernel::ClockStampGranularity>, &kernel::LayeredValue<alloc::vec::Vec<kernel::ClockZone>>, &kernel::LayeredValue<kernel::Effort>, &kernel::LayeredValue<kernel::SandboxLimits>, &kernel::LayeredValue<alloc::vec::Vec<kernel::McpServer>>) -> kernel::FrozenConfig
 pub fn kernel::gate_discard(&kernel::DiscardRequest, &kernel::Registry, &kernel::GateContext, &str, &kernel::Locator) -> kernel::GateOutcome
+pub fn kernel::gather_shares(&[kernel::Share]) -> kernel::Share
 pub fn kernel::govern(&kernel::GateContext, &kernel::Address, &kernel::Address, &str, &kernel::Locator, &kernel::TaintSet) -> kernel::GateOutcome
+pub fn kernel::insert_children(&str, &kernel::NodeId, &[kernel::NewChild]) -> core::result::Result<alloc::string::String, kernel::AxError>
 pub fn kernel::markdown(&str) -> alloc::vec::Vec<kernel::Span>
 pub fn kernel::match_item(&kernel::Policy, &kernel::ApprovalItem) -> kernel::PolicyApplication
 pub fn kernel::may_answer(&kernel::Autonomy, &kernel::ApprovalItem, &kernel::Answerer) -> kernel::AnswerVerdict
 pub fn kernel::message_payload(&[kernel::ContentBlock]) -> core::result::Result<kernel::Payload, kernel::AxError>
+pub fn kernel::notices(&[kernel::Blockage], &alloc::collections::btree::map::BTreeMap<kernel::NodeId, alloc::string::String>) -> alloc::vec::Vec<kernel::Notice>
 pub fn kernel::observe(&[kernel::ActionFingerprint]) -> kernel::StallVerdict
 pub fn kernel::observe_ctx(kernel::Tokens, kernel::CtxLock) -> kernel::CtxVerdict
 pub fn kernel::observe_edit_war(&[kernel::EditSample]) -> kernel::EditWarVerdict
+pub fn kernel::observe_pursuit(kernel::PursuitState, &[kernel::NodeId], u32) -> kernel::PursuitVerdict
 pub fn kernel::policy_expiry(&kernel::Policy, kernel::TimeMs) -> kernel::PolicyExpiry
 pub fn kernel::request_repair(&alloc::collections::btree::map::BTreeMap<kernel::Address, kernel::RunId>, &kernel::Address, &kernel::RunId) -> kernel::RepairVerdict
 pub fn kernel::scan(&[u8]) -> alloc::vec::Vec<kernel::SecretSpan>
-pub fn kernel::set_roadmap_status(&str, u64, kernel::RoadmapStatus, core::option::Option<&kernel::Locator>) -> core::result::Result<alloc::string::String, kernel::AxError>
+pub fn kernel::set_roadmap_status(&str, &kernel::NodeId, kernel::RoadmapStatus, core::option::Option<&kernel::Locator>) -> core::result::Result<alloc::string::String, kernel::AxError>
 pub fn kernel::spawn(kernel::Depth, &kernel::DelegateKind) -> kernel::GateOutcome
 pub fn kernel::spend(&kernel::BudgetLadder, &kernel::BudgetUse, &kernel::TaintSet, &kernel::GateContext, &kernel::Locator) -> kernel::GateOutcome
-pub fn kernel::tally(&[kernel::RoadmapRow]) -> kernel::Progress
+pub fn kernel::spread(&kernel::PlanTree, &[kernel::RedNode]) -> alloc::vec::Vec<kernel::Blockage>
 pub fn kernel::value_has_float(&serde_json::value::Value) -> bool
 pub kernel::Admission::Admit
 pub kernel::Admission::Shed
@@ -468,6 +533,9 @@ pub kernel::AxCode::ToolUnknown
 pub kernel::AxCode::VersionConflict
 pub kernel::AxCode::WireMismatch
 pub kernel::AxCode::WorktreeBusy
+pub kernel::Blockage::reaches: alloc::vec::Vec<kernel::NodeId>
+pub kernel::Blockage::source: kernel::NodeId
+pub kernel::Blockage::why: kernel::StopCause
 pub kernel::BudgetCap::tokens: kernel::Tokens
 pub kernel::BudgetCap::usd: kernel::UsdMicros
 pub kernel::BudgetLadder::building: kernel::BudgetLevel
@@ -637,12 +705,15 @@ pub kernel::EventKind::PrOpened
 pub kernel::EventKind::PrRejected
 pub kernel::EventKind::PromptAssembled
 pub kernel::EventKind::ProviderDegraded
+pub kernel::EventKind::PursuitChanged
 pub kernel::EventKind::RepairReused
 pub kernel::EventKind::RepairStarted
 pub kernel::EventKind::ResultOffloaded
+pub kernel::EventKind::RoadmapBlocked
 pub kernel::EventKind::RoadmapClaimed
 pub kernel::EventKind::RoadmapFinished
 pub kernel::EventKind::RoadmapReleased
+pub kernel::EventKind::RoadmapSplit
 pub kernel::EventKind::RollbackApplied
 pub kernel::EventKind::RunForked
 pub kernel::EventKind::RunFrozen
@@ -740,8 +811,24 @@ pub kernel::ModelUsage::cache_read_tokens: kernel::Tokens
 pub kernel::ModelUsage::cache_write_tokens: kernel::Tokens
 pub kernel::ModelUsage::input_tokens: kernel::Tokens
 pub kernel::ModelUsage::output_tokens: kernel::Tokens
+pub kernel::NewChild::item: alloc::string::String
+pub kernel::NewChild::weight: u32
+pub kernel::Notice::about: kernel::NodeId
+pub kernel::Notice::line: alloc::string::String
+pub kernel::Notice::to: alloc::string::String
+pub kernel::PlanExit::Finished
+pub kernel::PlanExit::Finished::evidence: kernel::Locator
+pub kernel::PlanExit::Finished::id: kernel::NodeId
+pub kernel::PlanExit::Stopped
+pub kernel::PlanExit::Stopped::id: kernel::NodeId
+pub kernel::PlanExit::Stopped::why: kernel::StopCause
+pub kernel::PlanNode::children: alloc::vec::Vec<kernel::NodeId>
+pub kernel::PlanNode::row: kernel::RoadmapRow
+pub kernel::PlanNode::share: kernel::Share
 pub kernel::PlannedProgress::blocked: u32
+pub kernel::PlannedProgress::blocked_ppb: u64
 pub kernel::PlannedProgress::done: u32
+pub kernel::PlannedProgress::done_ppb: u64
 pub kernel::PlannedProgress::total: u32
 pub kernel::Policy::created: kernel::TimeMs
 pub kernel::Policy::id: alloc::string::String
@@ -763,6 +850,14 @@ pub kernel::PolicyVerdict::Allow
 pub kernel::PolicyVerdict::Deny
 pub kernel::Progress::Planned(kernel::PlannedProgress)
 pub kernel::Progress::Unplanned(kernel::UnplannedProgress)
+pub kernel::PursuitState::Paused
+pub kernel::PursuitState::Running
+pub kernel::PursuitVerdict::Finished
+pub kernel::PursuitVerdict::Paused
+pub kernel::PursuitVerdict::Waiting
+pub kernel::PursuitVerdict::Waiting::in_flight: u32
+pub kernel::PursuitVerdict::Work
+pub kernel::PursuitVerdict::Work::next: kernel::NodeId
 pub kernel::QueueStats::capacity: u64
 pub kernel::QueueStats::depth: u64
 pub kernel::Range::Bytes
@@ -771,6 +866,8 @@ pub kernel::Range::Bytes::to: u64
 pub kernel::Range::Lines
 pub kernel::Range::Lines::from: u64
 pub kernel::Range::Lines::to: u64
+pub kernel::RedNode::at: kernel::NodeId
+pub kernel::RedNode::why: kernel::StopCause
 pub kernel::RegisterVerdict::AlreadyRegistered
 pub kernel::RegisterVerdict::Registered
 pub kernel::RenderIntent::Diff
@@ -785,9 +882,11 @@ pub kernel::Restoration::Rebuildable
 pub kernel::Restoration::Rebuildable::reason: alloc::string::String
 pub kernel::Restoration::Tracked(kernel::Locator)
 pub kernel::RoadmapRow::evidence: kernel::EvidenceCell
-pub kernel::RoadmapRow::index: u64
+pub kernel::RoadmapRow::id: kernel::NodeId
 pub kernel::RoadmapRow::item: alloc::string::String
+pub kernel::RoadmapRow::needs: alloc::vec::Vec<kernel::NodeId>
 pub kernel::RoadmapRow::status: kernel::RoadmapStatus
+pub kernel::RoadmapRow::weight: u32
 pub kernel::RoadmapShape::Malformed
 pub kernel::RoadmapShape::Malformed::problems: alloc::vec::Vec<alloc::string::String>
 pub kernel::RoadmapShape::WellFormed
@@ -818,6 +917,15 @@ pub kernel::SpendVerdict::Exhausted::layer: kernel::BudgetLayer
 pub kernel::StallVerdict::Ok
 pub kernel::StallVerdict::Stall
 pub kernel::StallVerdict::Stall::repeats: u32
+pub kernel::StopCause::Blocked
+pub kernel::StopCause::Blocked::note: alloc::string::String
+pub kernel::StopCause::FrozeWithoutEvidence
+pub kernel::StopCause::GateOverdue
+pub kernel::StopCause::GateOverdue::waited_ms: u64
+pub kernel::StopCause::HandedBack
+pub kernel::StopCause::HandedBack::note: alloc::string::String
+pub kernel::StopCause::Stalled
+pub kernel::StopCause::Stalled::repeats: u32
 pub kernel::StopReason::EndTurn
 pub kernel::StopReason::MaxTokens
 pub kernel::StopReason::ToolUse
@@ -879,6 +987,7 @@ pub struct kernel::ApprovalItem
 pub struct kernel::Artifact
 pub struct kernel::AxError
 pub struct kernel::B3Hash(_)
+pub struct kernel::Blockage
 pub struct kernel::BudgetCap
 pub struct kernel::BudgetLadder
 pub struct kernel::BudgetLevel
@@ -907,6 +1016,7 @@ pub struct kernel::GateRefusal
 pub struct kernel::GitOid(_)
 pub struct kernel::GoalEntry
 pub struct kernel::GoalId(_)
+pub struct kernel::Held(_)
 pub struct kernel::IdemKey
 pub struct kernel::ItemMeta
 pub struct kernel::LayeredValue<T>
@@ -915,11 +1025,18 @@ pub struct kernel::McpServer
 pub struct kernel::ModelRequest
 pub struct kernel::ModelReturn
 pub struct kernel::ModelUsage
+pub struct kernel::NewChild
+pub struct kernel::NodeId(_)
+pub struct kernel::Notice
 pub struct kernel::Payload(_)
+pub struct kernel::PlanNode
+pub struct kernel::PlanTree
 pub struct kernel::PlannedProgress
 pub struct kernel::Policy
 pub struct kernel::PolicyMatcher
+pub struct kernel::Pursuit
 pub struct kernel::QueueStats
+pub struct kernel::RedNode
 pub struct kernel::Registry
 pub struct kernel::ResidentId(_)
 pub struct kernel::RoadmapRow
@@ -931,6 +1048,7 @@ pub struct kernel::SecretSpan
 pub struct kernel::Seq(_)
 pub struct kernel::ServerLabel(_)
 pub struct kernel::SessionName(_)
+pub struct kernel::Share(_)
 pub struct kernel::Span
 pub struct kernel::SystemBlock
 pub struct kernel::TaintSet(_)

@@ -245,8 +245,8 @@ impl Landing {
 /// them does not and nothing at all is written.
 pub(crate) enum Claims {
     Landed(Box<Landing>),
-    /// The rows that moved, so a person can be told which.
-    Stale(Vec<u64>),
+    /// The nodes that moved, so a person can be told which.
+    Stale(Vec<String>),
 }
 
 impl Claims {
@@ -265,10 +265,19 @@ impl Claims {
         room: &Address,
         who: &str,
     ) -> Result<Claims, AxError> {
-        let stale: Vec<u64> = effects
+        // Only the *first* effect on each node is checked against the
+        // disk. A run that claims a node and then closes it produced
+        // both, in that order, from the file as it stood when the run
+        // was dispatched; asking the disk whether the second one still
+        // holds would ask whether this run's own earlier effect had
+        // already landed, and it has not — the desk writes the whole
+        // file once, at the end.
+        let mut asked = std::collections::BTreeSet::new();
+        let stale: Vec<String> = effects
             .iter()
+            .filter(|effect| asked.insert(effect.id().to_string()))
             .filter(|effect| !collab::still_true(on_disk, effect))
-            .map(collab::ClaimEffect::index)
+            .map(|effect| effect.id().to_string())
             .collect();
         if !stale.is_empty() {
             return Ok(Claims::Stale(stale));
@@ -278,11 +287,10 @@ impl Claims {
             lines.push(Line {
                 who: who.to_owned(),
                 addr: room.clone(),
-                kind: match effect {
-                    collab::ClaimEffect::Claimed { .. } => EventKind::RoadmapClaimed,
-                    collab::ClaimEffect::Finished { .. } => EventKind::RoadmapFinished,
-                    collab::ClaimEffect::Released { .. } => EventKind::RoadmapReleased,
-                },
+                // Which record this is, is the effect's own answer: the
+                // exit decided it, and a second match here would be a
+                // second opinion about what a stop means.
+                kind: effect.kind(),
                 data: effect.payload(who)?,
             });
         }

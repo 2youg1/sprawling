@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/ui/delegate_declares_pursuit.rs:14:38
+   |
+14 |     let _ = kernel::Pursuit::declare(&delegate, "work all night".to_owned());
+   |             ------------------------ ^^^^^^^^^ expected `&Delegator`, found `&Delegate`
+   |             |
+   |             arguments to this function are incorrect
+   |
+   = note: expected reference `&Delegator`
+              found reference `&kernel::Delegate`
+note: associated function defined here
+  --> src/pursuit.rs
+   |
+   |     pub fn declare(_at: &Delegator, goal: String) -> Result<Pursuit, crate::error::AxError> {
+   |            ^^^^^^^

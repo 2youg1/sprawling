@@ -132,7 +132,7 @@ pub enum EventKind {
     BudgetLimit,
     RunFrozen,
     LogTruncated,
-    // Collaboration (16).
+    // Collaboration (19).
     SignalEnqueued,
     SignalConsumed,
     DraftHeld,
@@ -149,6 +149,19 @@ pub enum EventKind {
     RoadmapClaimed,
     RoadmapFinished,
     RoadmapReleased,
+    /// A branch was divided into children. The plan grew rather than
+    /// moved, which is a different fact from any row changing state and
+    /// is the only one that changes what the denominator is made of.
+    RoadmapSplit,
+    /// A node cannot proceed, and why. Distinct from `roadmap_released`:
+    /// a released node is back in the ready set, a blocked one is red
+    /// and everything behind it is waiting.
+    RoadmapBlocked,
+    /// A city was given a goal to keep working towards, or that goal
+    /// was paused, resumed or cleared. Recorded because it is the one
+    /// thing in the city that starts work without a person asking, and
+    /// "who set this running" has to be answerable afterwards.
+    PursuitChanged,
     // Governance and facilities (17).
     ApprovalRequested,
     ApprovalResolved,
@@ -192,7 +205,7 @@ pub enum WindowClass {
 impl EventKind {
     /// Every kind, in the order the SPEC table lists them. Data face for counting tests
     /// and (from S2 on) `xtask specalign`.
-    pub const ALL: [EventKind; 61] = [
+    pub const ALL: [EventKind; 64] = [
         EventKind::CityInitialized,
         EventKind::BuildingCreated,
         EventKind::RunStarted,
@@ -229,6 +242,9 @@ impl EventKind {
         EventKind::RoadmapClaimed,
         EventKind::RoadmapFinished,
         EventKind::RoadmapReleased,
+        EventKind::RoadmapSplit,
+        EventKind::RoadmapBlocked,
+        EventKind::PursuitChanged,
         EventKind::ApprovalRequested,
         EventKind::ApprovalResolved,
         EventKind::PolicyCreated,
@@ -296,6 +312,9 @@ impl EventKind {
             | EventKind::RoadmapClaimed
             | EventKind::RoadmapFinished
             | EventKind::RoadmapReleased
+            | EventKind::RoadmapSplit
+            | EventKind::RoadmapBlocked
+            | EventKind::PursuitChanged
             | EventKind::ApprovalRequested
             | EventKind::ApprovalResolved
             | EventKind::PolicyCreated
@@ -544,12 +563,12 @@ mod tests {
 
     #[test]
     fn event_kind_is_61_with_exactly_8_in_window() {
-        assert_eq!(EventKind::ALL.len(), 61);
+        assert_eq!(EventKind::ALL.len(), 64);
         let names: BTreeSet<String> = EventKind::ALL
             .iter()
             .map(|k| serde_json::to_string(k).unwrap())
             .collect();
-        assert_eq!(names.len(), 61, "serde spellings must be unique");
+        assert_eq!(names.len(), 64, "serde spellings must be unique");
         let in_window: Vec<EventKind> = EventKind::ALL
             .into_iter()
             .filter(|k| k.window_class() == WindowClass::InWindow)

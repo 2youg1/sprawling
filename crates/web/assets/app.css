@@ -1069,3 +1069,51 @@ ol.lines { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: 
 .saying { color: var(--TEXT_QUIET); font-style: normal;
           border-left: 2px solid var(--G3); padding-left: var(--space-snug);
           margin-bottom: var(--space-base); }
+
+/* ----------------------------------------------------- the plan, by state */
+/* The board holds no state: every column is read from the answer on each
+   render, and there is nothing here a pointer can move. So there is no
+   drag affordance to style, and the cards are read rather than handled. */
+.board-columns { display: grid; gap: var(--space-base);
+                 grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+                 align-items: start; }
+.board-column { display: flex; flex-direction: column; gap: var(--space-snug);
+                min-width: 0; }
+/* The heading carries the count, so a column that is empty says so by
+   being empty rather than by a sentence saying it is. */
+.board-heading { display: flex; align-items: baseline; gap: var(--space-tight);
+                 font-size: var(--text-note); font-weight: 400;
+                 color: var(--TEXT_QUIET); margin: 0;
+                 padding-bottom: var(--space-tight);
+                 border-bottom: 1px solid var(--G2); }
+.board-card { display: flex; flex-wrap: wrap; align-items: baseline;
+              gap: var(--space-tight); background: var(--G2);
+              border: 1px solid var(--G3); border-radius: var(--corner-card);
+              corner-shape: var(--corner-card-shape);
+              padding: var(--space-snug); color: var(--TEXT);
+              font-size: var(--text-note); min-width: 0; }
+/* Ready is the only column a person acts from, so it is the only one
+   whose cards are marked. One accent, one meaning: something can happen
+   here. */
+.board-card.ready { border-color: var(--ACCENT); }
+.board-card.quiet { color: var(--TEXT_QUIET); background: var(--G1); }
+.board-card.done { color: var(--TEXT_QUIET); }
+.board-card.alert { border-color: var(--ALERT); }
+/* The index is what a person types into the plan tool, so it is the part
+   that must survive a small screen intact. */
+.board-node { font-variant-numeric: tabular-nums; color: var(--TEXT_QUIET);
+              flex: none; }
+.board-item { flex: 1 1 6rem; min-width: 0; overflow-wrap: anywhere; }
+.board-share { color: var(--TEXT_QUIET); font-variant-numeric: tabular-nums;
+               flex: none; }
+.board-waits { color: var(--TEXT_QUIET); flex: none; }
+/* One cause, one line. The count of what stands behind it sits at the
+   end, where the sentence's weight belongs. */
+.blocked-line { display: flex; align-items: baseline; gap: var(--space-snug);
+                margin: 0 0 var(--space-snug); }
+.blocked-line .turn { margin-left: auto; color: var(--TEXT_QUIET);
+                      font-size: var(--text-note); }
+/* A phase dot for work that has stopped and needs somebody. ALERT is the
+   one loud colour and it means the same thing here as everywhere else in
+   this interface: a person is needed. */
+.phase.alert { background: var(--ALERT); }

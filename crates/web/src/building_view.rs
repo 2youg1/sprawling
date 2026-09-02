@@ -32,6 +32,11 @@ use dioxus::prelude::*;
 /// that are not a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Leaf {
+    /// The plan tree, by state. First because it is what the building is
+    /// for: a person opening one wants to know what it is doing, and
+    /// `Roadmap.md` read as prose is the same facts in the shape a
+    /// parser wanted rather than the shape a reader wants.
+    Plan,
     /// One document, by file name.
     Doc(String),
     /// The archive index.
@@ -68,8 +73,15 @@ enum Over {
 }
 
 /// The first thing to show for a building: its plan, unless it has none.
+///
+/// The board rather than the file, when the plan parses. Both say the
+/// same thing; only one of them says which nodes a person could hand out
+/// right now.
 #[must_use]
 pub fn opening_leaf(answer: &BuildingAnswer) -> Leaf {
+    if !answer.plan.is_empty() {
+        return Leaf::Plan;
+    }
     answer
         .docs
         .first()
@@ -319,6 +331,14 @@ pub fn BuildingView(
                 }
             }
             div { class: "tabs",
+                if !answer.plan.is_empty() {
+                    button {
+                        class: "tab",
+                        "aria-current": if showing == Leaf::Plan { "true" } else { "false" },
+                        onclick: move |_| leaf.set(Some(Leaf::Plan)),
+                        "{word(Msg::BuildingPlanTab)}"
+                    }
+                }
                 for doc in docs.clone() {
                     button {
                         key: "{doc.name}",
@@ -391,6 +411,9 @@ pub fn BuildingView(
                 }
             }
             match showing {
+                Leaf::Plan => rsx! {
+                    crate::board::BoardView { answer: answer.clone() }
+                },
                 Leaf::Room(ref room) => rsx! {
                     div { class: "mailbox",
                         match waiting_in(inbox.as_ref(), &answer.addr, room) {
@@ -506,6 +529,8 @@ mod tests {
 
     fn answer(docs: Vec<&str>) -> BuildingAnswer {
         BuildingAnswer {
+            plan: Vec::new(),
+            blocked: Vec::new(),
             sandbox: None,
             mcp: Vec::new(),
             addr: Address::parse("lab").unwrap(),
@@ -513,6 +538,8 @@ mod tests {
                 done: 3,
                 blocked: 0,
                 total: 7,
+                done_ppb: 0,
+                blocked_ppb: 0,
             }),
             problems: Vec::new(),
             rooms: vec!["room1".to_owned()],
@@ -546,10 +573,28 @@ mod tests {
         assert!(room_addr(&lab, "").is_none());
     }
 
+    /// A building opens on the board when it has a plan, and on the
+    /// file when the plan does not parse: the board of an unreadable
+    /// plan is an empty board, which says nothing about what is wrong.
     #[test]
     fn a_building_opens_on_its_plan() {
-        let held = answer(vec!["Roadmap.md", "Memo.md"]);
-        assert_eq!(opening_leaf(&held), Leaf::Doc("Roadmap.md".to_owned()));
+        let mut held = answer(vec!["Roadmap.md", "Memo.md"]);
+        assert_eq!(
+            opening_leaf(&held),
+            Leaf::Doc("Roadmap.md".to_owned()),
+            "with no plan rows, the file is what there is to read"
+        );
+        held.plan = vec![channels::PlanRow {
+            node: channels::NodeId::parse("1").unwrap(),
+            item: "wire the kiln".to_owned(),
+            status: channels::RoadmapStatus::NotStarted,
+            share_ppb: channels::WHOLE_PPB,
+            needs: Vec::new(),
+            ready: true,
+            leaf: true,
+            evidence: None,
+        }];
+        assert_eq!(opening_leaf(&held), Leaf::Plan);
     }
 
     #[test]

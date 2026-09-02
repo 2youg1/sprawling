@@ -2999,17 +2999,22 @@ mod tests {
 
     fn city_answer() -> channels::CityAnswer {
         channels::CityAnswer {
+            pursuits: Vec::new(),
             runs: Vec::new(),
             active: 0,
             frozen: 0,
             // A city with a building in it, because an empty city
             // exercises the empty state and nothing else.
             buildings: vec![channels::BuildingProgress {
+                blocked: Vec::new(),
+                ready: 0,
                 addr: Address::parse("lab").unwrap(),
                 progress: channels::Progress::Planned(channels::PlannedProgress {
                     done: 1,
                     blocked: 0,
                     total: 4,
+                    done_ppb: 0,
+                    blocked_ppb: 0,
                 }),
                 problems: Vec::new(),
             }],
@@ -3018,6 +3023,8 @@ mod tests {
 
     fn building_answer() -> channels::BuildingAnswer {
         channels::BuildingAnswer {
+            plan: Vec::new(),
+            blocked: Vec::new(),
             sandbox: None,
             mcp: Vec::new(),
             addr: Address::parse("lab").unwrap(),
@@ -3025,6 +3032,8 @@ mod tests {
                 done: 1,
                 blocked: 0,
                 total: 4,
+                done_ppb: 0,
+                blocked_ppb: 0,
             }),
             problems: Vec::new(),
             rooms: vec!["room1".to_owned()],

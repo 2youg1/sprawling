@@ -62,15 +62,15 @@ pub collab::Circumstance::arbitration_tried: bool
 pub collab::Circumstance::gate_refused: bool
 pub collab::Circumstance::touches_intent: bool
 pub collab::ClaimEffect::Claimed
-pub collab::ClaimEffect::Claimed::index: u64
+pub collab::ClaimEffect::Claimed::id: kernel::plan::NodeId
 pub collab::ClaimEffect::Claimed::item: alloc::string::String
-pub collab::ClaimEffect::Finished
-pub collab::ClaimEffect::Finished::evidence: kernel::locator::Locator
-pub collab::ClaimEffect::Finished::index: u64
-pub collab::ClaimEffect::Finished::item: alloc::string::String
-pub collab::ClaimEffect::Released
-pub collab::ClaimEffect::Released::index: u64
-pub collab::ClaimEffect::Released::item: alloc::string::String
+pub collab::ClaimEffect::PutDown
+pub collab::ClaimEffect::PutDown::exit: kernel::plan::PlanExit
+pub collab::ClaimEffect::PutDown::id: kernel::plan::NodeId
+pub collab::ClaimEffect::PutDown::item: alloc::string::String
+pub collab::ClaimEffect::Split
+pub collab::ClaimEffect::Split::children: alloc::vec::Vec<alloc::string::String>
+pub collab::ClaimEffect::Split::parent: kernel::plan::NodeId
 pub collab::Delegated::goal: alloc::string::String
 pub collab::Delegated::kind: kernel::delegation::DelegateKind
 pub collab::Delegated::room: kernel::address::Address
@@ -176,12 +176,15 @@ pub fn collab::Claim::by(&self) -> &str
 pub fn collab::Claim::new(collab::NodeId, kernel::locator::Locator, kernel::locator::B3Hash, alloc::string::String) -> collab::Claim
 pub fn collab::Claim::node(&self) -> &collab::NodeId
 pub fn collab::Claim::verified(self, bool, &str) -> core::result::Result<collab::Artifact, kernel::error::AxError>
+pub fn collab::ClaimDesk::abandon(&mut self) -> core::result::Result<(), kernel::error::AxError>
+pub fn collab::ClaimDesk::holding(&self) -> core::option::Option<&kernel::plan::NodeId>
 pub fn collab::ClaimDesk::new(alloc::string::String, kernel::address::Address, alloc::string::String) -> collab::ClaimDesk
 pub fn collab::ClaimDesk::roadmap(&self) -> core::option::Option<&str>
 pub fn collab::ClaimDesk::take_effects(&mut self) -> alloc::vec::Vec<collab::ClaimEffect>
 pub fn collab::ClaimDesk::who(&self) -> &str
 pub fn collab::ClaimEffect::expected_before(&self) -> kernel::spine::RoadmapStatus
-pub fn collab::ClaimEffect::index(&self) -> u64
+pub fn collab::ClaimEffect::id(&self) -> &kernel::plan::NodeId
+pub fn collab::ClaimEffect::kind(&self) -> kernel::event::EventKind
 pub fn collab::ClaimEffect::payload(&self, &str) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
 pub fn collab::ClaimTool::invoke(&mut self, &kernel::tool::ToolCall) -> core::result::Result<kernel::tool::ToolOutcome, kernel::error::AxError>
 pub fn collab::ClaimTool::meta(&self) -> &kernel::tool::ToolMeta
@@ -313,7 +316,7 @@ pub fn collab::WorkshopTool::meta(&self) -> &kernel::tool::ToolMeta
 pub fn collab::WorkshopTool::new(alloc::rc::Rc<core::cell::RefCell<collab::WorkshopDesk>>, alloc::rc::Rc<core::cell::RefCell<collab::DelegateDesk>>) -> core::result::Result<collab::WorkshopTool, kernel::error::AxError>
 pub fn collab::arbitrate(&[kernel::goal::GoalEntry], &kernel::goal::GoalEntry, collab::Circumstance) -> core::option::Option<collab::Level>
 pub fn collab::conflict_payload(&kernel::goal::GoalEntry, &collab::Level) -> core::result::Result<kernel::event::Payload, kernel::error::AxError>
-pub fn collab::evidence_of(&str, u64) -> core::option::Option<kernel::locator::Locator>
+pub fn collab::evidence_of(&str, &kernel::plan::NodeId) -> core::option::Option<kernel::locator::Locator>
 pub fn collab::still_true(&str, &collab::ClaimEffect) -> bool
 pub mod collab
 pub struct collab::AgentSteer

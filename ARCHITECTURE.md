@@ -173,7 +173,7 @@ A city is one directory. Copy it and it is the same city; delete it and nothing 
    │  ├─ BUILDING.md           the building's rules: confidential, review, write domains
    │  ├─ CONFIG.toml           building layer, including its MCP servers
    │  └─ skills/               skills only this building admits
-   ├─ Roadmap.md               the only task table, and the denominator of every progress reading
+   ├─ Roadmap.md               the plan tree, and the denominator of every progress reading
    ├─ Memo.md                  decisions and corrections
    ├─ Handoff.md               what the next session needs
    └─ <room>/                  one session's workplace, named by the person who started it
@@ -185,14 +185,17 @@ A city is one directory. Copy it and it is the same city; delete it and nothing 
 
 A run's write domain is what its building's `BUILDING.md` declares, and **the whole building when it declares nothing** — which is the shipped template. The room is where a session works, not the boundary that contains it.
 
+**`Roadmap.md` is a tree, and the `plan` tool is what writes it.** The index column is a path — `2.3.1` hangs under `2.3` — so one file states a multi-level plan without a second file to say how the levels relate. `Weight` is a ratio among the rows sharing a parent and `Needs` names what must finish first, which is what makes a ready set computable. A resident divides its own branch and cannot reach past it: `kernel::share` has no constructor, so a share exists only by dividing another one, and the total is the whole plan whatever the plan turns into. Only leaves are counted; a branch's work is its children.
+
 ## 7 The wire
 
-One WebSocket, three kinds of frame, and a schema hash that both ends check on connect: a page from a different build refuses rather than misreads. `WIRE_V` is 4.
+One WebSocket, three kinds of frame, and a schema hash that both ends check on connect: a page from a different build refuses rather than misreads. `WIRE_V` is 13.
 
 | Frame | Count | What it is |
 |---|---|---|
-| `Command` | 20 | something a person wants done: dispatch, steer, cancel, approve, halt, raise a building, attach an endpoint |
-| `Query` | 11 | something a page wants to know: the city, one run, approvals, cost, the ledger, archive, discards, inboxes |
+| `Command` | 23 | something a person wants done: dispatch, steer, cancel, approve, halt, raise a building, attach an endpoint, set a goal the city works towards |
+| `Query` | 14 | something a page wants to know: the city, one run, approvals, cost, the ledger, archive, discards, inboxes |
+| `Delta` | — | what a model is saying while it is still saying it: no sequence number, never written down, and a client that missed one has lost nothing |
 | `Event` | the Ledger's own kinds | what happened, pushed as it happens |
 
 Two properties are worth stating because they are enforced by types rather than by review. A `Command` carrying a credential **cannot be serialised**: `Sealed<T>` has no `Serialize`, and the `PutSecret` payload of the remote command type is an uninhabited type, so entering a key over the network is not a request that can be spelled. And every `Query` must be answered exhaustively — the answer match has no catch-all, so adding a query without answering it does not compile.
@@ -203,7 +206,7 @@ This repository bundles nobody's key, pays for nothing, and proxies nothing. Eve
 
 ### Provider intelligence — followed from codex and pi
 
-Signing in to a provider means knowing four things: authorization endpoint, token endpoint, client id, scopes. Those are facts, and they change without warning, so they are followed from two actively maintained projects rather than watched by hand: [`openai/codex`](https://github.com/openai/codex) (Apache-2.0) for OpenAI, [`earendil-works/pi`](https://github.com/earendil-works/pi) (MIT) for Anthropic and the rest. **What is followed is intelligence, not code** — see [`docs/third-party.md`](docs/third-party.md) for the obligations and how to re-check.
+Signing in to a provider means knowing four things: authorization endpoint, token endpoint, client id, scopes. Those are facts, and they change without warning, so they are followed from two actively maintained projects rather than watched by hand: [`openai/codex`](https://github.com/openai/codex) (Apache-2.0) for OpenAI, [`earendil-works/pi`](https://github.com/earendil-works/pi) (MIT) for Anthropic and the rest. **What is followed is intelligence, not code** — see [`docs/third-party.md`](docs/third-party.md) for the obligations and how to re-check. That file's §3 also lists the thirty-one crates this workspace names and the licence each one declares; the full resolved graph is 413 packages and belongs to `cargo deny` and the CycloneDX bill of materials, not to a table in a document.
 
 | To do this | Change this |
 |---|---|
@@ -265,6 +268,9 @@ Each of these is a type, not a slogan, and each has a compile-failure counterexa
 - `Discard`'s constructor requires a `Restoration` ⇒ **a deletion with no way back cannot be spelled**.
 - `Sealed<T>` has no `Serialize` ⇒ **entering a credential remotely cannot be spelled**.
 - `UnplannedProgress` has no `ratio` method ⇒ **a percentage with no denominator cannot be drawn**; there is nothing to call.
+- `Share` has no constructor and no arithmetic; the only producer is `Share::split`, which consumes what it divides ⇒ **weight cannot be minted**, so a branch cannot be given more than its parent had and the total is always the whole plan.
+- `Held` has one private field and two consuming methods ⇒ **a claimed plan node cannot be put down silently**: it is finished with evidence or stopped with a cause, and a run that simply ends spends it on `FrozeWithoutEvidence`.
+- `Pursuit::declare` takes the depth-zero position and a `Delegate` cannot produce one ⇒ **a sub-agent cannot set the city working until the work runs out**.
 
 ## 10 Determinism and hardening
 
@@ -339,7 +345,7 @@ The machine's data face, parsed by `cargo xtask modmap`: a `.rs` file under `cra
 
 Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (the construction stage that introduced it: S0–S5 skeleton, P1–P4 product, R1 repair, F1 front end, P5–P7 documents, measurement and delivery) **| Status** (`planned`, `building`, `built`, `frozen`).
 
-### kernel (29) — every decision in the city, and nothing that touches a disk
+### kernel (33) — every decision in the city, and nothing that touches a disk
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -359,7 +365,11 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | kernel::backpressure | crates/kernel/src/backpressure.rs | the city-wide shedding posture: admit or shed, with a reason | decision | S2 | built |
 | kernel::stall | crates/kernel/src/stall.rs | the sole criterion for "this run is going nowhere" | decision | S2 | built |
 | kernel::goal | crates/kernel/src/goal.rs | two goals wanting the same resource | decision | S2 | built |
-| kernel::spine | crates/kernel/src/spine.rs | the Roadmap table's shape and the three moments it may be written | decision | S2 | built |
+| kernel::spine | crates/kernel/src/spine.rs | the Roadmap table's grammar: six columns, a dotted index, and the one editing entrance | decision | S2 | built |
+| kernel::share | crates/kernel/src/share.rs | how much of the plan one node is; a share exists only by dividing another, so weight cannot be minted | value | V3 | built |
+| kernel::plan | crates/kernel/src/plan.rs | the plan as a tree: what hangs where, what each is worth, what may be started, and the two exits of a held node | decision | V3 | built |
+| kernel::blockage | crates/kernel/src/blockage.rs | red, and how far it reaches: one cause named rather than every symptom listed | decision | V3 | built |
+| kernel::pursuit | crates/kernel/src/pursuit.rs | a goal the city works towards, and the one condition under which it stops | decision | V3 | built |
 | kernel::completion | crates/kernel/src/completion.rs | done requires evidence; progress has two states and no third | value | S2 | built |
 | kernel::registry | crates/kernel/src/registry.rs | the three books: artifact, asset, skill | value | S2 | built |
 | kernel::approval | crates/kernel/src/approval.rs | what waits for a person, its cluster key, and a policy that expires | value | S2 | built |
@@ -491,11 +501,12 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | channels::auth | crates/channels/src/auth.rs | pairing tokens: minting, the one readable form, constant-time comparison | value | S4 | built |
 | channels::aggregate | crates/channels/src/aggregate.rs | watching several cities from one interface, queries and events only | decision | S4 | built |
 
-### web (23) — the only client, compiled to WebAssembly
+### web (24) — the only client, compiled to WebAssembly
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
 | web::app | crates/web/src/app.rs | what the client believes, folded forward from events; holds no business state | projection | S4 | built |
+| web::board | crates/web/src/board.rs | the plan tree laid out by state; five columns, no state of its own, nothing here can move a node | projection | V3 | built |
 | web::socket | crates/web/src/socket.rs | the only place in this crate that talks to the server | adapter | S4 | built |
 | web::pace | crates/web/src/pace.rs | how often this page may change, and what a burst of frames folds into | decision | R2 | built |
 | web::keys | crates/web/src/keys.rs | what a keystroke means, and the one sequence that cannot strand a reader | decision | R2 | built |
@@ -524,7 +535,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::waiting | crates/web/src/waiting.rs | everything that cannot move until a person answers, in one place | decision | V3 | built |
 | web::record | crates/web/src/record.rs | one history, in three lenses, at one address | decision | V3 | built |
 
-### browser (6), protocol (2), bin (10)
+### browser (6), protocol (2), bin (11)
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -546,6 +557,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | bin::console | crates/sprawling/src/console.rs | what a served city says to the terminal it is running in, and what a line typed there means | decision | P1 | built |
 | bin::keying | crates/sprawling/src/keying.rs | what guards the door this serve opens: nothing, what the operator configured, or one minted for this serve alone | decision | R2 | built |
 | bin::effect | crates/sprawling/src/effect.rs | what a run's desks left behind: the lines the history takes, and the change the city may not make before them | value | R2 | built |
+| bin::plan_view | crates/sprawling/src/plan_view.rs | every building's plan, parsed once and re-parsed only when a record says it may have moved | projection | V3 | built |
 
 ## 13 Changing this document
 

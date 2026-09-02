@@ -1581,6 +1581,29 @@ issue #1 的「使用起来过于抽象」有一半在词上：**城、楼、房
 >
 > 这条排除的是一种架构而不是一个缺陷，所以它会过期，而上面三个是它过期的样子。
 
+### 8-58 看板：计划树的一张脸，它自己不持状态（V3.23）
+
+```rust
+pub enum Column { Ready, Waiting, Working, Blocked, Done }
+impl Column { pub const ALL: [Column; 5]; pub fn token(self) -> &'static str; pub fn heading(self) -> Msg; }
+pub fn column_of(row: &PlanRow) -> Column;
+pub fn column<'a>(plan: &'a [PlanRow], which: Column) -> Vec<&'a PlanRow>;
+pub fn percent(share_ppb: u64) -> u64;
+pub fn waits_for(row: &PlanRow) -> String;
+#[component] pub fn BoardView(answer: BuildingAnswer) -> Element;
+// building_view：Leaf 多一个 Plan，且计划解析得出来时它是 opening_leaf
+```
+
+按四步法做：**先 `crates/web/screens/board.html` 定稿**，再翻译成 RSX。
+
+- **它自己不持任何状态，也没有拖动。** 每一列都在每次渲染时从 `BuildingAnswer.plan` 读出来，这里没有任何东西能移动一个节点。一张能把卡片拖进「完成」的脸，就是这座城每一次进度读数所除的那张表的第二个写者——**有两个写者的那一刻，就有了两个分母**。一个节点动，是因为一个 run 报告它动了；要推进一个节点，从「就绪」列点一个**派个活**，那是这座城本来就有的权威。
+- **只画叶子。** 一根枝的活就是它的子节点，两边都画等于把同一份力气数两遍——与 `kernel::plan` 数进度的规则同一条，只是画了出来。
+- **五列，因为它们是五件不同的事**：就绪是可以派出去的活，等依赖是还没轮到的活，在做是别人手上的，卡住需要人或另一根枝，完成是带着证据结掉的。把「等依赖」并进「就绪」，等于把一扇锁着的门指给人看。
+- **`ready` 是服务端的答案而不是这一页算的**：一个节点能不能开工是 `kernel::plan` 的判定，客户端自己从依赖列表推一遍，就是那条规则住的第二个地方。
+- **份额画成整数百分比**：份额是有人估出来的东西，小数第二位会让人把估算读成测量。全程整数算术——线上传的就是十亿分之一，正是为了这个。
+- **挂成楼的第一个页签**（计划解析得出来时），不占第七个导航目的地：六个目的地是 §8-53 的裁定，而看板是**计划树的一张脸**，不是第七件要看的东西。
+- **`xtask ax` 在这张卡上咬了一次**：定稿屏上写了 `role=tablist`／`role=tab`，客户端的页签没有。**撤回定稿屏而不是加进客户端**——楼页签的 ARIA 是它自己的一张卡，只改一边正是这道门存在要抓的那种漂移。两边要加就一起加。
+
 ## 9 工作流程
 
 （随 S4.05 填：从 `socket` 建连、握手校验、事件流入口，到 `app` 求值视图、DOM 应用与画布绘制的完整通路。）

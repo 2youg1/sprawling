@@ -245,6 +245,8 @@ mod tests {
             done,
             blocked,
             total,
+            done_ppb: 0,
+            blocked_ppb: 0,
         })
     }
 

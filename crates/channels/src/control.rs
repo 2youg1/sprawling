@@ -105,6 +105,10 @@ pub fn classify(command: &Command) -> ControlVerdict {
         | Command::Approve { .. }
         | Command::CreatePolicy { .. }
         | Command::SetAutonomy { .. }
+        // Pausing a standing goal stops the city taking new work; it
+        // does not reach into a run that is already going, and a verb
+        // that owed a Handoff would be claiming it had.
+        | Command::Pursue { .. }
         | Command::Auth { .. } => ControlVerdict::NotAnIntervention,
     }
 }

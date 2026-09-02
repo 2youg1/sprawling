@@ -37,16 +37,17 @@ pub use server::{SessionState, SessionStep, decide_frame};
 #[cfg(feature = "server")]
 pub use server::{decide_bind, decide_handshake, router, serve};
 pub use wire::RunSummary;
-pub use wire::{Answer, ApprovalsAnswer, ArchiveLine, BuildingProgress};
+pub use wire::{Answer, ApprovalsAnswer, ArchiveLine, BlockedLine, BuildingProgress};
 pub use wire::{ArchiveAnswer, ArchiveHit, DiscardAnswer, DiscardLine};
 pub use wire::{BuildingAnswer, BuildingDoc};
 pub use wire::{COMMAND_NAMES, QUERY_NAMES, WIRE_V, schema_hash};
 pub use wire::{ChangesAnswer, HISTORY_MAX, HistoryAnswer};
 pub use wire::{ChosenSummary, CityAnswer, CostAnswer, EndpointSummary, EndpointsAnswer};
 pub use wire::{ClientFrame, Command, Delta, ServerFrame, WireCommand};
-pub use wire::{HaltScope, Hello, LoginStep, NoSecret, Query, Welcome};
+pub use wire::{HaltScope, Hello, LoginStep, NoSecret, PlanRow, Query, Welcome};
 pub use wire::{InboxAnswer, MetricsAnswer, RegistryAnswer, RegistryLine, SignalLine};
 pub use wire::{ModeTag, ProviderName, TemplateName, UploadId};
+pub use wire::{PursuitLine, PursuitStep};
 
 pub use kernel::{Address, ApprovalId, Autonomy, AxCode, AxError, B3Hash, BudgetCap};
 pub use kernel::{ApprovalClass, ApprovalItem, ApprovalSource, ClusterKey, Restoration};
@@ -54,5 +55,6 @@ pub use kernel::{BudgetUse, Locator, PlannedProgress, Progress, UnplannedProgres
 pub use kernel::{DialectKind, Effort, ModelTag};
 pub use kernel::{EventDraft, EventKind, EventRecord, GitOid, IdemKey, RunId};
 pub use kernel::{McpServer, McpTransport, SandboxLimits, ServerLabel};
+pub use kernel::{NodeId, PursuitState, RoadmapStatus, WHOLE_PPB};
 pub use kernel::{Payload, Sealed, Seq, TimeMs, Tokens, UsdMicros};
 pub use kernel::{PolicyVerdict, SessionName, WriteDomain};

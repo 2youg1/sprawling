@@ -64,17 +64,27 @@ pub use registry::{Artifact, Claim, RegisterVerdict, Registry, ResidentId};
 pub use repair::{RepairVerdict, request as request_repair};
 
 mod approval;
+mod blockage;
 mod completion;
+mod plan;
+mod pursuit;
+mod share;
 mod spine;
 
 pub use approval::{AnswerVerdict, Answerer, ApprovalClass, ApprovalId, ApprovalItem};
 pub use approval::{ApprovalSource, Autonomy, ClusterKey, Policy, PolicyApplication};
 pub use approval::{PolicyClass, PolicyExpiry, PolicyMatcher, PolicyRevocation, PolicyVerdict};
 pub use approval::{expiry as policy_expiry, match_item, may_answer};
+pub use blockage::{Blockage, Notice, RedNode, notices, spread};
 pub use completion::{Completion, Evidence, PlannedProgress, Progress, UnplannedProgress};
-pub use spine::{EvidenceCell, MEMO_OUTLINE_FIELDS, MemoShape, ROADMAP_STATUS_SPELLINGS};
-pub use spine::{RoadmapRow, RoadmapShape, RoadmapStatus, ScopeChange, WriteMoment};
-pub use spine::{check_memo_shape, check_roadmap_shape, set_roadmap_status, tally};
+pub use plan::{Held, NODE_DEPTH_MAX, NodeId, PLAN_WHOLE_PPB, PlanExit, PlanNode};
+pub use plan::{PlanTree, StopCause};
+pub use pursuit::{Pursuit, PursuitState, PursuitVerdict, observe as observe_pursuit};
+pub use share::{Share, WHOLE_PPB, gather as gather_shares};
+pub use spine::{EvidenceCell, MEMO_OUTLINE_FIELDS, MemoShape, NewChild};
+pub use spine::{ROADMAP_COLUMNS, ROADMAP_STATUS_SPELLINGS, RoadmapRow, RoadmapShape};
+pub use spine::{RoadmapStatus, ScopeChange, WriteMoment};
+pub use spine::{check_memo_shape, check_roadmap_shape, insert_children, set_roadmap_status};
 
 mod change;
 

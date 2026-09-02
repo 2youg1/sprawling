@@ -211,33 +211,28 @@ const DOC_BYTES_MAX: usize = 64 * 1024;
 
 /// One building, as the files in it say it is.
 ///
-/// The files are the authority - the same rule `read_spine` follows for
-/// the plan - so this reads them at the moment of asking rather than
-/// keeping an index that would be a second copy of what the disk says.
-fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingAnswer> {
+/// The files are the authority, so the documents, the rooms and the
+/// archive are read at the moment of asking rather than kept as a second
+/// copy of what the disk says. The plan arrives already read, from the
+/// one projection that reads it: a second parse here would be a second
+/// answer to "what is stuck and why", and only one of them would be
+/// folding the records that say why.
+fn read_building(
+    city_root: &Path,
+    addr: &Address,
+    plan: crate::plan_view::PlanReading,
+) -> Option<channels::BuildingAnswer> {
     let root = city_root.join(addr.as_str());
     if !root.is_dir() {
         return None;
     }
-    let unplanned = || {
-        kernel::Progress::Unplanned(kernel::UnplannedProgress {
-            steps: 0,
-            budget: kernel::BudgetUse::default(),
-        })
-    };
-    // A plan that cannot be opened is not a plan somebody wrote badly.
-    // Read as an empty document it would go through the shape check and
-    // come back as `no four-column table found`, which sends a person to
-    // edit a table when the file will not open. `problems` is where the
-    // page already says what is wrong with a building's plan, so the
-    // reason goes there rather than into a shape nobody derived.
-    let (progress, problems) = match city::roadmap(city_root, addr) {
-        Err(err) => (unplanned(), vec![err.to_string()]),
-        Ok(text) => match kernel::check_roadmap_shape(&text) {
-            kernel::RoadmapShape::WellFormed { rows } => (kernel::tally(&rows), Vec::new()),
-            kernel::RoadmapShape::Malformed { problems } => (unplanned(), problems),
-        },
-    };
+    let crate::plan_view::PlanReading {
+        progress,
+        problems,
+        rows: plan,
+        blocked,
+        ready: _,
+    } = plan;
     // What counts as a room is `city::rooms`, which the model-facing
     // roster reads too: a page and an agent disagreeing about which
     // rooms a building has would be two answers to one question. A
@@ -297,6 +292,8 @@ fn read_building(city_root: &Path, addr: &Address) -> Option<channels::BuildingA
         addr: addr.clone(),
         progress,
         problems,
+        plan,
+        blocked,
         rooms,
         docs,
         archive,
@@ -468,6 +465,14 @@ pub(crate) struct Views {
     /// same question costs one directory listing and the bytes that are
     /// actually new.
     index: memory::LedgerIndex,
+    /// Every building's plan, parsed once and re-parsed only when a
+    /// record says it may have moved.
+    plans: crate::plan_view::PlanView,
+    /// What each building is working towards, folded from the records
+    /// that said so. The goal text and its state, not the value itself:
+    /// declaring a pursuit takes the depth-zero position, and a view
+    /// that could mint one would be a second door onto the guard.
+    pursuits: std::collections::BTreeMap<Address, (String, kernel::PursuitState)>,
 }
 
 impl Views {
@@ -488,7 +493,54 @@ impl Views {
             // and a city with no ledger yet is the ordinary first run.
             index: memory::LedgerIndex::load_or_rebuild(&ledger_dir(city_root))
                 .unwrap_or_else(|_| memory::LedgerIndex::empty()),
+            plans: crate::plan_view::PlanView::default(),
+            pursuits: std::collections::BTreeMap::new(),
         }
+    }
+
+    /// One entry per building, with its plan as the projection last read
+    /// it.
+    fn spine(&mut self) -> Vec<channels::BuildingProgress> {
+        let root = self.city_root.clone();
+        buildings_of(&root)
+            .into_iter()
+            .map(|addr| {
+                let reading = self.plans.of(&root, &addr);
+                channels::BuildingProgress {
+                    addr,
+                    progress: reading.progress,
+                    problems: reading.problems,
+                    blocked: reading.blocked,
+                    ready: u32::try_from(reading.ready.len()).unwrap_or(u32::MAX),
+                }
+            })
+            .collect()
+    }
+
+    /// What each pursuit is doing, as the city reads it.
+    ///
+    /// The verdict is computed here rather than on the page, so the stop
+    /// condition has one authority: a client that worked out for itself
+    /// whether a city had finished would be the second.
+    fn pursuit_lines(&mut self) -> Vec<channels::PursuitLine> {
+        let root = self.city_root.clone();
+        let held: Vec<(Address, String, kernel::PursuitState)> = self
+            .pursuits
+            .iter()
+            .map(|(addr, (goal, state))| (addr.clone(), goal.clone(), *state))
+            .collect();
+        let in_flight = u32::try_from(self.hot.active_count()).unwrap_or(u32::MAX);
+        let mut out = Vec::new();
+        for (addr, goal, state) in held {
+            let ready = self.plans.of(&root, &addr).ready;
+            out.push(channels::PursuitLine {
+                goal,
+                state,
+                verdict: verdict_line(kernel::observe_pursuit(state, &ready, in_flight)),
+                addr,
+            });
+        }
+        out
     }
 
     /// What this city is called: what its first record says, and for a
@@ -567,40 +619,77 @@ fn not_built(action: &'static str, subject: String, instead: &'static str) -> Ax
     AxError::failure(AxCode::WireMismatch, action, subject).with_recovery(instead)
 }
 
-/// Reads every building's `Roadmap.md` and tallies it.
+/// The run reporting a change to the plan: which run, in which room, of
+/// which building, as whom. Four values that always travel together and
+/// are never chosen independently, so they travel as one.
+#[derive(Clone, Copy)]
+struct Reporter<'a> {
+    run_id: RunId,
+    room: &'a Address,
+    building: &'a Address,
+    who: &'a str,
+}
+
+/// The building an address belongs to: its first segment.
+fn building_of(addr: &Address) -> Option<Address> {
+    Address::parse(addr.as_str().split('/').next()?).ok()
+}
+
+/// Which plan node a `roadmap_*` record names.
+fn plan_node_of(record: &EventRecord) -> Option<kernel::NodeId> {
+    kernel::NodeId::parse(record.data().as_map().get("node")?.as_str()?).ok()
+}
+
+/// One clause a person reads: what the city is doing about its pursuit.
 ///
-/// The roadmap is read at query time rather than folded from events,
-/// because the file is the plan: an agent edits it with the edit tool,
-/// and a copy of it in a projection would be a second statement of what
-/// the plan is. A building with no roadmap has no denominator, and
-/// `Progress::Unplanned` is exactly that fact — it has no ratio method,
-/// so the interface cannot draw a percentage it does not have.
-fn read_spine(city_root: &Path) -> Vec<channels::BuildingProgress> {
-    let mut out = Vec::new();
-    for addr in city::buildings(city_root).unwrap_or_default() {
-        let Ok(text) =
-            std::fs::read_to_string(city_root.join(addr.as_str()).join(city::ROADMAP_FILE))
-        else {
-            continue;
-        };
-        let (progress, problems) = match kernel::check_roadmap_shape(&text) {
-            kernel::RoadmapShape::WellFormed { rows } => (kernel::tally(&rows), Vec::new()),
-            kernel::RoadmapShape::Malformed { problems } => (
-                kernel::Progress::Unplanned(kernel::UnplannedProgress {
-                    steps: 0,
-                    budget: kernel::BudgetUse::default(),
-                }),
-                problems,
-            ),
-        };
-        out.push(channels::BuildingProgress {
-            addr,
-            progress,
-            problems,
-        });
+/// The one wording, so the page, the console and a log line all say the
+/// same thing about the same verdict.
+fn verdict_line(verdict: kernel::PursuitVerdict) -> String {
+    match verdict {
+        kernel::PursuitVerdict::Work { next } => format!("working on {next}"),
+        kernel::PursuitVerdict::Waiting { in_flight } => {
+            format!("waiting for {in_flight} run(s) still going")
+        }
+        kernel::PursuitVerdict::Paused => "paused".to_owned(),
+        kernel::PursuitVerdict::Finished => {
+            "finished: nothing is ready and nobody is working".to_owned()
+        }
     }
-    out.sort_by(|left, right| left.addr.as_str().cmp(right.addr.as_str()));
-    out
+}
+
+/// What one `pursuit_changed` record says.
+///
+/// `None` for a record this build cannot read as one, which a view skips
+/// rather than inventing a goal for.
+fn pursuit_from(record: &EventRecord) -> Option<(Address, Option<(String, kernel::PursuitState)>)> {
+    let map = record.data().as_map();
+    let addr = record.addr()?.clone();
+    let step = map.get("step")?.as_str()?;
+    let goal = map
+        .get("goal")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let held = match step {
+        "set" => Some((goal, kernel::PursuitState::Running)),
+        "pause" => Some((goal, kernel::PursuitState::Paused)),
+        "resume" => Some((goal, kernel::PursuitState::Running)),
+        "clear" => None,
+        _ => return None,
+    };
+    Some((addr, held))
+}
+
+/// Every building the city has, in reading order.
+///
+/// The plans themselves are `crate::plan_view`'s: reading them here as
+/// well would be a second parse of the same file, and the two would
+/// disagree the first time one of them was invalidated and the other was
+/// not.
+fn buildings_of(city_root: &Path) -> Vec<Address> {
+    let mut found = city::buildings(city_root).unwrap_or_default();
+    found.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    found
 }
 
 impl Views {
@@ -616,6 +705,7 @@ impl Views {
             .apply(record)
             .map_err(memory::MemoryError::into_ax)?;
         self.book.apply(record)?;
+        self.plans.apply(record);
         self.events = self.events.saturating_add(1);
         match record.kind() {
             EventKind::CityInitialized => {
@@ -631,6 +721,18 @@ impl Views {
                     && let Some(queue) = self.waiting.get_mut(&room)
                 {
                     queue.retain(|held| held.id != line.id);
+                }
+            }
+            EventKind::PursuitChanged => {
+                if let Some((addr, held)) = pursuit_from(record) {
+                    match held {
+                        Some(entry) => {
+                            self.pursuits.insert(addr, entry);
+                        }
+                        None => {
+                            self.pursuits.remove(&addr);
+                        }
+                    }
                 }
             }
             EventKind::FileDiscarded => {
@@ -802,11 +904,14 @@ impl Views {
                     .runs()
                     .map(|(run, hot)| summarize(*run, hot))
                     .collect();
+                let active = self.hot.active_count();
+                let frozen = self.hot.frozen_count();
                 channels::Answer::City(channels::CityAnswer {
                     runs,
-                    active: self.hot.active_count(),
-                    frozen: self.hot.frozen_count(),
-                    buildings: read_spine(&self.city_root),
+                    active,
+                    frozen,
+                    buildings: self.spine(),
+                    pursuits: self.pursuit_lines(),
                 })
             }
             channels::Query::RunView { run } => {
@@ -857,14 +962,18 @@ impl Views {
             channels::Query::EndpointView => {
                 channels::Answer::Endpoints(endpoints_answer(&self.book))
             }
-            channels::Query::BuildingView { addr } => match read_building(&self.city_root, addr) {
-                Some(answer) => channels::Answer::Building(Box::new(answer)),
-                // A building nobody raised is not an empty building. The
-                // page needs to be able to tell those apart.
-                None => channels::Answer::Unavailable {
-                    query: format!("BuildingView({})", addr.as_str()),
-                },
-            },
+            channels::Query::BuildingView { addr } => {
+                let root = self.city_root.clone();
+                let plan = self.plans.of(&root, addr);
+                match read_building(&root, addr, plan) {
+                    Some(answer) => channels::Answer::Building(Box::new(answer)),
+                    // A building nobody raised is not an empty building. The
+                    // page needs to be able to tell those apart.
+                    None => channels::Answer::Unavailable {
+                        query: format!("BuildingView({})", addr.as_str()),
+                    },
+                }
+            }
             channels::Query::InboxView { addr } => channels::Answer::Inbox(channels::InboxAnswer {
                 addr: addr.clone(),
                 waiting: self.waiting.get(addr).cloned().unwrap_or_default(),
@@ -883,7 +992,8 @@ impl Views {
                     events: self.events,
                     runs_active: self.hot.active_count(),
                     runs_frozen: self.hot.frozen_count(),
-                    buildings: u64::try_from(read_spine(&self.city_root).len()).unwrap_or(u64::MAX),
+                    buildings: u64::try_from(buildings_of(&self.city_root).len())
+                        .unwrap_or(u64::MAX),
                     approvals_waiting: u64::try_from(self.approvals.len()).unwrap_or(u64::MAX),
                     signals_waiting: self
                         .waiting
@@ -907,8 +1017,8 @@ impl Views {
     fn search_archives(&self, needle: &str) -> channels::ArchiveAnswer {
         let mut hits = Vec::new();
         let wanted = needle.to_lowercase();
-        for building in read_spine(&self.city_root) {
-            let Ok(entries) = city::archive_index(&self.city_root, &building.addr) else {
+        for building in buildings_of(&self.city_root) {
+            let Ok(entries) = city::archive_index(&self.city_root, &building) else {
                 continue;
             };
             for entry in entries {
@@ -916,7 +1026,7 @@ impl Views {
                     continue;
                 }
                 hits.push(channels::ArchiveHit {
-                    building: building.addr.clone(),
+                    building: building.clone(),
                     kind: entry.kind.as_str().to_owned(),
                     day: entry.day,
                     subject: entry.subject,
@@ -1122,6 +1232,35 @@ struct Collaboration {
     joins: std::collections::BTreeMap<Address, collab::FanIn>,
     goals: Vec<kernel::GoalEntry>,
     requests: Vec<collab::OpenRequest>,
+    /// What each building was last told to work towards.
+    pursuits: std::collections::BTreeMap<Address, (String, kernel::PursuitState)>,
+    /// Which room holds each node of each building's plan.
+    plan_holders:
+        std::collections::BTreeMap<Address, std::collections::BTreeMap<kernel::NodeId, String>>,
+}
+
+impl Collaboration {
+    /// The pursuits as values, minted through the depth-zero position.
+    ///
+    /// The fold reads text and state out of the records; only a holder
+    /// of a `Delegator` turns those back into something that can take
+    /// work, which is why this takes one rather than doing it inline.
+    fn pursuits(
+        &self,
+        at: &kernel::Delegator,
+    ) -> std::collections::BTreeMap<Address, kernel::Pursuit> {
+        let mut out = std::collections::BTreeMap::new();
+        for (addr, (goal, state)) in &self.pursuits {
+            let Ok(mut held) = kernel::Pursuit::declare(at, goal.clone()) else {
+                continue;
+            };
+            if *state == kernel::PursuitState::Paused {
+                held.pause();
+            }
+            out.insert(addr.clone(), held);
+        }
+        out
+    }
 }
 
 /// `Collaboration` while it is still being read out of a history.
@@ -1133,6 +1272,16 @@ struct Collaboration {
 #[derive(Default)]
 struct CollaborationFold {
     goals: Vec<kernel::GoalEntry>,
+    /// What each building was last told to work towards. Text and
+    /// state, because a `Pursuit` is minted through the depth-zero
+    /// position and a fold has none.
+    pursuits: std::collections::BTreeMap<Address, (String, kernel::PursuitState)>,
+    /// Which room holds each node of each building's plan. The map a
+    /// red node's neighbours are found through, and the one copy of it:
+    /// the record that claims a node carries the room in its `addr`,
+    /// so nothing here derives what somebody else already wrote down.
+    plan_holders:
+        std::collections::BTreeMap<Address, std::collections::BTreeMap<kernel::NodeId, String>>,
     requests: Vec<collab::OpenRequest>,
     enqueued: Vec<collab::Signal>,
     consumed: std::collections::BTreeSet<String>,
@@ -1155,6 +1304,37 @@ impl CollaborationFold {
                 }
             }
             EventKind::GoalRegistered => self.goals.push(effect::goal_from_payload(record.data())?),
+            EventKind::RoadmapClaimed => {
+                if let (Some(building), Some(node), Some(room)) = (
+                    record.addr().and_then(building_of),
+                    plan_node_of(record),
+                    record.addr(),
+                ) {
+                    self.plan_holders
+                        .entry(building)
+                        .or_default()
+                        .insert(node, room.as_str().to_owned());
+                }
+            }
+            EventKind::RoadmapFinished | EventKind::RoadmapReleased | EventKind::RoadmapBlocked => {
+                if let (Some(building), Some(node)) =
+                    (record.addr().and_then(building_of), plan_node_of(record))
+                {
+                    self.plan_holders.entry(building).or_default().remove(&node);
+                }
+            }
+            EventKind::PursuitChanged => {
+                if let Some((addr, held)) = pursuit_from(record) {
+                    match held {
+                        Some(entry) => {
+                            self.pursuits.insert(addr, entry);
+                        }
+                        None => {
+                            self.pursuits.remove(&addr);
+                        }
+                    }
+                }
+            }
             EventKind::PrOpened => self
                 .requests
                 .push(collab::OpenRequest::from_payload(record.data())?),
@@ -1182,6 +1362,7 @@ impl CollaborationFold {
         let mut joins: std::collections::BTreeMap<Address, collab::FanIn> =
             std::collections::BTreeMap::new();
         let (goals, requests, consumed) = (self.goals, self.requests, self.consumed);
+        let (pursuits, plan_holders) = (self.pursuits, self.plan_holders);
         for signal in self.enqueued {
             // A join is folded from every handback the room ever
             // received, whether or not the signal announcing it has been
@@ -1206,6 +1387,8 @@ impl CollaborationFold {
             joins,
             goals,
             requests,
+            pursuits,
+            plan_holders,
         })
     }
 }
@@ -1884,6 +2067,16 @@ pub struct RunWorker {
     /// in the order the claims were made — which is the order the
     /// conflict check reads them in.
     goals: Vec<kernel::GoalEntry>,
+    /// What each building is working towards, and the depth-zero
+    /// position that lets one be declared. Held by the worker because
+    /// the worker is what acts on it; rebuilt from the records on open,
+    /// like the endpoint book and the goal register beside it.
+    pursuits: std::collections::BTreeMap<Address, kernel::Pursuit>,
+    delegator: kernel::Delegator,
+    /// Which room holds each node of each building's plan, folded from
+    /// the claim records and kept up to date as this worker writes them.
+    plan_holders:
+        std::collections::BTreeMap<Address, std::collections::BTreeMap<kernel::NodeId, String>>,
     /// The instant the schedule was last read against. Set when the
     /// worker opens, so a city that was off owes nothing for the time it
     /// was off.
@@ -2056,6 +2249,11 @@ impl RunWorker {
         } = Standing::fold(&dir)?;
         let cas = Cas::open(&city_root.join(".sprawling").join("cas"))
             .map_err(memory::MemoryError::into_ax)?;
+        // The one place a `Delegator` is minted in this process, which
+        // is what makes "a sub-agent cannot set the city working" a
+        // fact about the code rather than a rule somebody follows.
+        let delegator = kernel::Delegator::root();
+        let pursuits = collaboration.pursuits(&delegator);
         Ok(RunWorker {
             city_root: city_root.to_path_buf(),
             ledger,
@@ -2067,8 +2265,11 @@ impl RunWorker {
             governance,
             inboxes: collaboration.inboxes,
             joins: collaboration.joins,
+            pursuits,
+            plan_holders: collaboration.plan_holders,
             goals: collaboration.goals,
             requests: collaboration.requests,
+            delegator,
             last_tick: now,
             tainted_arrival: false,
             expiries: std::collections::BTreeMap::new(),
@@ -3555,14 +3756,25 @@ impl RunWorker {
             )? {
                 effect::Claims::Landed(taken) => {
                     self.settle(run_id, addr, mode, budget, *taken)?;
+                    self.tell_whoever_is_behind(
+                        Reporter {
+                            run_id,
+                            room: addr,
+                            building: building.addr(),
+                            who,
+                        },
+                        mode,
+                        budget,
+                        &claim_effects,
+                    )?;
                 }
-                effect::Claims::Stale(rows) => {
-                    for row in rows {
+                effect::Claims::Stale(nodes) => {
+                    for node in nodes {
                         self.note(
                             runtime::diagnostics::Level::Refuse,
                             "collab::claim_tool",
                             &format!(
-                                "row {row} moved before this run's claim landed; nothing was \
+                                "node {node} moved before this run's claim landed; nothing was \
                                  written"
                             ),
                         );
@@ -3715,11 +3927,27 @@ impl RunWorker {
     /// The append comes first: the book states what the history says,
     /// never what the process hoped to write.
     fn record(&mut self, kind: EventKind, data: Payload) -> Result<(), AxError> {
+        self.record_where(kind, None, data)
+    }
+
+    /// The same, for a record that belongs to one address. A pursuit is
+    /// a building's, and a record with no address would be a fact about
+    /// the city that no view could file under the building it changed.
+    fn record_at(&mut self, kind: EventKind, addr: Address, data: Payload) -> Result<(), AxError> {
+        self.record_where(kind, Some(addr), data)
+    }
+
+    fn record_where(
+        &mut self,
+        kind: EventKind,
+        addr: Option<Address>,
+        data: Payload,
+    ) -> Result<(), AxError> {
         let draft = EventDraft {
             run: RunId::CITY,
             t: now_ms()?,
             who: "owner".to_owned(),
-            addr: None,
+            addr,
             kind,
             data: data.clone(),
             ig: false,
@@ -4284,6 +4512,7 @@ impl RunWorker {
             channels::Command::SetAutonomy {
                 scope, autonomy, ..
             } => self.set_autonomy(&scope, autonomy),
+            channels::Command::Pursue { addr, step, .. } => self.set_pursuit(&addr, step),
             channels::Command::Fork {
                 run, at_seq, addr, ..
             } => self.fork(run, at_seq, addr).map(|_| ()),
@@ -4708,6 +4937,258 @@ impl RunWorker {
             serde_json::Value::String(autonomy_name(&autonomy)),
         );
         self.record(EventKind::AutonomyChanged, Payload::new(map)?)
+    }
+
+    /// Sets, pauses, resumes or clears a building's pursuit.
+    ///
+    /// **Held in the process and not written down.** A standing goal is
+    /// a posture rather than a fact about the past, and a city that came
+    /// back from a restart already working through the night is the one
+    /// failure this must not have. What the goal *does* — every run it
+    /// starts — is recorded like anything else.
+    ///
+    /// A goal is declared through the depth-zero position this Desk
+    /// holds, which is the runtime half of the guard the type already
+    /// carries: a sub-agent has no `Delegator` and cannot reach this
+    /// function either.
+    fn set_pursuit(&mut self, addr: &Address, step: channels::PursuitStep) -> Result<(), AxError> {
+        let missing = |action: &'static str| {
+            AxError::failure(
+                AxCode::InvalidArgs,
+                action,
+                format!("{} is not pursuing anything", addr.as_str()),
+            )
+            .with_recovery("set a goal first; there is nothing here to change")
+        };
+        let name = match step {
+            channels::PursuitStep::Set { goal } => {
+                // Declared through the depth-zero position this worker
+                // holds. That is the runtime half of the guard the type
+                // already carries: a sub-agent has no `Delegator`, and
+                // no path from a tool reaches this function either.
+                let declared = kernel::Pursuit::declare(&self.delegator, goal)?;
+                self.note(
+                    runtime::diagnostics::Level::Effect,
+                    "kernel::pursuit",
+                    &format!(
+                        "{} works towards `{}` until nothing is ready",
+                        addr.as_str(),
+                        declared.goal()
+                    ),
+                );
+                self.pursuits.insert(addr.clone(), declared);
+                "set"
+            }
+            channels::PursuitStep::Pause => {
+                self.pursuits
+                    .get_mut(addr)
+                    .ok_or_else(|| missing("pause a pursuit"))?
+                    .pause();
+                "pause"
+            }
+            channels::PursuitStep::Resume => {
+                self.pursuits
+                    .get_mut(addr)
+                    .ok_or_else(|| missing("resume a pursuit"))?
+                    .resume();
+                "resume"
+            }
+            channels::PursuitStep::Clear => {
+                self.pursuits
+                    .remove(addr)
+                    .ok_or_else(|| missing("clear a pursuit"))?;
+                "clear"
+            }
+        };
+        let mut map = serde_json::Map::new();
+        map.insert(
+            "step".to_owned(),
+            serde_json::Value::String(name.to_owned()),
+        );
+        if let Some(held) = self.pursuits.get(addr) {
+            map.insert(
+                "goal".to_owned(),
+                serde_json::Value::String(held.goal().to_owned()),
+            );
+        }
+        self.record_at(EventKind::PursuitChanged, addr.clone(), Payload::new(map)?)?;
+        self.pursue(addr)
+    }
+
+    /// Takes ready work for as long as a pursuit says to.
+    ///
+    /// **It terminates because every dispatch takes a node out of the
+    /// ready set.** Claiming moves a node to `In progress`, and a run
+    /// that ends still holding one leaves it blocked, so the set this
+    /// reads from strictly shrinks — except when a run splits a branch,
+    /// which is the city finding more work rather than looping.
+    ///
+    /// The verdict is `kernel::pursuit`'s and is not re-derived here:
+    /// what "there is nothing left to do" means has one authority.
+    fn pursue(&mut self, addr: &Address) -> Result<(), AxError> {
+        loop {
+            let Some(state) = self.pursuits.get(addr).map(kernel::Pursuit::state) else {
+                return Ok(());
+            };
+            let ready = self.ready_in(addr);
+            let goal = self
+                .pursuits
+                .get(addr)
+                .map(|held| held.goal().to_owned())
+                .unwrap_or_default();
+            match kernel::observe_pursuit(state, &ready, 0) {
+                kernel::PursuitVerdict::Work { next } => {
+                    let Some(node) = self.plan_item(addr, &next) else {
+                        return Ok(());
+                    };
+                    self.note(
+                        runtime::diagnostics::Level::Effect,
+                        "kernel::pursuit",
+                        &format!("{} takes {next}: {node}", addr.as_str()),
+                    );
+                    self.dispatch_in(
+                        addr.clone(),
+                        format!("Plan node {next}: {node}"),
+                        goal,
+                        runtime::Mode::PlanGoal,
+                        kernel::BudgetCap::default(),
+                        None,
+                    )?;
+                    // A dispatch that did not move the node would loop
+                    // for ever, so the check is on the ready set itself
+                    // rather than on a counter.
+                    if self.ready_in(addr).contains(&next) {
+                        self.note(
+                            runtime::diagnostics::Level::Refuse,
+                            "kernel::pursuit",
+                            &format!(
+                                "{next} is still ready after a run took it; the pursuit stops \
+                                 rather than dispatching it again"
+                            ),
+                        );
+                        return Ok(());
+                    }
+                }
+                kernel::PursuitVerdict::Waiting { .. }
+                | kernel::PursuitVerdict::Paused
+                | kernel::PursuitVerdict::Finished => return Ok(()),
+            }
+        }
+    }
+
+    /// Tells whoever is standing behind a node that has just gone red.
+    ///
+    /// **A fact starts this, not a person.** Every other way one
+    /// resident reaches another in this city begins with somebody
+    /// deciding to speak; this one begins with a node going red, and it
+    /// reaches exactly the rooms holding work that cannot now move.
+    ///
+    /// The signal's id is derived from the building and the node, so a
+    /// blockage announced twice is one signal: the inbox already
+    /// deduplicates by id, and a room told four times about one problem
+    /// is a room that stops reading its inbox.
+    fn tell_whoever_is_behind(
+        &mut self,
+        at: Reporter<'_>,
+        mode: runtime::Mode,
+        budget: kernel::BudgetCap,
+        effects: &[collab::ClaimEffect],
+    ) -> Result<(), AxError> {
+        let Reporter {
+            run_id,
+            room,
+            building,
+            who,
+        } = at;
+        let red: Vec<kernel::RedNode> = effects
+            .iter()
+            .filter_map(|effect| match effect {
+                collab::ClaimEffect::PutDown {
+                    exit: kernel::PlanExit::Stopped { id, why },
+                    ..
+                } if why.is_red() => Some(kernel::RedNode {
+                    at: id.clone(),
+                    why: why.clone(),
+                }),
+                _ => None,
+            })
+            .collect();
+        if red.is_empty() {
+            return Ok(());
+        }
+        let Some(tree) = self.plan_of(building) else {
+            return Ok(());
+        };
+        let held = self.holders_in(building);
+        let mut sent = Vec::new();
+        for notice in kernel::notices(&kernel::spread(&tree, &red), &held) {
+            let Ok(to) = Address::parse(&notice.to) else {
+                continue;
+            };
+            if &to == room {
+                continue;
+            }
+            let mut payload = serde_json::Map::new();
+            payload.insert(
+                "text".to_owned(),
+                serde_json::Value::String(notice.line.clone()),
+            );
+            sent.push(collab::SignalEffect::Enqueued(collab::Signal::new(
+                collab::SignalId::parse(&format!(
+                    "blocked-{}-{}",
+                    building.as_str().replace('/', "-"),
+                    notice.about
+                ))?,
+                collab::SignalKind::Mention,
+                who.to_owned(),
+                to,
+                kernel::Version::FIRST,
+                Payload::new(payload)?,
+                now_ms()?,
+            )?));
+        }
+        if sent.is_empty() {
+            return Ok(());
+        }
+        let landing = effect::Landing::signals(sent, room, who)?;
+        self.settle(run_id, room, mode, budget, landing)
+    }
+
+    /// Which room holds each node of a building's plan.
+    ///
+    /// Read from the plan and the claim records together: the table
+    /// says which nodes are being worked on, and the records say from
+    /// which room. A node marked `In progress` that no record claims is
+    /// left out rather than guessed at.
+    fn holders_in(&self, building: &Address) -> std::collections::BTreeMap<kernel::NodeId, String> {
+        self.plan_holders.get(building).cloned().unwrap_or_default()
+    }
+
+    /// What could be started in one building right now.
+    fn ready_in(&self, addr: &Address) -> Vec<kernel::NodeId> {
+        self.plan_of(addr)
+            .map(|tree| tree.ready())
+            .unwrap_or_default()
+    }
+
+    /// One node's text, for the task a dispatch carries.
+    fn plan_item(&self, addr: &Address, node: &kernel::NodeId) -> Option<String> {
+        self.plan_of(addr)?
+            .get(node)
+            .map(|held| held.row.item.clone())
+    }
+
+    /// A building's plan as it stands on disk.
+    ///
+    /// Read here rather than folded: this runs once per dispatch, not
+    /// once per question a page asks, and the worker writes the file it
+    /// is reading.
+    fn plan_of(&self, addr: &Address) -> Option<kernel::PlanTree> {
+        let text = city::roadmap(&self.city_root, addr).ok()?;
+        match kernel::check_roadmap_shape(&text) {
+            kernel::RoadmapShape::WellFormed { rows } => kernel::PlanTree::build(rows).ok(),
+            kernel::RoadmapShape::Malformed { .. } => None,
+        }
     }
 
     /// Lays out a building, then records that it exists.
@@ -6023,8 +6504,9 @@ mod tests {
             city::BuildingTemplate::Minimal,
         )
         .unwrap();
-        let answer = read_building(dir.path(), &Address::parse("lab").unwrap())
-            .expect("a created building has a page");
+        let lab = Address::parse("lab").unwrap();
+        let plan = crate::plan_view::PlanView::default().of(dir.path(), &lab);
+        let answer = read_building(dir.path(), &lab, plan).expect("a created building has a page");
         let rules = answer
             .docs
             .iter()
@@ -6042,7 +6524,7 @@ mod tests {
     /// different facts, and the page used to state the second one.
     ///
     /// Reading the file as empty runs it through `check_roadmap_shape`,
-    /// which finds no header row and answers `no four-column table
+    /// which finds no header row and answers `no six-column table
     /// found`. That sends a person to edit a table when what they have
     /// to fix is a file that will not open - the same misreport R2.06
     /// removed from the dispatch path, still standing on the page.
@@ -6058,7 +6540,9 @@ mod tests {
         let _ = std::fs::remove_file(&plan);
         std::fs::create_dir_all(&plan).unwrap();
 
-        let answer = read_building(dir.path(), &lab).expect("the building is still a building");
+        let plan = crate::plan_view::PlanView::default().of(dir.path(), &lab);
+        let answer =
+            read_building(dir.path(), &lab, plan).expect("the building is still a building");
         assert!(
             answer
                 .problems
@@ -9116,16 +9600,16 @@ addr = \"gone/room1\"
     }
 
     const PLAN_TWO_FREE_ROWS: &str = concat!(
-        "| # | Item | Status | Evidence |\n",
-        "|---|---|---|---|\n",
-        "| 1 | wire the kiln | Not started | |\n",
-        "| 2 | glaze tests | Not started | |\n",
+        "| # | Item | Weight | Needs | Status | Evidence |\n",
+        "|---|---|---|---|---|---|\n",
+        "| 1 | wire the kiln | 1 |  | Not started |  |\n",
+        "| 2 | glaze tests | 1 |  | Not started |  |\n",
     );
 
-    const PLAN_ONE_ROW_IN_PROGRESS: &str = concat!(
-        "| # | Item | Status | Evidence |\n",
-        "|---|---|---|---|\n",
-        "| 1 | wire the kiln | In progress | |\n",
+    const PLAN_ONE_FREE_ROW: &str = concat!(
+        "| # | Item | Weight | Needs | Status | Evidence |\n",
+        "|---|---|---|---|---|---|\n",
+        "| 1 | wire the kiln | 1 |  | Not started |  |\n",
     );
 
     /// R2.10's other half: not only "the line comes before the change",
@@ -9151,7 +9635,7 @@ addr = \"gone/room1\"
                     "taking a row",
                     "tu_1",
                     "plan",
-                    serde_json::json!({ "action": "claim", "row": 1 }),
+                    serde_json::json!({ "action": "claim", "node": "1" }),
                 ),
                 completion("took it", None),
             ],
@@ -9229,7 +9713,7 @@ addr = \"gone/room1\"
         let plan = dir.path().join("lab").join(city::ROADMAP_FILE);
         std::fs::create_dir_all(dir.path().join("lab")).unwrap();
         std::fs::write(&plan, PLAN_TWO_FREE_ROWS).unwrap();
-        let take = serde_json::json!({ "action": "claim", "row": 1 });
+        let take = serde_json::json!({ "action": "claim", "node": "1" });
         let (base_url, provider) = fake_openai(
             &["m-local"],
             vec![
@@ -9262,11 +9746,11 @@ addr = \"gone/room1\"
 
         let after = std::fs::read_to_string(&plan).unwrap();
         assert!(
-            after.contains("| 1 | wire the kiln | In progress |  |"),
+            after.contains("| 1 | wire the kiln | 1 |  | In progress |  |"),
             "the plan on disk carries the claim: {after}"
         );
         assert!(
-            after.contains("| 2 | glaze tests | Not started | |"),
+            after.contains("| 2 | glaze tests | 1 |  | Not started |  |"),
             "a refused claim rewrites nothing, not even the row it was offered: {after}"
         );
         let verified = runtime::replay::verify_ledger_dir(&report.ledger_dir).unwrap();
@@ -9323,7 +9807,7 @@ addr = \"gone/room1\"
                     "taking a row",
                     "tu_2",
                     "plan",
-                    serde_json::json!({ "action": "claim", "row": 1 }),
+                    serde_json::json!({ "action": "claim", "node": "1" }),
                 ),
                 completion("done", None),
             ],
@@ -9396,8 +9880,8 @@ addr = \"gone/room1\"
         assert!(
             city::roadmap(dir.path(), &lab_addr)
                 .unwrap()
-                .contains("| 1 | wire the kiln | In progress |"),
-            "the row is claimed in the plan"
+                .contains("| 1 | wire the kiln | 1 |  | In progress |"),
+            "the node is claimed in the plan"
         );
     }
 
@@ -9407,16 +9891,24 @@ addr = \"gone/room1\"
         let report = init_city(dir.path()).unwrap();
         let plan = dir.path().join("lab").join(city::ROADMAP_FILE);
         std::fs::create_dir_all(dir.path().join("lab")).unwrap();
-        std::fs::write(&plan, PLAN_ONE_ROW_IN_PROGRESS).unwrap();
+        std::fs::write(&plan, PLAN_ONE_FREE_ROW).unwrap();
         let evidence = format!("cas:b3-{}", "ab".repeat(32));
+        // Two calls, because the plan gate admits no shortcut: a run
+        // closes the node it took, and this run has to take it first.
         let (base_url, provider) = fake_openai(
             &["m-local"],
             vec![
                 tool_completion(
-                    "closing it",
+                    "taking it",
                     "tu_1",
                     "plan",
-                    serde_json::json!({ "action": "finish", "row": 1, "evidence": evidence }),
+                    serde_json::json!({ "action": "claim", "node": "1" }),
+                ),
+                tool_completion(
+                    "closing it",
+                    "tu_2",
+                    "plan",
+                    serde_json::json!({ "action": "finish", "node": "1", "evidence": evidence }),
                 ),
                 completion("closed", None),
             ],
@@ -9440,7 +9932,8 @@ addr = \"gone/room1\"
         let kernel::RoadmapShape::WellFormed { rows } = kernel::check_roadmap_shape(&after) else {
             panic!("an edited plan still parses");
         };
-        let kernel::Progress::Planned(planned) = kernel::tally(&rows) else {
+        let tree = kernel::PlanTree::build(rows).expect("an edited plan is still a tree");
+        let kernel::Progress::Planned(planned) = tree.progress() else {
             panic!("a plan's progress is planned")
         };
         assert_eq!(
@@ -10536,8 +11029,9 @@ addr = \"gone/room1\"
         // And the page reads the building's own rung back, not the
         // resolved value, so saving twice does not copy the city's
         // settings down into the building.
-        let shown = read_building(dir.path(), &Address::parse("lab").unwrap())
-            .expect("the building page has an answer");
+        let lab = Address::parse("lab").unwrap();
+        let plan = crate::plan_view::PlanView::default().of(dir.path(), &lab);
+        let shown = read_building(dir.path(), &lab, plan).expect("the building page has an answer");
         assert_eq!(shown.mcp.len(), 1);
         assert!(shown.sandbox.is_some_and(|limits| limits.shell));
     }
@@ -11083,11 +11577,12 @@ addr = \"gone/room1\"
         std::fs::write(
             building.join("Roadmap.md"),
             format!(
-                "# Roadmap\n\n| # | Item | Status | Evidence |\n|---|---|---|---|\n\
-                 | 1 | wired | Done | {evidence} |\n\
-                 | 2 | claimed | Done | |\n\
-                 | 3 | waiting | Awaiting approval | |\n\
-                 | 4 | later | not started | |\n"
+                "# Roadmap\n\n| # | Item | Weight | Needs | Status | Evidence |\n\
+                 |---|---|---|---|---|---|\n\
+                 | 1 | wired | 1 |  | Done | {evidence} |\n\
+                 | 2 | claimed | 1 |  | Done |  |\n\
+                 | 3 | waiting | 1 |  | Awaiting approval |  |\n\
+                 | 4 | later | 1 |  | not started |  |\n"
             ),
         )
         .unwrap();
@@ -11120,7 +11615,9 @@ addr = \"gone/room1\"
         std::fs::create_dir_all(&building).unwrap();
         std::fs::write(
             building.join("Roadmap.md"),
-            "| # | Item | Status | Evidence |\n|---|---|---|---|\n| 1 | x | nearly there | |\n",
+            "| # | Item | Weight | Needs | Status | Evidence |\n\
+             |---|---|---|---|---|---|\n\
+             | 1 | x | 1 |  | nearly there |  |\n",
         )
         .unwrap();
 

@@ -330,7 +330,9 @@ fn is_placeholder_row(line: &str) -> bool {
         .map(str::trim)
         .collect();
     match (cells.len(), cells.first(), cells.get(1)) {
-        (4, Some(index), Some(item)) => index.parse::<u64>().is_ok() && item.is_empty(),
+        (kernel::ROADMAP_COLUMNS, Some(index), Some(item)) => {
+            kernel::NodeId::parse(index).is_ok() && item.is_empty()
+        }
         _ => false,
     }
 }
@@ -369,7 +371,7 @@ fn storage(path: &Path, err: &std::io::Error) -> AxError {
 mod tests {
     use super::*;
     use crate::policy::BUILDING_FILE;
-    use kernel::{Progress, RoadmapShape, check_roadmap_shape, tally};
+    use kernel::{PlanTree, Progress, RoadmapShape, check_roadmap_shape};
 
     fn addr(raw: &str) -> Address {
         Address::parse(raw).unwrap()
@@ -392,10 +394,12 @@ mod tests {
             rows.is_empty(),
             "the template's example rows are not this building's tasks"
         );
-        let Progress::Planned(planned) = tally(&rows) else {
+        let plan = PlanTree::build(rows).expect("a laid-out roadmap is a tree");
+        let Progress::Planned(planned) = plan.progress() else {
             panic!("a building with a roadmap has a denominator");
         };
         assert_eq!(planned.ratio(), (0, 0));
+        assert_eq!(planned.done_ppb, 0);
     }
 
     #[test]
@@ -418,8 +422,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("lab");
         lay_out(&root, &addr("lab")).unwrap();
-        let worked = "| # | Item | Status | Evidence |\n|---|---|---|---|\n\
-                      | 1 | ship it | Done | cas:b3-x |\n";
+        let worked = "| # | Item | Weight | Needs | Status | Evidence |\n\
+                      |---|---|---|---|---|---|\n\
+                      | 1 | ship it | 1 |  | Done | cas:b3-x |\n";
         std::fs::write(root.join(ROADMAP_FILE), worked).unwrap();
 
         lay_out(&root, &addr("lab")).unwrap();
