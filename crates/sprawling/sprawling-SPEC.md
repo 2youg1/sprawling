@@ -1078,3 +1078,26 @@ P7 起交付形态入册：`just package` 的产物名、`QUICKSTART.md`、READM
 V3.38 同理：`RunWorker::handle` 的参数从 `channels::wire::Command` 变成
 `channels::command::Command`。公开路径仍是 `channels::Command`，签名一字未动；
 `Command` 从 `channels::wire` 搬进了自己的文件（channels-SPEC §8-1）。
+
+
+## 8-38 一座城怎么被端上来，与一轮活怎么跑完（V3.42；`bin::serving`）
+
+`bin::assembly` 11,461 → 10,695，`bin::serving` 830。**交接文件点名的第一刀**，切的是形状而不是行数：
+`Serving`／`spawn_worker`／`serve`／`CommandDesk` 回答「一座城怎么被端上来」，`RunWorker` 回答「一轮活怎么跑完」，这不是同一件事。
+
+**搬走什么**：门口那把钥匙（`Keyed`／`key_for`／`random_token`——熵在本 crate 只有这一处）、
+金库的开启（`open_vault`）、socket 与唯一写入者之间的那张桌子（`CommandDesk`／`Waiting`／`Posted`／`DeskWait`／`Underway`）、
+`Serving` 与 `serve`，以及**开唯一那条写入线程的 `spawn_worker`**——账本在它里面打开且从不离开，这条性质现在写在它自己的模块文档里。
+
+**一条超长签名被消掉而不是被搬走（V3.35a 的规矩）**：`spawn_worker` 八个参数，现在两个——
+`Opening { city_root, vault, notice, log }`（一个工人是用什么打开的）与 `Outward { desk, views, to_clients, to_watchers }`（它的活从哪来、结果到哪去）。
+**`#[expect(clippy::too_many_arguments)]` 随之消失**：一条压制在修好之后自己清掉，这正是 rust-hardening 要的形状。
+
+**没搬走什么**：`execution_engine`／`CITY_VERIFIER`／`local_model_facts` 留在 `assembly`，因为它们是 `RunWorker` 在一轮活里用的东西，不是端城用的。
+
+**剩下的债写在这里，因为它不是拆分能还的**：`assembly.rs` 仍有 10,695 行，其中 `RunWorker` 一个类型约 3,700 行、22 个私有字段，
+`mod tests` 约 5,600 行。把 `impl RunWorker` 的方法散到兄弟模块要把 22 个字段改成 `pub(crate)`——
+那是用一个诚实的大文件换几个不诚实的小文件。真正的修法是 ARCHITECTURE §5 已经写下的那条：
+**invert the model seam**，让 `RunWorker` 接收模型适配器而不是自己从 endpoint book 造一个，
+于是策略可以被 citysim 用一颗种子驱动，端到端的那 5,600 行测试也就有了 `crates/sprawling/tests/` 这个去处。
+这件事没有卡，也没有人裁定过要不要做。

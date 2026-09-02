@@ -21,6 +21,7 @@
 pub mod assembly;
 pub mod console;
 pub mod firstrun;
+pub mod serving;
 
 mod effect;
 mod keying;

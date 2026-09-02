@@ -334,7 +334,7 @@ pub(crate) fn web_url(terminal: &Terminal) -> String {
 /// typing would have made interaction a condition of service.
 pub(crate) fn start(
     terminal: Terminal,
-    desk: Arc<crate::assembly::CommandDesk>,
+    desk: Arc<crate::serving::CommandDesk>,
     answering: Answering,
     mut watching: tokio::sync::broadcast::Receiver<kernel::EventRecord>,
 ) {
@@ -363,7 +363,7 @@ pub(crate) fn start(
 /// The loop, over any reader and writer so a test can drive it.
 fn drive<R: BufRead, W: Write>(
     terminal: &Terminal,
-    desk: &crate::assembly::CommandDesk,
+    desk: &crate::serving::CommandDesk,
     answering: &Answering,
     input: &mut R,
     out: &mut W,
@@ -439,7 +439,7 @@ fn drive<R: BufRead, W: Write>(
 /// One frame, onto the same desk a browser's frames land on, or into the
 /// same answering function a browser's questions reach.
 fn post<W: Write>(
-    desk: &crate::assembly::CommandDesk,
+    desk: &crate::serving::CommandDesk,
     answering: &Answering,
     frame: channels::ClientFrame,
     out: &mut W,
@@ -577,7 +577,7 @@ mod tests {
     /// Runs the console loop over a scripted script and returns what a
     /// person would have seen.
     fn typed(script: &str, terminal: &Terminal) -> String {
-        let desk = crate::assembly::CommandDesk::new();
+        let desk = crate::serving::CommandDesk::new();
         let mut out: Vec<u8> = Vec::new();
         drive(
             terminal,

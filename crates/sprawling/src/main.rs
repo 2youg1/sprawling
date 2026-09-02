@@ -15,7 +15,7 @@
 mod install;
 mod wire_client;
 
-use sprawling::{assembly, console, firstrun};
+use sprawling::{assembly, console, firstrun, serving};
 
 use std::process::ExitCode;
 
@@ -521,7 +521,7 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
     // adopted; an address that reaches past this machine and has none
     // gets one minted for this serve alone. Read once here and never
     // stored - `serve` is handed a digest.
-    let keyed = match assembly::key_for(bind, std::env::var("SPRAWLING_PAIRING_TOKEN").ok()) {
+    let keyed = match serving::key_for(bind, std::env::var("SPRAWLING_PAIRING_TOKEN").ok()) {
         Ok(keyed) => keyed,
         Err(err) => return report(err),
     };
@@ -548,15 +548,15 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
     println!("    client   {client_line}");
     println!();
     match &keyed {
-        assembly::Keyed::NothingToPresent => {}
-        assembly::Keyed::Adopted(_) => {
+        serving::Keyed::NothingToPresent => {}
+        serving::Keyed::Adopted(_) => {
             println!("    key      the one you configured; this city will ask for it");
             println!();
         }
         // Shown here and nowhere else, for as long as this process
         // lives. Nothing writes it down, so a person who loses it stops
         // and starts the city again rather than looking for a file.
-        assembly::Keyed::Minted(code) => {
+        serving::Keyed::Minted(code) => {
             println!("    key      {code}");
             println!();
             println!("  This address reaches past this machine, so the city minted a key.");
@@ -608,8 +608,8 @@ fn serve_city(city: &std::path::Path, raw: &str, args: &[String], open: bool) ->
         println!("  and `/serving` says where this city listens and what is running in it.");
         println!();
     }
-    let (vault, vault_notice) = assembly::open_vault();
-    match runtime.block_on(assembly::serve(assembly::Serving {
+    let (vault, vault_notice) = serving::open_vault();
+    match runtime.block_on(serving::serve(serving::Serving {
         city_root: city.to_path_buf(),
         addr: bind,
         token,
@@ -636,7 +636,7 @@ fn resume(dir: Option<&String>) -> ExitCode {
         eprintln!("usage: sprawling resume <city-dir>");
         return ExitCode::from(2);
     };
-    let (vault, _notice) = assembly::open_vault();
+    let (vault, _notice) = serving::open_vault();
     let outcome = assembly::RunWorker::new(
         std::path::Path::new(dir),
         vault,
@@ -675,7 +675,7 @@ fn fork(args: &[String]) -> ExitCode {
         Some(Ok(addr)) => Some(addr),
         Some(Err(err)) => return report(err),
     };
-    let (vault, _notice) = assembly::open_vault();
+    let (vault, _notice) = serving::open_vault();
     let outcome = assembly::RunWorker::new(
         std::path::Path::new(dir),
         vault,
@@ -704,7 +704,7 @@ fn adopt(dir: Option<&String>, addr: Option<&String>) -> ExitCode {
         Ok(addr) => addr,
         Err(err) => return report(err),
     };
-    let (vault, _notice) = assembly::open_vault();
+    let (vault, _notice) = serving::open_vault();
     let outcome = assembly::RunWorker::new(
         std::path::Path::new(dir),
         vault,

@@ -559,7 +559,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | web::waiting | crates/web/src/waiting.rs | everything that cannot move until a person answers, in one place | decision | V3 | built |
 | web::record | crates/web/src/record.rs | one history, in three lenses, at one address | decision | V3 | built |
 
-### browser (6), protocol (2), bin (11)
+### browser (6), protocol (2), bin (12)
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
@@ -573,6 +573,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | protocol::acp | crates/protocol/src/acp.rs | the other direction: an outside editor driving this city | decision | P4 | built |
 | bin::main | crates/sprawling/src/main.rs | the command line, each subcommand refused honestly until it exists | adapter | S0 | built |
 | bin::assembly | crates/sprawling/src/assembly.rs | the assembly point: the dirtiest component and the only omniscient one | adapter | S0 | built |
+| bin::serving | crates/sprawling/src/serving.rs | how a city is stood up and served: the key at the door, the desk, the one writer thread | adapter | V3 | built |
 | bin::mcp_stdio | crates/sprawling/src/mcp_stdio.rs | an MCP server as a child process, one line per message | adapter | R1 | built |
 | bin::mcp_http | crates/sprawling/src/mcp_http.rs | an MCP server over HTTP: one request, one message, no session | adapter | R1 | built |
 | bin::firstrun | crates/sprawling/src/firstrun.rs | the first screen, where a city goes when nobody said, and handing a URL to the desktop | adapter | P7 | built |
