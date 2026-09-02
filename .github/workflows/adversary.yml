@@ -1,0 +1,89 @@
+# V10, on a schedule, and never on a push.
+#
+# nightly.yml states the rule this file obeys: a scheduled run earns its slot
+# only by answering what a push cannot. This one answers two such questions. A
+# fresh draw of random bytes explores traces last night's draw did not, which is
+# the whole point of a property that quantifies over traces. And `adversary/`
+# has no freeze file, so tonight's run also resolves its Haskell dependencies
+# against Hackage as it stands tonight - the world outside this repository,
+# which is the other input that changes while nobody pushes.
+#
+# This is not a gate. `just check` never reaches it, no push waits for it, and a
+# red run here blocks nothing: it reports a finding, and the finding is then
+# fixed in Rust, where the rule lives (adversary/adversary-SPEC.md section 2).
+name: adversary
+
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-properties:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      # `sprawling` reaches `keyring`, whose Linux backend is secret-service and
+      # whose build wants dbus headers this runner does not carry. nightly.yml
+      # records the night that fact was learned; naming the package here is what
+      # keeps this job from relearning it.
+      - name: install the dbus headers keyring builds against
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libdbus-1-dev pkg-config
+
+      - name: build the binary the adversary drives
+        run: |
+          rustup show
+          cargo build -p sprawling --locked
+
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.10.3"
+          cabal-version: "3.16.1.0"
+
+      # Keyed on the .cabal file rather than on a lock file, because there is
+      # none: restoring a plan is a convenience here, and resolving a fresh one
+      # is half of why this job runs at all.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cabal/store
+          key: adversary-${{ runner.os }}-ghc9.10.3-${{ hashFiles('adversary/adversary.cabal') }}
+          restore-keys: adversary-${{ runner.os }}-ghc9.10.3-
+
+      # Everything except the open finding. That group asserts a defect this
+      # repository already knows it has, so it is red every night by
+      # construction, and a red that is red every night is how a new red gets
+      # missed. A failure in this step is therefore news.
+      - name: properties that must hold today
+        working-directory: adversary
+        env:
+          SPRAWLING_BIN: ${{ github.workspace }}/target/debug/sprawling
+        run: cabal test --test-options='-p "!/open finding/"'
+
+      # The open finding, watched rather than gated. Its red is the known state;
+      # its green is the news, and the day it arrives this group stops being an
+      # open finding and moves in with the rest.
+      - name: the open finding, still open
+        id: open-finding
+        continue-on-error: true
+        working-directory: adversary
+        env:
+          SPRAWLING_BIN: ${{ github.workspace }}/target/debug/sprawling
+        run: cabal test --test-options='-p "/open finding/"'
+
+      - name: say which of the two happened
+        run: |
+          if [ "${{ steps.open-finding.outcome }}" = "success" ]; then
+            echo "Something now reads the IdemKey the wire makes every command carry."
+            echo "Move that group out of 'open finding' in adversary/test/Main.hs,"
+            echo "and update adversary/adversary-SPEC.md section 4."
+          else
+            echo "The open finding recorded in adversary-SPEC.md section 4 still reproduces:"
+            echo "kernel::gate::dedup has no caller, so a replayed command happens twice."
+          fi

@@ -26,6 +26,7 @@ just check                                  # fmt + clippy (-D warnings, --all-f
 | `just replay <log>` | verify a ledger chain offline, read-only |
 | `just mem [pid]` / `just bench` / `just budget` | the measurements, in this platform's own vocabulary |
 | `just fuzz <target>` / `just mutants` | fuzz targets / mutation testing |
+| `just adversary` | the out-of-tree property checker that attacks the binary through the wire; never a gate, and a no-op without GHC |
 
 ## Read before you write
 
@@ -64,6 +65,10 @@ Violating any of these turns CI red with a message naming the rule, the violatio
 | Keep credentials as `secret:realm/name` references; let plaintext reach the vault only. | `xtask secret` |
 | Take colour from `web::theme`; express a colour as a ratio of the gamut limit. | `xtask color` |
 | Keep sizes inside their budget, and badges in step with the artifacts. | `xtask budget` |
+| Describe every kernel enum in its SPEC table variant for variant. | `xtask specalign` |
+| Give every verb the city can carry out a control that reaches it, or classify it on the wire seam and say why a person may not ask for it. | `xtask wiring` with `channels-SPEC.md` §19-2 |
+| Take every word a reader is given from `web::lang`. | `xtask wording` |
+| Offer in the client every role, accessible name and landmark a settled screen wrote down. | `xtask ax`, `xtask render` |
 | Publish nothing that names one machine's home directory or its working notes. | `xtask release` |
 | **Fix the cause when a gate goes red.** Loosening a gate *in the change that the gate is failing* requires an explicit ruling from the person, recorded as a `Verdict:` trailer. Re-pricing a rule in its own commit does not. | `xtask guard` |
 
