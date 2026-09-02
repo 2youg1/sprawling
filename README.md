@@ -165,6 +165,14 @@ I sell neither APIs nor account hosting, so everything external sits on a seam a
 
 Location and replacement steps for each piece are in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
+## A sister repository: [kusanagi](https://github.com/2youg1/kusanagi)
+
+Inside one city, history is **one chain**. Every effect becomes an event on a single append-only Ledger before it becomes an effect, and the single total order is what makes five ordinary questions answerable at all: who claimed this work, whose edits collided, which goal wins, has this message already been delivered, did anybody write since I read. Every one of them asks *who was first*, and a city that split its history could no longer say.
+
+Between machines, that same total order is the thing you must not have. `kusanagi` is a decentralised collaboration network for agents: **one chain per pair**, every address derived so that no two drops of one conversation are relatable by the host carrying them, and the host is one neither party runs or trusts. A global order there would be a fact an observer could read.
+
+One chain inside a city, one chain per pair between cities. The two repositories are halves of one answer to how agents keep a history they can trust; read either alone and the other half reads as missing.
+
 ## Where it listens, where credentials live
 
 **Defaults to loopback only.** To let another machine on the same network connect, bind a non-loopback address and set `SPRAWLING_PAIRING_TOKEN`. Without a pairing token it **refuses to start**—it does not come up and then reject connections one by one. Beyond that, this repository ships neither tunnel nor relay: those two things each carry their own trust model, and choosing one for you would be making a security decision on your behalf.

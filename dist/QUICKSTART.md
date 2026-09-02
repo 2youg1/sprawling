@@ -35,4 +35,4 @@ In `city/`, beside this file. One folder holds the whole history, and it can be 
 
 ## Everything else
 
-Run `sprawling help` for the full command list. The complete walkthrough, the vocabulary, and the design are at <https://github.com/2youg1/sprawling>.
+Run `sprawling help` for the full command list. The complete walkthrough, the vocabulary, and the design are at <https://github.com/2youg1/sprawling-agents>.
