@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AxCode, AxError};
 use crate::locator::Locator;
-use crate::plan::NodeId;
+use crate::node_id::NodeId;
 
 /// The five states, closed. The spellings below are the canonical table
 /// strings, and there is exactly one set of them: a second set would be a

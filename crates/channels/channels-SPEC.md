@@ -519,3 +519,10 @@ pub struct Delta { pub run: RunId, pub text: String }
 **`client` 而尚未落地的四个**（`Attach`／`Takeover`／`Rollback`／`CreatePolicy`／`BatchByBuilding`）今天由 `not_built` 作答，
 所以门对它们要求的是**客户端不画**——`not_built` 的 rustdoc 说的就是这件事，现在有机器看着了。
 它们的 reach 仍写 `client`，因为那是它们做完之后该去的地方；写成别的取值等于把「还没做」记成「不该做」。
+
+## 附记：`NodeId` 的定义模块变了，接口没变（V3.34）
+
+本 crate 的 API 基线里 `kernel::plan::NodeId` 变成 `kernel::node_id::NodeId`。
+**这不是一次接口变更**：公开路径仍是 `kernel::NodeId`，字段与签名一字未动，
+变的只是 `cargo public-api` 记录的定义模块——`NodeId` 从 `kernel::plan` 搬进了自己的文件（kernel-SPEC §8-N）。
+记在这里是因为 `apisync` 判的是「基线动了就要有一份 SPEC 同行」，而基线确实动了。

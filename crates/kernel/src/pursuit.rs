@@ -34,7 +34,7 @@
 //! Cancelling a *run* is a third thing again, and it lives where runs do.
 
 use crate::delegation::Delegator;
-use crate::plan::NodeId;
+use crate::node_id::NodeId;
 
 /// Whether a pursuit is taking work right now.
 ///

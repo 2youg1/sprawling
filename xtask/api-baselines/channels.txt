@@ -57,7 +57,7 @@ pub channels::BindFace::Loopback
 pub channels::BindVerdict::Refuse(kernel::error::AxError)
 pub channels::BindVerdict::Serve(channels::BindFace)
 pub channels::BlockedLine::line: alloc::string::String
-pub channels::BlockedLine::source: kernel::plan::NodeId
+pub channels::BlockedLine::source: kernel::node_id::NodeId
 pub channels::BlockedLine::waiting: u32
 pub channels::BuildingAnswer::addr: kernel::address::Address
 pub channels::BuildingAnswer::archive: alloc::vec::Vec<channels::ArchiveLine>
@@ -261,8 +261,8 @@ pub channels::MetricsAnswer::signals_waiting: u64
 pub channels::PlanRow::evidence: core::option::Option<alloc::string::String>
 pub channels::PlanRow::item: alloc::string::String
 pub channels::PlanRow::leaf: bool
-pub channels::PlanRow::needs: alloc::vec::Vec<kernel::plan::NodeId>
-pub channels::PlanRow::node: kernel::plan::NodeId
+pub channels::PlanRow::needs: alloc::vec::Vec<kernel::node_id::NodeId>
+pub channels::PlanRow::node: kernel::node_id::NodeId
 pub channels::PlanRow::ready: bool
 pub channels::PlanRow::share_ppb: u64
 pub channels::PlanRow::status: kernel::spine::RoadmapStatus

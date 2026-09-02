@@ -451,3 +451,10 @@ impl ClaimTool { pub fn new(desk: Rc<RefCell<ClaimDesk>>) -> Result<ClaimTool, A
 （入窗什么｜token 代价｜对 prefix 缓存的影响；无贡献则写「零字节，因为……」。）
 
 ## 18 文档同步
+
+## 附记：`NodeId` 的定义模块变了，接口没变（V3.34）
+
+本 crate 的 API 基线里 `kernel::plan::NodeId` 变成 `kernel::node_id::NodeId`。
+**这不是一次接口变更**：公开路径仍是 `kernel::NodeId`，字段与签名一字未动，
+变的只是 `cargo public-api` 记录的定义模块——`NodeId` 从 `kernel::plan` 搬进了自己的文件（kernel-SPEC §8-N）。
+记在这里是因为 `apisync` 判的是「基线动了就要有一份 SPEC 同行」，而基线确实动了。

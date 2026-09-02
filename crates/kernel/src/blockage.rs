@@ -28,7 +28,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::plan::{NodeId, PlanTree, StopCause};
+use crate::node_id::NodeId;
+use crate::plan::{PlanTree, StopCause};
 
 /// One node the city has a reason to call red.
 #[derive(Debug, Clone, PartialEq, Eq)]

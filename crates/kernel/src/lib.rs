@@ -66,6 +66,7 @@ pub use repair::{RepairVerdict, request as request_repair};
 mod approval;
 mod blockage;
 mod completion;
+mod node_id;
 mod plan;
 mod pursuit;
 mod share;
@@ -77,7 +78,8 @@ pub use approval::{PolicyClass, PolicyExpiry, PolicyMatcher, PolicyRevocation, P
 pub use approval::{expiry as policy_expiry, match_item, may_answer};
 pub use blockage::{Blockage, Notice, RedNode, notices, spread};
 pub use completion::{Completion, Evidence, PlannedProgress, Progress, UnplannedProgress};
-pub use plan::{Held, NODE_DEPTH_MAX, NodeId, PLAN_WHOLE_PPB, PlanExit, PlanNode};
+pub use node_id::{NODE_DEPTH_MAX, NodeId};
+pub use plan::{Held, PLAN_WHOLE_PPB, PlanExit, PlanNode};
 pub use plan::{PlanTree, StopCause};
 pub use pursuit::{Pursuit, PursuitState, PursuitVerdict, observe as observe_pursuit};
 pub use share::{Share, WHOLE_PPB, gather as gather_shares};

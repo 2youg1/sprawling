@@ -367,6 +367,7 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | kernel::goal | crates/kernel/src/goal.rs | two goals wanting the same resource | decision | S2 | built |
 | kernel::spine | crates/kernel/src/spine.rs | the Roadmap table's grammar: six columns, a dotted index, and the one editing entrance | decision | S2 | built |
 | kernel::share | crates/kernel/src/share.rs | how much of the plan one node is; a share exists only by dividing another, so weight cannot be minted | value | V3 | built |
+| kernel::node_id | crates/kernel/src/node_id.rs | a plan node's address: the dotted path that says where it hangs | value | V3 | built |
 | kernel::plan | crates/kernel/src/plan.rs | the plan as a tree: what hangs where, what each is worth, what may be started, and the two exits of a held node | decision | V3 | built |
 | kernel::blockage | crates/kernel/src/blockage.rs | red, and how far it reaches: one cause named rather than every symptom listed | decision | V3 | built |
 | kernel::pursuit | crates/kernel/src/pursuit.rs | a goal the city works towards, and the one condition under which it stops | decision | V3 | built |
