@@ -405,12 +405,15 @@ Columns are fixed: **Module | File | What it owns | Shape** (§9) **| Since** (t
 | memory::digest_cache | crates/memory/src/digest_cache.rs | the same bytes summarised once in their lifetime | projection | S3 | built |
 | memory::bundle | crates/memory/src/bundle.rs | export and restore; the manifest is the completeness test | adapter | P1 | built |
 
-### gateway (9) — everything between a decision to call a model and the bytes on the wire
+### gateway (12) — everything between a decision to call a model and the bytes on the wire
 
 | Module | File | What it owns | Shape | Since | Status |
 |---|---|---|---|---|---|
 | gateway::router | crates/gateway/src/router.rs | the book of attached endpoints and the model chosen per tag | projection | P1 | built |
-| gateway::dialect | crates/gateway/src/dialect.rs | pure two-way translation between the canonical shape and a provider's | decision | S3 | built |
+| gateway::dialect | crates/gateway/src/dialect.rs | which dialect answers a question, and the closed set of two | decision | S3 | built |
+| gateway::anthropic | crates/gateway/src/anthropic.rs | the Anthropic Messages wire, in both directions | decision | V3 | built |
+| gateway::openai | crates/gateway/src/openai.rs | the OpenAI Chat Completions wire, and every loss the translation takes | decision | V3 | built |
+| gateway::mismatch | crates/gateway/src/mismatch.rs | reading a provider's JSON, and the one word for a shape we did not ask for | decision | V3 | built |
 | gateway::native | crates/gateway/src/native.rs | local inference, which never leaves the machine | adapter | S3 | built |
 | gateway::endpoint | crates/gateway/src/endpoint.rs | the external provider: a self-written wire format over one HTTP client | adapter | S3 | built |
 | gateway::oauth_profiles | crates/gateway/src/oauth_profiles.rs | subscription-login intelligence: data only, zero branches | data | S3 | built |

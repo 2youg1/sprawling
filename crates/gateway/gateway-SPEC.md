@@ -43,7 +43,9 @@ Dialect／Endpoint／Custody／Vault／SecretRef／Sealed／admission／market s
 ## 7 模块边界
 
 ```
-dialect（纯函数）◀── endpoint／native（I/O 适配器，impl kernel::Model）
+dialect（路由，纯函数）◀── endpoint／native（I/O 适配器，impl kernel::Model）
+dialect ───────────────▶ anthropic／openai（各自一种线格式的两向翻译）
+anthropic／openai ──────▶ mismatch（共用的读取器与拒词；单向，无环）
 credential ──▶ 内缝 Vault（pub(crate) trait：keyring 生产适配器＋会话内存第二适配器）
 oauth_profiles（数据面，零分支）◀── credential（流程消费情报）
 admission／market／cost：纯判定与数据面，被 endpoint 与 S3 回合层消费
@@ -57,9 +59,15 @@ admission／market／cost：纯判定与数据面，被 endpoint 与 S3 回合�
 
 ## 8 接口先行（按模块分章）
 
-### 8-1 gateway::dialect（S3.01；形状 1 判定函数族）
+### 8-1 gateway::dialect（S3.01；形状 1 判定函数族）＋anthropic／openai／mismatch（V3.37）
 
 城内规范会话类型住 `kernel::model`（缝上类型，S3 只加）；本模块只做 canonical↔wire 翻译，纯函数、无 I/O、无状态。
+
+**V3.37：一个文件里两家 provider 的字段知识交错排列，现在各住各家。** 1,280 → 512＋352（anthropic）＋393（openai）＋88（mismatch）。
+切缝不是行数而是**变化的理由**：一家 provider 改了它的形状，只有它那一个文件动；而本模块顶上那句「改之前先读 provider 自己的文档」只有跟它指的那堆字段同居一处才真的被读到，所以两张文档链接表各自跟着它的 dialect 走。
+- `dialect` 剩五个入口，每个一条 `match kind`，封闭集为二；不认得的 dialect 恒拒而不拿较近的那一家近似。跨 dialect 的断言（两向往返、两种强度拼写、float 拒收）留在这里，因为它们测的就是路由的契约。
+- `mismatch` 是两家共用的四个读取器（`require`／`as_str`／`tokens_or_zero`／`payload_from`）与三句拒词（`mismatch`／`stream_cut`／`unspelled_effort`）。**依赖是单向的**：dialect → 两家 → mismatch，谁都不回头指。
+- 只属一家的东西跟着它：`empty_answer`（空答案）、`joined_text`与 `effort_field` 入 openai；`role_str`、`stop_from`／`stop_str`、`block_wire`／`block_from`、`effort_fields` 入 anthropic。
 
 **P6.01 改：每一条形状不匹配都带出路，而空答案不再被当成形状不匹配**。真机派活时拿到 `E_WIRE_MISMATCH: translate wire on response.choices: expected array`，**`recovery` 为空串**——一条让人无从下手的拒绝，而 `AxError` 的契约写着 `recovery` 必须是可直接执行的信息。两处修正：
 

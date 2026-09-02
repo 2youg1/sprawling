@@ -8,13 +8,16 @@
 //! translation (deliberately not a trait).
 
 mod admission;
+mod anthropic;
 mod cost;
 mod credential;
 mod dialect;
 mod endpoint;
 mod market;
+mod mismatch;
 mod native;
 mod oauth_profiles;
+mod openai;
 mod router;
 
 pub use admission::{AdmissionState, AdmissionVerdict, ProviderOutcome};
