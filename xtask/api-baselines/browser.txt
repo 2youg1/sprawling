@@ -82,7 +82,6 @@ pub fn browser::Session::navigate(&mut self, &browser::ContextId, &str) -> core:
 pub fn browser::Session::new() -> browser::Session
 pub fn browser::Session::read_tree(&serde_json::value::Value) -> core::result::Result<alloc::vec::Vec<browser::ContextId>, kernel::error::AxError>
 pub fn browser::Session::tree(&mut self) -> core::result::Result<browser::Frame, kernel::error::AxError>
-pub fn browser::assert_port_conformance<P: browser::BrowserPort>(&mut P, &browser::Frame)
 pub fn browser::frame_for(&mut browser::Session, &browser::ContextId, &browser::PageSnapshot, u64, &browser::Action) -> core::result::Result<browser::Frame, kernel::error::AxError>
 pub mod browser
 pub struct browser::ContextId(_)

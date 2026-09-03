@@ -65,6 +65,7 @@ impl Reply {
     pub fn into_result(self) -> Result<Value, AxError>;    // 远端的拒绝带着它自己的词过来
 }
 pub trait BrowserPort { fn send(&mut self, frame: &Frame) -> Result<Reply, AxError>; }
+#[cfg(feature = "conformance")]                            // 恒不进构建物
 pub fn assert_port_conformance<P: BrowserPort>(port: &mut P, known: &Frame);
 
 // 8-2 session（形状 4 适配器＋形状 2）
@@ -164,3 +165,5 @@ impl Profile { pub fn of(building: &Address, confidential: bool) -> Result<Profi
 ## 18 文档同步
 
 `ARCHITECTURE.md` §6 browser 六行与 §3 缝清单｜`docs/glossary.md` 若新增词汇｜装配层接线时同步 §6 末接线台账。
+
+**`conformance` feature（人的裁决，2026-09-05：test 恒不进构建物）**：`assert_port_conformance` 此前是裸 `pub fn`，并由 `lib.rs` 无条件再导出，因而随发行二进制出厂；它自己的 lint 豁免写着「dev-only by contract」，而无一处机器持有那纸合约。本工作区另外四套 conformance 一直在 `#[cfg(feature = "conformance")]` 之后，本 crate 是唯一的例外，原因只是它此前没有 `[features]` 段。现已补齐，并由 `cargo xtask artifact` 持有此规则；公开接口面随之缩减一行，`xtask/api-baselines/browser.txt` 同集更新。`crates/browser/src/session.rs` 中调用它的那条断言改为 `#[cfg(feature = "conformance")]`，故它在 `--all-features` 下运行——那正是 `just check` 与 `just test` 所用的构建。

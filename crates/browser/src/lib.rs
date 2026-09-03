@@ -20,7 +20,9 @@ mod snapshot;
 
 pub use act::{Action, frame_for};
 pub use devloop::{DevLoop, LOOKS_MAX, Observation, QUIET_LOOKS, Step};
-pub use port::{BrowserPort, Frame, Reply, assert_port_conformance};
+pub use port::{BrowserPort, Frame, Reply};
+#[cfg(feature = "conformance")]
+pub use port::assert_port_conformance;
 pub use profile::{PROFILES_DIR, Profile};
 pub use session::{ContextId, Recording, Session, SessionRequest};
 pub use snapshot::{Node, PageSnapshot};

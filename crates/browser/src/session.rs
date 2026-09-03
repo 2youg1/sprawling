@@ -249,6 +249,7 @@ impl BrowserPort for Recording {
 )]
 mod tests {
     use super::*;
+    #[cfg(feature = "conformance")]
     use crate::port::assert_port_conformance;
 
     #[test]
@@ -306,6 +307,7 @@ mod tests {
         assert_eq!(recording.missed().len(), 1);
     }
 
+    #[cfg(feature = "conformance")]
     #[test]
     fn the_recording_satisfies_the_seams_assertions() {
         let mut session = Session::new();

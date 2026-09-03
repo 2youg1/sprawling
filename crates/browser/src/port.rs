@@ -207,10 +207,11 @@ pub trait BrowserPort {
 /// # Panics
 /// On any implementation that renumbers frames, invents a reply for a
 /// frame nobody sent, or answers after it has been closed.
+#[cfg(feature = "conformance")]
 #[allow(
     clippy::panic,
     clippy::expect_used,
-    reason = "conformance suites assert by panicking; dev-only by contract"
+    reason = "conformance suites assert by panicking; the feature keeps them out of the product"
 )]
 pub fn assert_port_conformance<P: BrowserPort>(port: &mut P, known: &Frame) {
     let reply = port.send(known).expect("a known frame is answered");

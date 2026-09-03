@@ -5,6 +5,15 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# The seam's assertion suite, off by default. It exists to hold a second
+# adapter to the first one's behaviour, and a suite that ships is test
+# code inside the binary a person downloads (`xtask artifact`). The four
+# other suites in this workspace were already behind this feature; this
+# one was a plain `pub fn` whose lint waiver called it "dev-only by
+# contract" while nothing held the contract.
+conformance = []
+
 [dependencies]
 kernel = { path = "../kernel" }
 serde_json = { workspace = true }
