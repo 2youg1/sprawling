@@ -150,6 +150,12 @@ jobs:
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release delete "${GITHUB_REF_NAME}" --yes
           fi
+          # Pre-release is the state this project is in, and it was being
+          # set by hand after every publish - which means it was one
+          # forgotten click away from a pre-alpha presenting itself as the
+          # release a person should download. The day that stops being
+          # true, this flag is what gets deleted, deliberately.
           gh release create "${GITHUB_REF_NAME}" assets/*.zip \
             --title "sprawling ${GITHUB_REF_NAME}" \
+            --prerelease \
             --notes-file .github/release-notes.md
