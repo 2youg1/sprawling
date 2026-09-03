@@ -238,21 +238,41 @@ names = [
   "crates/sprawling/src/console.rs::drive",        # 5
 ]
 
+# **Re-priced from 1000 to 400 on the person's ruling, 2026-09-05.** The
+# 1000-line line was drawn against a tree whose largest file was 12,078
+# lines, and it did what it was drawn to do: the register it arrived with
+# emptied, and `bin::assembly` went from 10,695 lines to an `assembly/`
+# directory. A budget whose register is empty has stopped being a budget -
+# it now permits every file in the tree - and the reader it was drawn for
+# is no longer only a person. A file is read into a model's context whole,
+# and 400 lines is where a module still arrives as one unit next to the
+# other files a change has to be read against.
+#
+# The new line lights up 97 of the 250 files it measures. That is the
+# project the previous re-pricing named and deferred, and it is deferred
+# again on the same ruling: **the register below is the backlog, worst
+# first, and working it off is the next version's P0.** What is bought
+# today is the ratchet - nothing new may be born over 400 lines, and
+# nothing already over it may grow.
 [file_length]
 what = "one source file under a crate's src/, every line of it, tests included"
-budget_lines = 1000
+budget_lines = 400
 measured_by = "cargo xtask length"
 status = "gated, with a register of the files that predate the rule"
 
-# The files that were already over the line on the day it was drawn
-# (2026-09-02), each pinned at the length it had that day. Eleven of
-# them; the table is empty, and an empty table is this rule's finished
-# state rather than a gap in it.
+# The files that were already over the line on the day it was re-drawn
+# (2026-09-05), each pinned at the length it had that day, worst first.
+# Ninety-seven of them, and the order is the order to split them in.
 #
-# `crates/web/src/lang.rs` is 3,217 lines and is not here: its module-map
-# row states the shape `data`, and the same exemption the function rule
-# grants it holds for the file rule, for the same reason. A table of
-# every word the client says is looked things up in, not navigated.
+# `crates/web/src/lang.rs` (3,444 lines) and `crates/web/src/theme.rs`
+# (1,019) are not here: their module-map rows state the shape `data`, and
+# the same exemption the function rule grants them holds for the file
+# rule, for the same reason. A table of every word the client says, and a
+# table of every colour it may produce, are looked things up in rather
+# than navigated.
+#
+# `xtask/src/length.rs` is on this list, which is correct: the gate that
+# states the rule is not exempt from it.
 #
 # This list has three properties, and it needs all three to be an
 # honest debt rather than a licence. A file it does not name is refused
@@ -261,10 +281,134 @@ status = "gated, with a register of the files that predate the rule"
 # back under budget_lines must be struck from the list, so **it removes
 # itself** as the work gets done.
 #
-# Delete a row by doing the split, never by raising its number. The last
-# row to go was `bin::assembly` at 10,695 lines (V3.43), and it left the
-# table the way the rule asks: the split was done, not the number.
+# Delete a row by doing the split, never by raising its number.
 [file_length.predating]
+"crates/sprawling/src/assembly/workbench.rs" = 1000
+"crates/sprawling/src/views.rs" = 995
+"crates/sprawling/src/assembly/driving.rs" = 993
+"crates/gateway/src/credential.rs" = 988
+"crates/web/src/settings.rs" = 985
+"crates/sprawling/src/assembly/credentials.rs" = 978
+"crates/web/src/app.rs" = 977
+"crates/kernel/src/plan.rs" = 958
+"crates/sprawling/src/assembly/folds.rs" = 957
+"crates/sprawling/src/assembly/commanding.rs" = 953
+"crates/runtime/src/turn.rs" = 919
+"crates/collab/src/claim_tool.rs" = 913
+"crates/sprawling/src/main.rs" = 900
+"crates/kernel/src/spine.rs" = 883
+"crates/kernel/src/gate.rs" = 875
+"crates/web/src/live.rs" = 860
+"crates/web/src/sessions.rs" = 857
+"crates/web/src/turn.rs" = 850
+"crates/web/src/socket.rs" = 839
+"crates/sprawling/src/serving.rs" = 830
+"crates/protocol/src/mcp.rs" = 823
+"xtask/src/color.rs" = 819
+"crates/memory/src/jsonl.rs" = 812
+"crates/sprawling/src/assembly/dispatching.rs" = 787
+"crates/memory/src/index.rs" = 783
+"crates/sprawling/src/console.rs" = 781
+"crates/sprawling/src/assembly/freezing.rs" = 778
+"crates/kernel/src/event.rs" = 775
+"crates/sprawling/src/assembly.rs" = 772
+"crates/sprawling/src/assembly/settling.rs" = 765
+"crates/web/src/building_view.rs" = 747
+"crates/sprawling/src/assembly/plans.rs" = 740
+"crates/runtime/src/bench.rs" = 740
+"crates/web/src/skyline.rs" = 722
+"crates/web/src/mount.rs" = 687
+"xtask/src/wording.rs" = 686
+"crates/city/src/config_layers.rs" = 681
+"crates/sprawling/src/assembly/genesis.rs" = 677
+"crates/channels/src/server.rs" = 652
+"crates/memory/src/projection.rs" = 650
+"crates/gateway/src/endpoint.rs" = 639
+"crates/eval/src/nesting.rs" = 632
+"crates/memory/src/worktree.rs" = 622
+"crates/web/src/approval.rs" = 599
+"crates/city/src/spine_files.rs" = 591
+"xtask/src/render.rs" = 581
+"xtask/src/release.rs" = 578
+"crates/channels/src/command.rs" = 576
+"xtask/src/length.rs" = 573
+"crates/web/src/shell.rs" = 570
+"crates/runtime/src/replay.rs" = 570
+"crates/sprawling/src/assembly/reviewing.rs" = 567
+"crates/kernel/src/discard.rs" = 561
+"crates/collab/src/pr_tool.rs" = 561
+"crates/gateway/src/router.rs" = 559
+"crates/sprawling/src/install.rs" = 556
+"crates/runtime/src/prefix.rs" = 546
+"crates/sprawling/src/mcp_http.rs" = 543
+"crates/collab/src/inbox.rs" = 543
+"crates/collab/src/workshop_tool.rs" = 539
+"crates/memory/src/bundle.rs" = 532
+"crates/runtime/src/tools/edit.rs" = 522
+"crates/city/src/policy.rs" = 517
+"crates/memory/src/fault_fs.rs" = 516
+"crates/kernel/src/model.rs" = 516
+"crates/gateway/src/dialect.rs" = 512
+"xtask/src/guard.rs" = 508
+"crates/city/src/building.rs" = 502
+"crates/memory/src/attribution.rs" = 500
+"crates/collab/src/signal_tool.rs" = 498
+"crates/web/src/session.rs" = 496
+"crates/web/src/route.rs" = 489
+"crates/web/src/alert.rs" = 488
+"crates/memory/src/checkpoint.rs" = 480
+"crates/kernel/src/locator.rs" = 477
+"crates/runtime/src/run.rs" = 468
+"crates/collab/src/draft.rs" = 466
+"crates/kernel/src/error.rs" = 464
+"crates/web/src/prompt.rs" = 460
+"crates/runtime/src/digest.rs" = 449
+"crates/collab/src/workshop.rs" = 445
+"crates/kernel/src/secret.rs" = 441
+"crates/kernel/src/highlight.rs" = 437
+"xtask/src/badge.rs" = 436
+"crates/sprawling/src/assembly/waking.rs" = 434
+"crates/web/src/dashboard.rs" = 430
+"crates/kernel/src/tool.rs" = 430
+"crates/web/src/isometry.rs" = 429
+"crates/web/src/ledger_view.rs" = 426
+"crates/web/src/command.rs" = 424
+"crates/runtime/src/sandbox.rs" = 422
+"crates/city/src/schedule.rs" = 420
+"crates/kernel/src/config.rs" = 418
+"crates/sprawling/src/plan_view.rs" = 413
+"crates/kernel/src/approval.rs" = 413
+"crates/runtime/src/tools/exec.rs" = 403
+"crates/web/src/city_view.rs" = 402
+
+# White box is Rust, black box is Haskell (the person's ruling,
+# 2026-09-05). `cargo xtask boundary` refuses a Rust check that reaches
+# this product across a process boundary; `adversary/` is where such a
+# check belongs, in a language with none of this repository's vocabulary,
+# so it can testify about a client that shares none of its assumptions.
+#
+# One file predates the rule. `crates/channels/tests/enrolment.rs` stands
+# up the enrolment endpoint on a loopback port and writes the HTTP
+# request out by hand, byte for byte - which is a black-box check wearing
+# a Rust file, and its hand-written request says so. Moving it to
+# `adversary/` is the next version's work; until then it may cross, and
+# it may not grow a second offender, because a file this list does not
+# name is refused outright.
+#
+# `crates/sprawling/src/assembly/driving.rs` is deliberately absent. Its
+# sockets reach a fake model provider the test stood up, never this
+# product, and its three lines carry `boundary-ok:` with that reason. A
+# waiver is right there and a register row would be wrong: the debt is
+# not one anybody intends to pay.
+[boundary]
+what = "a Rust check that reaches this product across a process boundary"
+measured_by = "cargo xtask boundary"
+status = "gated, with a register of the files that predate the rule"
+
+[boundary.predating]
+files = [
+  "crates/channels/tests/enrolment.rs",
+]
 
 [session_resident]
 what = "one session's resident memory, in this platform's own counter"

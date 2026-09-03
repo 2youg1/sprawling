@@ -9,8 +9,10 @@
 //! failure mode a gate can have (xtask-SPEC.md section 12).
 
 mod apisync;
+mod artifact;
 mod ax;
 mod badge;
+mod boundary;
 mod budget;
 mod color;
 mod depmap;
@@ -107,6 +109,8 @@ fn main() -> ExitCode {
         Some("header") => report::finish("header", header::check(&root)),
         Some("lexicon") => report::finish("lexicon", lexicon::check(&root)),
         Some("length") => report::finish("length", length::check(&root)),
+        Some("boundary") => report::finish("boundary", boundary::check(&root)),
+        Some("artifact") => report::finish("artifact", artifact::check(&root)),
         Some("modmap") => report::finish("modmap", modmap::check(&root)),
         Some("depmap") => report::finish("depmap", depmap::check(&root)),
         Some("guard") => report::finish("guard", guard::check(&root, range.as_deref())),

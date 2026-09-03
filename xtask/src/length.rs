@@ -10,15 +10,19 @@
 //! flow of control; a long **file** hides where anything is, and costs
 //! every reader who has to find one thing in it.
 //!
-//! **The file rule is a re-pricing, and here is the parameter that
-//! moved.** This gate used to measure functions only, and said so: any
-//! honest file threshold lit up eight files across four crates at once,
-//! "which is a project rather than a gate". That was a true reading of
-//! the cost and a fair reason to wait. The person has now asked for that
-//! project, on the ground that the largest file - 12,078 lines - was
-//! costing more per iteration than the split would cost once. So the
-//! threshold arrives with a register of the files that predate it, each
-//! pinned at the length it had on the day the line was drawn.
+//! **The file rule has been re-priced twice, and each time the parameter
+//! that moved is written beside it.** It began as a function rule only:
+//! any honest file threshold lit up eight files at once, "which is a
+//! project rather than a gate". The person asked for that project when
+//! the largest file reached 12,078 lines, and 1000 lines was the line
+//! that got it done - `bin::assembly` became an `assembly/` directory and
+//! the register emptied. **A budget whose register is empty permits every
+//! file in the tree**, which is what moved the line to 400 on
+//! 2026-09-05: a file is now read whole into a model's context as often
+//! as it is read by a person, and 400 lines is where a module still
+//! arrives as one unit beside the other files a change must be read
+//! against. Each re-pricing arrives with a register of the files that
+//! predate it, pinned at the length they had on the day the line moved.
 //!
 //! **The register can only shrink, and it cleans itself.** A file it does
 //! not name is refused at the budget outright, so the list cannot grow. A
@@ -489,7 +493,7 @@ mod tests {
             .map(Path::to_path_buf)
             .expect("xtask lives one level under the repo root");
         assert_eq!(limit(&root, ROW).unwrap(), 200);
-        assert_eq!(limit(&root, FILE_ROW).unwrap(), 1000);
+        assert_eq!(limit(&root, FILE_ROW).unwrap(), 400);
         assert!(limit(&root, "a_row_nobody_wrote").is_err());
     }
 
